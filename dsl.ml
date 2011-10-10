@@ -44,12 +44,42 @@ module DSL = struct
 
   module Runtime = struct
 
-    (* representation of the run-time in the meta-language *)
-    type meta = {
-      mutable programs: (string, program) Hashtbl.t;
-      mutable values: (string, atom) Hashtbl.t; (* No, not atoms: run-time atoms contain more *)
-    }
+    (* Representation of the run-time in the meta-language *)
+    module Simulation_backend = struct
 
+      type not_yet_defined
+
+
+      (* A "loaded" program, must be type-checked *)
+      type compilation_result = not_yet_defined
+      
+      type runtime_program = {
+        
+        (* An Id which must be unique *)
+        program_id: string;
+        original_program: program;
+        
+        (* A Stack of results of compilation passes *)
+        mutable compilations: compilation_result list; 
+      }
+
+      type runtime_int = {
+        (* kind of pointer / unique id *)
+        int_id: string;
+        (* again a stack, representing history *)
+        mutable int_history: int list;
+      }
+
+      (* ... *)
+
+      type runtime_value = 
+        | Int of runtime_int
+
+      type meta = {
+        mutable programs: (string, runtime_program) Hashtbl.t;
+        mutable values: (string, runtime_value) Hashtbl.t;
+      }
+    end
 
   end
 
