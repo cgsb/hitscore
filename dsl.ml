@@ -15,7 +15,7 @@ module DSL = struct
       | Int of int
       | String of string
       | Fastq of fastq list
-      | File of string * string (* path × md5 *)
+      | File of string
 
     type expression =
       | Constant of atom
@@ -36,7 +36,7 @@ module DSL = struct
     let int i = Constant (Int i)
     let str s = Constant (String s)
     let var s = Variable s
-    let file f = Constant (File (f, (* md5 *) f))
+    let file f = Constant (File f)
     let load_fastq f = Load_fastq f 
     let bowtie e i = Bowtie (e, int i)
 
@@ -84,26 +84,6 @@ module DSL = struct
   end
 
 
-  let string_of_expression e =
-    let fastq = fun { fastq_comment; fastq_record; fastq_quality } ->
-      sprintf "(%s %s %s)" fastq_comment fastq_record fastq_quality in
-    let basic = function
-      | Int i -> sprintf "%d" i
-      | String s -> sprintf "%S" s
-      | Fastq f -> 
-        sprintf "(fastq: %s)" (String.concat ", " (List.map fastq f))
-      | File (f, _) -> sprintf "(file: %s)" f in
-    let rec expr = function
-      | Constant c -> sprintf "(cst: %s)" (basic c)
-      | Variable v -> sprintf "(var: %s)" v
-      | Load_fastq e -> sprintf "(load_fastq: %s)" (expr e)
-      | Bowtie (e1, e2) -> sprintf "(bowtie %s %s)" (expr e1) (expr e2)
-    in
-    (expr e)
-
-  let print_program =
-    List.iter (fun (g, e) -> printf "[%S:\n  %s\n]\n" g (string_of_expression e))
-
   (* Client or Server side *)
   let check_program prog =
     (* syntax / type checking / (optional) database check *)
@@ -133,6 +113,32 @@ module DSL = struct
   (* Client or Server *)
   let access_state prog_id =
     "current state / results"
+
+
+
+  (* Debug Stuff: *)
+
+  let string_of_expression e =
+    let fastq = fun { fastq_comment; fastq_record; fastq_quality } ->
+      sprintf "(%s %s %s)" fastq_comment fastq_record fastq_quality in
+    let basic = function
+      | Int i -> sprintf "%d" i
+      | String s -> sprintf "%S" s
+      | Fastq f -> 
+        sprintf "(fastq: %s)" (String.concat ", " (List.map fastq f))
+      | File f -> sprintf "(file: %s)" f in
+    let rec expr = function
+      | Constant c -> sprintf "(cst: %s)" (basic c)
+      | Variable v -> sprintf "(var: %s)" v
+      | Load_fastq e -> sprintf "(load_fastq: %s)" (expr e)
+      | Bowtie (e1, e2) -> sprintf "(bowtie %s %s)" (expr e1) (expr e2)
+    in
+    (expr e)
+
+  let print_program =
+    List.iter (fun (g, e) -> printf "[%S:\n  %s\n]\n" g (string_of_expression e))
+
+
 
 end
 
