@@ -139,6 +139,35 @@ module DSL = struct
 
   end
 
+  module Transform = struct
+
+    let factorize_files p =
+      let files = ref [] in
+      let new_file =
+        let i = ref 0 in
+        (fun f ->
+          match List.find_opt (fun (n, file) -> file = f) !files with
+          | Some (n, f) -> Variable n
+          | None ->
+            let name = incr i; sprintf "__fact_file_%d" !i in
+            files := (name, f) :: !files;
+            Variable name) in
+      let rec transform_expression = function
+        | Constant (File f) as e -> new_file e
+        | Constant _ as e -> e
+        | Variable _ as e -> e
+        | Load_fastq  e -> Load_fastq (transform_expression e)
+        | Bowtie (e1, e2) -> 
+          Bowtie (transform_expression e1, transform_expression e2) in
+      let new_prog =
+        List.map (fun (n, e) -> (n, transform_expression e)) p in
+      (List.rev !files) @ new_prog
+
+    let optimize p = factorize_files p
+
+  end
+
+
   module Runtime = struct
 
     (* Representation of the server run-time in the meta-language *)
@@ -216,7 +245,7 @@ module DSL = struct
 end
 
 
-let test name p =
+let test ?(opt=false) name p =
   printf "=== Program %S ===\n" name;
   DSL.print_program ~indent:2 p;
   printf "  Type Checking:\n";
@@ -225,7 +254,12 @@ let test name p =
       (match res with
       | Ok t -> DSL.Verify.string_of_type t
       | Bad b -> b);
-  ) (DSL.Verify.type_check_program p)
+  ) (DSL.Verify.type_check_program p);
+  if opt then (
+    printf "  Optimization pass:\n";
+    DSL.print_program ~indent:2 (DSL.Transform.optimize p);
+  );
+  ()
 
 
 let () =
@@ -233,13 +267,17 @@ let () =
   test "good" [
     "myfile", (file "/path/to/myfile.fastq");
     "bowtie", (bowtie (load_fastq (var "myfile")) 42);
-    "rebowtie", (bowtie (var "bowtie") 51)
+    "rebowtie", (bowtie (var "bowtie") 51);
   ];
   test "bad" [
+    "wrong_name", (var "__two_underscores");
     "wrong_file", load_fastq (int 42);
     "wrong_var", var "nope";
-    "bad_bowtie", (bowtie (var "bowtie") 51)
+    "bad_bowtie", (bowtie (var "bowtie") 51);
   ];
-
+  test ~opt:true "optimizable" [
+    "bowtie", (bowtie (load_fastq (file "/path/to/samefile")) 42);
+    "rebowtie", (bowtie (load_fastq (file "/path/to/samefile")) 51);
+  ];
   ()
     
