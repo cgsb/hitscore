@@ -435,7 +435,7 @@ let () =
     "rebowtie", (bowtie (load_fastq (file "/path/to/samefile")) 51);
   ];
   test "good" [ "myfile", (int 42) ];
-  test "good" [ "added_value", (int 42) ];
+  test "good" [ "added_value", (ext_fastq ["optimizable"; "bowtie"]) ];
   test "good" [];
   printf "===== Current Runtime =====\n";
   Runtime.print_runtime ~indent:2 runtime;
