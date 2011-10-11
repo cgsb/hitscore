@@ -94,10 +94,14 @@ module DSL = struct
       | `file -> "file"
 
     let variable_type env var =
-      try
-        (snd (List.find (fun (v, t) -> v = var) env))
-      with 
-        Not_found -> Bad (sprintf "Variable %S not found" var)
+      if String.length var > 2 && String.sub var 0 2 = "__" then
+        Bad (sprintf "Variable %S has a wrong name" var)
+      else
+        begin try
+                (snd (List.find (fun (v, t) -> v = var) env))
+          with 
+            Not_found -> Bad (sprintf "Variable %S not found" var)
+        end
 
     let atom_type = function
       | Int _ -> Ok `int
