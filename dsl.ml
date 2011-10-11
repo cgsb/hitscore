@@ -10,7 +10,10 @@ module List = struct
   let find_opt f l =
     try Some (List.find f l) with _ -> None
 end
-
+module HT = struct
+  include Hashtbl
+  let find ht k = try Some (Hashtbl.find ht k) with _ -> None 
+end
 
 module DSL = struct
 
