@@ -52,8 +52,11 @@ module DSL = struct
     in
     (expr e)
 
-  let print_program =
-    List.iter (fun (g, e) -> printf "[%S:\n  %s\n]\n" g (string_of_expression e))
+  let print_program ?(indent=0) =
+    let strindent = String.make indent ' ' in
+    List.iter (fun (g, e) ->
+      printf "%s[%S:\n%s  %s\n%s]\n" 
+        strindent g strindent (string_of_expression e) strindent)
 
 
 
@@ -87,7 +90,7 @@ module DSL = struct
       try
         (snd (List.find (fun (v, t) -> v = var) env))
       with 
-        Not_found -> Bad (sprintf "Variable %s not found" var)
+        Not_found -> Bad (sprintf "Variable %S not found" var)
 
     let atom_type = function
       | Int _ -> Ok `int
@@ -102,7 +105,7 @@ module DSL = struct
         begin match type_check_expression env e with
         | Ok `file -> Ok `fastq
         | Ok other ->
-          Bad (sprintf "Load_fastq expects a file, %s has a wrong type: %s"
+          Bad (sprintf "Load_fastq expects a file, %S has a wrong type: %S"
                  (string_of_expression e) (string_of_type other))
         | Bad s -> Bad s
         end
@@ -111,8 +114,8 @@ module DSL = struct
           type_check_expression env e2 with
           | Ok `fastq, Ok `int -> Ok `fastq
           | _, _ ->
-            Bad "Bowtie expects a `fastq and an `int, error messages \
-                  will be better in the next version"
+            Bad "Bowtie expects a `fastq and an `int … error messages \
+                  will be better in the future"
         end
 
     let type_check_program p =
