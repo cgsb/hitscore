@@ -179,9 +179,11 @@ module DSL = struct
       type not_yet_defined
 
 
-      (* A "loaded" program, must be type-checked *)
-      type compilation_result = not_yet_defined
+      type compilation_result = 
+        [ `target_independent_transformation of program ]
+
       
+      (* A "loaded" program, must be type-checked *)
       type runtime_program = {
         
         (* An Id which must be unique *)
@@ -192,22 +194,59 @@ module DSL = struct
         mutable compilations: compilation_result list; 
       }
 
-      type runtime_int = {
+      type 'a runtime_value_storage = {
         (* kind of pointer / unique id *)
-        int_id: string;
+        val_id: string;
         (* again a stack, representing history *)
-        mutable int_history: int list;
+        mutable val_history: 'a list;
       }
-
-      (* ... *)
 
       type runtime_value = 
-        | Int of runtime_int
+        | RT_int of int runtime_value_storage
+        | RT_string of string runtime_value_storage
+        | RT_file of (string * string) runtime_value_storage
+        | RT_fastq of (fastq * string option) runtime_value_storage
+        | RT_program of program runtime_value_storage
 
-      type meta = {
-        mutable programs: (string, runtime_program) Hashtbl.t;
-        mutable values: (string, runtime_value) Hashtbl.t;
+      type runtime = {
+        unique_id: string -> string;
+        mutable programs: (string, runtime_program) HT.t;
+        mutable values: (string, runtime_value) HT.t;
       }
+
+      let create () =
+        let ids = ref 0 in
+        {unique_id = (fun s -> incr ids; sprintf "%s%d" s !ids);
+         programs = HT.create 42;
+         values = HT.create 42}
+
+      let load_program rt p =
+        let valid =        
+          let type_checked = Verify.type_check_program p in
+          List.for_all (fun (n, t) ->
+            match t with Ok _ -> true | _ -> false) type_checked
+        in
+        if valid then (
+          let id = rt.unique_id "simdb_program_" in
+          let rt_prog = 
+            {program_id = id; original_program = p; compilations = []} in
+          HT.add rt.programs id rt_prog;
+          Some id
+        ) else
+          None
+            
+      let compile_program ?(optimize=`all) rt prog_id =
+        match HT.find rt.programs prog_id with
+        | Some p ->
+          if optimize = `all then
+            p.compilations <- 
+              `target_independent_transformation 
+              (Transform.optimize p.original_program) ::
+              p.compilations
+          else
+            ()
+        | None -> failwith (sprintf "Program %S not found in database" prog_id)
+
     end
 
   end
@@ -225,7 +264,7 @@ module DSL = struct
     "prog unique id"
 
   (* On Server *)
-  let compile_program prog_id =
+  let compile_program prog_id other_parameters =
     (* look for internal and external redundancies *)
     (* optimize *)
     (* prepare the PBS script *)
