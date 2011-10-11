@@ -15,6 +15,12 @@ module HT = struct
   let find ht k = try Some (Hashtbl.find ht k) with _ -> None 
 end
 
+module Path = struct
+  type t = string list
+  let str = String.concat "/"
+end
+
+
 module DSL = struct
 
   module Definition = struct
@@ -176,76 +182,107 @@ module DSL = struct
     (* Representation of the server run-time in the meta-language *)
     module Simulation_backend = struct
 
-      type not_yet_defined
+      type error = [ 
+      | `fatal_error of string (* The kind that should not happen *)
+      | `wrong_request of string (* The “client” sent an impossible request *)
+      | `runtime_error of string (* Error due to external conditions *)
+      ]
+      let string_of_error = function
+        | `fatal_error   s -> sprintf "FATAL ERROR: \"%s\"\n\
+                                       ===>  you should complain to the devs" s
+        | `wrong_request s -> sprintf "Wrong Request: %s" s 
+        | `runtime_error s -> sprintf "Runtime Error: %s" s 
 
-
-      type compilation_result = 
-        [ `target_independent_transformation of program ]
-
-      
-      (* A "loaded" program, must be type-checked *)
-      type runtime_program = {
-        
-        (* An Id which must be unique *)
-        program_id: string;
-        original_program: program;
-        
-        (* A Stack of results of compilation passes *)
-        mutable compilations: compilation_result list; 
-      }
-
-      type 'a runtime_value_storage = {
-        (* kind of pointer / unique id *)
-        val_id: string;
+      type meta_value = 
+        | RT_int of int
+        | RT_string of string
+        | RT_file of string
+        | RT_checked_file of (string * Digest.t)
+        | RT_fastq of fastq
+        | RT_expression of expression
+      type runtime_value = {
+        (* kind of path / unique id / Ocsigen's convention *)
+        val_id: Path.t;
         (* again a stack, representing history *)
-        mutable val_history: 'a list;
+        mutable val_history: meta_value list;
       }
 
-      type runtime_value = 
-        | RT_int of int runtime_value_storage
-        | RT_string of string runtime_value_storage
-        | RT_file of (string * string) runtime_value_storage
-        | RT_fastq of (fastq * string option) runtime_value_storage
-        | RT_program of program runtime_value_storage
+      let rt_value id v = {val_id = id; val_history = [ v ]}
+      let update_value v nv =
+        v.val_history <- nv :: v.val_history
+      let current_value v = List.hd v.val_history        
+
+      let string_of_runtime_value v =
+        let s = 
+          match current_value v with
+          | RT_int            v    -> sprintf "int %d" v 
+          | RT_string         v    -> sprintf "string %s" v
+          | RT_file           v    -> sprintf "file %s" v 
+          | RT_checked_file (v, _) -> sprintf "checked_file %s" v 
+          | RT_fastq          v    -> sprintf "fastq %s" v.fastq_comment 
+          | RT_expression     v    -> sprintf "expr %s" (string_of_expression v)
+        in
+        sprintf "VAL:%S = [ %s; ... %d updates ... ]"
+          (Path.str v.val_id)  s (List.length v.val_history - 1)
 
       type runtime = {
         unique_id: string -> string;
-        mutable programs: (string, runtime_program) HT.t;
-        mutable values: (string, runtime_value) HT.t;
+        mutable values: (Path.t, runtime_value) HT.t;
       }
-
       let create () =
         let ids = ref 0 in
         {unique_id = (fun s -> incr ids; sprintf "%s%d" s !ids);
-         programs = HT.create 42;
          values = HT.create 42}
+      let add_value rt v =
+        HT.add rt.values v.val_id v
+      let get_value rt id =
+        HT.find rt.values id
+      let print_runtime ?(indent=0) rt =
+        let strindent = String.make indent ' ' in
+        HT.iter (fun id v ->
+          printf "%s%s\n" strindent (string_of_runtime_value v)
+        ) rt.values
 
-      let load_program rt p =
-        let valid =        
-          let type_checked = Verify.type_check_program p in
-          List.for_all (fun (n, t) ->
-            match t with Ok _ -> true | _ -> false) type_checked
+      let load_program rt prog_id program =
+        let validate () =        
+          let type_checked = Verify.type_check_program program in
+          List.iter (fun (name, t) ->
+            match t with
+            | Ok _ -> 
+              let path = [prog_id; name] in
+              begin match get_value rt path with
+              | Some s ->
+                failwith (sprintf "Program/Module %S already exists"
+                            (Path.str path))
+              | None -> ()
+              end
+            | Bad reason ->
+              failwith 
+                (sprintf "Can't load programs that do not type-check: %s: %s"
+                   name reason)
+          ) type_checked
         in
-        if valid then (
-          let id = rt.unique_id "simdb_program_" in
-          let rt_prog = 
-            {program_id = id; original_program = p; compilations = []} in
-          HT.add rt.programs id rt_prog;
-          Some id
-        ) else
-          None
-            
-      let compile_program ?(optimize=`all) rt prog_id =
-        match HT.find rt.programs prog_id with
-        | Some p ->
-          if optimize = `all then
-            p.compilations <- 
-              `target_independent_transformation 
-              (Transform.optimize p.original_program) ::
-              p.compilations
-          else
-            ()
-        | None -> failwith (sprintf "Program %S not found in database" prog_id)
+        try 
+          validate ();
+          List.iter (fun (name, expr) ->
+            let path = [prog_id; name] in
+            add_value rt (rt_value path (RT_expression expr))
+          ) program;
+          Ok ()
+        with
+          Failure s -> 
+            Bad (`wrong_request s)
+
+      let compile_runtime ?(optimize=`to_eleven) rt s =
+        HT.iter (fun expr_path rtval ->
+          match current_value rtval with
+          | RT_expression p -> 
+            if optimize = `all then
+              () (*update_value rtval (RT_expression (Transform.optimize p))*)
+            else
+              ()
+          | _ -> ()
+        ) rt.values
 
     end
 
@@ -287,6 +324,9 @@ module DSL = struct
 end
 
 
+module Runtime = DSL.Runtime.Simulation_backend
+let runtime = Runtime.create ()
+
 let test ?(opt=false) name p =
   printf "=== Program %S ===\n" name;
   DSL.print_program ~indent:2 p;
@@ -299,8 +339,13 @@ let test ?(opt=false) name p =
   ) (DSL.Verify.type_check_program p);
   if opt then (
     printf "  Optimization pass:\n";
-    DSL.print_program ~indent:2 (DSL.Transform.optimize p);
+    DSL.print_program ~indent:4 (DSL.Transform.optimize p);
   );
+  begin match Runtime.load_program runtime name p with
+  | Ok () -> printf "  Program loaded\n"
+  | Bad s -> printf "  Program can't be loaded:\n    %s\n"
+    (Runtime.string_of_error s)
+  end;
   ()
 
 
@@ -321,5 +366,8 @@ let () =
     "bowtie", (bowtie (load_fastq (file "/path/to/samefile")) 42);
     "rebowtie", (bowtie (load_fastq (file "/path/to/samefile")) 51);
   ];
+  test "good" [ "myfile", (int 42) ];
+  printf "===== Current Runtime =====\n";
+  Runtime.print_runtime ~indent:4 runtime;
   ()
     
