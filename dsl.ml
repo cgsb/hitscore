@@ -1,4 +1,7 @@
 open Printf
+type ('a, 'b) result = 
+  | Ok of 'a
+  | Bad of 'b
 
 
 
@@ -31,6 +34,30 @@ module DSL = struct
 
   open Definition
 
+
+  let string_of_expression e =
+    let fastq = fun { fastq_comment; fastq_record; fastq_quality } ->
+      sprintf "(%s %s %s)" fastq_comment fastq_record fastq_quality in
+    let basic = function
+      | Int i -> sprintf "%d" i
+      | String s -> sprintf "%S" s
+      | Fastq f -> 
+        sprintf "(fastq: %s)" (String.concat ", " (List.map fastq f))
+      | File f -> sprintf "(file: %s)" f in
+    let rec expr = function
+      | Constant c -> sprintf "(cst: %s)" (basic c)
+      | Variable v -> sprintf "(var: %s)" v
+      | Load_fastq e -> sprintf "(load_fastq: %s)" (expr e)
+      | Bowtie (e1, e2) -> sprintf "(bowtie %s %s)" (expr e1) (expr e2)
+    in
+    (expr e)
+
+  let print_program =
+    List.iter (fun (g, e) -> printf "[%S:\n  %s\n]\n" g (string_of_expression e))
+
+
+
+
   module Construct = struct
       
     let int i = Constant (Int i)
@@ -42,9 +69,65 @@ module DSL = struct
 
   end
 
+  module Verify = struct
+
+    type dsl_type = 
+      [ `int
+      | `string
+      | `fastq
+      | `file ]
+
+    let string_of_type = function
+      | `int -> "int"
+      | `string -> "string"
+      | `fastq -> "fastq"
+      | `file -> "file"
+
+    let variable_type env var =
+      try
+        (snd (List.find (fun (v, t) -> v = var) env))
+      with 
+        Not_found -> Bad (sprintf "Variable %s not found" var)
+
+    let atom_type = function
+      | Int _ -> Ok `int
+      | String _ -> Ok `string
+      | Fastq _ -> Ok `fastq
+      | File _ -> Ok `file
+
+    let rec type_check_expression env = function
+      | Constant a -> atom_type a
+      | Variable v -> variable_type env v
+      | Load_fastq e -> 
+        begin match type_check_expression env e with
+        | Ok `file -> Ok `fastq
+        | Ok other ->
+          Bad (sprintf "Load_fastq expects a file, %s has a wrong type: %s"
+                 (string_of_expression e) (string_of_type other))
+        | Bad s -> Bad s
+        end
+      | Bowtie (e1, e2) ->
+        begin match type_check_expression env e1, 
+          type_check_expression env e2 with
+          | Ok `fastq, Ok `int -> Ok `fastq
+          | _, _ ->
+            Bad "Bowtie expects a `fastq and an `int, error messages \
+                  will be better in the next version"
+        end
+
+    let type_check_program p =
+      let env = ref [] in
+      List.iter (fun (name, expr) ->
+        let tc = type_check_expression !env expr in
+        env := (name, tc) :: !env
+      ) p;
+      List.rev !env
+
+  end
+
   module Runtime = struct
 
-    (* Representation of the run-time in the meta-language *)
+    (* Representation of the server run-time in the meta-language *)
     module Simulation_backend = struct
 
       type not_yet_defined
@@ -116,30 +199,6 @@ module DSL = struct
 
 
 
-  (* Debug Stuff: *)
-
-  let string_of_expression e =
-    let fastq = fun { fastq_comment; fastq_record; fastq_quality } ->
-      sprintf "(%s %s %s)" fastq_comment fastq_record fastq_quality in
-    let basic = function
-      | Int i -> sprintf "%d" i
-      | String s -> sprintf "%S" s
-      | Fastq f -> 
-        sprintf "(fastq: %s)" (String.concat ", " (List.map fastq f))
-      | File f -> sprintf "(file: %s)" f in
-    let rec expr = function
-      | Constant c -> sprintf "(cst: %s)" (basic c)
-      | Variable v -> sprintf "(var: %s)" v
-      | Load_fastq e -> sprintf "(load_fastq: %s)" (expr e)
-      | Bowtie (e1, e2) -> sprintf "(bowtie %s %s)" (expr e1) (expr e2)
-    in
-    (expr e)
-
-  let print_program =
-    List.iter (fun (g, e) -> printf "[%S:\n  %s\n]\n" g (string_of_expression e))
-
-
-
 end
 
 let () =
@@ -149,6 +208,13 @@ let () =
       "bowtie", (bowtie (load_fastq (var "myfile")) 42);
       "rebowtie", (bowtie (var "bowtie") 51)
     ] in
-  DSL.print_program p
+  DSL.print_program p;
+  printf "Type Checking:\n";
+  List.iter (fun (n, res) ->
+    printf "  %s : %s\n" n 
+      (match res with
+      | Ok t -> DSL.Verify.string_of_type t
+      | Bad b -> b);
+  ) (DSL.Verify.type_check_program p)
 
 
