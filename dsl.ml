@@ -204,20 +204,31 @@ module DSL = struct
 
 end
 
-let () =
-  let p =
-    let open DSL.Construct in [
-      "myfile", (file "/path/to/myfile.fastq");
-      "bowtie", (bowtie (load_fastq (var "myfile")) 42);
-      "rebowtie", (bowtie (var "bowtie") 51)
-    ] in
-  DSL.print_program p;
-  printf "Type Checking:\n";
+
+let test name p =
+  printf "=== Program %S ===\n" name;
+  DSL.print_program ~indent:2 p;
+  printf "  Type Checking:\n";
   List.iter (fun (n, res) ->
-    printf "  %s : %s\n" n 
+    printf "    %s : %s\n" n 
       (match res with
       | Ok t -> DSL.Verify.string_of_type t
       | Bad b -> b);
   ) (DSL.Verify.type_check_program p)
 
 
+let () =
+  let open DSL.Construct in 
+  test "good" [
+    "myfile", (file "/path/to/myfile.fastq");
+    "bowtie", (bowtie (load_fastq (var "myfile")) 42);
+    "rebowtie", (bowtie (var "bowtie") 51)
+  ];
+  test "bad" [
+    "wrong_file", load_fastq (int 42);
+    "wrong_var", var "nope";
+    "bad_bowtie", (bowtie (var "bowtie") 51)
+  ];
+
+  ()
+    
