@@ -3,6 +3,13 @@ type ('a, 'b) result =
   | Ok of 'a
   | Bad of 'b
 
+module OCamlList = List
+module List = struct
+  include OCamlList
+
+  let find_opt f l =
+    try Some (List.find f l) with _ -> None
+end
 
 
 module DSL = struct
