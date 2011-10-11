@@ -24,6 +24,15 @@ end
 module DSL = struct
 
   module Definition = struct
+
+    type dsl_type = 
+      | T_int
+      | T_string
+      | T_fastq
+      | T_file 
+
+
+
     type fastq = {
       fastq_comment : string;
       fastq_record : string;
@@ -39,6 +48,7 @@ module DSL = struct
     type expression =
       | Constant of atom
       | Variable of string
+      | External of Path.t * dsl_type
       | Load_fastq of expression
       | Bowtie of expression * expression (* fastq x some_other -> ??? *)
 
@@ -51,6 +61,12 @@ module DSL = struct
   open Definition
 
 
+  let string_of_type = function
+    | T_int -> "int"
+    | T_string -> "string"
+    | T_fastq -> "fastq"
+    | T_file -> "file"
+
   let string_of_expression e =
     let fastq = fun { fastq_comment; fastq_record; fastq_quality } ->
       sprintf "(%s %s %s)" fastq_comment fastq_record fastq_quality in
@@ -58,12 +74,14 @@ module DSL = struct
       | Int i -> sprintf "%d" i
       | String s -> sprintf "%S" s
       | Fastq f -> 
-        sprintf "(fastq: %s)" (String.concat ", " (List.map fastq f))
-      | File f -> sprintf "(file: %s)" f in
+        sprintf "(fastq %s)" (String.concat ", " (List.map fastq f))
+      | File f -> sprintf "(file %s)" f in
     let rec expr = function
-      | Constant c -> sprintf "(cst: %s)" (basic c)
-      | Variable v -> sprintf "(var: %s)" v
-      | Load_fastq e -> sprintf "(load_fastq: %s)" (expr e)
+      | Constant c -> sprintf "(cst %s)" (basic c)
+      | Variable v -> sprintf "(var %s)" v
+      | External (p, t) ->
+        sprintf "(ext %s : %s)" (Path.str p) (string_of_type t)
+      | Load_fastq e -> sprintf "(load_fastq %s)" (expr e)
       | Bowtie (e1, e2) -> sprintf "(bowtie %s %s)" (expr e1) (expr e2)
     in
     (expr e)
@@ -85,22 +103,13 @@ module DSL = struct
     let file f = Constant (File f)
     let load_fastq f = Load_fastq f 
     let bowtie e i = Bowtie (e, int i)
-
+    let ext_int p = External (p, T_int)
+    let ext_str p = External (p, T_string)
+    let ext_fastq p = External (p, T_fastq)
+    let ext_file p = External (p, T_file)
   end
 
   module Verify = struct
-
-    type dsl_type = 
-      [ `int
-      | `string
-      | `fastq
-      | `file ]
-
-    let string_of_type = function
-      | `int -> "int"
-      | `string -> "string"
-      | `fastq -> "fastq"
-      | `file -> "file"
 
     let variable_type env var =
       if String.length var > 2 && String.sub var 0 2 = "__" then
@@ -113,17 +122,35 @@ module DSL = struct
         end
 
     let atom_type = function
-      | Int _ -> Ok `int
-      | String _ -> Ok `string
-      | Fastq _ -> Ok `fastq
-      | File _ -> Ok `file
+      | Int _ -> Ok T_int
+      | String _ -> Ok T_string
+      | Fastq _ -> Ok T_fastq
+      | File _ -> Ok T_file
 
-    let rec type_check_expression env = function
+    let rec type_check_expression 
+        ?(check_externals:(Path.t -> (dsl_type, string) result) option) 
+        env expr =
+      match expr with
       | Constant a -> atom_type a
       | Variable v -> variable_type env v
+      | External (p, t) -> 
+        begin match check_externals with
+        | Some ce ->
+          begin match ce p with 
+          | Ok et -> 
+            if et = t then
+              Ok t 
+            else
+              Bad
+                (sprintf "External %s has conflicting types: %s Vs %s"
+                   (Path.str p) (string_of_type et) (string_of_type t))
+          | Bad b -> Bad b
+          end
+        | None -> Ok t
+        end
       | Load_fastq e -> 
         begin match type_check_expression env e with
-        | Ok `file -> Ok `fastq
+        | Ok T_file -> Ok T_fastq
         | Ok other ->
           Bad (sprintf "Load_fastq expects a file, %S has a wrong type: %S"
                  (string_of_expression e) (string_of_type other))
@@ -132,16 +159,16 @@ module DSL = struct
       | Bowtie (e1, e2) ->
         begin match type_check_expression env e1, 
           type_check_expression env e2 with
-          | Ok `fastq, Ok `int -> Ok `fastq
+          | Ok T_fastq, Ok T_int -> Ok T_fastq
           | _, _ ->
             Bad "Bowtie expects a `fastq and an `int … error messages \
                   will be better in the future"
         end
 
-    let type_check_program p =
+    let type_check_program ?check_externals p =
       let env = ref [] in
       List.iter (fun (name, expr) ->
-        let tc = type_check_expression !env expr in
+        let tc = type_check_expression ?check_externals !env expr in
         env := (name, tc) :: !env
       ) p;
       List.rev !env
@@ -165,6 +192,7 @@ module DSL = struct
                                        ===>  you should complain to the devs" s
         | `wrong_request s -> sprintf "Wrong Request: %s" s 
         | `runtime_error s -> sprintf "Runtime Error: %s" s 
+      exception Error of error
 
       type meta_value = 
         | RT_int of int
@@ -172,7 +200,7 @@ module DSL = struct
         | RT_file of string
         | RT_checked_file of (string * Digest.t)
         | RT_fastq of fastq
-        | RT_expression of expression
+        | RT_expression of expression * dsl_type
       type runtime_value = {
         (* kind of path / unique id / Ocsigen's convention *)
         val_id: Path.t;
@@ -183,7 +211,9 @@ module DSL = struct
       let rt_value id v = {val_id = id; val_history = [ v ]}
       let update_value v nv =
         v.val_history <- nv :: v.val_history
-      let current_value v = List.hd v.val_history        
+      let current_value v =
+        try List.hd v.val_history
+        with e -> raise (Error (`fatal_error "value has no history!"))
 
       let string_of_runtime_value v =
         let s = 
@@ -193,14 +223,15 @@ module DSL = struct
           | RT_file           v    -> sprintf "file %s" v 
           | RT_checked_file (v, _) -> sprintf "checked_file %s" v 
           | RT_fastq          v    -> sprintf "fastq %s" v.fastq_comment 
-          | RT_expression     v    -> sprintf "expr %s" (string_of_expression v)
+          | RT_expression   (v, t) -> sprintf "%s Expr %s"
+            (string_of_type t) (string_of_expression v)
         in
         sprintf "VAL:%S = [ %s; ... %d updates ... ]"
           (Path.str v.val_id)  s (List.length v.val_history - 1)
 
       type runtime = {
         unique_id: string -> string;
-        mutable programs: (string * (string * expression * Verify.dsl_type) list) list;
+        mutable programs: (string * (string * expression * dsl_type) list) list;
         mutable values: (Path.t, runtime_value) HT.t;
       }
       let create () =
@@ -222,7 +253,19 @@ module DSL = struct
           None
         with
           Found (p, v) -> Some (p, v)
-
+      let type_of_value rt path =
+        match get_value rt path with
+        | Some s ->
+          begin match current_value s with
+          | RT_int            v    -> Ok T_int
+          | RT_string         v    -> Ok T_string
+          | RT_file           v    -> Ok T_file  
+          | RT_checked_file (v, _) -> Ok T_file
+          | RT_fastq          v    -> Ok T_fastq
+          | RT_expression   (v, t) -> Ok t
+          end
+        | None -> Bad (sprintf "Value %s not found" (Path.str path))
+        
       let print_runtime ?(indent=0) rt =
         let strindent = String.make indent ' ' in
         HT.iter (fun id v ->
@@ -230,7 +273,9 @@ module DSL = struct
         ) rt.values
 
       let load_program rt prog_id program =
-        let type_checked = Verify.type_check_program program in
+        let type_checked = 
+          Verify.type_check_program ~check_externals:(type_of_value rt) program
+        in
         let validate () =
           if program = [] then failwith "Won't load an empty program";
           List.map2 (fun (name, tres) (name, code) ->
@@ -250,11 +295,12 @@ module DSL = struct
           ) type_checked program
         in
         try 
-          rt.programs <- (prog_id, validate ()) :: rt.programs;
-          List.iter (fun (name, expr) ->
+          let validated = validate () in
+          rt.programs <- (prog_id, validated) :: rt.programs;
+          List.iter (fun (name, expr, t) ->
             let path = [prog_id; name] in
-            add_value rt (rt_value path (RT_expression expr))
-          ) program;
+            add_value rt (rt_value path (RT_expression (expr, t)))
+          ) validated;
           Ok ()
         with
           Failure s -> 
@@ -270,28 +316,30 @@ module DSL = struct
             (fun file_expr ->
               let f path v =
                 match current_value v with
-                | RT_expression e -> e = file_expr 
+                | RT_expression (e, _) -> e = file_expr 
                 | _ -> false in
               match find_value ~f rt with
-              | Some (n, f) -> Variable (sprintf "GLOBAL:%s" (Path.str n))
+              | Some (p, f) -> External (p, T_file)
               | None ->
                 let name = incr i; sprintf "__file_%d" !i in
                 let path = [ "__files"; name ] in
-                add_value rt (rt_value path (RT_expression file_expr));
-                Variable (sprintf "GLOBAL:%s" (Path.str path))) in
+                add_value rt 
+                  (rt_value path (RT_expression (file_expr, T_file)));
+                External (path, T_file)) in
           let rec transform_expression = function
             | Constant (File f) as e -> new_file e
             | Constant _ as e -> e
             | Variable _ as e -> e
+            | External _ as e -> e
             | Load_fastq  e -> Load_fastq (transform_expression e)
             | Bowtie (e1, e2) -> 
               Bowtie (transform_expression e1, transform_expression e2) in
           HT.iter (fun path v ->
             match current_value v with
-            | RT_expression e -> 
+            | RT_expression (e, t) -> 
               let new_expr = transform_expression e in
               if e <> new_expr then
-                update_value v (RT_expression new_expr)
+                update_value v (RT_expression (new_expr, t))
             | _ -> ()
           ) rt.values
 
@@ -355,7 +403,7 @@ let test name p =
   List.iter (fun (n, res) ->
     printf "    %s : %s\n" n 
       (match res with
-      | Ok t -> DSL.Verify.string_of_type t
+      | Ok t -> DSL.string_of_type t
       | Bad b -> b);
   ) (DSL.Verify.type_check_program p);
   begin match Runtime.load_program runtime name p with
@@ -378,6 +426,9 @@ let () =
     "wrong_file", load_fastq (int 42);
     "wrong_var", var "nope";
     "bad_bowtie", (bowtie (var "bowtie") 51);
+  ];
+  test "with_wrong_external" [
+    "wrong_external", (ext_int ["good"; "myfile"])
   ];
   test "optimizable" [
     "bowtie", (bowtie (load_fastq (file "/path/to/samefile")) 42);
