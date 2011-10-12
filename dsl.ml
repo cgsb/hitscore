@@ -351,10 +351,23 @@ module DSL = struct
               end
           ) rt.values
 
-        
+        let eval_constants  ?(filter=[]) rt =
+          HT.iter (fun path v ->
+            if Path.is_top_of filter path then
+              begin match current_value v with
+              | RT_expression (Constant (File f), t) -> 
+                update_value v (RT_file f)
+              | RT_expression (Constant (Int i), t) -> 
+                update_value v (RT_int i)
+              | _ -> ()
+              end
+          ) rt.values
+       
         let optimize ?filter (how: optimization) rt =
           match how with
-          | `to_eleven -> factorize_files ?filter rt
+          | `to_eleven ->
+            eval_constants ?filter rt; 
+            factorize_files ?filter rt
 
       end
 
