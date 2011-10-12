@@ -380,6 +380,56 @@ module DSL = struct
             eval_constants ?filter rt; 
             factorize_files ?filter rt
 
+        let compile rt prog =
+          let open Concat_tree in
+          let compile_atom = function
+            | Int      v -> string_of_int v
+            | String   v -> v
+            | Fastq    v -> "Is_there_really_a_fastq_atom_or_just_a_type"
+            | File     v -> v
+          in
+          let echo s = elt (sprintf "echo \"%s\" >> /tmp/monitoring\n" s) in
+          let toplevel = 
+            ref (elt (sprintf "# Program %s compiled\n" (Path.str prog))) in
+          let to_top t = toplevel := concat (!toplevel :: t) in
+          let rec compile_expression = function
+            | Constant a -> elt (compile_atom a)
+            | Variable v -> elt (sprintf "`$get_result %s/%s`" (Path.str prog) v)
+            | External (e, t) -> elt (sprintf "`$get_result %s`" (Path.str e))
+            | Load_fastq  e -> 
+              let file = compile_expression e in
+              let file_var = rt.unique_id "FASTQ_LOADED_FILE_" in
+              to_top [
+                echo "Checking file";
+                elt "if [ -f "; file; elt " ] ; then\n";
+                echo "Seems OK";
+                elt "else\n";
+                echo "Problem!";
+                elt "exit 2\nfi\nexport ";
+                elt file_var;
+                elt "="; file; elt "\n\n"
+              ];
+              elt (sprintf "$%s" file_var)
+            | Bowtie (e1, e2) -> 
+              let fastq = compile_expression e1 in
+              let int = compile_expression e2 in
+              concat [
+                elt "echo 'Call Bowtie' >> /tmp/monitoring\n";
+                elt "$BOWTIE -fastq-file "; fastq;
+                elt " -param "; int; elt "\n";
+                elt "echo \"Bowtie returned $?\" >> /tmp/monitoring\n";
+              ]
+          in
+          match Option.map current_value (get_value rt prog) with
+          | Some (RT_expression (e, t)) ->
+            let result = 
+              concat [
+                !toplevel;
+                (compile_expression e);
+              ] in
+            Concat_tree.iter print_string result
+          | _ -> ()
+
       end
 
       let compile_runtime ?(optimize=`to_eleven) ?filter rt =
@@ -482,5 +532,14 @@ let () =
   Runtime.compile_runtime runtime;
   printf "=== Current Runtime:\n";
   Runtime.print_runtime ~indent:2 runtime;
+
+printf "\n\n";
+Runtime.Transform.compile runtime ["good"; "bowtie"];
+
+printf "\n\n";
+Runtime.Transform.compile runtime ["good"; "myfile"];
+
+printf "\n\n";
+Runtime.Transform.compile runtime ["good"; "rebowtie"];
   ()
     
