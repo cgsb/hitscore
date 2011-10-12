@@ -25,9 +25,20 @@ module Path = struct
     with
       Invalid_argument "List.for_all2" -> 
         List.length left < List.length right
-
 end
 
+module Option = BatOption
+
+module Concat_tree = struct
+
+  type 'a t = Elt of 'a | Cat of 'a t list
+
+  let elt e = Elt e
+  let concat l = Cat l
+  let rec iter f = function
+    | Elt e -> f e
+    | Cat le -> List.iter (iter f) le
+end
 
 module DSL = struct
 
