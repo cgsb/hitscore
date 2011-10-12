@@ -18,6 +18,14 @@ end
 module Path = struct
   type t = string list
   let str = String.concat "/"
+  let is_top_of left right =
+    (* This quite hackish *)
+    try
+      List.for_all2 (=) left right
+    with
+      Invalid_argument "List.for_all2" -> 
+        List.length left < List.length right
+
 end
 
 
@@ -310,7 +318,7 @@ module DSL = struct
 
         type optimization = [ `to_eleven ]
 
-        let factorize_files rt =
+        let factorize_files ?(filter=[]) rt =
           let new_file =
             let i = ref 0 in
             (fun file_expr ->
@@ -335,22 +343,24 @@ module DSL = struct
             | Bowtie (e1, e2) -> 
               Bowtie (transform_expression e1, transform_expression e2) in
           HT.iter (fun path v ->
-            match current_value v with
-            | RT_expression (e, t) -> 
-              let new_expr = transform_expression e in
-              if e <> new_expr then
-                update_value v (RT_expression (new_expr, t))
-            | _ -> ()
+            if Path.is_top_of filter path then
+              begin match current_value v with
+              | RT_expression (e, t) -> 
+                let new_expr = transform_expression e in
+                if e <> new_expr then
+                  update_value v (RT_expression (new_expr, t))
+              | _ -> ()
+              end
           ) rt.values
 
-        let optimize (how: optimization) rt =
+        let optimize ?filter (how: optimization) rt =
           match how with
-          | `to_eleven -> factorize_files rt
+          | `to_eleven -> factorize_files ?filter rt
 
       end
 
-      let compile_runtime ?(optimize=`to_eleven) rt =
-        Transform.optimize optimize rt;
+      let compile_runtime ?(optimize=`to_eleven) ?filter rt =
+        Transform.optimize optimize ?filter rt;
         ()
 
     end
@@ -439,9 +449,15 @@ let () =
   test "good" [];
   printf "===== Current Runtime =====\n";
   Runtime.print_runtime ~indent:2 runtime;
-  printf "=== Compiling\n";
+
+  let filter = [ "good" ] in
+  printf "===== Compiling %s/* stuff =====\n" (Path.str filter);
+  Runtime.compile_runtime ~filter runtime;
+  printf "=== Current Runtime:\n";
+  Runtime.print_runtime ~indent:2 runtime;
+  printf "===== Compiling all the stuff =====\n";
   Runtime.compile_runtime runtime;
-  printf "===== Current Runtime =====\n";
+  printf "=== Current Runtime:\n";
   Runtime.print_runtime ~indent:2 runtime;
   ()
     
