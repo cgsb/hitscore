@@ -226,12 +226,12 @@ module DSL = struct
       let string_of_runtime_value v =
         let s = 
           match current_value v with
-          | RT_int            v    -> sprintf "int %d" v 
-          | RT_string         v    -> sprintf "string %s" v
-          | RT_file           v    -> sprintf "file %s" v 
-          | RT_checked_file (v, _) -> sprintf "checked_file %s" v 
-          | RT_fastq          v    -> sprintf "fastq %s" v.fastq_comment 
-          | RT_expression   (v, t) -> sprintf "%s Expr %s"
+          | RT_int            v    -> sprintf "INT %d" v 
+          | RT_string         v    -> sprintf "STRING %s" v
+          | RT_file           v    -> sprintf "FILE %s" v 
+          | RT_checked_file (v, _) -> sprintf "CHECKED_FILE %s" v 
+          | RT_fastq          v    -> sprintf "FASTQ %s" v.fastq_comment 
+          | RT_expression   (v, t) -> sprintf "EXPR(%s) %s"
             (string_of_type t) (string_of_expression v)
         in
         sprintf "VAL:%S = [ %s; ... %d updates ... ]"
