@@ -320,39 +320,38 @@ module DSL = struct
 
         let factorize_files ?(filter=[]) rt =
           let new_file =
-            let i = ref 0 in
-            (fun file_expr ->
+            (fun filename ->
               let f path v =
                 match current_value v with
-                | RT_expression (e, _) -> e = file_expr 
+                | RT_file f -> f = filename
                 | _ -> false in
               match find_value ~f rt with
               | Some (p, f) -> External (p, T_file)
               | None ->
-                let name = incr i; sprintf "__file_%d" !i in
+                let name = rt.unique_id "__file_" in
                 let path = [ "__files"; name ] in
-                add_value rt 
-                  (rt_value path (RT_expression (file_expr, T_file)));
+                add_value rt (rt_value path (RT_file filename));
                 External (path, T_file)) in
-          let rec transform_expression = function
-            | Constant (File f) as e -> new_file e
+          let rec transform_expressions = function
+            | Constant (File f) -> new_file f
             | Constant _ as e -> e
             | Variable _ as e -> e
             | External _ as e -> e
-            | Load_fastq  e -> Load_fastq (transform_expression e)
+            | Load_fastq  e -> Load_fastq (transform_expressions e)
             | Bowtie (e1, e2) -> 
-              Bowtie (transform_expression e1, transform_expression e2) in
+              Bowtie (transform_expressions e1, transform_expressions e2) in
           HT.iter (fun path v ->
             if Path.is_top_of filter path then
               begin match current_value v with
               | RT_expression (e, t) -> 
-                let new_expr = transform_expression e in
+                let new_expr = transform_expressions e in
                 if e <> new_expr then
                   update_value v (RT_expression (new_expr, t))
               | _ -> ()
               end
           ) rt.values
 
+        
         let optimize ?filter (how: optimization) rt =
           match how with
           | `to_eleven -> factorize_files ?filter rt
