@@ -40,6 +40,9 @@ module Path = struct
         h = name
       | [] -> false) left
 
+  let dir_path path =
+    List.take (List.length path - 1) path
+
 end
 
 module Option = BatOption
@@ -436,7 +439,8 @@ module DSL = struct
           let to_top t = toplevel := concat (!toplevel :: t) in
           let rec compile_expression = function
             | Constant a -> elt (compile_atom a)
-            | Variable v -> elt (sprintf "`$get_result %s/%s`" (Path.str prog) v)
+            | Variable v -> 
+              elt (sprintf "`$get_result %s/%s`" Path.(prog |> dir_path |> str) v)
             | External (e, t) -> elt (sprintf "`$get_result %s`" (Path.str e))
             | Load_fastq  e -> 
               let file = compile_expression e in
