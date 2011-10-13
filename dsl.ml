@@ -1,14 +1,26 @@
 open Printf
-type ('a, 'b) result = 
-  | Ok of 'a
-  | Bad of 'b
+
+open BatStd (* Just for result !? *)
+module Result = struct
+  include BatResult
+end
 
 module OCamlList = List
 module List = struct
   include OCamlList
+  include BatList
+  include BatList.Exceptionless
+  include BatList.Labels
+  include BatList.Labels.LExceptionless
 
-  let find_opt f l =
-    try Some (List.find f l) with _ -> None
+  let results ~f l =
+    let o =
+      find_map (fun x ->
+        match f x with Ok () -> None | Bad b -> Some (Bad b)) l in
+    match o with 
+    | None -> Ok ()
+    | Some b -> b
+
 end
 module HT = struct
   include Hashtbl
@@ -107,7 +119,7 @@ module DSL = struct
 
   let print_program ?(indent=0) =
     let strindent = String.make indent ' ' in
-    List.iter (fun (g, e) ->
+    List.iter ~f:(fun (g, e) ->
       printf "%s[%S:\n%s  %s\n%s]\n" 
         strindent g strindent (string_of_expression e) strindent)
 
@@ -130,15 +142,31 @@ module DSL = struct
 
   module Verify = struct
 
+    let identifier var =
+      let module N = struct exception O of string end in
+      try
+        String.iter (function
+          | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> ()
+          | c -> 
+            raise (N.O (sprintf
+                           "Char %C not allowed in variable name: %S" c var))
+        ) var;
+        if String.length var > 2 && String.sub var 0 2 = "__" then
+          raise (N.O (sprintf "Variable %S can't start with '__'" var));
+        Ok ()
+      with
+        N.O msg -> Bad msg
+                 
+
+
     let variable_type env var =
-      if String.length var > 2 && String.sub var 0 2 = "__" then
-        Bad (sprintf "Variable %S has a wrong name" var)
-      else
-        begin try
-                (snd (List.find (fun (v, t) -> v = var) env))
-          with 
-            Not_found -> Bad (sprintf "Variable %S not found" var)
+      match identifier var with
+      | Ok () ->
+        begin match List.find ~f:(fun (v, _) -> v = var) env with
+        | Some (_, t) -> t
+        | None -> Bad (sprintf "Variable %S not found" var)
         end
+      | Bad b -> Bad b
 
     let atom_type = function
       | Int _ -> Ok T_int
@@ -153,19 +181,23 @@ module DSL = struct
       | Constant a -> atom_type a
       | Variable v -> variable_type env v
       | External (p, t) -> 
-        begin match check_externals with
-        | Some ce ->
-          begin match ce p with 
-          | Ok et -> 
-            if et = t then
-              Ok t 
-            else
-              Bad
-                (sprintf "External %s has conflicting types: %s Vs %s"
-                   (Path.str p) (string_of_type et) (string_of_type t))
-          | Bad b -> Bad b
+        begin match List.results ~f:identifier p with
+        | Ok () ->
+          begin match check_externals with
+          | Some ce ->
+            begin match ce p with 
+            | Ok et -> 
+              if et = t then
+                Ok t 
+              else
+                Bad
+                  (sprintf "External %s has conflicting types: %s Vs %s"
+                     (Path.str p) (string_of_type et) (string_of_type t))
+            | Bad b -> Bad b
+            end
+          | None -> Ok t
           end
-        | None -> Ok t
+        | Bad b -> Bad b
         end
       | Load_fastq e -> 
         begin match type_check_expression env e with
@@ -187,7 +219,11 @@ module DSL = struct
     let type_check_program ?check_externals p =
       let env = ref [] in
       List.iter (fun (name, expr) ->
-        let tc = type_check_expression ?check_externals !env expr in
+        let tc = 
+          Result.bind 
+            (identifier name)
+            (fun () -> type_check_expression ?check_externals !env expr)
+        in
         env := (name, tc) :: !env
       ) p;
       List.rev !env
@@ -231,8 +267,11 @@ module DSL = struct
       let update_value v nv =
         v.val_history <- nv :: v.val_history
       let current_value v =
-        try List.hd v.val_history
-        with e -> raise (Error (`fatal_error "value has no history!"))
+        try Option.get (List.hd v.val_history)
+        with e ->
+          raise (Error (`fatal_error
+                           (sprintf "The value %S has no history!"
+                              (Path.str v.val_id))))
 
       let string_of_runtime_value v =
         let s = 
@@ -506,6 +545,9 @@ let () =
   ];
   test "bad" [
     "wrong_name", (var "__two_underscores");
+    "wrong_name2", (var "spécial");
+    "wrong_name3'", (int 42);
+    "wrong_name4", (ext_int ["good"; "__bad"]);
     "wrong_file", load_fastq (int 42);
     "wrong_var", var "nope";
     "bad_bowtie", (bowtie (var "bowtie") 51);
