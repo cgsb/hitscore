@@ -30,13 +30,16 @@ end
 module Path = struct
   type t = string list
   let str = String.concat "/"
+
   let is_top_of left right =
-    (* This quite hackish *)
-    try
-      List.for_all2 (=) left right
-    with
-      Invalid_argument "List.for_all2" -> 
-        List.length left < List.length right
+    let l = ref right in
+    List.for_all (fun name ->
+      match !l with
+      | h :: t -> 
+        l := t;
+        h = name
+      | [] -> false) left
+
 end
 
 module Option = BatOption
