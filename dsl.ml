@@ -564,30 +564,30 @@ module DSL = struct
             if Path.is_top_of fil path then Transform.compile rt path);
         ()
 
-      let assemble_program rt prog =
+      let assemble_program rt prog exec_path =
         let common_header =
-          "# Common Header\n
-
-export MONITORING=/tmp/monitoring
+          sprintf "# Common Header\n
+export EXEC_PATH=%s
+export MONITORING=$EXEC_PATH/monitoring
 echo 'Starting program' > $MONITORING
 date -R >> $MONITORING
 echo '' >> $MONITORING
 
 fun_get_result () {
   echo \"Getting file $1\" >> $MONITORING
-  echo /tmp/sequme_rt_files/$1
+  echo $EXEC_PATH/$1
 }
 export get_result=fun_get_result
 fun_store_result () {
   echo \"Storing $1 into $2\" >> $MONITORING
-  cp $1 /tmp/sequme_rt_files/$2
+  cp $1 $EXEC_PATH/$2
 }
 fun_bowtie () {
   echo \"fun_bowtie called with '$*'\" >> $MONITORING
   # sleep 2
-  echo $* >> /tmp/sequme_rt_files/$1
-  echo \"$3 :\" >> /tmp/sequme_rt_files/$1
-  cat $3 >> /tmp/sequme_rt_files/$1
+  echo $* >> $EXEC_PATH/$1
+  echo \"$3 :\" >> $EXEC_PATH/$1
+  cat $3 >> $EXEC_PATH/$1
 }
 export BOWTIE=fun_bowtie
 
@@ -595,7 +595,7 @@ export BOWTIE=fun_bowtie
 sleep 2
 echo 'After initial sleep' >> $MONITORING
 
-"
+" exec_path 
         in
         match get_value rt prog with
         | None -> raise (Error (`wrong_request
@@ -649,17 +649,23 @@ echo 'After initial sleep' >> $MONITORING
 
       let run_program rt prog =
         (* Prepare file system *)
+        let exec_dir = 
+          let path = rt.unique_id "/tmp/sequme_runtime_" in
+          System.mkdir_p path;
+          path in
         HT.iter rt.values ~f:(fun ~key ~data ->
           match current_value data with
           | RT_file f -> 
             let path =
-              (sprintf "/tmp/sequme_rt_files/%s" Path.(key |> dir_path |> str)) in
+              (sprintf "%s/%s" exec_dir Path.(key |> dir_path |> str)) in
             System.mkdir_p path;
-            ignore (System.cmd (sprintf "cp %s /tmp/sequme_rt_files/%s" f (Path.str key)))
+            ignore (System.cmd (sprintf "cp %s %s/%s" f exec_dir (Path.str key)))
           | _ -> ()
         );
-        let get_value, script = assemble_program rt prog in
-        let script_file = rt.unique_id "/tmp/sequme_script_" in
+        let get_value, script = assemble_program rt prog exec_dir in
+        let script_file =
+          let file = rt.unique_id "sequme_script_" in
+          sprintf "%s/%s" exec_dir file in
         let out = open_out script_file in
         Concat_tree.iter (output_string out) script;
         close_out out;
