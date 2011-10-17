@@ -289,7 +289,7 @@ module DSL = struct
         let s = 
           match current_value v with
           | RT_int            v    -> sprintf "INT %d" v 
-          | RT_string         v    -> sprintf "STRING %s" v
+          | RT_string         v    -> sprintf "STRING %S" v
           | RT_file           v    -> sprintf "FILE %s" v 
           | RT_checked_file (v, _) -> sprintf "CHECKED_FILE %s" v 
           | RT_fastq          v    -> sprintf "FASTQ %s" v.fastq_comment 
@@ -421,6 +421,8 @@ module DSL = struct
                 update_value v (RT_file f)
               | RT_expression (Constant (Int i), t) -> 
                 update_value v (RT_int i)
+              | RT_expression (Constant (String s), t) -> 
+                update_value v (RT_string s)
               | _ -> ()
               end
           ) rt.values
@@ -555,6 +557,8 @@ let () =
     "myfile", (file "/path/to/myfile.fastq");
     "bowtie", (bowtie (load_fastq (var "myfile")) 42);
     "rebowtie", (bowtie (var "bowtie") 51);
+    "one_int", (int 17);
+    "one_string", (str "Hi, World.");
   ];
   test "bad" [
     "wrong_name", (var "__two_underscores");
