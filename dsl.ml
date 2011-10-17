@@ -353,10 +353,10 @@ module DSL = struct
       exception Found of (Path.t * runtime_value)
       let find_value ~f rt =
         try
-          HT.iter (fun path v ->
+          HT.iter rt.values ~f:(fun ~key:path ~data:v ->
             if f path v then
               raise (Found (path, v))
-          ) rt.values;
+          );
           None
         with
           Found (p, v) -> Some (p, v)
@@ -375,7 +375,7 @@ module DSL = struct
         
       let print_runtime ?(indent=0) rt =
         let strindent = String.make indent ' ' in
-        HT.iter (fun id v ->
+        HT.iter (fun ~key ~data:v ->
           printf "%s%s\n" strindent (string_of_runtime_value v)
         ) rt.values
 
@@ -439,7 +439,7 @@ module DSL = struct
             | Load_fastq  e -> Load_fastq (transform_expressions e)
             | Bowtie (e1, e2) -> 
               Bowtie (transform_expressions e1, transform_expressions e2) in
-          HT.iter (fun path v ->
+          HT.iter (fun ~key:path ~data:v ->
             if Path.is_top_of filter path then
               begin match current_value v with
               | RT_expression (e, t) -> 
@@ -451,7 +451,7 @@ module DSL = struct
           ) rt.values
 
         let eval_constants  ?(filter=[]) rt =
-          HT.iter (fun path v ->
+          HT.iter (fun ~key:path ~data:v ->
             if Path.is_top_of filter path then
               begin match current_value v with
               | RT_expression (Constant (File f), t) -> 
@@ -478,15 +478,22 @@ module DSL = struct
             | Fastq    v -> "Is_there_really_a_fastq_atom_or_just_a_type"
             | File     v -> v
           in
-          let echo s = elt (sprintf "echo \"%s\" >> /tmp/monitoring\n" s) in
+          let echo s = elt (sprintf "echo \"%s\" >> /tmp/sequme_monitoring\n" s) in
           let toplevel = 
-            ref (elt (sprintf "# Program %s compiled\n" (Path.str prog))) in
+            ref (elt (sprintf "# Program %s compiled top-level\n" 
+                        (Path.str prog))) in
           let to_top t = toplevel := concat (!toplevel :: t) in
+          let dependencies = ref PathSet.empty in
+          let depends_on s = dependencies := PathSet.add s !dependencies in
           let rec compile_expression = function
             | Constant a -> elt (compile_atom a)
             | Variable v -> 
-              elt (sprintf "`$get_result %s/%s`" Path.(prog |> dir_path |> str) v)
-            | External (e, t) -> elt (sprintf "`$get_result %s`" (Path.str e))
+              let full_name = Path.(concat [(dir_path prog); [v]]) in
+              depends_on full_name;
+              elt (sprintf "`$get_result %s`" (Path.str full_name))
+            | External (e, t) ->
+              depends_on e;
+              elt (sprintf "`$get_result %s`" (Path.str e))
             | Load_fastq  e -> 
               let file = compile_expression e in
               let file_var = rt.unique_id "FASTQ_LOADED_FILE_" in
@@ -507,9 +514,9 @@ module DSL = struct
               let output_file = rt.unique_id "bowtie_output_" in
               let result_var = rt.unique_id "BOWTIE_RESULT_" in
               to_top [
-                elt "echo 'Call Bowtie' >> /tmp/monitoring\n";
-                elt "$BOWTIE -fastq-file "; fastq;
-                elt " -param "; int; elt " -o "; elt output_file; elt "\n";
+                elt "echo 'Call Bowtie' >> /tmp/sequme_monitoring\n";
+                elt "$BOWTIE "; elt output_file; elt " -fastq-file "; fastq;
+                elt " -param "; int; elt "\n";
                 elt "export "; elt result_var; elt "=$?\n";
                 elt "if [ $"; elt result_var; elt " -eq 0 ]; then\n";
                 echo (sprintf 
@@ -528,9 +535,11 @@ module DSL = struct
           | Some value ->
             begin match current_value value with
             | RT_expression (e, t) ->
+              let compiled = compile_expression e in
               let result = {
                 sh_toplevel = !toplevel;
-                sh_value = compile_expression e;
+                sh_value = compiled;
+                sh_dependencies = List.of_enum (PathSet.enum !dependencies);
               } in
               update_value value (RT_compiled (result, t))
             | _ -> ()
@@ -540,7 +549,112 @@ module DSL = struct
 
       let compile_runtime ?(optimize=`to_eleven) ?filter rt =
         Transform.optimize optimize ?filter rt;
+        HT.iter rt.values  ~f:(fun ~key:path ~data ->
+          match filter with
+          | None -> Transform.compile rt path
+          | Some fil ->
+            if Path.is_top_of fil path then Transform.compile rt path);
         ()
+
+      let assemble_program rt prog =
+        let common_header =
+          "# Common Header\n
+fun_get_result () {
+  echo \"Getting file $1\" >> /tmp/sequme_monitoring
+  echo /tmp/sequme_rt_files/$1
+}
+export get_result=fun_get_result
+fun_store_result () {
+  echo \"Storing $1 into $2\" >> /tmp/sequme_monitoring
+  cp $1 /tmp/sequme_rt_files/$2
+}
+fun_bowtie () {
+  echo \"fun_bowtie called with '$*'\" >> /tmp/sequme_monitoring
+  # sleep 2
+  echo $* >> /tmp/sequme_rt_files/$1
+  echo \"$3 :\" >> /tmp/sequme_rt_files/$1
+  cat $3 >> /tmp/sequme_rt_files/$1
+}
+export BOWTIE=fun_bowtie
+
+# start 
+sleep 2
+echo 'After initial sleep' >> /tmp/sequme_monitoring
+
+"
+        in
+        match get_value rt prog with
+        | None -> raise (Error (`wrong_request
+                                   (sprintf "Program not found: %S"
+                                      (Path.str prog))))
+        | Some value ->
+          begin match current_value value with
+          | RT_compiled (com, t) ->
+            let open Concat_tree in
+            let rec get_dep p = 
+              match get_value rt p with
+              | None ->
+                raise (Error (`fatal_error
+                                 (sprintf "Program %S has a dependency not found: %S"
+                                    (Path.str prog) (Path.str p))))
+              | Some s ->
+                begin match current_value s with
+                | RT_compiled (c, _) ->
+                  concat [
+                    concat (List.map c.sh_dependencies ~f:get_dep);
+                    c.sh_toplevel;
+                    elt "fun_store_result `"; c.sh_value; elt "` ";
+                    elt (Path.str p); elt "\n";
+                  ]
+                | RT_string _ | RT_int _ | RT_file _ | RT_fastq _ ->
+                  elt (sprintf "# %S is constant\n" (Path.str p))
+                | RT_expression _ ->
+                  raise (Error
+                           (`wrong_request
+                               (sprintf "Program %S has a dependency not compiled: %S"
+                                  (Path.str prog) (Path.str p))))
+                end
+            in
+            (* printf "@@@ %S has %d dependencies: %s\n" *)
+            (*   (Path.str prog) (List.length com.sh_dependencies)  *)
+            (*   (String.concat ", " (List.map Path.str com.sh_dependencies)); *)
+            let toplevel =
+              concat [
+                elt common_header;
+                concat (List.map com.sh_dependencies ~f:get_dep);
+                com.sh_toplevel;
+                elt "fun_store_result `"; com.sh_value; elt "` ";
+                elt (Path.str prog); elt "\n";
+              ] in
+            (com.sh_value, toplevel)
+          | _ ->
+            raise (Error (`wrong_request
+                             (sprintf "Program not compiled: %S"
+                                (Path.str prog))))
+          end
+
+      let run_program rt prog =
+        (* Prepare file system *)
+        HT.iter rt.values ~f:(fun ~key ~data ->
+          match current_value data with
+          | RT_file f -> 
+            let path =
+              (sprintf "/tmp/sequme_rt_files/%s" Path.(key |> dir_path |> str)) in
+            System.mkdir_p path;
+            ignore (System.cmd (sprintf "cp %s /tmp/sequme_rt_files/%s" f (Path.str key)))
+          | _ -> ()
+        );
+        let get_value, script = assemble_program rt prog in
+        let script_file = rt.unique_id "/tmp/sequme_script_" in
+        let out = open_out script_file in
+        Concat_tree.iter (output_string out) script;
+        close_out out;
+        match System.cmd (sprintf "nohup sh %s &" script_file) with
+        | Ok () ->
+          printf "%s is running\n" script_file
+        | Bad b ->
+          printf "%s did not start\n" script_file
+
 
     end
 
@@ -606,7 +720,7 @@ let test name p =
 let () =
   let open DSL.Construct in 
   test "good" [
-    "myfile", (file "/path/to/myfile.fastq");
+    "myfile", (file "$HOME/.bashrc");
     "bowtie", (bowtie (load_fastq (var "myfile")) 42);
     "rebowtie", (bowtie (var "bowtie") 51);
     "one_int", (int 17);
@@ -635,26 +749,17 @@ let () =
   Runtime.print_runtime ~indent:2 runtime;
 
   let filter = [ "good" ] in
-  printf "===== Optimizing %s/* stuff =====\n" (Path.str filter);
+  printf "===== Compiling %s/* stuff =====\n" (Path.str filter);
   Runtime.compile_runtime ~filter runtime;
   printf "=== Current Runtime:\n";
   Runtime.print_runtime ~indent:2 runtime;
-  printf "===== Optimizing all the stuff =====\n";
+  printf "===== Compiling all the stuff =====\n";
   Runtime.compile_runtime runtime;
   printf "=== Current Runtime:\n";
   Runtime.print_runtime ~indent:2 runtime;
 
-
-printf "\n\n";
-Runtime.Transform.compile runtime ["good"; "bowtie"];
-
-printf "\n\n";
-Runtime.Transform.compile runtime ["good"; "myfile"];
-
-printf "\n\n";
-Runtime.Transform.compile runtime ["good"; "rebowtie"];
-
-  Runtime.print_runtime ~indent:2 runtime;
+printf "----------------------------------------\n";
+Runtime.run_program runtime ["good"; "rebowtie" ];
 
   ()
     
