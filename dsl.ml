@@ -68,6 +68,29 @@ module Concat_tree = struct
     | Cat le -> List.iter (iter f) le
 end
 
+module System = struct
+  (** create a directory but doesn't raise an exception if the
+      directory * already exist *)
+  let mkdir_safe dir perm =
+    try Unix.mkdir dir perm with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
+
+(** create a directory, and create parent if doesn't exist
+    i.e. mkdir -p *)
+  let mkdir_p ?(perm=0o700) dir =
+    let rec p_mkdir dir =
+      let p_name = Filename.dirname dir in
+      if p_name <> "/" && p_name <> "." then 
+        p_mkdir p_name;
+      mkdir_safe dir perm in
+    p_mkdir dir 
+
+  let cmd s =
+    match Unix.system s with
+    | Unix.WEXITED 0 -> Ok ()
+    | err -> Bad err
+      
+end
+
 module DSL = struct
 
   module Definition = struct
