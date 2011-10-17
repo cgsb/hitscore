@@ -214,57 +214,61 @@ module DSL = struct
         end
       | Bad b -> Bad b
 
-    let atom_type = function
-      | Int _ -> Ok T_int
-      | String _ -> Ok T_string
-      | Fastq _ -> Ok T_fastq
-      | File _ -> Ok T_file
-
-    let rec type_check_expression 
-        ?(check_externals:(Path.t -> (dsl_type, string) result) option) 
-        env expr =
-      match expr with
-      | Constant a -> atom_type a
-      | Variable v -> variable_type env v
-      | External (p, t) -> 
-        Result.bind (List.results ~f:identifier p)
-          (fun () -> 
-            match check_externals with
-            | Some ce ->
-              begin match ce p with 
-              | Ok et -> 
-                if et = t then
-                  Ok t 
-                else
-                  Bad
-                    (sprintf "External %s has conflicting types: %s Vs %s"
-                       (Path.str p) (string_of_type et) (string_of_type t))
-              | Bad b -> Bad b
-              end
-            | None -> Ok t)
-      | Load_fastq e -> 
-        begin match type_check_expression env e with
-        | Ok T_file -> Ok T_fastq
-        | Ok other ->
-          Bad (sprintf "Load_fastq expects a file, %S has a wrong type: %S"
-                 (string_of_expression e) (string_of_type other))
-        | Bad s -> Bad s
-        end
-      | Bowtie (e1, e2) ->
-        begin match type_check_expression env e1, 
-          type_check_expression env e2 with
+    let type_check_expression 
+        ?(check_externals:(Path.t -> (dsl_type, string) result) option)
+        ?(check_files: string -> (unit, string) result=fun _ -> Ok ())
+        environment expresssion =
+      let rec descent env expr =
+        match expr with
+        | Constant a -> 
+          begin match a with
+          | Int _ -> Ok T_int
+          | String _ -> Ok T_string
+          | Fastq _ -> Ok T_fastq
+          | File f -> Result.bind (check_files f) (fun () -> Ok T_file)
+          end
+        | Variable v -> variable_type env v
+        | External (p, t) -> 
+          Result.bind (List.results ~f:identifier p)
+            (fun () -> 
+              match check_externals with
+              | Some ce ->
+                begin match ce p with 
+                | Ok et -> 
+                  if et = t then
+                    Ok t 
+                  else
+                    Bad
+                      (sprintf "External %s has conflicting types: %s Vs %s"
+                         (Path.str p) (string_of_type et) (string_of_type t))
+                | Bad b -> Bad b
+                end
+              | None -> Ok t)
+        | Load_fastq e -> 
+          begin match descent env e with
+          | Ok T_file -> Ok T_fastq
+          | Ok other ->
+            Bad (sprintf "Load_fastq expects a file, %S has a wrong type: %S"
+                   (string_of_expression e) (string_of_type other))
+          | Bad s -> Bad s
+          end
+        | Bowtie (e1, e2) ->
+          begin match descent env e1, descent env e2 with
           | Ok T_fastq, Ok T_int -> Ok T_fastq
           | _, _ ->
             Bad "Bowtie expects a `fastq and an `int … error messages \
                   will be better in the future"
-        end
-
-    let type_check_program ?check_externals p =
+          end
+      in
+      descent environment expresssion
+      
+    let type_check_program ?check_externals ?check_files p =
       let env = ref [] in
       List.iter (fun (name, expr) ->
         let tc = 
           Result.bind (identifier name)
-            (fun () -> type_check_expression ?check_externals !env expr)
+            (fun () -> type_check_expression
+              ?check_externals ?check_files !env expr)
         in
         env := (name, tc) :: !env
       ) p;
@@ -381,7 +385,11 @@ module DSL = struct
 
       let load_program rt prog_id program =
         let type_checked = 
-          Verify.type_check_program ~check_externals:(type_of_value rt) program
+          Verify.type_check_program  program
+            ~check_externals:(type_of_value rt)
+            ~check_files:(fun path ->
+              if Sys.file_exists path then Ok () else
+                Bad (sprintf "File %S does not exist" path))
         in
         let validate () =
           if program = [] then failwith "Won't load an empty program";
@@ -718,9 +726,12 @@ let test name p =
 
 
 let () =
+  System.cmd "echo 'This is a Test File' `date` > /tmp/testfile1" |> ignore;
+  System.cmd "echo 'This is a Test File used Twice' `date` > /tmp/fileusedtwice" |> ignore;
+
   let open DSL.Construct in 
   test "good" [
-    "myfile", (file "$HOME/.bashrc");
+    "myfile", (file "/tmp/testfile1");
     "bowtie", (bowtie (load_fastq (var "myfile")) 42);
     "rebowtie", (bowtie (var "bowtie") 51);
     "one_int", (int 17);
@@ -738,9 +749,12 @@ let () =
   test "with_wrong_external" [
     "wrong_external", (ext_int ["good"; "myfile"])
   ];
+  test "with_wrong_file" [
+    "wrong_file", (file "/some/random/file")
+  ];
   test "optimizable" [
-    "bowtie", (bowtie (load_fastq (file "/path/to/samefile")) 42);
-    "rebowtie", (bowtie (load_fastq (file "/path/to/samefile")) 51);
+    "bowtie", (bowtie (load_fastq (file "/tmp/fileusedtwice")) 42);
+    "rebowtie", (bowtie (load_fastq (file "/tmp/fileusedtwice")) 51);
   ];
   test "good" [ "myfile", (int 42) ];
   test "good" [ "added_value", (ext_fastq ["optimizable"; "bowtie"]) ];
