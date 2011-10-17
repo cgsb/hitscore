@@ -486,7 +486,7 @@ module DSL = struct
             | Fastq    v -> "Is_there_really_a_fastq_atom_or_just_a_type"
             | File     v -> v
           in
-          let echo s = elt (sprintf "echo \"%s\" >> /tmp/sequme_monitoring\n" s) in
+          let echo s = elt (sprintf "echo \"%s\" >> $MONITORING\n" s) in
           let toplevel = 
             ref (elt (sprintf "# Program %s compiled top-level\n" 
                         (Path.str prog))) in
@@ -522,7 +522,7 @@ module DSL = struct
               let output_file = rt.unique_id "bowtie_output_" in
               let result_var = rt.unique_id "BOWTIE_RESULT_" in
               to_top [
-                elt "echo 'Call Bowtie' >> /tmp/sequme_monitoring\n";
+                elt "echo 'Call Bowtie' >> $MONITORING\n";
                 elt "$BOWTIE "; elt output_file; elt " -fastq-file "; fastq;
                 elt " -param "; int; elt "\n";
                 elt "export "; elt result_var; elt "=$?\n";
@@ -567,17 +567,23 @@ module DSL = struct
       let assemble_program rt prog =
         let common_header =
           "# Common Header\n
+
+export MONITORING=/tmp/monitoring
+echo 'Starting program' > $MONITORING
+date -R >> $MONITORING
+echo '' >> $MONITORING
+
 fun_get_result () {
-  echo \"Getting file $1\" >> /tmp/sequme_monitoring
+  echo \"Getting file $1\" >> $MONITORING
   echo /tmp/sequme_rt_files/$1
 }
 export get_result=fun_get_result
 fun_store_result () {
-  echo \"Storing $1 into $2\" >> /tmp/sequme_monitoring
+  echo \"Storing $1 into $2\" >> $MONITORING
   cp $1 /tmp/sequme_rt_files/$2
 }
 fun_bowtie () {
-  echo \"fun_bowtie called with '$*'\" >> /tmp/sequme_monitoring
+  echo \"fun_bowtie called with '$*'\" >> $MONITORING
   # sleep 2
   echo $* >> /tmp/sequme_rt_files/$1
   echo \"$3 :\" >> /tmp/sequme_rt_files/$1
@@ -587,7 +593,7 @@ export BOWTIE=fun_bowtie
 
 # start 
 sleep 2
-echo 'After initial sleep' >> /tmp/sequme_monitoring
+echo 'After initial sleep' >> $MONITORING
 
 "
         in
