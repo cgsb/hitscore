@@ -294,13 +294,13 @@ module DSL = struct
       type shell_script = {
         sh_toplevel: string Concat_tree.t;
         sh_value: string Concat_tree.t;
+        sh_dependencies: Path.t list;
       }
 
       type meta_value = 
         | RT_int of int
         | RT_string of string
         | RT_file of string
-        | RT_checked_file of (string * Digest.t)
         | RT_fastq of fastq
         | RT_expression of expression * dsl_type
         | RT_compiled of shell_script * dsl_type
@@ -328,7 +328,6 @@ module DSL = struct
           | RT_int            v    -> sprintf "INT %d" v 
           | RT_string         v    -> sprintf "STRING %S" v
           | RT_file           v    -> sprintf "FILE %s" v 
-          | RT_checked_file (v, _) -> sprintf "CHECKED_FILE %s" v 
           | RT_fastq          v    -> sprintf "FASTQ %s" v.fastq_comment 
           | RT_expression   (v, t) -> sprintf "EXPR(%s) %s"
             (string_of_type t) (string_of_expression v)
@@ -368,7 +367,6 @@ module DSL = struct
           | RT_int            v    -> Ok T_int
           | RT_string         v    -> Ok T_string
           | RT_file           v    -> Ok T_file  
-          | RT_checked_file (v, _) -> Ok T_file
           | RT_fastq          v    -> Ok T_fastq
           | RT_expression   (v, t) -> Ok t
           | RT_compiled   (v, t) -> Ok t
