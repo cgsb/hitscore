@@ -55,7 +55,12 @@ module Path = struct
   let dir_path path =
     List.take (List.length path - 1) path
 
+  let compare a b = String.compare (str a) (str b)
+
+  let concat a = List.concat a
+
 end
+module PathSet = BatSet.Make(Path)
 
 module Option = BatOption
 
