@@ -33,7 +33,9 @@ module List = struct
 
 end
 module HT = struct
-  include Hashtbl
+  include BatHashtbl
+  include BatHashtbl.Exceptionless
+  include BatHashtbl.Labels
   let find ht k = try Some (Hashtbl.find ht k) with _ -> None 
 end
 
