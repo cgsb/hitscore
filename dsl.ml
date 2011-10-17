@@ -3,6 +3,13 @@ open Printf
 open BatStd (* Just for result !? *)
 module Result = struct
   include BatResult
+
+  (* A more complete function than BatResult.of_option *)    
+  let of_option ?(bad=()) opt =
+    match opt with
+    | None -> Bad bad
+    | Some s -> Ok s
+
 end
 
 module OCamlList = List
@@ -13,6 +20,9 @@ module List = struct
   include BatList.Labels
   include BatList.Labels.LExceptionless
 
+  (* When f : 'a -> (unit, 'b) result and l : 'a list,
+     results ~f l returns Ok () if every element in the list gets Ok (),
+     or Bad b for the first which gets Bad b *)
   let results ~f l =
     let o =
       find_map (fun x ->
@@ -187,24 +197,21 @@ module DSL = struct
       | Constant a -> atom_type a
       | Variable v -> variable_type env v
       | External (p, t) -> 
-        begin match List.results ~f:identifier p with
-        | Ok () ->
-          begin match check_externals with
-          | Some ce ->
-            begin match ce p with 
-            | Ok et -> 
-              if et = t then
-                Ok t 
-              else
-                Bad
-                  (sprintf "External %s has conflicting types: %s Vs %s"
-                     (Path.str p) (string_of_type et) (string_of_type t))
-            | Bad b -> Bad b
-            end
-          | None -> Ok t
-          end
-        | Bad b -> Bad b
-        end
+        Result.bind (List.results ~f:identifier p)
+          (fun () -> 
+            match check_externals with
+            | Some ce ->
+              begin match ce p with 
+              | Ok et -> 
+                if et = t then
+                  Ok t 
+                else
+                  Bad
+                    (sprintf "External %s has conflicting types: %s Vs %s"
+                       (Path.str p) (string_of_type et) (string_of_type t))
+              | Bad b -> Bad b
+              end
+            | None -> Ok t)
       | Load_fastq e -> 
         begin match type_check_expression env e with
         | Ok T_file -> Ok T_fastq
@@ -226,8 +233,7 @@ module DSL = struct
       let env = ref [] in
       List.iter (fun (name, expr) ->
         let tc = 
-          Result.bind 
-            (identifier name)
+          Result.bind (identifier name)
             (fun () -> type_check_expression ?check_externals !env expr)
         in
         env := (name, tc) :: !env
