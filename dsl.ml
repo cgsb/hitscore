@@ -261,6 +261,11 @@ module DSL = struct
         | `runtime_error s -> sprintf "Runtime Error: %s" s 
       exception Error of error
 
+      type shell_script = {
+        sh_toplevel: string Concat_tree.t;
+        sh_value: string Concat_tree.t;
+      }
+
       type meta_value = 
         | RT_int of int
         | RT_string of string
@@ -268,6 +273,8 @@ module DSL = struct
         | RT_checked_file of (string * Digest.t)
         | RT_fastq of fastq
         | RT_expression of expression * dsl_type
+        | RT_compiled of shell_script * dsl_type
+
       type runtime_value = {
         (* kind of path / unique id / Ocsigen's convention *)
         val_id: Path.t;
@@ -295,6 +302,7 @@ module DSL = struct
           | RT_fastq          v    -> sprintf "FASTQ %s" v.fastq_comment 
           | RT_expression   (v, t) -> sprintf "EXPR(%s) %s"
             (string_of_type t) (string_of_expression v)
+          | RT_compiled (sh, t) -> sprintf "COMPILED(%s)" (string_of_type t)
         in
         sprintf "VAL:%S = [ %s; ... %d updates ... ]"
           (Path.str v.val_id)  s (List.length v.val_history - 1)
@@ -333,6 +341,7 @@ module DSL = struct
           | RT_checked_file (v, _) -> Ok T_file
           | RT_fastq          v    -> Ok T_fastq
           | RT_expression   (v, t) -> Ok t
+          | RT_compiled   (v, t) -> Ok t
           end
         | None -> Bad (sprintf "Value %s not found" (Path.str path))
         
@@ -467,22 +476,37 @@ module DSL = struct
             | Bowtie (e1, e2) -> 
               let fastq = compile_expression e1 in
               let int = compile_expression e2 in
-              concat [
+              let output_file = rt.unique_id "bowtie_output_" in
+              let result_var = rt.unique_id "BOWTIE_RESULT_" in
+              to_top [
                 elt "echo 'Call Bowtie' >> /tmp/monitoring\n";
                 elt "$BOWTIE -fastq-file "; fastq;
-                elt " -param "; int; elt "\n";
-                elt "echo \"Bowtie returned $?\" >> /tmp/monitoring\n";
-              ]
+                elt " -param "; int; elt " -o "; elt output_file; elt "\n";
+                elt "export "; elt result_var; elt "=$?\n";
+                elt "if [ $"; elt result_var; elt " -eq 0 ]; then\n";
+                echo (sprintf 
+                        "Bowtie was successful (ret: $%s ; file: %s)"
+                        result_var output_file);
+                elt "else\n";
+                echo (sprintf "Bowtie gave an error (ret: $%s)" result_var);
+                elt (sprintf "  rm -f %s\nfi\n" output_file);
+              ];
+              concat [ elt "$get_result "; elt output_file;]
           in
-          match Option.map current_value (get_value rt prog) with
-          | Some (RT_expression (e, t)) ->
-            let result = 
-              concat [
-                !toplevel;
-                (compile_expression e);
-              ] in
-            Concat_tree.iter print_string result
-          | _ -> ()
+          match get_value rt prog with
+          | None -> raise (Error (`wrong_request
+                                     (sprintf "Program not found: %S"
+                                        (Path.str prog))))
+          | Some value ->
+            begin match current_value value with
+            | RT_expression (e, t) ->
+              let result = {
+                sh_toplevel = !toplevel;
+                sh_value = compile_expression e;
+              } in
+              update_value value (RT_compiled (result, t))
+            | _ -> ()
+            end
 
       end
 
@@ -583,14 +607,15 @@ let () =
   Runtime.print_runtime ~indent:2 runtime;
 
   let filter = [ "good" ] in
-  printf "===== Compiling %s/* stuff =====\n" (Path.str filter);
+  printf "===== Optimizing %s/* stuff =====\n" (Path.str filter);
   Runtime.compile_runtime ~filter runtime;
   printf "=== Current Runtime:\n";
   Runtime.print_runtime ~indent:2 runtime;
-  printf "===== Compiling all the stuff =====\n";
+  printf "===== Optimizing all the stuff =====\n";
   Runtime.compile_runtime runtime;
   printf "=== Current Runtime:\n";
   Runtime.print_runtime ~indent:2 runtime;
+
 
 printf "\n\n";
 Runtime.Transform.compile runtime ["good"; "bowtie"];
@@ -600,5 +625,8 @@ Runtime.Transform.compile runtime ["good"; "myfile"];
 
 printf "\n\n";
 Runtime.Transform.compile runtime ["good"; "rebowtie"];
+
+  Runtime.print_runtime ~indent:2 runtime;
+
   ()
     
