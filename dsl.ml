@@ -64,15 +64,28 @@ module PathSet = BatSet.Make(Path)
 
 module Option = BatOption
 
-module Concat_tree = struct
+module String_tree = struct
 
-  type 'a t = Elt of 'a | Cat of 'a t list
+  type t = 
+    | Elt of string
+    | Cat of t list
+    | Sep_cat of string * t list
 
   let elt e = Elt e
-  let concat l = Cat l
+  let concat ?sep l = 
+    match sep with 
+    | None -> Cat l
+    | Some s -> Sep_cat (s, l)
+  let nl = Elt ""
+
   let rec iter f = function
     | Elt e -> f e
     | Cat le -> List.iter (iter f) le
+    | Sep_cat (sep, []) -> ()
+    | Sep_cat (sep, h :: t) -> 
+      iter f h;
+      List.iter t ~f:(fun ls -> f sep; iter f ls)
+
 end
 
 module System = struct
@@ -296,8 +309,8 @@ module DSL = struct
       exception Error of error
 
       type shell_script = {
-        sh_toplevel: string Concat_tree.t;
-        sh_value: string Concat_tree.t;
+        sh_toplevel: String_tree.t;
+        sh_value: String_tree.t;
         sh_dependencies: Path.t list;
       }
 
@@ -479,7 +492,7 @@ module DSL = struct
             factorize_files ?filter rt
 
         let compile rt prog =
-          let open Concat_tree in
+          let open String_tree in
           let compile_atom = function
             | Int      v -> string_of_int v
             | String   v -> v
@@ -604,7 +617,7 @@ echo 'After initial sleep' >> $MONITORING
         | Some value ->
           begin match current_value value with
           | RT_compiled (com, t) ->
-            let open Concat_tree in
+            let open String_tree in
             let rec get_dep p = 
               match get_value rt p with
               | None ->
@@ -667,7 +680,7 @@ echo 'After initial sleep' >> $MONITORING
           let file = rt.unique_id "sequme_script_" in
           sprintf "%s/%s" exec_dir file in
         let out = open_out script_file in
-        Concat_tree.iter (output_string out) script;
+        String_tree.iter (output_string out) script;
         close_out out;
         match System.cmd (sprintf "nohup sh %s &" script_file) with
         | Ok () ->
