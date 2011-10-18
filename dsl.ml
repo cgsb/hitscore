@@ -1,51 +1,40 @@
+(* ocamlfind ocamlc -thread -package core,sexplib,sexplib.syntax -syntax camlp4o -linkpkg dsl.ml -o dsl *)
+
 open Printf
 
-open BatStd (* Just for result !? *)
+let (|>) x f = f x
+let (@) = Core.Core_list.append
+
+open Core.Result.Export
 module Result = struct
-  include BatResult
-
-  (* A more complete function than BatResult.of_option *)    
-  let of_option ?(bad=()) opt =
-    match opt with
-    | None -> Bad bad
-    | Some s -> Ok s
-
+  include Core.Result
 end
 
-module OCamlList = List
 module List = struct
-  include OCamlList
-  include BatList
-  include BatList.Exceptionless
-  include BatList.Labels
-  include BatList.Labels.LExceptionless
+  include Core.Core_list
 
   (* When f : 'a -> (unit, 'b) result and l : 'a list,
      results ~f l returns Ok () if every element in the list gets Ok (),
-     or Bad b for the first which gets Bad b *)
+     or Error b for the first which gets Error b *)
   let results ~f l =
     let o =
-      find_map (fun x ->
-        match f x with Ok () -> None | Bad b -> Some (Bad b)) l in
+      find_map ~f:(fun x ->
+        match f x with Ok () -> None | Error b -> Some (Error b)) l in
     match o with 
     | None -> Ok ()
     | Some b -> b
 
 end
-module HT = struct
-  include BatHashtbl
-  include BatHashtbl.Exceptionless
-  include BatHashtbl.Labels
-  let find ht k = try Some (Hashtbl.find ht k) with _ -> None 
-end
+
+module String = Core.Core_string
 
 module Path = struct
-  type t = string list
-  let str = String.concat "/"
+  type t = String.t List.t with sexp
+  let str = String.concat ~sep:"/"
 
   let is_top_of left right =
     let l = ref right in
-    List.for_all (fun name ->
+    List.for_all ~f:(fun name ->
       match !l with
       | h :: t -> 
         l := t;
@@ -53,16 +42,35 @@ module Path = struct
       | [] -> false) left
 
   let dir_path path =
-    List.take (List.length path - 1) path
+    List.take path (List.length path - 1)
 
   let compare a b = String.compare (str a) (str b)
 
   let concat a = List.concat a
 
+  
+  type sexpable = t
+  let equal = (=)
+  let hash = Hashtbl.hash
+  
 end
-module PathSet = BatSet.Make(Path)
 
-module Option = BatOption
+module Path_HT = struct
+  include Core.Hashable.Make (Path)
+  include Table
+  let add = replace
+
+end
+
+module Path_set = struct
+  type t = Path.t list
+  let empty = []
+  let add t e = e :: t
+  let to_list t = List.rev t
+end
+
+
+module Option = Core.Option
 
 module String_tree = struct
 
@@ -80,7 +88,7 @@ module String_tree = struct
 
   let rec iter f = function
     | Elt e -> f e
-    | Cat le -> List.iter (iter f) le
+    | Cat le -> List.iter ~f:(iter f) le
     | Sep_cat (sep, []) -> ()
     | Sep_cat (sep, h :: t) -> 
       iter f h;
@@ -107,7 +115,7 @@ module System = struct
   let cmd s =
     match Unix.system s with
     | Unix.WEXITED 0 -> Ok ()
-    | err -> Bad err
+    | err -> Error err
       
 end
 
@@ -164,7 +172,7 @@ module DSL = struct
       | Int i -> sprintf "%d" i
       | String s -> sprintf "%S" s
       | Fastq f -> 
-        sprintf "(fastq %s)" (String.concat ", " (List.map fastq f))
+        sprintf "(fastq %s)" (String.concat ~sep:", " (List.map ~f:fastq f))
       | File f -> sprintf "(file %s)" f in
     let rec expr = function
       | Constant c -> sprintf "(cst %s)" (basic c)
@@ -204,17 +212,17 @@ module DSL = struct
     let identifier var =
       let module N = struct exception O of string end in
       try
-        String.iter (function
+        String.iter var ~f:(function
           | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> ()
           | c -> 
             raise (N.O (sprintf
                            "Char %C not allowed in variable name: %S" c var))
-        ) var;
+        );
         if String.length var > 2 && String.sub var 0 2 = "__" then
           raise (N.O (sprintf "Variable %S can't start with '__'" var));
         Ok ()
       with
-        N.O msg -> Bad msg
+        N.O msg -> Error msg
                  
 
 
@@ -223,13 +231,13 @@ module DSL = struct
       | Ok () ->
         begin match List.find ~f:(fun (v, _) -> v = var) env with
         | Some (_, t) -> t
-        | None -> Bad (sprintf "Variable %S not found" var)
+        | None -> Error (sprintf "Variable %S not found" var)
         end
-      | Bad b -> Bad b
+      | Error b -> Error b
 
     let type_check_expression 
-        ?(check_externals:(Path.t -> (dsl_type, string) result) option)
-        ?(check_files: string -> (unit, string) result=fun _ -> Ok ())
+        ?(check_externals:(Path.t -> (dsl_type, string) Result.t) option)
+        ?(check_files: string -> (unit, string) Result.t=fun _ -> Ok ())
         environment expresssion =
       let rec descent env expr =
         match expr with
@@ -251,25 +259,25 @@ module DSL = struct
                   if et = t then
                     Ok t 
                   else
-                    Bad
+                    Error
                       (sprintf "External %s has conflicting types: %s Vs %s"
                          (Path.str p) (string_of_type et) (string_of_type t))
-                | Bad b -> Bad b
+                | Error b -> Error b
                 end
               | None -> Ok t)
         | Load_fastq e -> 
           begin match descent env e with
           | Ok T_file -> Ok T_fastq
           | Ok other ->
-            Bad (sprintf "Load_fastq expects a file, %S has a wrong type: %S"
+            Error (sprintf "Load_fastq expects a file, %S has a wrong type: %S"
                    (string_of_expression e) (string_of_type other))
-          | Bad s -> Bad s
+          | Error s -> Error s
           end
         | Bowtie (e1, e2) ->
           begin match descent env e1, descent env e2 with
           | Ok T_fastq, Ok T_int -> Ok T_fastq
           | _, _ ->
-            Bad "Bowtie expects a `fastq and an `int … error messages \
+            Error "Bowtie expects a `fastq and an `int … error messages \
                   will be better in the future"
           end
       in
@@ -277,7 +285,7 @@ module DSL = struct
       
     let type_check_program ?check_externals ?check_files p =
       let env = ref [] in
-      List.iter (fun (name, expr) ->
+      List.iter ~f:(fun (name, expr) ->
         let tc = 
           Result.bind (identifier name)
             (fun () -> type_check_expression
@@ -306,7 +314,7 @@ module DSL = struct
                                        ===>  you should complain to the devs" s
         | `wrong_request s -> sprintf "Wrong Request: %s" s 
         | `runtime_error s -> sprintf "Runtime Error: %s" s 
-      exception Error of error
+      exception Error_exn of error
 
       type shell_script = {
         sh_toplevel: String_tree.t;
@@ -333,11 +341,13 @@ module DSL = struct
       let update_value v nv =
         v.val_history <- nv :: v.val_history
       let current_value v =
-        try Option.get (List.hd v.val_history)
-        with e ->
-          raise (Error (`fatal_error
-                           (sprintf "The value %S has no history!"
-                              (Path.str v.val_id))))
+        match List.hd v.val_history with
+        | None ->
+          raise (Error_exn
+                   (`fatal_error
+                       (sprintf "The value %S has no history!"
+                          (Path.str v.val_id))))
+        | Some e -> e
 
       let string_of_runtime_value v =
         let s = 
@@ -356,21 +366,21 @@ module DSL = struct
       type runtime = {
         unique_id: string -> string;
         mutable programs: (string * (string * expression * dsl_type) list) list;
-        mutable values: (Path.t, runtime_value) HT.t;
+        mutable values:  runtime_value Path_HT.t;
       }
       let create () =
         let ids = ref 0 in
         {unique_id = (fun s -> incr ids; sprintf "%s%d" s !ids);
          programs = [];
-         values = HT.create 42}
+         values = Path_HT.create ()}
       let add_value rt v =
-        HT.add rt.values v.val_id v
+        Path_HT.add rt.values v.val_id v
       let get_value rt id =
-        HT.find rt.values id
+        Path_HT.find rt.values id
       exception Found of (Path.t * runtime_value)
       let find_value ~f rt =
         try
-          HT.iter rt.values ~f:(fun ~key:path ~data:v ->
+          Path_HT.iter rt.values ~f:(fun ~key:path ~data:v ->
             if f path v then
               raise (Found (path, v))
           );
@@ -388,13 +398,13 @@ module DSL = struct
           | RT_expression   (v, t) -> Ok t
           | RT_compiled   (v, t) -> Ok t
           end
-        | None -> Bad (sprintf "Value %s not found" (Path.str path))
+        | None -> Error (sprintf "Value %s not found" (Path.str path))
         
       let print_runtime ?(indent=0) rt =
         let strindent = String.make indent ' ' in
-        HT.iter (fun ~key ~data:v ->
+        Path_HT.iter rt.values (fun ~key ~data:v ->
           printf "%s%s\n" strindent (string_of_runtime_value v)
-        ) rt.values
+        ) 
 
       let load_program rt prog_id program =
         let type_checked = 
@@ -402,11 +412,11 @@ module DSL = struct
             ~check_externals:(type_of_value rt)
             ~check_files:(fun path ->
               if Sys.file_exists path then Ok () else
-                Bad (sprintf "File %S does not exist" path))
+                Error (sprintf "File %S does not exist" path))
         in
         let validate () =
           if program = [] then failwith "Won't load an empty program";
-          List.map2 (fun (name, tres) (name, code) ->
+          List.map2_exn ~f:(fun (name, tres) (name, code) ->
             match tres with
             | Ok t -> 
               let path = [prog_id; name] in
@@ -416,7 +426,7 @@ module DSL = struct
                             (Path.str path))
               | None -> (name, code, t)
               end
-            | Bad reason ->
+            | Error reason ->
               failwith 
                 (sprintf "Can't load programs that do not type-check: %s: %s"
                    name reason)
@@ -425,14 +435,14 @@ module DSL = struct
         try 
           let validated = validate () in
           rt.programs <- (prog_id, validated) :: rt.programs;
-          List.iter (fun (name, expr, t) ->
+          List.iter ~f:(fun (name, expr, t) ->
             let path = [prog_id; name] in
             add_value rt (rt_value path (RT_expression (expr, t)))
           ) validated;
           Ok ()
         with
           Failure s -> 
-            Bad (`wrong_request s)
+            Error (`wrong_request s)
 
       module Transform = struct
 
@@ -460,7 +470,7 @@ module DSL = struct
             | Load_fastq  e -> Load_fastq (transform_expressions e)
             | Bowtie (e1, e2) -> 
               Bowtie (transform_expressions e1, transform_expressions e2) in
-          HT.iter (fun ~key:path ~data:v ->
+          Path_HT.iter rt.values (fun ~key:path ~data:v ->
             if Path.is_top_of filter path then
               begin match current_value v with
               | RT_expression (e, t) -> 
@@ -469,10 +479,10 @@ module DSL = struct
                   update_value v (RT_expression (new_expr, t))
               | _ -> ()
               end
-          ) rt.values
+          )
 
         let eval_constants  ?(filter=[]) rt =
-          HT.iter (fun ~key:path ~data:v ->
+          Path_HT.iter rt.values (fun ~key:path ~data:v ->
             if Path.is_top_of filter path then
               begin match current_value v with
               | RT_expression (Constant (File f), t) -> 
@@ -483,7 +493,7 @@ module DSL = struct
                 update_value v (RT_string s)
               | _ -> ()
               end
-          ) rt.values
+          ) 
        
         let optimize ?filter (how: optimization) rt =
           match how with
@@ -504,8 +514,8 @@ module DSL = struct
             ref (elt (sprintf "# Program %s compiled top-level\n" 
                         (Path.str prog))) in
           let to_top t = toplevel := concat (!toplevel :: t) in
-          let dependencies = ref PathSet.empty in
-          let depends_on s = dependencies := PathSet.add s !dependencies in
+          let dependencies = ref Path_set.empty in
+          let depends_on s = dependencies := Path_set.add !dependencies s in
           let rec compile_expression = function
             | Constant a -> elt (compile_atom a)
             | Variable v -> 
@@ -550,7 +560,7 @@ module DSL = struct
               concat [ elt "$get_result "; elt output_file;]
           in
           match get_value rt prog with
-          | None -> raise (Error (`wrong_request
+          | None -> raise (Error_exn (`wrong_request
                                      (sprintf "Program not found: %S"
                                         (Path.str prog))))
           | Some value ->
@@ -560,7 +570,7 @@ module DSL = struct
               let result = {
                 sh_toplevel = !toplevel;
                 sh_value = compiled;
-                sh_dependencies = List.of_enum (PathSet.enum !dependencies);
+                sh_dependencies = Path_set.to_list !dependencies;
               } in
               update_value value (RT_compiled (result, t))
             | _ -> ()
@@ -570,7 +580,7 @@ module DSL = struct
 
       let compile_runtime ?(optimize=`to_eleven) ?filter rt =
         Transform.optimize optimize ?filter rt;
-        HT.iter rt.values  ~f:(fun ~key:path ~data ->
+        Path_HT.iter rt.values  ~f:(fun ~key:path ~data ->
           match filter with
           | None -> Transform.compile rt path
           | Some fil ->
@@ -611,7 +621,7 @@ echo 'After initial sleep' >> $MONITORING
 " exec_path 
         in
         match get_value rt prog with
-        | None -> raise (Error (`wrong_request
+        | None -> raise (Error_exn (`wrong_request
                                    (sprintf "Program not found: %S"
                                       (Path.str prog))))
         | Some value ->
@@ -621,7 +631,7 @@ echo 'After initial sleep' >> $MONITORING
             let rec get_dep p = 
               match get_value rt p with
               | None ->
-                raise (Error (`fatal_error
+                raise (Error_exn (`fatal_error
                                  (sprintf "Program %S has a dependency not found: %S"
                                     (Path.str prog) (Path.str p))))
               | Some s ->
@@ -636,7 +646,7 @@ echo 'After initial sleep' >> $MONITORING
                 | RT_string _ | RT_int _ | RT_file _ | RT_fastq _ ->
                   elt (sprintf "# %S is constant\n" (Path.str p))
                 | RT_expression _ ->
-                  raise (Error
+                  raise (Error_exn
                            (`wrong_request
                                (sprintf "Program %S has a dependency not compiled: %S"
                                   (Path.str prog) (Path.str p))))
@@ -655,7 +665,7 @@ echo 'After initial sleep' >> $MONITORING
               ] in
             (com.sh_value, toplevel)
           | _ ->
-            raise (Error (`wrong_request
+            raise (Error_exn (`wrong_request
                              (sprintf "Program not compiled: %S"
                                 (Path.str prog))))
           end
@@ -666,7 +676,7 @@ echo 'After initial sleep' >> $MONITORING
           let path = rt.unique_id "/tmp/sequme_runtime_" in
           System.mkdir_p path;
           path in
-        HT.iter rt.values ~f:(fun ~key ~data ->
+        Path_HT.iter rt.values ~f:(fun ~key ~data ->
           match current_value data with
           | RT_file f -> 
             let path =
@@ -685,7 +695,7 @@ echo 'After initial sleep' >> $MONITORING
         match System.cmd (sprintf "nohup sh %s &" script_file) with
         | Ok () ->
           printf "%s is running\n" script_file
-        | Bad b ->
+        | Error b ->
           printf "%s did not start\n" script_file
 
 
@@ -736,15 +746,15 @@ let test name p =
   printf "=== Program %S ===\n" name;
   DSL.print_program ~indent:2 p;
   printf "  Type Checking:\n";
-  List.iter (fun (n, res) ->
+  List.iter ~f:(fun (n, res) ->
     printf "    %s : %s\n" n 
       (match res with
       | Ok t -> DSL.string_of_type t
-      | Bad b -> b);
+      | Error b -> b);
   ) (DSL.Verify.type_check_program p);
   begin match Runtime.load_program runtime name p with
   | Ok () -> printf "  Program loaded\n"
-  | Bad s -> printf "  Program can't be loaded:\n    %s\n"
+  | Error s -> printf "  Program can't be loaded:\n    %s\n"
     (Runtime.string_of_error s)
   end;
   ()
