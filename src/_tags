@@ -1,0 +1,4 @@
+<lib>: include
+<**/*.{ml,mli,byte,native}>: thread, pkg_batteries, pkg_calendar, pkg_biocaml, pkg_sequme
+<lib/*.cmx>: for-pack(Hitscore)
+true: debug

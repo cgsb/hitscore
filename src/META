@@ -1,0 +1,5 @@
+description = "NYU CGSB Genomics Core Facility"
+requires = "batteries biocaml sequme calendar"
+version = "0.0"
+archive(byte) = "hitscore.cma"
+archive(native) = "hitscore.cmxa"
