@@ -1,0 +1,27 @@
+#!/bin/bash
+
+cat <<EOF > template_script_tmp.in
+check_fastqs.ml \$ANALYZE_DIR/ > \$OUT_DIR/Check_FASTQs_\$NAME.txt
+
+EOF
+
+export ANALYZE_ROOT=/scratch/cgsb/sm4431/bclToFastq/D053MACXX/
+
+function make_one () {
+make_pbs_script.ml \
+	-var ANALYZE_DIR=$ANALYZE_ROOT/$1 \
+	-template template_script_tmp.in \
+	$2
+}
+
+make_one M0/Unaligned/Project_Carlton ChkFstq_M0Carlton
+make_one M1/Unaligned/Project_Carlton ChkFstq_M1Carlton
+make_one M0/Unaligned/Project_Gresham ChkFstq_M0Gresham
+make_one M1/Unaligned/Project_Gresham ChkFstq_M1Gresham
+make_one M0/Unaligned/Project_PhiX ChkFstq_M0PhiX
+make_one M1/Unaligned/Project_PhiX ChkFstq_M1PhiX
+
+make_one M0/Unaligned/Undetermined_indices ChkFstq_M0Undetermin
+make_one M1/Unaligned/Undetermined_indices ChkFstq_M1Undetermin
+
+
