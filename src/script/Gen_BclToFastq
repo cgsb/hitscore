@@ -1,0 +1,46 @@
+#!/bin/bash
+
+BASECALLS=""
+SAMPLESHEET=""
+if [ $# -ne 2 ] ; then
+    echo "Where are the BaseCalls and the Samplesheet?"
+    echo "usage: $0 basecalldir samplesheet"
+    exit 1
+else
+    export BASECALLS="$1"
+    export SAMPLESHEET="$2"
+fi
+
+cat <<EOF > /tmp/template_script_tmp.in
+
+module add casava
+cd \$UNALIGNED
+
+make -j8 \
+  1> \$OUT_DIR/make.stdout \
+  2> \$OUT_DIR/make.stderr
+
+EOF
+
+export MAKEPBS="make_pbs_script.ml -template /tmp/template_script_tmp.in -nodes-ppn 1 8"
+
+echo "Creating Mismatch_0 Mismatch_1"
+mkdir Mismatch_0 Mismatch_1
+
+configureBclToFastq.pl \
+  --input-dir $BASECALLS \
+  --output-dir Mismatch_0/Unaligned \
+  --sample-sheet $SAMPLESHEET \
+  --mismatches 0 
+
+$MAKEPBS -var UNALIGNED=$PWD/Mismatch_0/Unaligned Bcl2F_M0
+
+configureBclToFastq.pl \
+  --input-dir $BASECALLS \
+  --output-dir Mismatch_1/Unaligned \
+  --sample-sheet $SAMPLESHEET \
+  --mismatches 1
+
+$MAKEPBS  -var UNALIGNED=$PWD/Mismatch_1/Unaligned  Bcl2F_M1
+
+
