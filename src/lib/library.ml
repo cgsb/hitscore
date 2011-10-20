@@ -7,7 +7,7 @@ exception Error of string
 type t = {
   sample : Sample.t;
   indexes : Illumina.Barcode.t list;
-  read_type : ReadType.t;
+  read_type : Read_type.t;
   read_length : int;
 }
 
@@ -24,7 +24,7 @@ let of_row (get : Table.getter) (row : Table.row) =
   |> flip String.nsplit ","
   |> List.map (String.strip |- Illumina.Barcode.of_ad_code)
     ;
-    read_type = get row "Read Type" |> ReadType.of_string;
+    read_type = get row "Read Type" |> Read_type.of_string;
     read_length = get row "Read Length" |> parse_read_length;
   }
 
