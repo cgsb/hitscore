@@ -5,7 +5,7 @@ exception Error of string
 type t = {
   sample : Sample.t;
   indexes : Sequme.Illumina.Barcode.t list;
-  read_type : Sequme.ReadType.t;
+  read_type : Sequme.Read_type.t;
   read_length : int; (** For paired-end, this is length of each end. *)
 }
 
