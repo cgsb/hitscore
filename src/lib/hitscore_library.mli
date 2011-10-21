@@ -1,6 +1,7 @@
-open Batteries_uni
 
 exception Error of string
+
+module Sample: module type of Hitscore_sample
 
 type t = {
   sample : Sample.t;
@@ -12,6 +13,6 @@ type t = {
 module Database : sig
   exception Error of string
   type s = t
-  type t = s Map.IntMap.t
+  type t = s BatMap.IntMap.t
   val of_file : string -> t
 end

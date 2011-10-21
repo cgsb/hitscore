@@ -1,6 +1,9 @@
-open Batteries_uni;; open Printf;; open Biocaml;; open Sequme
-module IntMap = Map.IntMap
-module StringSet = Set.StringSet
+open Hitscore_std
+
+module Sample = Hitscore_sample
+module Illumina = Sequme_illumina
+module Read_type = Sequme_read_type
+module Table = Biocaml_table
 
 exception Error of string
 
@@ -22,7 +25,7 @@ let of_row (get : Table.getter) (row : Table.row) =
     indexes =
       get row "indexes"
   |> flip String.nsplit ","
-  |> List.map (String.strip |- Illumina.Barcode.of_ad_code)
+  |> List.map ~f:(String.strip |- Illumina.Barcode.of_ad_code)
     ;
     read_type = get row "Read Type" |> Read_type.of_string;
     read_length = get row "Read Length" |> parse_read_length;
@@ -53,7 +56,7 @@ module Database = struct
       if (cols |> List.enum |> StringSet.of_enum) <> (columns |> List.enum |> StringSet.of_enum) then
         Error "unexpected columns" |> raise
       else
-        Enum.fold (add_row get) IntMap.empty e
+        Enum.fold ~f:(add_row get) ~init:IntMap.empty e
     in
     close_in inp;
     ans

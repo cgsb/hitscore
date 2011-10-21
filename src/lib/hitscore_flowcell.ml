@@ -1,13 +1,15 @@
-open Batteries_uni;; open Printf;; open Biocaml
-module IntMap = Map.IntMap
-module StringSet = Set.StringSet
+open Hitscore_std
 
 exception Error of string
+
+module Table = Biocaml_table
+module Library = Hitscore_library
+module Sample = Hitscore_library.Sample
 
 type record = {
   fcid : string;
   lane : int;
-  library : Library.t
+  library : Hitscore_library.t
 }
 
 let of_row libdb (get : Table.getter) (row : Table.row) =
@@ -39,7 +41,7 @@ module Database = struct
       if (cols |> List.enum |> StringSet.of_enum) <> (columns |> List.enum |> StringSet.of_enum) then
         Error "unexpected columns" |> raise
       else
-        Enum.fold (fun ans row -> (of_row libdb get row)::ans) [] e
+        Enum.fold ~f:(fun ans row -> (of_row libdb get row)::ans) ~init:[] e
     in
     close_in inp;
     List.rev ans

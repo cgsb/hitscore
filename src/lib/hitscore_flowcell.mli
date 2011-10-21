@@ -5,11 +5,11 @@ exception Error of string
 type record = {
   fcid : string;
   lane : int;
-  library : Library.t
+  library : Hitscore_library.t
 }
 
 module Database : sig
   exception Error of string
   type t = record list
-  val of_file : Library.Database.t -> string -> t
+  val of_file : Hitscore_library.Database.t -> string -> t
 end

@@ -1,0 +1,37 @@
+
+OASISFormat: 0.2
+Name:        hitscore
+Version:     0.1
+Synopsis:    CGSB Core Library
+Authors:     Ashish Agarwal
+License:     LGPL-3.0 with OCaml linking exception
+Plugins:     META (0.2)
+BuildTools:  ocamlbuild
+
+
+Library hitscore
+  Path: src/lib
+  FindlibName: hitscore
+  BuildDepends: threads, batteries, calendar, biocaml, sequme
+  Install: true
+  Modules: Hitscore
+           , Hitscore_bclToFastq 
+           , Hitscore_conf       
+           , Hitscore_flowcell   
+           , Hitscore_library    
+           , Hitscore_sample     
+           , Hitscore_std
+  DataFiles: ../script/check_fastqs.ml  ($bindir)
+           , ../script/Gen_all_checkscripts  ($bindir)
+           , ../script/Gen_BclToFastq  ($bindir)
+           , ../script/hiseq_fastq_index_histogram.ml  ($bindir)
+           , ../script/make_SampleSheet_all_indices.ml  ($bindir)
+  
+Document hitscoredoc
+  Title:      Documentation of the Hitscore library
+  InstallDir: $docdir
+  Type:                 ocamlbuild (0.2)
+  Install:              false
+  BuildTools+:          ocamldoc
+  XOCamlbuildPath:      src/lib/
+  XOCamlbuildLibraries: hitscore

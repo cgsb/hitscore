@@ -1,3 +1,2 @@
-doc/
-src/_build/
+_build/
 src/script/*.exe
