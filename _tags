@@ -1,0 +1,10 @@
+# OASIS_START
+# DO NOT EDIT (digest: e16175e62196118f962176a437a155da)
+# Library hitscore
+"src/lib": include
+<src/lib/*.ml{,i}>: pkg_threads
+<src/lib/*.ml{,i}>: pkg_sequme
+<src/lib/*.ml{,i}>: pkg_calendar
+<src/lib/*.ml{,i}>: pkg_biocaml
+<src/lib/*.ml{,i}>: pkg_batteries
+# OASIS_STOP
