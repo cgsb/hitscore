@@ -1,2 +1,5 @@
 _build/
 src/script/*.exe
+hitscoredoc.docdir
+setup.data
+setup.log
