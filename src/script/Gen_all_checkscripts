@@ -1,16 +1,18 @@
 #!/bin/bash
 
 export ANALYZE_ROOT=""
-if [ $# -ne 1 ] ; then
-    echo "Where is the root of the analysis?"
-    echo "usage: $0 analyze_root"
+export NAME=""
+if [ $# -ne 2 ] ; then
+    echo "Where is the root of the analysis and its name?"
+    echo "usage: $0 <analyze_root_dir> <name>"
     exit 1
 else
-    export ANALYZE_ROOT="$1"
+    export ANALYZE_ROOT=`cd $1 ; pwd`
+    export NAME="$2"
 fi
 
-export M0_U=$ANALYZE_ROOT/Mismatch_0/Unaligned
-export M1_U=$ANALYZE_ROOT/Mismatch_1/Unaligned
+export M0_U=$ANALYZE_ROOT/${NAME}_M0/Unaligned
+export M1_U=$ANALYZE_ROOT/${NAME}_M1/Unaligned
 if [ -d $M0_U ] && [ -d $M1_U ] ; then
     echo "OK This seems standard"
 else
@@ -25,7 +27,7 @@ EOF
 
 function make_one () {
     make_pbs_script.ml \
-	-var ANALYZE_DIR=$ANALYZE_ROOT/$1 \
+	-var ANALYZE_DIR=$1 \
 	-template /tmp/template_script_tmp.in \
 	$2
 }
@@ -33,16 +35,16 @@ function make_one () {
 PROJECTS_0=`find $M0_U -maxdepth 1  -name "Project_*" -type d`
 PROJECTS_1=`find $M1_U -maxdepth 1  -name "Project_*" -type d`
 
-echo $PROJECTS_0
-echo $PROJECTS_1
 
 for proj in $PROJECTS_0; do
-    NAME="CFM0`basename $proj`"
-    make_one $proj $NAME
+    PNAME="CFM0`basename $proj`"
+    echo "Making $PNAME for $proj"
+    make_one $proj $PNAME
 done
 for proj in $PROJECTS_1; do
-    NAME="CFM1`basename $proj`"
-    make_one $proj $NAME
+    PNAME="CFM1`basename $proj`"
+    echo "Making $PNAME for $proj"
+    make_one $proj $PNAME
 done
 
 
