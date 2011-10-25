@@ -96,19 +96,17 @@ let () =
     HT.enum samples |> List.of_enum |> List.sort in
   printf "{begin table 8 readtable r}\n";
   printf "{c h|Lane} {c h|Sample}\
-          {c h|Raw Mismatch 0} {c h|Raw Mismatch 1} {c h|Raw Quality Score Sum}\
-          {c h|PF Mismatch 0} {c h|PF Mismatch 1} {c h|PF Quality Score Sum}";
+          {c h|Raw Mismatch 0} {c h|Raw Mismatch 1} {c h|Mean Quality Score (Raw)}\
+          {c h|PF Mismatch 0} {c h|PF Mismatch 1} {c h|Mean Quality Score (PF)}";
   List.iter (fun ((l, s), stats) ->
     printf "{c|%s}{c|%s}{c|{t|%F}}{c|{t|%F}}{c|{t|%F}}{c|{t|%F}}{c|{t|%F}}{c|{t|%F}}\n"
       l s 
       stats.raw_cluster_count_m0
       (stats.raw_cluster_count_m0 +. stats.raw_cluster_count_m1)
-      (* (0.01 *. stats.raw_quality_score_sum /. (stats.raw_cluster_count_m0 +. stats.raw_cluster_count_m1)) *)
-      stats.raw_quality_score_sum
+      (stats.raw_quality_score_sum /. ((stats.raw_cluster_count_m0 +. stats.raw_cluster_count_m1) *. 101.))
       stats.pf_cluster_count_m0
       (stats.pf_cluster_count_m0 +. stats.pf_cluster_count_m1)
-      stats.pf_quality_score_sum
-  (* (0.01 *. stats.pf_quality_score_sum /. (stats.pf_cluster_count_m0 +. stats.pf_cluster_count_m1)) *)
+      (stats.pf_quality_score_sum /. ((stats.pf_cluster_count_m0 +. stats.pf_cluster_count_m1) *. 101.))
   ) sorted;
   printf "{end}\n"
 
