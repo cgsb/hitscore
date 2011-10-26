@@ -1,4 +1,5 @@
 (* ocamlfind ocamlc -thread -package core,sexplib,sexplib.syntax -syntax camlp4o -linkpkg dsl.ml -o dsl *)
+(* ocamlfind ocamlc -thread -package core -linkpkg dsl.ml -o dsl *)
 
 open Printf
 
@@ -28,8 +29,16 @@ end
 
 module String = Core.Core_string
 
+module Fake_sexpable (M : sig type t val empty : t end) = struct
+  type sexpable = M.t
+  let t_of_sexp: Sexplib.Sexp.t -> sexpable = fun _ -> M.empty
+  let sexp_of_t: sexpable -> Sexplib.Sexp.t = fun _ -> Sexplib.Sexp.Atom "THE_UGLY_Fake_sexpable_HACK"
+end
+
 module Path = struct
-  type t = String.t List.t with sexp
+  type path = String.t List.t
+  type t = path
+
   let str = String.concat ~sep:"/"
 
   let is_top_of left right =
@@ -48,11 +57,11 @@ module Path = struct
 
   let concat a = List.concat a
 
-  
-  type sexpable = t
   let equal = (=)
   let hash = Hashtbl.hash
-  
+  let compare = compare
+
+  include Fake_sexpable(struct type t = path let empty = [] end)
 end
 
 module Path_HT = struct
