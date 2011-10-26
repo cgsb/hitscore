@@ -1,8 +1,8 @@
 # OASIS_START
-# DO NOT EDIT (digest: 00d2a3c9d0bf69fe83b4e4d745c9fa13)
+# DO NOT EDIT (digest: 34280cf49458b783c65acf8b0ba99b54)
 version = "0.1"
 description = "CGSB Core Library"
-requires = "threads batteries calendar biocaml sequme"
+requires = "threads core calendar biocaml sequme"
 archive(byte) = "hitscore.cma"
 archive(native) = "hitscore.cmxa"
 exists_if = "hitscore.cma"
