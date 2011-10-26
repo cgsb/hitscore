@@ -17,6 +17,7 @@ Library hitscore
   Modules: Hitscore
            , Hitscore_std
            , Hitscore_config
+           , Hitscore_state
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)
            , ../script/Gen_BclToFastq  ($bindir)
