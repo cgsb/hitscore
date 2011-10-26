@@ -12,10 +12,11 @@ BuildTools:  ocamlbuild
 Library hitscore
   Path: src/lib
   FindlibName: hitscore
-  BuildDepends: threads, core, calendar, biocaml, sequme
+  BuildDepends: threads, core, pgocaml, calendar, biocaml, sequme
   Install: true
   Modules: Hitscore
            , Hitscore_std
+           , Hitscore_config
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)
            , ../script/Gen_BclToFastq  ($bindir)
