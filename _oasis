@@ -15,7 +15,6 @@ Library hitscore
   BuildDepends: threads, core, calendar, biocaml, sequme
   Install: true
   Modules: Hitscore
-           , Hitscore_conf       
            , Hitscore_std
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)
