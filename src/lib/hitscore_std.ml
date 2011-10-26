@@ -14,3 +14,5 @@ end
 
 module IntMap = Map.Make(Int)
 module StringSet = Set.Make(String)
+
+type dbh = (string, bool) Hashtbl.t PGOCaml.t
