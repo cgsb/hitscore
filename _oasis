@@ -12,7 +12,8 @@ BuildTools:  ocamlbuild
 Library hitscore
   Path: src/lib
   FindlibName: hitscore
-  BuildDepends: threads, core, pgocaml, calendar, biocaml, sequme
+  BuildDepends: threads, core, pgocaml, pgocaml.syntax, calendar, biocaml, sequme
+  BuildTools: camlp4o
   Install: true
   Modules: Hitscore
            , Hitscore_std
