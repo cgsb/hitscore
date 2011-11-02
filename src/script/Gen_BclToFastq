@@ -13,9 +13,11 @@ else
     export SAMPLESHEET="$3"
 fi
 
+
 cat <<EOF > /tmp/template_script_tmp.in
 
-module add casava
+. /share/apps/casava/1.8.2/intel/env.sh
+
 cd \$UNALIGNED
 
 make -j8 \
@@ -29,7 +31,11 @@ export MAKEPBS="make_pbs_script.ml -template /tmp/template_script_tmp.in -nodes-
 echo "Creating ${NAME}_M0 ${NAME}_M1"
 mkdir ${NAME}_M0 ${NAME}_M1
 
-configureBclToFastq.pl \
+. /share/apps/casava/1.8.2/intel/env.sh
+
+export FCC_OPTION=" --fastq-cluster-count 800000000"
+
+configureBclToFastq.pl $FCC_OPTION \
   --input-dir $BASECALLS \
   --output-dir ${NAME}_M0/Unaligned \
   --sample-sheet $SAMPLESHEET \
@@ -37,7 +43,7 @@ configureBclToFastq.pl \
 
 $MAKEPBS -var UNALIGNED=$PWD/${NAME}_M0/Unaligned B2Fpbs_${NAME}_M0
 
-configureBclToFastq.pl \
+configureBclToFastq.pl $FCC_OPTION \
   --input-dir $BASECALLS \
   --output-dir ${NAME}_M1/Unaligned \
   --sample-sheet $SAMPLESHEET \
