@@ -1,6 +1,6 @@
 #!/bin/bash
 
-NAME=""OB
+NAME=""
 BASECALLS=""
 SAMPLESHEET=""
 if [ $# -ne 3 ] ; then
