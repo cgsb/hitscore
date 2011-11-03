@@ -38,7 +38,7 @@ let () =
     | _ -> eprintf "Did not manage to understand file %s" line
   );
   
-  List.iter (results |> HT.enum |> List.of_enum |> List.sort)
+  List.iter (results |> HT.enum |> List.of_enum |> List.fast_sort)
     ~f:(fun ((name, lane, side), count) ->
       printf "Sample %-20s on lane %s (%s): %d\n%!" name lane side count;
     )
