@@ -1,0 +1,21 @@
+(table organism
+       (id identifier)
+       (name text))
+
+(table sample
+       (id identifier)
+       (name text not_null unique)
+       (organism organism:id)
+       )
+
+(table wrong_no_id
+       (foo integer))
+(table wrong_two_ids
+       (id1 identifier) (id2 identifier))
+
+(table wrong_pointer1
+       (key identifier)
+       (pointer wrong:id))
+(table wrong_pointer2
+       (key identifier)
+       (pointer sample:wrong))
