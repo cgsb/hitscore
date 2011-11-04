@@ -1,0 +1,70 @@
+(table timelog
+       (id   identifier)
+       (table_name text not_null)
+       (object_id integer not_null)
+       (inserted   timestamp)
+       (requested  timestamp)
+       (started    timestamp)
+       (completed  timestamp))
+
+(table note
+       (id         identifier)
+       (table_name text not_null)
+       (object_id  integer not_null)
+       (note       text not_null))
+
+(table person
+       (id              identifier)
+       (print_name      text)
+       (family_name     text not_null)
+       (email           text not_null))
+
+(table organism
+       (id   identifier)
+       (name text unique not_null))
+
+(table sample
+       (id           identifier)
+       (name1        text unique not_null)
+       (name2        text)
+       (organism     organism:id not_null));
+
+(table library
+       (id             identifier)
+       (investigator person:id not_null)
+       (contact1     person:id)
+       (contact2     person:id)
+       (sample_id      sample:id)
+       (vial_id        integer unique not_null)
+       (name           text unique not_null)
+       (application    text)
+       (stranded       bool)
+       (control_type   text)
+       (truseq_control bool)
+       (rnaseq_control text)
+       (barcode_type   text)
+       (barcodes       text)
+       (read_type      text)
+       (read_length1   integer not_null)
+       (read_length2   integer))
+
+(table qpcr
+       (id identifier)
+       (library_id library:id not_null)
+       (concentration real)
+       (volume real))
+
+(table bioanalyzer
+       (id  identifier)
+       (library_id library:id not_null)
+       (pdf_filename text not_null)
+       (well_number integer)
+       (mean_fragment_size real))
+
+(table agarose_gel
+       (id  identifier)
+       (library_id library:id not_null)
+       (pdf_filename  text)
+       (well_number integer)
+       (mean_fragment_size  real))
+
