@@ -32,8 +32,7 @@
 (table library
        (id             identifier)
        (investigator person:id not_null)
-       (contact1     person:id)
-       (contact2     person:id)
+       (contacts     person:id array)
        (sample_id      sample:id)
        (vial_id        integer unique not_null)
        (name           text unique not_null)
