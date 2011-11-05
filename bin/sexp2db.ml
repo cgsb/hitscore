@@ -20,6 +20,7 @@ type basic_type =
   | Real
   | Bool
 type property =
+  | Array
   | Not_null
   | Unique
 type properties = property list
@@ -51,6 +52,7 @@ let parse_sexp sexp =
   let parse_props = function
     | Sx.Atom "not_null" -> Not_null
     | Sx.Atom "unique" -> Unique
+    | Sx.Atom "array" -> Array
     | sx -> fail  (sprintf "I'm lost parsing properties with: %s\n" (Sx.to_string sx))
   in
   let parse_field fl =
@@ -110,6 +112,7 @@ let init_db_postgres db output_string =
              (String.concat ~sep:""
                 (List.map pl ~f:(function
                   | Not_null -> " NOT NULL"
+                  | Array -> " ARRAY"
                   | Unique -> " UNIQUE"))))));
     output_string ");\n";
   )
