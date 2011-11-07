@@ -154,11 +154,38 @@ let verify db output_string =
       | _ -> ())
   )
 
+let digraph db ?(name="db") output_string =
+  sprintf "digraph %s {\n" name |> output_string;
+  List.iter db (fun table ->
+    sprintf "  %s [shape=record, label=\
+        <<table border=\"0\"><tr><td border=\"1\">%s</td></tr><tr><td>"
+      table.name table.name |> output_string;
+    let links = ref [] in
+    List.iter table.fields (fun (n, t, al) ->
+      sprintf "%s" n |> output_string;
+      begin match t with
+      | Identifier -> output_string "*"
+      | Pointer (t, f) -> 
+        output_string "!";
+        links := t :: !links
+      | _ -> ()
+      end;
+      output_string "<br/>";
+    );
+    output_string "</td></tr></table>>];\n";
+    List.iter !links (fun t ->
+      sprintf "%s -> %s;\n" table.name t |> output_string
+    );
+  );
+  output_string "}\n"
+
+
 
 let () =
   match Sys.argv |> Array.to_list with
   | exec :: "verify" :: file :: [] ->
-    In_channel.(with_file file ~f:(fun i -> verify (input_all i |> parse_str) (eprintf "%s")))
+    In_channel.(with_file file
+                  ~f:(fun i -> verify (input_all i |> parse_str) (eprintf "%s")))
   | exec :: "postgres" :: file :: [] ->
     In_channel.with_file file 
       ~f:(fun i -> 
@@ -168,8 +195,15 @@ let () =
                        ~f:(fun o -> init_db_postgres db (output_string o)));
         Out_channel.(with_file (Filename.basename file ^ "_clear.psql") 
                        ~f:(fun o -> clear_db_postgres db (output_string o))))
+  | exec :: "draw" :: file :: [] ->
+    In_channel.with_file file 
+      ~f:(fun i -> 
+        let db = parse_str (In_channel.input_all i) in
+        Out_channel.(with_file 
+                       ((Filename.basename file) ^ "_digraph.dot") 
+                       ~f:(fun o -> digraph db (output_string o))))
   | _ ->
-    eprintf "usage: sexp2db {verify, postgres}\n";
+    eprintf "usage: sexp2db {verify, postgres, draw} <sexp_file>\n";
     ()
 
 
