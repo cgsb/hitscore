@@ -168,10 +168,14 @@ let verify db output_string =
   )
 
 let digraph db ?(name="db") output_string =
-  sprintf "digraph %s {\n" name |> output_string;
+  sprintf "digraph %s {
+        graph [fontsize=20 labelloc=\"t\" label=\"\" \
+            splines=true overlap=false rankdir = \"LR\"];\n"
+    name |> output_string;
   List.iter db (fun table ->
-    sprintf "  %s [shape=record, label=\
-        <<table border=\"0\"><tr><td border=\"1\">%s</td></tr><tr><td>"
+    sprintf "  %s [shape=Mrecord, label=\
+        <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>\
+        <tr ><td align=\"right\">"
       table.name table.name |> output_string;
     let links = ref [] in
     List.iter table.fields (fun (n, t, al) ->
