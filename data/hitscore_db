@@ -1,33 +1,58 @@
-(table timelog
+(template function_application
+          (id identifier)
+          (state process:id)
+          )
+
+;; Generic tables:
+(table process
        (id   identifier)
-       (table_name text not_null)
-       (object_id integer not_null)
        (inserted   timestamp)
        (requested  timestamp)
        (started    timestamp)
-       (completed  timestamp))
+       (completed  timestamp)
+       (status     text) ;; Should be a variant?
+)
 
 (table note
        (id         identifier)
-       (table_name text not_null)
-       (object_id  integer not_null)
        (note       text not_null))
 
+(table file ;;Static files
+       (id identifier)
+       (path text)
+       (size integer)
+       (type text)
+)
+
+(table result ;;Cached result
+       (id identifier)
+       (path text)
+       (size integer)
+       (type text)
+)
+
+;; Almost static input data:
 (table person
        (id              identifier)
        (print_name      text)
        (family_name     text not_null)
-       (email           text not_null))
+       (email           text not_null)
+       (note            note:id)
+)
 
 (table organism
        (id   identifier)
-       (name text unique not_null))
+       (name text unique not_null)
+       (note            note:id)
+)
 
 (table sample
        (id           identifier)
        (name1        text unique not_null)
        (name2        text)
-       (organism     organism:id not_null));
+       (organism     organism:id not_null)
+       (note            note:id)
+);
 
 (table library
        (id             identifier)
@@ -45,25 +70,60 @@
        (barcodes       text)
        (read_type      text)
        (read_length1   integer not_null)
-       (read_length2   integer))
+       (read_length2   integer)
+       (note            note:id)
+)
 
-(table qpcr
+(table flowcell
        (id identifier)
-       (library_id library:id not_null)
-       (concentration real)
-       (volume real))
+       (hiseq_id text)
+       (lanes library:id array)
+)
 
-(table bioanalyzer
-       (id  identifier)
-       (library_id library:id not_null)
-       (pdf_filename text not_null)
-       (well_number integer)
-       (mean_fragment_size real))
 
-(table agarose_gel
-       (id  identifier)
-       (library_id library:id not_null)
-       (pdf_filename  text)
-       (well_number integer)
-       (mean_fragment_size  real))
+;; Functions:
+(function_application qpcr
+                      (library library:id)
+                      (concentration real)
+                      (volume real))
+
+(function_application bioanalyzer
+                      (library library:id)
+                      (pdf file:id not_null)
+                      (well_number integer)
+                      (mean_fragment_size real))
+
+(function_application agarose_gel
+                      (library library:id)
+                      (pdf result:id)
+                      (well_number integer)
+                      (mean_fragment_size  real))
+
+(function_application hiseq_run
+                      (flowcell flowcell:id)
+                      (raw_data result:id))
+
+(function_application sample_sheet
+                      (kind text) ;; All barcodes or not
+                      (flowcell flowcell:id)
+                      (csv_file result:id)
+)
+
+(function_application bcl_to_fastq
+                      (mismatch integer)
+                      (version text)
+                      (sample_sheet sample_sheet:id)
+                      (unaligned result:id)
+                      )
+
+(function_application library_fastqs
+                      (unaligned result:id)
+                      (library library:id)
+                      (output_dir result:id)
+                      )
+(function_application library_fastx_stats
+                      (library_fastqs library_fastqs:id)
+                      (other_param integer)
+                      (stats result:id)
+                      )
 
