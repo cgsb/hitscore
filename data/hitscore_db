@@ -1,6 +1,8 @@
 (template function_application
           (id identifier)
           (state process:id)
+          (recomputable bool)
+          (recompute_penalty real)
           )
 
 ;; Generic tables:
@@ -24,12 +26,26 @@
        (type text)
 )
 
-(table result ;;Cached result
-       (id identifier)
+;; Runtime Values:
+(template value
+          (id identifier)
+          (last_accessed timestamp)
+          )
+(value int_value
+       (val integer)
+       )
+(value real_value
+       (val real)
+       )
+(value string_value
+       (val text)
+       )
+(value file_value
        (path text)
-       (size integer)
        (type text)
-)
+       (size integer)
+       )
+
 
 ;; Almost static input data:
 (table person
@@ -54,11 +70,32 @@
        (note            note:id)
 );
 
-(table library
-       (id             identifier)
+(table BIOO_barcode
+       (id integer)
+       (barcode text)
+       )
+(table TruSeq_barcode
+       (id integer)
+       (barcode text)
+       )
+
+(table protocol
+       (id identifier)
+       (pdf file:id))
+
+;; Functions:
+
+
+(function_application library_preparation
+                      (sample_id      sample:id)
+                      (protocol protocol:id)
+                      (submitted_spreadsheet file:id)
+                      (result library_value:id)
+                      )
+
+(value library_value                  
        (investigator person:id not_null)
        (contacts     person:id array)
-       (sample_id      sample:id)
        (vial_id        integer unique not_null)
        (name           text unique not_null)
        (application    text)
@@ -66,64 +103,75 @@
        (control_type   text)
        (truseq_control bool)
        (rnaseq_control text)
-       (barcode_type   text)
-       (barcodes       text)
+       (bioo_barcodes BIOO_barcode:id array)
+       (truseq_barcodes TruSeq_barcode:id array)
        (read_type      text)
        (read_length1   integer not_null)
        (read_length2   integer)
-       (note            note:id)
+       )
+
+(value lane_value
+       (with_phix bool)
+       (libraries library_value:id array)
+       (lane lane_value:id)
+       )
+
+(function_application lane_mix
+                      (libraries library_value:id array)
+                      (lane lane_value:id)
+                      )
+
+(function_application flowcell_preparation
+                      (unique_name text)
+                      (lanes library_value:id array)
 )
+(value flowcell_value
+       (unique_name text)
+       (lanes library_value:id array)
+       )
 
-(table flowcell
-       (id identifier)
-       (hiseq_id text)
-       (lanes library:id array)
-)
-
-
-;; Functions:
 (function_application qpcr
-                      (library library:id)
+                      (library library_value:id)
                       (concentration real)
                       (volume real))
 
 (function_application bioanalyzer
-                      (library library:id)
-                      (pdf file:id not_null)
-                      (well_number integer)
-                      (mean_fragment_size real))
+                      (library library_value:id)
+                      (pdf file_value:id)
+                      (well_number int_value:id)
+                      (mean_fragment_size real_value:id))
 
 (function_application agarose_gel
-                      (library library:id)
-                      (pdf result:id)
-                      (well_number integer)
-                      (mean_fragment_size  real))
+                      (library library_value:id)
+                      (pdf file_value:id)
+                      (well_number int_value:id)
+                      (mean_fragment_size  real_value:id))
 
 (function_application hiseq_run
-                      (flowcell flowcell:id)
-                      (raw_data result:id))
+                      (flowcell flowcell_value:id)
+                      (raw_data file_value:id))
 
 (function_application sample_sheet
                       (kind text) ;; All barcodes or not
-                      (flowcell flowcell:id)
-                      (csv_file result:id)
+                      (flowcell flowcell_value:id)
+                      (csv_file file_value:id)
 )
 
 (function_application bcl_to_fastq
                       (mismatch integer)
                       (version text)
-                      (sample_sheet sample_sheet:id)
-                      (unaligned result:id)
+                      (sample_sheet file_value:id)
+                      (unaligned file_value:id)
                       )
 
 (function_application library_fastqs
-                      (unaligned result:id)
-                      (library library:id)
-                      (output_dir result:id)
+                      (unaligned file_value:id)
+                      (library library_value:id)
+                      (output_dir file_value:id)
                       )
 (function_application library_fastx_stats
-                      (library_fastqs library_fastqs:id)
+                      (library_fastqs file_value:id)
                       (other_param integer)
-                      (stats result:id)
+                      (stats file_value:id)
                       )
 
