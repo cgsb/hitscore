@@ -162,14 +162,18 @@ let digraph db ?(name="db") output_string =
       table.name table.name |> output_string;
     let links = ref [] in
     List.iter table.fields (fun (n, t, al) ->
-      sprintf "%s" n |> output_string;
+      sprintf "%s " n |> output_string;
       begin match t with
       | Identifier -> output_string "*"
       | Pointer (t, f) -> 
-        output_string "!";
+        output_string "&amp;";
         links := t :: !links
       | _ -> ()
       end;
+      List.iter al (function
+        | Not_null -> output_string ""
+        | Array -> output_string "[]"
+        | Unique -> output_string "!");
       output_string "<br/>";
     );
     output_string "</td></tr></table>>];\n";
