@@ -63,11 +63,24 @@ let parse_sexp sexp =
       fail (sprintf "I'm lost parsing fields with: %s\n" (Sx.to_string l))
 
   in
+  let templates = ref [] in
   let parse_entry entry =
     match entry with
+    | (Sx.Atom "template") :: (Sx.Atom name) :: l ->
+      let fields = List.map ~f:parse_field l in
+      templates := (name, fields) :: !templates;
+      None
     | (Sx.Atom "table") :: (Sx.Atom name) :: l ->
       let fields = List.map ~f:parse_field l in
-      {name; fields}
+      Some {name; fields}
+    | (Sx.Atom template) :: (Sx.Atom name) :: l ->
+      begin match List.Assoc.find !templates template with
+      | Some fs ->
+        let fields = fs @ (List.map ~f:parse_field l) in
+        Some {name; fields}
+      | None ->
+        fail (sprintf "Unknown template or command: %s" name)
+      end
     | s ->
       fail (sprintf "I'm lost while parsing entry with: %s\n"
               (Sx.to_string (Sx.List s)))
@@ -75,7 +88,7 @@ let parse_sexp sexp =
   match sexp with
   | Sx.Atom s -> fail_atom s
   | Sx.List l ->
-    List.map l
+    List.filter_map l
       ~f:(function
         | Sx.Atom s -> fail_atom s
         | Sx.List l -> parse_entry l)
