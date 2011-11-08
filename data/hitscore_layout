@@ -5,13 +5,13 @@
 (value file ;;Static files
        (path string)
        (size int)
-       (type string))
+       (filetype string))
 
 ;; Runtime Values:
-(value int_value (val int))
-(value bool_value (val bool))
-(value real_value (val real))
-(value string_value (val string))
+(value int_value (value int))
+(value bool_value (value bool))
+(value real_value (value real))
+(value string_value (value string))
 
 ;; Almost static input data:
 (value person

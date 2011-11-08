@@ -247,6 +247,35 @@ let rec type_is_pointer = function
   | Array a      -> type_is_pointer a
   | Pointer p -> `yes p
 
+let rec type_is_option = function
+  | Bool         -> `no
+  | Timestamp    -> `no
+  | Int          -> `no
+  | Real         -> `no
+  | String       -> `no
+  | Option o     -> `yes
+  | Array a      -> type_is_option a
+  | Pointer p -> `no
+
+let sanitize s =
+  String.iter s ~f:(function
+    | 'a' .. 'z' | '_' | '0' .. '9' | 'A' .. 'Z' -> ()
+    | c -> 
+      sprintf "In name %S, char %C is forbidden" s c |> failwith
+  );
+  begin match String.get s 0 with
+  | 'a' .. 'z' -> ()
+  | _ -> 
+    sprintf "%S should start with a lowercase letter" s |> failwith
+  end;
+  if String.is_prefix s ~prefix:"g_" then
+    sprintf "%S should not start with \"g_\"" s |> failwith;
+  begin match s with
+  | "type" | "val" | "let" | "in" | "with" | "match" | "null" ->
+    sprintf "%S is not a good name …" s |> failwith
+  | _ -> ()
+  end
+ 
 let parse_sexp sexp =
   let fail msg =
     raise (Parse_error (sprintf "Syntax Error: %s" msg)) in
@@ -275,6 +304,8 @@ let parse_sexp sexp =
   let parse_field fl =
     match fl with
     | Sx.List ((Sx.Atom name) :: (Sx.Atom typ) :: props) ->
+      sanitize name;
+      sanitize typ;
       (name, parse_2nd_type (type_of_string typ) props)
     | l ->
       fail (sprintf "I'm lost parsing fields with: %s\n" (Sx.to_string l))
@@ -283,10 +314,13 @@ let parse_sexp sexp =
   let parse_entry entry =
     match entry with
     | (Sx.Atom "value") :: (Sx.Atom name) :: l ->
+      sanitize name;
       let fields = List.map ~f:parse_field l in
       existing_types := name :: !existing_types;
       Value (name, fields)
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
+      sanitize name;
+      sanitize lout;
       let fields = 
         List.map ~f:(function
           | Sx.List [Sx.Atom name; Sx.Atom typ] ->
