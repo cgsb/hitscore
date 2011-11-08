@@ -402,6 +402,29 @@ let digraph dsl ?(name="dsl") output_string =
 
 let () =
   match Sys.argv |> Array.to_list with
+  | exec :: "all" :: file :: prefix :: [] ->
+    let dsl =
+      In_channel.(with_file file ~f:(fun i -> parse_str (input_all i))) in
+    Out_channel.(
+      with_file (prefix ^ (Filename.basename file) ^ "_digraph.dot") 
+        ~f:(fun o -> digraph dsl (output_string o))
+    );
+    let db = to_db dsl in
+    eprintf "Verification:\n";
+    DB_dsl.verify db (eprintf "%s");
+    eprintf "Done.\n";
+    let open Out_channel in
+    with_file (prefix ^ (Filename.basename file) ^ "_dsl_digraph.dot") 
+      ~f:(fun o -> DB_dsl.digraph db (output_string o));
+      
+    with_file (prefix ^ (Filename.basename file) ^ "_init.psql") 
+      ~f:(fun o -> DB_dsl.init_db_postgres db (output_string o));
+    
+    with_file (prefix ^ (Filename.basename file) ^ "_clear.psql") 
+      ~f:(fun o -> DB_dsl.clear_db_postgres db (output_string o));
+    
+
+
   | exec :: "dbverify" :: file :: [] ->
     In_channel.(with_file file
                   ~f:(fun i -> DB_dsl.verify
@@ -446,7 +469,9 @@ let () =
                        ((Filename.basename file) ^ "_digraph.dot") 
                        ~f:(fun o -> digraph dsl (output_string o))))
   | _ ->
-    eprintf "usage: sexp2db {dbverify, dbpostgres, dbdraw} <sexp_file>\n";
+    eprintf "usage: \n\
+       sexp2db {dbverify, dbpostgres, dbdraw, ...} <sexp_file>\n\
+       sexp2db all <sexp_file> <outprefix>\n";
     ()
 
 
