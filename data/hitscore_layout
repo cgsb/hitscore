@@ -42,7 +42,7 @@
 
 (value protocol
        (name string)
-       (pdf file))
+       (dir file))
 
 ;; Functions:
 
@@ -69,51 +69,49 @@
           (protocol  protocol)
           (submitted_spreadsheet file)
           )
+
 (value library_array
        (libraries library array))
 
 (value lane
        (with_phix bool)
-       (libraries library array)
-       )
+       (libraries library_array))
+
 (value lane_array
-       (lanes lane array)
-       )
+       (lanes lane array))
 
 (function lane lane_mix
-          (libraries library_array)
-          )
+          (libraries library_array))
 
 (value flowcell
        (vendor_name string)
-       (lanes lane array)
-       )
+       (lanes lane_array))
+
 (function flowcell flowcell_preparation
           (unique_name string_value)
-          (lanes lane_array)
-          )
+          (lanes lane_array))
 
 (value qpcr_result 
        (concentration real_value)
        (volume real_value))
 
 (function qpcr_result qpcr
-          (library library)
-          )
+          (library library))
 
-(value biogel_analysis
+(value bioanalyzer_result
        (pdf file)
-       (mean_fragment_size real)
-       )
+       (mean_fragment_size real))
+(value agarose_gel_result
+       (pdf file)
+       (mean_fragment_size real))
 
-(function biogel_analysis bioanalyzer
+(function bioanalyzer_result bioanalyzer
           (library library)
           (well_number int_value))
 
-(function biogel_analysis agarose_gel
+(function agarose_gel_result agarose_gel
           (library library)
-          (well_number int_value)
-          )
+          (well_number int_value))
 
 (value hiseq_raw
        (data file))
@@ -137,22 +135,24 @@
        )
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
+          (raw_data hiseq_raw)
           (mismatch int_value)
           (version string_value)
           (sample_sheet file))
 
-(function file fastqs_dir
-          (unaligned file)
-          (library library)
-          )
 
-(function file library_fastx_stats
-          (library_fastqs file)
-          (other_param int_value)
-          (stats file)
-          )
-
-(value deliverable
-       (fastq_dir file)
-       (stats_dir file)
-       (email_body string))
+;; (function file fastqs_dir
+;;           (unaligned file)
+;;           (library library)
+;;           )
+;;  
+;; (function file library_fastx_stats
+;;           (library_fastqs file)
+;;           (other_param int_value)
+;;           (stats file)
+;;           )
+;;  
+;; (value deliverable
+;;        (fastq_dir file)
+;;        (stats_dir file)
+;;        (email_body string))
