@@ -237,6 +237,16 @@ let rec string_of_dsl_type = function
   | Array a     -> sprintf "%s array" (string_of_dsl_type a)
   | Pointer p   -> sprintf "%s ref" p
 
+let rec type_is_pointer = function
+  | Bool         -> `no
+  | Timestamp    -> `no
+  | Int          -> `no
+  | Real         -> `no
+  | String       -> `no
+  | Option o     -> type_is_pointer o
+  | Array a      -> type_is_pointer a
+  | Pointer p -> `yes p
+
 let parse_sexp sexp =
   let fail msg =
     raise (Parse_error (sprintf "Syntax Error: %s" msg)) in
@@ -376,15 +386,14 @@ let digraph dsl ?(name="dsl") output_string =
       List.iter fields (fun (n, t) ->
         sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n (string_of_dsl_type t) 
                            |> output_string;
-        begin match t with
-        | Pointer t -> 
-          links := t :: !links
-        | _ -> ()
-        end;
+        begin match type_is_pointer t with
+        | `yes p -> links := p :: !links
+        | `no -> ()
+        end
       );
       output_string "</table>>];\n";
       List.iter !links (fun t ->
-        sprintf "%s -> %s;\n" name t |> output_string
+        sprintf "%s -> %s [color=\"#888888\"];\n" name t |> output_string
       );
     | Function (name, args, result) ->
       sprintf "  %s [shape=Mrecord, label=\
@@ -395,11 +404,13 @@ let digraph dsl ?(name="dsl") output_string =
         sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n t |> output_string;
         links := t :: !links
       );
-      sprintf "<tr><td align=\"left\">%s</td></tr>" result |> output_string;
+      sprintf "<tr><td align=\"left\"><i>%s</i></td></tr>" result |> output_string;
       output_string "</table>>];\n";
       List.iter !links (fun t ->
-        sprintf "%s -> %s;\n" name t |> output_string
+        sprintf "%s -> %s [style=dashed, color=\"#880000\"];\n" name t |> 
+            output_string
       );
+      sprintf "%s -> %s [color=\"#008800\"];\n" name result |> output_string
     );
     output_string "}\n"
 
