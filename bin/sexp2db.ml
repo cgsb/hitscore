@@ -103,22 +103,26 @@ module DB_dsl = struct
       name |> output_string;
     List.iter db (fun table ->
       sprintf "  %s [shape=Mrecord, label=\
-        <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>"
+        <<table border=\"0\" ><tr><td border=\"1\" colspan=\"2\">%s</td></tr>"
         table.name table.name |> output_string;
       let links = ref [] in
       List.iter table.fields (fun (n, t, al) ->
-        sprintf "<tr><td align=\"left\">%s " n |> output_string;
+        sprintf "<tr><td align=\"left\">%s </td><td align=\"left\">: " n
+                                 |> output_string;
         begin match t with
-        | Identifier -> output_string "*"
-        | Pointer (t, f) -> 
-          output_string "&amp;";
-          links := t :: !links
-        | _ -> ()
-        end;
-        List.iter al (function
-          | Not_null -> output_string ""
-          | Array -> output_string "[]"
-          | Unique -> output_string "!");
+        | Timestamp      -> "Timestamp"      
+        | Identifier     -> "Identifier"     
+        | Text           -> "Text"           
+        | Pointer (t, f) -> links := t :: !links; sprintf "%s:%s" t f
+        | Integer        -> "Integer"        
+        | Real           -> "Real"           
+        | Bool           -> "Bool"
+        end |> output_string;
+        List.map al (function
+          | Not_null ->  " non null" 
+          | Array ->  " array"
+          | Unique -> " unique") |> String.concat ~sep:""
+                                 |> output_string;
         output_string "</td></tr>";
       );
       output_string "</table>>];\n";
