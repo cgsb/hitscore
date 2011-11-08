@@ -522,6 +522,58 @@ let ocaml_code dsl output_string =
   );
   ()
 
+let testing_inserts dsl amount output_string =
+  List.iter dsl (function
+    | Value (name, fields) ->
+      let intos =
+        "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
+      let values i =
+        let rec g (n, t) =
+          match  t with
+          | Bool        -> Random.bool () |> sprintf "%b"
+          | Timestamp   -> "now()"
+          | Int         -> Random.int 30_000 |> sprintf "%d"
+          | Real        -> Random.float 42_000. |> sprintf "%f"
+          | String      -> sprintf "random_%s_%d" n (Random.int 30000)
+          | Option o    ->  g (n, o)
+          | Array a     -> 
+            sprintf "{%s}" (String.concat ~sep:", "
+                              (List.init (Random.int 42 + 1) (fun _ -> g (n, a))))
+          | Pointer p   -> g (n, Int)
+        in
+        let f = Fn.compose (sprintf "'%s'") g in
+        "now()" :: List.map fields ~f |> String.concat ~sep:", " in
+      for i = 0 to Random.int amount do
+        sprintf "INSERT INTO %s (%s) VALUES (%s);\n\n" 
+          name intos (values i) |> output_string;
+      done
+    | Function (name, args, result) ->
+      let intos =
+        "g_result" ::
+          "g_recomputable" ::
+          "g_recompute_penalty" ::
+          "g_inserted" ::
+          "g_started" ::
+          "g_completed" ::
+          "g_status" ::
+          (List.map args fst) |> String.concat ~sep:", " in
+      let values i =
+        (if Random.bool () then Random.int amount |> sprintf "'%d'" else "null") ::
+          (Random.bool () |> sprintf "'%b'") ::
+          (Random.float 42. |> sprintf "'%f'") ::
+          "now()" ::
+          "now()" ::
+          "now()" ::
+          (sprintf "'random_status_for_%s_%d'" name (Random.int 30000)) ::
+          (List.map args (fun (n, t) ->
+            sprintf "'%d'" (Random.int amount))) |> String.concat ~sep:", "
+      in
+      for i = 0 to Random.int amount do
+        sprintf "INSERT INTO %s (%s) VALUES (%s);\n\n" 
+          name intos (values i) |> output_string;
+      done;
+      ()
+  )
 
 let () =
   match Sys.argv |> Array.to_list with
@@ -549,6 +601,10 @@ let () =
     with_file (prefix ^ (Filename.basename file) ^ "_code.ml") 
       ~f:(fun o -> ocaml_code dsl (output_string o));
 
+    with_file (prefix ^ (Filename.basename file) ^ "_fuzzdata_afew.psql")
+      ~f:(fun o -> testing_inserts dsl 42 (output_string o));
+    with_file (prefix ^ (Filename.basename file) ^ "_fuzzdata_alot.psql")
+      ~f:(fun o -> testing_inserts dsl 4242 (output_string o));
 
   | exec :: "dbverify" :: file :: [] ->
     In_channel.(with_file file
