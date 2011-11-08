@@ -449,6 +449,58 @@ let digraph dsl ?(name="dsl") output_string =
     output_string "}\n"
 
 
+let ocaml_code dsl output_string =
+  List.iter dsl (function
+    | Value (name, fields) ->
+      (* Function to add a new value: *)
+      sprintf "let add_value_%s\n" name |> output_string;
+      List.iter fields (fun (n, t) ->
+        let kind_of_arg =
+          match type_is_option t with `yes -> "?" | `no -> "~" in
+        let want_id =
+          match type_is_pointer t with `yes _ -> "_id" | `no -> "" in
+        sprintf "    %s%s%s\n" kind_of_arg n want_id |> output_string;
+      );
+      let intos =
+        "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
+      let values =
+        let prefix (n, t) =
+          (match type_is_option t with `yes -> "$?" | `no -> "$") ^
+            n ^
+            (match type_is_pointer t with `yes _ -> "_id" | `no -> "")
+        in
+        "now()" :: List.map fields prefix |> String.concat ~sep:", " in
+      sprintf "    db_handle =\n  PGSQL (db_handle)\n" |> output_string;
+      sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
+                   \     RETURNING g_id \"\n\n" 
+        name intos values |> output_string;
+    | Function (name, args, result) ->
+      (* Function to insert a new function evaluation: *)
+      sprintf "let add_evaluation_of_%s\n" name |> output_string;
+      List.iter args (fun (n, t) -> output_string ("    ~" ^ n ^ "_id\n"));
+      output_string "    ?(recomputable=false)\n";
+      output_string "    ?(recompute_penalty=0.)\n";
+      output_string "    db_handle =\n  PGSQL (db_handle)\n";
+      let intos =
+        "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
+          (List.map args fst) |> String.concat ~sep:", " in
+      let values =
+        "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'INSERTED'" ::
+          (List.map args (fun (n, t) -> "$" ^ n ^ "_id")) |>
+              String.concat ~sep:", " in
+      sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
+                   \     RETURNING g_id \"\n\n" 
+        name intos values |> output_string;
+      (* Function to set the state of a function evaluation to 'STARTED': *)
+      sprintf "let set_%s_started ~id db_handle =\n" name |> output_string;
+      output_string "  PGSQL (db_handle)\n";
+      sprintf "    \"UPDATE %s SET g_status = 'STARTED', g_started = now ()\n\
+              \    WHERE g_id = $id\"\n\n" name |> output_string
+
+  );
+  ()
+
+
 let () =
   match Sys.argv |> Array.to_list with
   | exec :: "all" :: file :: prefix :: [] ->
@@ -472,6 +524,8 @@ let () =
     with_file (prefix ^ (Filename.basename file) ^ "_clear.psql") 
       ~f:(fun o -> DB_dsl.clear_db_postgres db (output_string o));
     
+    with_file (prefix ^ (Filename.basename file) ^ "_code.ml") 
+      ~f:(fun o -> ocaml_code dsl (output_string o));
 
 
   | exec :: "dbverify" :: file :: [] ->
