@@ -103,12 +103,11 @@ module DB_dsl = struct
       name |> output_string;
     List.iter db (fun table ->
       sprintf "  %s [shape=Mrecord, label=\
-        <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>\
-        <tr ><td align=\"right\">"
+        <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>"
         table.name table.name |> output_string;
       let links = ref [] in
       List.iter table.fields (fun (n, t, al) ->
-        sprintf "%s " n |> output_string;
+        sprintf "<tr><td align=\"left\">%s " n |> output_string;
         begin match t with
         | Identifier -> output_string "*"
         | Pointer (t, f) -> 
@@ -120,9 +119,9 @@ module DB_dsl = struct
           | Not_null -> output_string ""
           | Array -> output_string "[]"
           | Unique -> output_string "!");
-        output_string "<br/>";
+        output_string "</td></tr>";
       );
-      output_string "</td></tr></table>>];\n";
+      output_string "</table>>];\n";
       List.iter !links (fun t ->
         sprintf "%s -> %s;\n" table.name t |> output_string
       );
@@ -328,32 +327,32 @@ let to_db dsl =
               | Array t2 ->
                 props := DB.Array :: !props;
                 convert t2
-              | Pointer s -> DB.Pointer (s, "id")
+              | Pointer s -> DB.Pointer (s, "g_id")
             in
             let converted = convert t in
             (converted, !props)
           in
           (n,  typ, props)) in
       let fields = 
-        ("id", DB.Identifier, [DB.Not_null]) ::
-          ("last_accessed", DB.Timestamp, []) ::
+        ("g_id", DB.Identifier, [DB.Not_null]) ::
+          ("g_last_accessed", DB.Timestamp, []) ::
           user_fields
       in
       { DB.name ; DB.fields }
     | Function (name, args, result) ->
       let arg_fields =
         List.map args (fun (n, t) ->
-          (n, DB.Pointer (t, "id"), [DB.Not_null]))
+          (n, DB.Pointer (t, "g_id"), [DB.Not_null]))
       in
       let fields =
-        ("id", DB.Identifier, [DB.Not_null]) ::
-          ("_result", DB.Pointer (result, "id"), []) ::
-          ("_recomputable", DB.Bool, []) ::
-          ("_recompute_penalty", DB.Real, []) ::
-          ("_inserted", DB.Timestamp, []) ::
-          ("_started", DB.Timestamp, []) ::
-          ("_completed", DB.Timestamp, []) ::
-          ("_status", DB.Text, []) ::
+        ("g_id", DB.Identifier, [DB.Not_null]) ::
+          ("g_result", DB.Pointer (result, "id"), []) ::
+          ("g_recomputable", DB.Bool, []) ::
+          ("g_recompute_penalty", DB.Real, []) ::
+          ("g_inserted", DB.Timestamp, []) ::
+          ("g_started", DB.Timestamp, []) ::
+          ("g_completed", DB.Timestamp, []) ::
+          ("g_status", DB.Text, []) ::
           arg_fields in
       { DB.name; DB.fields }
   )

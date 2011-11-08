@@ -1,0 +1,13 @@
+
+(atom string_value
+      (val string))
+
+(atom int_value
+      (val int))
+(atom int_real
+      (i int_value)
+      (r real))
+
+(function int_value fun1 
+          (in1 int_value)
+          (in2 string_value))
