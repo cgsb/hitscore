@@ -474,6 +474,17 @@ let ocaml_code dsl output_string =
       sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
                    \     RETURNING g_id \"\n\n" 
         name intos values |> output_string;
+      (* Access a value *)
+      sprintf "let get_value_%s_by_id ~id db_handle =\n" name |> output_string;
+      output_string "  PGSQL (db_handle)\n";
+      sprintf "    \"SELECT * FROM %s \
+                   WHERE g_id = $id\"\n\n" name |> output_string;
+      (* Delete a value *)
+      sprintf "let delete_value_%s_by_id ~id db_handle =\n" name |> output_string;
+      output_string "  PGSQL (db_handle)\n";
+      sprintf "    \"DELETE FROM %s \
+                   WHERE g_id = $id\"\n\n" name |> output_string;
+      
     | Function (name, args, result) ->
       (* Function to insert a new function evaluation: *)
       sprintf "let add_evaluation_of_%s\n" name |> output_string;
@@ -491,6 +502,17 @@ let ocaml_code dsl output_string =
       sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
                    \     RETURNING g_id \"\n\n" 
         name intos values |> output_string;
+      (* Access a function *)
+      sprintf "let get_evaluation_%s_by_id ~id db_handle =\n" name |> output_string;
+      output_string "  PGSQL (db_handle)\n";
+      sprintf "    \"SELECT * FROM %s \
+                   WHERE g_id = $id\"\n\n" name |> output_string;
+      (* Delete a function *)
+      sprintf "let delete_evaluation_%s_by_id ~id db_handle =\n" 
+        name |> output_string;
+      output_string "  PGSQL (db_handle)\n";
+      sprintf "    \"DELETE FROM %s \
+                   WHERE g_id = $id\"\n\n" name |> output_string;
       (* Function to set the state of a function evaluation to 'STARTED': *)
       sprintf "let set_%s_started ~id db_handle =\n" name |> output_string;
       output_string "  PGSQL (db_handle)\n";
