@@ -217,7 +217,7 @@ type dsl_type =
 type typed_value = string * dsl_type
 
 type dsl_runtime_item =
-  | Atom of string * typed_value list
+  | Value of string * typed_value list
   | Function of string * (string * string) list * string
 
 type dsl_runtime = dsl_runtime_item list
@@ -268,10 +268,10 @@ let parse_sexp sexp =
   in
   let parse_entry entry =
     match entry with
-    | (Sx.Atom "atom") :: (Sx.Atom name) :: l ->
+    | (Sx.Atom "value") :: (Sx.Atom name) :: l ->
       let fields = List.map ~f:parse_field l in
       existing_types := name :: !existing_types;
-      Atom (name, fields)
+      Value (name, fields)
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
       let fields = 
         List.map ~f:(function
@@ -309,7 +309,7 @@ let parse_str str =
 let to_db dsl =
   let module DB = DB_dsl in
   List.map dsl (function
-    | Atom (name, record) ->
+    | Value (name, record) ->
       let user_fields =
         List.map record (fun (n, t) ->
           let typ, props = 
@@ -364,7 +364,7 @@ let digraph dsl ?(name="dsl") output_string =
             splines=true overlap=false rankdir = \"LR\"];\n"
     name |> output_string;
   List.iter dsl (function
-    | Atom (name, fields) ->
+    | Value (name, fields) ->
       sprintf "  %s [shape=record, label=\
         <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>"
         name name |> output_string;

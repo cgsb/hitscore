@@ -1,12 +1,13 @@
 
-(atom string_value
-      (val string))
+(value string_value
+       (val string))
 
-(atom int_value
-      (val int))
-(atom int_real
-      (i int_value)
-      (r real))
+(value int_value
+       (val int))
+
+(value int_real
+       (i int_value)
+       (r real))
 
 (function int_value fun1 
           (in1 int_value)
