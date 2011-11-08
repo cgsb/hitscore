@@ -346,7 +346,7 @@ let to_db dsl =
       in
       let fields =
         ("g_id", DB.Identifier, [DB.Not_null]) ::
-          ("g_result", DB.Pointer (result, "id"), []) ::
+          ("g_result", DB.Pointer (result, "g_id"), []) ::
           ("g_recomputable", DB.Bool, []) ::
           ("g_recompute_penalty", DB.Real, []) ::
           ("g_inserted", DB.Timestamp, []) ::
