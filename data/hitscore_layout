@@ -1,0 +1,158 @@
+
+(value note
+       (note string))
+
+(value file ;;Static files
+       (path string)
+       (size int)
+       (type string))
+
+;; Runtime Values:
+(value int_value (val int))
+(value bool_value (val bool))
+(value real_value (val real))
+(value string_value (val string))
+
+;; Almost static input data:
+(value person
+       (print_name      string option)
+       (family_name     string)
+       (email           string)
+       (note            note option)
+       )
+
+(value organism
+       (name string)
+       (note note option)
+       )
+
+(value sample
+       (name        string)
+       (organism    organism)
+       (note        note option)
+       )
+
+(value bioo_barcode
+       (vendor_id int)
+       (barcode string))
+
+(value truseq_barcode
+       (vendor_id int)
+       (barcode string))
+
+(value protocol
+       (name string)
+       (pdf file))
+
+;; Functions:
+
+
+(value library                  
+       (investigator person)
+       (contacts     person array)
+       (vial_id        int)
+       (name           string)
+       (application    string)
+       (stranded       bool)
+       (control_type   string)
+       (truseq_control bool)
+       (rnaseq_control string)
+       (bioo_barcodes bioo_barcode array)
+       (truseq_barcodes truseq_barcode array)
+       (read_type      string)
+       (read_length1   int)
+       (read_length2   int)
+       )
+
+(function library library_preparation
+          (sample      sample)
+          (protocol  protocol)
+          (submitted_spreadsheet file)
+          )
+(value library_array
+       (libraries library array))
+
+(value lane
+       (with_phix bool)
+       (libraries library array)
+       )
+(value lane_array
+       (lanes lane array)
+       )
+
+(function lane lane_mix
+          (libraries library_array)
+          )
+
+(value flowcell
+       (vendor_name string)
+       (lanes lane array)
+       )
+(function flowcell flowcell_preparation
+          (unique_name string_value)
+          (lanes lane_array)
+          )
+
+(value qpcr_result 
+       (concentration real_value)
+       (volume real_value))
+
+(function qpcr_result qpcr
+          (library library)
+          )
+
+(value biogel_analysis
+       (pdf file)
+       (mean_fragment_size real)
+       )
+
+(function biogel_analysis bioanalyzer
+          (library library)
+          (well_number int_value))
+
+(function biogel_analysis agarose_gel
+          (library library)
+          (well_number int_value)
+          )
+
+(value hiseq_raw
+       (data file))
+
+(function hiseq_raw hiseq_run
+          (flowcell flowcell)
+          (keep_intensities bool_value)
+          )
+
+(value sample_sheet
+       (csv_file file)
+       )
+
+(function sample_sheet assemble_sample_sheet
+          (kind string_value) ;; All barcodes or not
+          (flowcell flowcell)
+          )
+
+(value bcl_to_fastq_unaligned
+       (unaligned file)
+       )
+
+(function bcl_to_fastq_unaligned bcl_to_fastq
+          (mismatch int_value)
+          (version string_value)
+          (sample_sheet file))
+
+(function file fastqs_dir
+          (unaligned file)
+          (library library)
+          )
+
+(function file library_fastx_stats
+          (library_fastqs file)
+          (other_param int_value)
+          (stats file)
+          )
+
+(value deliverable
+       (fastq_dir file)
+       (stats_dir file)
+       (email_body string))
