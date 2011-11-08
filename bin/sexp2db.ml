@@ -223,6 +223,17 @@ type dsl_runtime_item =
 
 type dsl_runtime = dsl_runtime_item list
 
+
+let rec string_of_dsl_type = function
+  | Bool        -> "Bool"
+  | Timestamp   -> "Timestamp"
+  | Int         -> "Int"
+  | Real        -> "Real"
+  | String      -> "String"    
+  | Option o    -> sprintf "%s option" (string_of_dsl_type o)
+  | Array a     -> sprintf "%s array" (string_of_dsl_type a)
+  | Pointer p   -> sprintf "%s ref" p
+
 let parse_sexp sexp =
   let fail msg =
     raise (Parse_error (sprintf "Syntax Error: %s" msg)) in
@@ -347,6 +358,49 @@ let to_db dsl =
       { DB.name; DB.fields }
   )
 
+      
+let digraph dsl ?(name="dsl") output_string =
+  sprintf "digraph %s {
+        graph [fontsize=20 labelloc=\"t\" label=\"\" \
+            splines=true overlap=false rankdir = \"LR\"];\n"
+    name |> output_string;
+  List.iter dsl (function
+    | Atom (name, fields) ->
+      sprintf "  %s [shape=record, label=\
+        <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>"
+        name name |> output_string;
+      let links = ref [] in
+      List.iter fields (fun (n, t) ->
+        sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n (string_of_dsl_type t) 
+                           |> output_string;
+        begin match t with
+        | Pointer t -> 
+          links := t :: !links
+        | _ -> ()
+        end;
+      );
+      output_string "</table>>];\n";
+      List.iter !links (fun t ->
+        sprintf "%s -> %s;\n" name t |> output_string
+      );
+    | Function (name, args, result) ->
+      sprintf "  %s [shape=Mrecord, label=\
+        <<table border=\"0\" ><tr><td border=\"4\">%s</td></tr>"
+        name name |> output_string;
+      let links = ref [] in
+      List.iter args (fun (n, t) ->
+        sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n t |> output_string;
+        links := t :: !links
+      );
+      sprintf "<tr><td align=\"left\">%s</td></tr>" result |> output_string;
+      output_string "</table>>];\n";
+      List.iter !links (fun t ->
+        sprintf "%s -> %s;\n" name t |> output_string
+      );
+    );
+    output_string "}\n"
+
+
 let () =
   match Sys.argv |> Array.to_list with
   | exec :: "dbverify" :: file :: [] ->
@@ -385,6 +439,13 @@ let () =
                        ~f:(fun o -> DB_dsl.init_db_postgres db (output_string o)));
         Out_channel.(with_file (Filename.basename file ^ "_clear.psql") 
                        ~f:(fun o -> DB_dsl.clear_db_postgres db (output_string o))))
+  | exec :: "dsldraw" :: file :: [] ->
+    In_channel.with_file file 
+      ~f:(fun i -> 
+        let dsl = parse_str (In_channel.input_all i) in
+        Out_channel.(with_file 
+                       ((Filename.basename file) ^ "_digraph.dot") 
+                       ~f:(fun o -> digraph dsl (output_string o))))
   | _ ->
     eprintf "usage: sexp2db {dbverify, dbpostgres, dbdraw} <sexp_file>\n";
     ()
