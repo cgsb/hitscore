@@ -217,26 +217,34 @@ type dsl_type =
   | Option of dsl_type
   | Array of dsl_type 
   | Pointer of string
+  | Record_name of string
+  | Enumeration_name of string
+  | Function_name of string
 
 type typed_value = string * dsl_type
 
-type dsl_runtime_item =
+type dsl_runtime_type =
+  | Enumeration of string * string list
   | Record of string * typed_value list
   | Function of string * (string * string) list * string
-
-type complex_type =
-  | Record_type of string
-  | Enumeration of string * string list
-
+      
 type dsl_runtime_description = {
-  nodes: dsl_runtime_item list;
-  types: complex_type list;
+  nodes: dsl_runtime_type list;
+  types: dsl_type list; (* TODO clarify what's in there! *)
 }
 
-let built_in_complexes = [
+let built_in_complex_types = [
   Enumeration ("process_status",
                [ "STARTED"; "INSERTED"; "FAIL"; "COMPLETED" ]);
 ]
+
+let type_name = function
+  | Enumeration (n, _) -> Enumeration_name n
+  | Record (n, _) -> Record_name n
+  | Function (n, _, _) -> Function_name n
+
+let built_in_types =
+  List.map built_in_complex_types ~f:type_name
 
 let rec string_of_dsl_type = function
   | Bool        -> "Bool"
@@ -247,6 +255,9 @@ let rec string_of_dsl_type = function
   | Option o    -> sprintf "%s option" (string_of_dsl_type o)
   | Array a     -> sprintf "%s array" (string_of_dsl_type a)
   | Pointer p   -> sprintf "%s ref" p
+  | Record_name       n -> n |> sprintf "%s:rec" 
+  | Enumeration_name  n -> n |> sprintf "%s:enum" 
+  | Function_name     n -> n |> sprintf "%s:fun" 
 
 let rec type_is_pointer = function
   | Bool         -> `no
@@ -257,6 +268,23 @@ let rec type_is_pointer = function
   | Option o     -> type_is_pointer o
   | Array a      -> type_is_pointer a
   | Pointer p -> `yes p
+  | Record_name       n -> `yes n
+  | Enumeration_name  n -> `no
+  | Function_name     n -> `yes n
+
+(* A link is semantic: a pointer, or a enum-name, etc. *)
+let rec type_is_link = function
+  | Bool      
+  | Timestamp 
+  | Int       
+  | Real      
+  | String       -> `no
+  | Option o     -> type_is_link o
+  | Array a      -> type_is_link a
+  | Pointer           n
+  | Record_name       n
+  | Enumeration_name  n
+  | Function_name     n -> `yes n
 
 let rec type_is_option = function
   | Bool         -> `no
@@ -267,10 +295,18 @@ let rec type_is_option = function
   | Option o     -> `yes
   | Array a      -> type_is_option a
   | Pointer p -> `no
+  | Record_name       n -> `no
+  | Enumeration_name  n -> `no
+  | Function_name     n -> `no
 
-let complex_type_name = function
-  | Record_type s -> s
-  | Enumeration (s, _) -> s
+let find_type l t =
+  List.find l ~f:(function
+    | Record_name       n -> n = t
+    | Enumeration_name  n -> n = t
+    | Function_name     n -> n = t
+    | _ -> false)
+
+
 
 let sanitize s =
   String.iter s ~f:(function
@@ -295,12 +331,11 @@ let parse_sexp sexp =
   let fail msg =
     raise (Parse_error (sprintf "Syntax Error: %s" msg)) in
   let fail_atom s = fail (sprintf "Unexpected atom: %s" s) in
-  let existing_types = ref built_in_complexes in
+  let existing_types = ref [] in
   let check_type t =
-    match List.find !existing_types ~f:(fun et -> complex_type_name et = t) with
-    | Some (Record_type _) -> (Pointer t)
-    | Some (Enumeration (e, _)) -> (Pointer t)
-    | None -> fail (sprintf "Unknown type: %s" t)
+    match find_type !existing_types t with
+    | Some t -> t
+    | _ -> fail (sprintf "Unknown type: %s" t)
   in
   let type_of_string = function
     | "timestamp" -> Timestamp
@@ -332,8 +367,8 @@ let parse_sexp sexp =
     | (Sx.Atom "record") :: (Sx.Atom name) :: l ->
       sanitize name;
       let fields = List.map ~f:parse_field l in
-      existing_types := Record_type name :: !existing_types;
-      Some (Record (name, fields))
+      existing_types := Record_name name :: !existing_types;
+      (Record (name, fields))
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
       sanitize name;
       sanitize lout;
@@ -347,16 +382,15 @@ let parse_sexp sexp =
                     (Sx.to_string s))
         ) lin in
       ignore (check_type lout);
-      Some (Function (name, fields, lout))
+      existing_types := Function_name name :: !existing_types;
+      Function (name, fields, lout)
     | (Sx.Atom "enumeration") :: (Sx.Atom name) :: lin ->
-      existing_types :=
-        (Enumeration (name,
-                      List.map lin
-                        (function Sx.Atom a -> a 
-                          | _ -> 
-                            fail (sprintf "Enumeration %s has wrong format" name))))
-        :: !existing_types;
-      None
+      existing_types := Enumeration_name name :: !existing_types;
+      (Enumeration (name,
+                    List.map lin
+                      (function Sx.Atom a -> a 
+                        | _ -> 
+                          fail (sprintf "Enumeration %s has wrong format" name))))
     | s ->
       fail (sprintf "I'm lost while parsing entry with: %s\n"
               (Sx.to_string (Sx.List s)))
@@ -364,12 +398,13 @@ let parse_sexp sexp =
   match sexp with
   | Sx.Atom s -> fail_atom s
   | Sx.List l ->
-    let nodes =
-      List.filter_map l
+    let user_nodes =
+      List.map l
         ~f:(function
           | Sx.Atom s -> fail_atom s
           | Sx.List l -> parse_entry l) in
-    { nodes; types = List.rev !existing_types }
+    { nodes = built_in_complex_types @ user_nodes; 
+      types = List.rev !existing_types }
     
 
 let parse_str str =
@@ -402,6 +437,9 @@ let to_db dsl =
                 props := DB.Array :: !props;
                 convert t2
               | Pointer s -> DB.Pointer (s, "g_id")
+              | Function_name s -> DB.Pointer (s, "g_id")
+              | Enumeration_name s -> DB.Text
+              | Record_name s -> DB.Pointer (s, "g_id")
             in
             let converted = convert t in
             (converted, !props)
@@ -412,7 +450,7 @@ let to_db dsl =
           ("g_last_accessed", DB.Timestamp, []) ::
           user_fields
       in
-      { DB.name ; DB.fields }
+      [{ DB.name ; DB.fields }]
     | Function (name, args, result) ->
       let arg_fields =
         List.map args (fun (n, t) ->
@@ -428,8 +466,9 @@ let to_db dsl =
           ("g_completed", DB.Timestamp, []) ::
           ("g_status", DB.Text, []) ::
           arg_fields in
-      { DB.name; DB.fields }
-  )
+      [ { DB.name; DB.fields } ]
+    | Enumeration _ -> []
+  ) |> List.flatten
 
       
 let digraph dsl ?(name="dsl") output_string =
@@ -446,7 +485,7 @@ let digraph dsl ?(name="dsl") output_string =
       List.iter fields (fun (n, t) ->
         sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n (string_of_dsl_type t) 
                            |> output_string;
-        begin match type_is_pointer t with
+        begin match type_is_link t with
         | `yes p -> links := p :: !links
         | `no -> ()
         end
@@ -471,12 +510,45 @@ let digraph dsl ?(name="dsl") output_string =
             output_string
       );
       sprintf "%s -> %s [color=\"#008800\"];\n" name result |> output_string
+    | Enumeration (name, items) ->
+      sprintf "%s [label=\"%s = %s\"];\n\n" name name 
+        (String.concat ~sep:" | " items) |> output_string
     );
     output_string "}\n"
 
 
 let ocaml_code dsl output_string =
+  let rec ocaml_type = function
+    | Bool        -> "bool"
+    | Timestamp   -> "PGOCaml.timestamptz"
+    | Int         -> "int32"
+    | Real        -> "float"      
+    | String      -> "string"
+    | Option t -> sprintf "%s option" (ocaml_type t)
+    | Array t -> sprintf "%s array" (ocaml_type t)
+    | Pointer s -> "int32"
+    | Function_name s -> "int32"
+    | Enumeration_name s -> s
+    | Record_name s -> "int32"
+  in
   List.iter dsl.nodes (function
+    | Enumeration (name, fields) ->
+      sprintf "type %s = [%s]\n\n" name
+        (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ") |> 
+            output_string;
+      sprintf "let string_of_%s : %s -> string = function\n| %s\n" name name
+        (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
+            String.concat ~sep:"\n| ") |> 
+            output_string;
+      output_string "\n";
+      sprintf "let %s_of_string_exn: string -> %s = function\n| %s\n" name name
+        (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
+            String.concat ~sep:"\n| ") |> 
+            output_string;
+      sprintf "| s -> failwith (Printf.sprintf \"%s_of_string_exn: \
+               input error: %%s\" s)\n\n" 
+        name  |> output_string;
+
     | Record (name, fields) ->
       (* Function to add a new value: *)
       sprintf "let add_value_%s\n" name |> output_string;
@@ -485,7 +557,8 @@ let ocaml_code dsl output_string =
           match type_is_option t with `yes -> "?" | `no -> "~" in
         let want_id =
           match type_is_pointer t with `yes _ -> "_id" | `no -> "" in
-        sprintf "    %s%s%s\n" kind_of_arg n want_id |> output_string;
+        sprintf "    %s(%s%s:%s)\n" kind_of_arg n want_id (ocaml_type t) |>
+            output_string;
       );
       let intos =
         "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
@@ -496,7 +569,13 @@ let ocaml_code dsl output_string =
             (match type_is_pointer t with `yes _ -> "_id" | `no -> "")
         in
         "now()" :: List.map fields prefix |> String.concat ~sep:", " in
-      sprintf "    db_handle =\n  PGSQL (db_handle)\n" |> output_string;
+      sprintf "    db_handle =\n" |> output_string;
+      List.iter fields (function
+        | (n, Enumeration_name e) -> 
+          sprintf "  let %s = string_of_%s %s in\n" n e n |>
+              output_string
+        | _ -> ());
+      "  PGSQL (db_handle)\n" |> output_string;
       sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
                    \     RETURNING g_id \"\n\n" 
         name intos values |> output_string;
@@ -550,6 +629,7 @@ let ocaml_code dsl output_string =
 
 let testing_inserts dsl amount output_string =
   List.iter dsl.nodes (function
+    | Enumeration _ -> (* Nothing to do *)()
     | Record (name, fields) ->
       let intos =
         "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
@@ -565,7 +645,8 @@ let testing_inserts dsl amount output_string =
           | Array a     -> 
             sprintf "{%s}" (String.concat ~sep:", "
                               (List.init (Random.int 42 + 1) (fun _ -> g (n, a))))
-          | Pointer p   -> g (n, Int)
+          | Pointer _ | Function_name _|Record_name _ -> g (n, Int)
+          | Enumeration_name _ -> g (n, String)
         in
         let f = Fn.compose (sprintf "'%s'") g in
         "now()" :: List.map fields ~f |> String.concat ~sep:", " in
