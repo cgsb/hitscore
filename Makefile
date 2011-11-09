@@ -1,4 +1,4 @@
-.PHONY: doc install uninstall clean fresh dot update_psql dbinit dbclear
+.PHONY: doc install uninstall clean fresh dot update_psql dbinit dbclear dbupdate
 
 all: build
 
@@ -23,12 +23,14 @@ hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot
 dots: hitscore_layout_digraph.pdf hitscore_db_digraph.pdf
 
 
-update_psql:
+update_psql: 
 	./bin/sexp2db.ml postgres data/hitscore_layout _build/
 dbinit:
 	psql -1 -q -f _build/hitscore_layout_init.psql
 dbclear:
 	psql -1 -q -f _build/hitscore_layout_clear.psql
+
+dbupdate: dbclear update_psql dbinit
 
 build: src/lib/hitscore_db_access.ml
 	ocaml setup.ml -build
