@@ -332,6 +332,7 @@ let parse_sexp sexp =
     raise (Parse_error (sprintf "Syntax Error: %s" msg)) in
   let fail_atom s = fail (sprintf "Unexpected atom: %s" s) in
   let existing_types = ref [] in
+  let subrecord_macros = ref [] in
   let check_type t =
     match find_type !existing_types t with
     | Some t -> t
@@ -357,23 +358,33 @@ let parse_sexp sexp =
     | Sx.List ((Sx.Atom name) :: (Sx.Atom typ) :: props) ->
       sanitize name;
       sanitize typ;
-      (name, parse_2nd_type (type_of_string typ) props)
+      [(name, parse_2nd_type (type_of_string typ) props)]
+    | Sx.Atom n ->
+      begin match List.find !subrecord_macros (fun (nn, _) -> n = nn) with
+      | Some tv -> snd tv
+      | None ->
+        sprintf "Unknown sub-record-macro: %S" n |> fail
+      end
     | l ->
       fail (sprintf "I'm lost parsing fields with: %s\n" (Sx.to_string l))
 
   in
   let parse_entry entry =
     match entry with
+    | (Sx.Atom "subrecord") :: (Sx.Atom name) :: l ->
+      sanitize name;
+      let fields = List.map ~f:parse_field l |> List.flatten in
+      subrecord_macros := (name, fields) :: !subrecord_macros;
+      None
     | (Sx.Atom "record") :: (Sx.Atom name) :: l ->
       sanitize name;
-      let fields = List.map ~f:parse_field l in
+      let fields = List.map ~f:parse_field l |> List.flatten in
       existing_types := Record_name name :: !existing_types;
-      (Record (name, fields))
+      Some (Record (name, fields))
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
       sanitize name;
       sanitize lout;
-      let fields = 
-        List.map ~f:parse_field lin in
+      let fields = List.map ~f:parse_field lin |> List.flatten in
       begin match check_type lout with
       | Record_name r -> ()
       | t -> 
@@ -381,14 +392,14 @@ let parse_sexp sexp =
                 (string_of_dsl_type t) name)
       end;
       existing_types := Function_name name :: !existing_types;
-      Function (name, fields, lout)
+      Some (Function (name, fields, lout))
     | (Sx.Atom "enumeration") :: (Sx.Atom name) :: lin ->
       existing_types := Enumeration_name name :: !existing_types;
-      (Enumeration (name,
-                    List.map lin
-                      (function Sx.Atom a -> a 
-                        | _ -> 
-                          fail (sprintf "Enumeration %s has wrong format" name))))
+      Some (Enumeration (name,
+                         List.map lin
+                           (function Sx.Atom a -> a 
+                             | _ -> 
+                               fail (sprintf "Enumeration %s has wrong format" name))))
     | s ->
       fail (sprintf "I'm lost while parsing entry with: %s\n"
               (Sx.to_string (Sx.List s)))
@@ -397,7 +408,7 @@ let parse_sexp sexp =
   | Sx.Atom s -> fail_atom s
   | Sx.List l ->
     let user_nodes =
-      List.map l
+      List.filter_map l
         ~f:(function
           | Sx.Atom s -> fail_atom s
           | Sx.List l -> parse_entry l) in
