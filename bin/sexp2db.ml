@@ -226,7 +226,7 @@ type typed_value = string * dsl_type
 type dsl_runtime_type =
   | Enumeration of string * string list
   | Record of string * typed_value list
-  | Function of string * (string * string) list * string
+  | Function of string * typed_value list * string
       
 type dsl_runtime_description = {
   nodes: dsl_runtime_type list;
@@ -373,15 +373,13 @@ let parse_sexp sexp =
       sanitize name;
       sanitize lout;
       let fields = 
-        List.map ~f:(function
-          | Sx.List [Sx.Atom name; Sx.Atom typ] ->
-            ignore (check_type typ);
-            (name, typ)
-          | s ->
-            fail (sprintf "I'm lost while parsing fun-args with: %s\n"
-                    (Sx.to_string s))
-        ) lin in
-      ignore (check_type lout);
+        List.map ~f:parse_field lin in
+      begin match check_type lout with
+      | Record_name r -> ()
+      | t -> 
+        fail (sprintf "A function can only return a record, not %S like %s does."
+                (string_of_dsl_type t) name)
+      end;
       existing_types := Function_name name :: !existing_types;
       Function (name, fields, lout)
     | (Sx.Atom "enumeration") :: (Sx.Atom name) :: lin ->
@@ -417,33 +415,34 @@ let parse_str str =
   
 let to_db dsl =
   let module DB = DB_dsl in
+  let db_type t =
+    let props = ref [ DB.Not_null] in
+    let rec convert t =
+      match t with
+      | Bool        -> DB.Bool      
+      | Timestamp   -> DB.Timestamp 
+      | Int         -> DB.Integer       
+      | Real        -> DB.Real      
+      | String      -> DB.Text   
+      | Option t2 -> 
+        props := List.filter !props ~f:((=) DB.Not_null);
+        convert t2
+      | Array t2 ->
+        props := DB.Array :: !props;
+        convert t2
+      | Pointer s -> DB.Pointer (s, "g_id")
+      | Function_name s -> DB.Pointer (s, "g_id")
+      | Enumeration_name s -> DB.Text
+      | Record_name s -> DB.Pointer (s, "g_id")
+    in
+    let converted = convert t in
+    (converted, !props)
+  in
   List.map dsl.nodes (function
     | Record (name, record) ->
       let user_fields =
         List.map record (fun (n, t) ->
-          let typ, props = 
-            let props = ref [ DB.Not_null] in
-            let rec convert t =
-              match t with
-              | Bool        -> DB.Bool      
-              | Timestamp   -> DB.Timestamp 
-              | Int         -> DB.Integer       
-              | Real        -> DB.Real      
-              | String      -> DB.Text   
-              | Option t2 -> 
-                props := List.filter !props ~f:((=) DB.Not_null);
-                convert t2
-              | Array t2 ->
-                props := DB.Array :: !props;
-                convert t2
-              | Pointer s -> DB.Pointer (s, "g_id")
-              | Function_name s -> DB.Pointer (s, "g_id")
-              | Enumeration_name s -> DB.Text
-              | Record_name s -> DB.Pointer (s, "g_id")
-            in
-            let converted = convert t in
-            (converted, !props)
-          in
+          let typ, props = db_type t in
           (n,  typ, props)) in
       let fields = 
         ("g_id", DB.Identifier, [DB.Not_null]) ::
@@ -454,8 +453,8 @@ let to_db dsl =
     | Function (name, args, result) ->
       let arg_fields =
         List.map args (fun (n, t) ->
-          (n, DB.Pointer (t, "g_id"), [DB.Not_null]))
-      in
+          let typ, props = db_type t in
+          (n,  typ, props)) in
       let fields =
         ("g_id", DB.Identifier, [DB.Not_null]) ::
           ("g_result", DB.Pointer (result, "g_id"), []) ::
@@ -500,8 +499,12 @@ let digraph dsl ?(name="dsl") output_string =
         name name |> output_string;
       let links = ref [] in
       List.iter args (fun (n, t) ->
-        sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n t |> output_string;
-        links := t :: !links
+        sprintf "<tr><td align=\"left\">%s: %s</td></tr>" 
+          n (string_of_dsl_type t) |> output_string;
+        begin match type_is_link t with
+        | `yes p -> links := p :: !links
+        | `no -> ()
+        end
       );
       sprintf "<tr><td align=\"left\"><i>%s</i></td></tr>" result |> output_string;
       output_string "</table>>];\n";
@@ -530,6 +533,17 @@ let ocaml_code dsl output_string =
     | Function_name s -> sprintf "Function_%s.t" s
     | Enumeration_name s -> sprintf "Enumeration_%s.t" s
     | Record_name s -> sprintf "Record_%s.t" s
+  in
+  let let_in_typed_value  = function
+    | (n, Enumeration_name e) -> 
+      sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n
+    | (n, Record_name r) ->
+      sprintf "  let %s = %s.Record_%s.id in\n" n n r
+    | (n, Option (Record_name r)) ->
+      sprintf "  let %s = option_map %s (fun s -> s.Record_%s.id) in\n" n n r
+    | (n, Array (Record_name r)) ->
+      sprintf "  let %s = array_map %s (fun s -> s.Record_%s.id) in\n" n n r
+    | _ -> ""
   in
   output_string "(** Autogenerated module *)\n\n";
   output_string "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
@@ -576,20 +590,7 @@ let ocaml_code dsl output_string =
         "now()" :: List.map fields prefix |> String.concat ~sep:", " in
       sprintf "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n" |> 
           output_string;
-      List.iter fields (function
-        | (n, Enumeration_name e) -> 
-          sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n |>
-              output_string
-        | (n, Record_name r) ->
-          sprintf "  let %s = %s.Record_%s.id in\n" n n r |>
-              output_string
-        | (n, Option (Record_name r)) ->
-          sprintf "  let %s = option_map %s (fun s -> s.Record_%s.id) in\n" n n r |>
-              output_string
-        | (n, Array (Record_name r)) ->
-          sprintf "  let %s = array_map %s (fun s -> s.Record_%s.id) in\n" n n r |>
-              output_string
-        | _ -> ());
+      List.iter fields (fun tv -> let_in_typed_value tv |> output_string);
       "  let id_list_monad_monad = PGSQL (dbh)\n" |> output_string;
       sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
                    \     RETURNING g_id \" in\n" 
@@ -619,17 +620,14 @@ let ocaml_code dsl output_string =
       output_string "    ?(recomputable=false)\n";
       output_string "    ?(recompute_penalty=0.)\n";
       output_string "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n";
-      List.iter args (fun (n, t) ->
-        sprintf "  let %s_id = %s.Record_%s.id in\n" n n t |>
-            output_string);
+      List.iter args (fun tv -> let_in_typed_value tv |> output_string);
       output_string "  let id_list_monad_monad = PGSQL (dbh)\n";
       let intos =
         "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
           (List.map args fst) |> String.concat ~sep:", " in
       let values =
         "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'INSERTED'" ::
-          (List.map args (fun (n, t) -> "$" ^ n ^ "_id")) |>
-              String.concat ~sep:", " in
+          (List.map args (fun (n, t) -> "$" ^ n)) |> String.concat ~sep:", " in
       sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
                    \     RETURNING g_id \" in\n" 
         name intos values |> output_string;
