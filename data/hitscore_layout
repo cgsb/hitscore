@@ -66,15 +66,9 @@
           (submitted_spreadsheet file)
           )
 
-(record library_array
-       (libraries library array))
-
 (record lane
        (with_phix bool)
        (libraries library array))
-
-;;(record lane_array
-;;       (lanes lane array))
 
 (function lane lane_mix
           (libraries library array))
