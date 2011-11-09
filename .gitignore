@@ -3,3 +3,5 @@ src/script/*.exe
 hitscoredoc.docdir
 setup.data
 setup.log
+/src/lib/hitscore_db_access.ml
+/bin/sexp2db.ml.exe
