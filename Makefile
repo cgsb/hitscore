@@ -1,6 +1,11 @@
 all: build
 
-build:
+GEN_DEPS=bin/sexp2db.ml data/hitscore_layout
+
+src/lib/hitscore_db_access.ml: $(GEN_DEPS)
+	./bin/sexp2db.ml codegen data/hitscore_layout src/lib/hitscore_db_access.ml
+
+build: src/lib/hitscore_db_access.ml
 	ocaml setup.ml -build
 
 install:

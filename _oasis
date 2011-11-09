@@ -17,6 +17,7 @@ Library hitscore
   Install: true
   Modules: Hitscore
            , Hitscore_std
+           , Hitscore_db_access
            , Hitscore_config
            , Hitscore_state
            , Hitscore_person
