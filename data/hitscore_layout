@@ -7,11 +7,6 @@
        (size int)
        (filetype string))
 
-;; Runtime Values:
-(record int_value (value int))
-(record bool_value (value bool))
-(record real_value (value real))
-(record string_value (value string))
 
 ;; Almost static input data:
 (record person
@@ -76,25 +71,25 @@
 
 (record lane
        (with_phix bool)
-       (libraries library_array))
+       (libraries library array))
 
-(record lane_array
-       (lanes lane array))
+;;(record lane_array
+;;       (lanes lane array))
 
 (function lane lane_mix
-          (libraries library_array))
+          (libraries library array))
 
 (record flowcell
        (vendor_name string)
-       (lanes lane_array))
+       (lanes lane array))
 
 (function flowcell flowcell_preparation
-          (unique_name string_value)
-          (lanes lane_array))
+          (unique_name string)
+          (lanes lane array))
 
 (record qpcr_result 
-       (concentration real_value)
-       (volume real_value))
+       (concentration real)
+       (volume real))
 
 (function qpcr_result qpcr
           (library library))
@@ -108,18 +103,18 @@
 
 (function bioanalyzer_result bioanalyzer
           (library library)
-          (well_number int_value))
+          (well_number int))
 
 (function agarose_gel_result agarose_gel
           (library library)
-          (well_number int_value))
+          (well_number int))
 
 (record hiseq_raw
         (data file))
 
 (function hiseq_raw hiseq_run
           (flowcell flowcell)
-          (keep_intensities bool_value)
+          (keep_intensities bool)
           )
 
 (record sample_sheet
@@ -127,7 +122,7 @@
         )
 
 (function sample_sheet assemble_sample_sheet
-          (kind string_value) ;; All barcodes or not
+          (kind string) ;; All barcodes or not
           (flowcell flowcell)
           )
 
@@ -137,8 +132,8 @@
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
           (raw_data hiseq_raw)
-          (mismatch int_value)
-          (version string_value)
+          (mismatch int)
+          (version string)
           (sample_sheet file))
 
 
@@ -149,7 +144,7 @@
 ;;  
 ;; (function file library_fastx_stats
 ;;           (library_fastqs file)
-;;           (other_param int_value)
+;;           (other_param int)
 ;;           (stats file)
 ;;           )
 ;;  
