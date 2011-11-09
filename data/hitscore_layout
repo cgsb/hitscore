@@ -46,6 +46,7 @@
 
 ;; Functions:
 
+(enumeration read_type read_type_PE read_type_SE)
 
 (value library                  
        (investigator person)
@@ -59,7 +60,7 @@
        (rnaseq_control string)
        (bioo_barcodes bioo_barcode array)
        (truseq_barcodes truseq_barcode array)
-       (read_type      string)
+       (read_type      read_type)
        (read_length1   int)
        (read_length2   int)
        )

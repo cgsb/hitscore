@@ -224,10 +224,19 @@ type dsl_runtime_item =
   | Value of string * typed_value list
   | Function of string * (string * string) list * string
 
+type complex_type =
+  | Value_type of string
+  | Enumeration of string * string list
+
 type dsl_runtime_description = {
   nodes: dsl_runtime_item list;
+  types: complex_type list;
 }
 
+let built_in_complexes = [
+  Enumeration ("process_status",
+               [ "STARTED"; "INSERTED"; "FAIL"; "COMPLETED" ]);
+]
 
 let rec string_of_dsl_type = function
   | Bool        -> "Bool"
@@ -259,6 +268,10 @@ let rec type_is_option = function
   | Array a      -> type_is_option a
   | Pointer p -> `no
 
+let complex_type_name = function
+  | Value_type s -> s
+  | Enumeration (s, _) -> s
+
 let sanitize s =
   String.iter s ~f:(function
     | 'a' .. 'z' | '_' | '0' .. '9' | 'A' .. 'Z' -> ()
@@ -282,10 +295,11 @@ let parse_sexp sexp =
   let fail msg =
     raise (Parse_error (sprintf "Syntax Error: %s" msg)) in
   let fail_atom s = fail (sprintf "Unexpected atom: %s" s) in
-  let existing_types = ref [] in
+  let existing_types = ref built_in_complexes in
   let check_type t =
-    match List.find !existing_types ~f:((=) t) with
-    | Some _ -> (Pointer t)
+    match List.find !existing_types ~f:(fun et -> complex_type_name et = t) with
+    | Some (Value_type _) -> (Pointer t)
+    | Some (Enumeration (e, _)) -> (Pointer t)
     | None -> fail (sprintf "Unknown type: %s" t)
   in
   let type_of_string = function
@@ -318,8 +332,8 @@ let parse_sexp sexp =
     | (Sx.Atom "value") :: (Sx.Atom name) :: l ->
       sanitize name;
       let fields = List.map ~f:parse_field l in
-      existing_types := name :: !existing_types;
-      Value (name, fields)
+      existing_types := Value_type name :: !existing_types;
+      Some (Value (name, fields))
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
       sanitize name;
       sanitize lout;
@@ -333,7 +347,16 @@ let parse_sexp sexp =
                     (Sx.to_string s))
         ) lin in
       ignore (check_type lout);
-      Function (name, fields, lout)
+      Some (Function (name, fields, lout))
+    | (Sx.Atom "enumeration") :: (Sx.Atom name) :: lin ->
+      existing_types :=
+        (Enumeration (name,
+                      List.map lin
+                        (function Sx.Atom a -> a 
+                          | _ -> 
+                            fail (sprintf "Enumeration %s has wrong format" name))))
+        :: !existing_types;
+      None
     | s ->
       fail (sprintf "I'm lost while parsing entry with: %s\n"
               (Sx.to_string (Sx.List s)))
@@ -341,12 +364,13 @@ let parse_sexp sexp =
   match sexp with
   | Sx.Atom s -> fail_atom s
   | Sx.List l ->
-    {nodes = List.map l
+    let nodes =
+      List.filter_map l
         ~f:(function
           | Sx.Atom s -> fail_atom s
-          | Sx.List l -> parse_entry l)}
-
-
+          | Sx.List l -> parse_entry l) in
+    { nodes; types = List.rev !existing_types }
+    
 
 let parse_str str =
   let sexp = 
