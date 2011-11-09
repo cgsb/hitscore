@@ -768,28 +768,27 @@ let () =
         Out_channel.(with_file 
                        ((Filename.basename file) ^ "_digraph.dot") 
                        ~f:(fun o -> DB_dsl.digraph db (output_string o))))
-  | exec :: "dsldbdraw" :: file :: [] ->
+  | exec :: "db_digraph" :: file :: outfile :: [] ->
     In_channel.with_file file 
       ~f:(fun i -> 
         let db = to_db (parse_str (In_channel.input_all i)) in
-        Out_channel.(with_file 
-                       ((Filename.basename file) ^ "_digraph.dot") 
+        Out_channel.(with_file outfile
                        ~f:(fun o -> DB_dsl.digraph db (output_string o))))
-  | exec :: "dsldbpostgres" :: file :: [] ->
+  | exec :: "postgres" :: file :: outprefix :: [] ->
     In_channel.with_file file 
       ~f:(fun i -> 
         let db = to_db (parse_str (In_channel.input_all i)) in
         Out_channel.(with_file 
-                       ((Filename.basename file) ^ "_init.psql") 
+                       (outprefix ^ (Filename.basename file) ^ "_init.psql") 
                        ~f:(fun o -> DB_dsl.init_db_postgres db (output_string o)));
-        Out_channel.(with_file (Filename.basename file ^ "_clear.psql") 
+        Out_channel.(with_file 
+                       (outprefix ^ Filename.basename file ^ "_clear.psql") 
                        ~f:(fun o -> DB_dsl.clear_db_postgres db (output_string o))))
-  | exec :: "dsldraw" :: file :: [] ->
+  | exec :: "digraph" :: file :: outfile :: [] ->
     In_channel.with_file file 
       ~f:(fun i -> 
         let dsl = parse_str (In_channel.input_all i) in
-        Out_channel.(with_file 
-                       ((Filename.basename file) ^ "_digraph.dot") 
+        Out_channel.(with_file outfile
                        ~f:(fun o -> digraph dsl (output_string o))))
   | _ ->
     eprintf "usage: \n\
