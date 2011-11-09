@@ -551,8 +551,9 @@ let ocaml_code dsl output_string =
         name  |> output_string;
       sprintf "end (* %s *)\n\n" name |> output_string
     | Record (name, fields) ->
+      sprintf "module Record_%s = struct\n" name |> output_string;
       (* Function to add a new value: *)
-      sprintf "let add_value_%s\n" name |> output_string;
+      sprintf "let add_value\n" |> output_string;
       List.iter fields (fun (n, t) ->
         let kind_of_arg =
           match type_is_option t with `yes -> "?" | `no -> "~" in
@@ -581,19 +582,20 @@ let ocaml_code dsl output_string =
                    \     RETURNING g_id \"\n\n" 
         name intos values |> output_string;
       (* Access a value *)
-      sprintf "let get_value_%s_by_id ~id db_handle =\n" name |> output_string;
+      sprintf "let get_value_by_id ~id db_handle =\n" |> output_string;
       output_string "  PGSQL (db_handle)\n";
       sprintf "    \"SELECT * FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
       (* Delete a value *)
-      sprintf "let delete_value_%s_by_id ~id db_handle =\n" name |> output_string;
+      sprintf "let delete_value_by_id ~id db_handle =\n" |> output_string;
       output_string "  PGSQL (db_handle)\n";
       sprintf "    \"DELETE FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
-      
+      sprintf "end (* %s *)\n\n" name |> output_string;
     | Function (name, args, result) ->
+      sprintf "module Record_%s = struct\n" name |> output_string;
       (* Function to insert a new function evaluation: *)
-      sprintf "let add_evaluation_of_%s\n" name |> output_string;
+      sprintf "let add_evaluation\n" |> output_string;
       List.iter args (fun (n, t) -> output_string ("    ~" ^ n ^ "_id\n"));
       output_string "    ?(recomputable=false)\n";
       output_string "    ?(recompute_penalty=0.)\n";
@@ -609,22 +611,22 @@ let ocaml_code dsl output_string =
                    \     RETURNING g_id \"\n\n" 
         name intos values |> output_string;
       (* Access a function *)
-      sprintf "let get_evaluation_%s_by_id ~id db_handle =\n" name |> output_string;
+      sprintf "let get_evaluation_by_id ~id db_handle =\n" |> output_string;
       output_string "  PGSQL (db_handle)\n";
       sprintf "    \"SELECT * FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
       (* Delete a function *)
-      sprintf "let delete_evaluation_%s_by_id ~id db_handle =\n" 
-        name |> output_string;
+      sprintf "let delete_evaluation_by_id ~id db_handle =\n" |> output_string;
       output_string "  PGSQL (db_handle)\n";
       sprintf "    \"DELETE FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
       (* Function to set the state of a function evaluation to 'STARTED': *)
-      sprintf "let set_%s_started ~id db_handle =\n" name |> output_string;
+      sprintf "let set_started ~id db_handle =\n" |> output_string;
       output_string "  PGSQL (db_handle)\n";
       sprintf "    \"UPDATE %s SET g_status = 'STARTED', g_started = now ()\n\
-              \    WHERE g_id = $id\"\n\n" name |> output_string
+              \    WHERE g_id = $id\"\n\n" name |> output_string;
 
+      sprintf "end (* %s *)\n\n" name |> output_string;
   );
   ()
 
