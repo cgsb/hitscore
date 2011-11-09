@@ -509,7 +509,7 @@ let digraph dsl ?(name="dsl") output_string =
       sprintf "<tr><td align=\"left\"><i>%s</i></td></tr>" result |> output_string;
       output_string "</table>>];\n";
       List.iter !links (fun t ->
-        sprintf "%s -> %s [style=dashed, color=\"#880000\"];\n" name t |> 
+        sprintf "%s -> %s [style=dashed, color=\"#880000\"];\n" t name |> 
             output_string
       );
       sprintf "%s -> %s [color=\"#008800\"];\n" name result |> output_string
