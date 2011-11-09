@@ -8,13 +8,13 @@ src/lib/hitscore_db_access.ml: $(GEN_DEPS)
 	./bin/sexp2db.ml codegen data/hitscore_layout src/lib/hitscore_db_access.ml
 
 
-_build/hitscore_layout_digraph.dot: data/hitscore_layout
+_build/hitscore_layout_digraph.dot: data/hitscore_layout ./bin/sexp2db.ml
 	./bin/sexp2db.ml digraph data/hitscore_layout $@
 
 hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot
 	dot -Tpdf $< -o$@
 
-_build/hitscore_db_digraph.dot: data/hitscore_layout
+_build/hitscore_db_digraph.dot: data/hitscore_layout ./bin/sexp2db.ml
 	./bin/sexp2db.ml db_digraph data/hitscore_layout $@
 
 hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot
