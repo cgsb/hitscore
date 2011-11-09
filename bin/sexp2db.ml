@@ -224,7 +224,9 @@ type dsl_runtime_item =
   | Value of string * typed_value list
   | Function of string * (string * string) list * string
 
-type dsl_runtime = dsl_runtime_item list
+type dsl_runtime_description = {
+  nodes: dsl_runtime_item list;
+}
 
 
 let rec string_of_dsl_type = function
@@ -339,10 +341,10 @@ let parse_sexp sexp =
   match sexp with
   | Sx.Atom s -> fail_atom s
   | Sx.List l ->
-    List.map l
-      ~f:(function
-        | Sx.Atom s -> fail_atom s
-        | Sx.List l -> parse_entry l)
+    {nodes = List.map l
+        ~f:(function
+          | Sx.Atom s -> fail_atom s
+          | Sx.List l -> parse_entry l)}
 
 
 
@@ -356,7 +358,7 @@ let parse_str str =
   
 let to_db dsl =
   let module DB = DB_dsl in
-  List.map dsl (function
+  List.map dsl.nodes (function
     | Value (name, record) ->
       let user_fields =
         List.map record (fun (n, t) ->
@@ -411,7 +413,7 @@ let digraph dsl ?(name="dsl") output_string =
         graph [fontsize=20 labelloc=\"t\" label=\"\" \
             splines=true overlap=false rankdir = \"LR\"];\n"
     name |> output_string;
-  List.iter dsl (function
+  List.iter dsl.nodes (function
     | Value (name, fields) ->
       sprintf "  %s [shape=record, label=\
         <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>"
@@ -450,7 +452,7 @@ let digraph dsl ?(name="dsl") output_string =
 
 
 let ocaml_code dsl output_string =
-  List.iter dsl (function
+  List.iter dsl.nodes (function
     | Value (name, fields) ->
       (* Function to add a new value: *)
       sprintf "let add_value_%s\n" name |> output_string;
@@ -523,7 +525,7 @@ let ocaml_code dsl output_string =
   ()
 
 let testing_inserts dsl amount output_string =
-  List.iter dsl (function
+  List.iter dsl.nodes (function
     | Value (name, fields) ->
       let intos =
         "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
