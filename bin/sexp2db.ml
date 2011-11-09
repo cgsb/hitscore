@@ -632,6 +632,12 @@ let () =
     with_file (prefix ^ (Filename.basename file) ^ "_fuzzdata_alot.psql")
       ~f:(fun o -> testing_inserts dsl 4242 (output_string o));
 
+  | exec :: "codegen" :: in_file :: out_file :: [] ->
+    let dsl =
+      In_channel.(with_file in_file ~f:(fun i -> parse_str (input_all i))) in
+    Out_channel.(with_file out_file
+                   ~f:(fun o -> ocaml_code dsl (output_string o)))
+      
   | exec :: "dbverify" :: file :: [] ->
     In_channel.(with_file file
                   ~f:(fun i -> DB_dsl.verify
