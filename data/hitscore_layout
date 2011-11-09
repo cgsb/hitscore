@@ -1,46 +1,46 @@
 
-(value note
+(record note
        (note string))
 
-(value file ;;Static files
+(record file ;;Static files
        (path string)
        (size int)
        (filetype string))
 
 ;; Runtime Values:
-(value int_value (value int))
-(value bool_value (value bool))
-(value real_value (value real))
-(value string_value (value string))
+(record int_value (value int))
+(record bool_value (value bool))
+(record real_value (value real))
+(record string_value (value string))
 
 ;; Almost static input data:
-(value person
+(record person
        (print_name      string option)
        (family_name     string)
        (email           string)
        (note            note option)
        )
 
-(value organism
+(record organism
        (name string)
        (note note option)
        )
 
-(value sample
+(record sample
        (name        string)
        (organism    organism)
        (note        note option)
        )
 
-(value bioo_barcode
+(record bioo_barcode
        (vendor_id int)
        (barcode string))
 
-(value truseq_barcode
+(record truseq_barcode
        (vendor_id int)
        (barcode string))
 
-(value protocol
+(record protocol
        (name string)
        (dir file))
 
@@ -48,7 +48,7 @@
 
 (enumeration read_type read_type_PE read_type_SE)
 
-(value library                  
+(record library                  
        (investigator person)
        (contacts     person array)
        (vial_id        int)
@@ -71,20 +71,20 @@
           (submitted_spreadsheet file)
           )
 
-(value library_array
+(record library_array
        (libraries library array))
 
-(value lane
+(record lane
        (with_phix bool)
        (libraries library_array))
 
-(value lane_array
+(record lane_array
        (lanes lane array))
 
 (function lane lane_mix
           (libraries library_array))
 
-(value flowcell
+(record flowcell
        (vendor_name string)
        (lanes lane_array))
 
@@ -92,17 +92,17 @@
           (unique_name string_value)
           (lanes lane_array))
 
-(value qpcr_result 
+(record qpcr_result 
        (concentration real_value)
        (volume real_value))
 
 (function qpcr_result qpcr
           (library library))
 
-(value bioanalyzer_result
+(record bioanalyzer_result
        (pdf file)
        (mean_fragment_size real))
-(value agarose_gel_result
+(record agarose_gel_result
        (pdf file)
        (mean_fragment_size real))
 
@@ -114,26 +114,26 @@
           (library library)
           (well_number int_value))
 
-(value hiseq_raw
-       (data file))
+(record hiseq_raw
+        (data file))
 
 (function hiseq_raw hiseq_run
           (flowcell flowcell)
           (keep_intensities bool_value)
           )
 
-(value sample_sheet
-       (csv_file file)
-       )
+(record sample_sheet
+        (csv_file file)
+        )
 
 (function sample_sheet assemble_sample_sheet
           (kind string_value) ;; All barcodes or not
           (flowcell flowcell)
           )
 
-(value bcl_to_fastq_unaligned
-       (unaligned file)
-       )
+(record bcl_to_fastq_unaligned
+        (unaligned file)
+        )
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
           (raw_data hiseq_raw)

@@ -221,11 +221,11 @@ type dsl_type =
 type typed_value = string * dsl_type
 
 type dsl_runtime_item =
-  | Value of string * typed_value list
+  | Record of string * typed_value list
   | Function of string * (string * string) list * string
 
 type complex_type =
-  | Value_type of string
+  | Record_type of string
   | Enumeration of string * string list
 
 type dsl_runtime_description = {
@@ -269,7 +269,7 @@ let rec type_is_option = function
   | Pointer p -> `no
 
 let complex_type_name = function
-  | Value_type s -> s
+  | Record_type s -> s
   | Enumeration (s, _) -> s
 
 let sanitize s =
@@ -298,7 +298,7 @@ let parse_sexp sexp =
   let existing_types = ref built_in_complexes in
   let check_type t =
     match List.find !existing_types ~f:(fun et -> complex_type_name et = t) with
-    | Some (Value_type _) -> (Pointer t)
+    | Some (Record_type _) -> (Pointer t)
     | Some (Enumeration (e, _)) -> (Pointer t)
     | None -> fail (sprintf "Unknown type: %s" t)
   in
@@ -329,11 +329,11 @@ let parse_sexp sexp =
   in
   let parse_entry entry =
     match entry with
-    | (Sx.Atom "value") :: (Sx.Atom name) :: l ->
+    | (Sx.Atom "record") :: (Sx.Atom name) :: l ->
       sanitize name;
       let fields = List.map ~f:parse_field l in
-      existing_types := Value_type name :: !existing_types;
-      Some (Value (name, fields))
+      existing_types := Record_type name :: !existing_types;
+      Some (Record (name, fields))
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
       sanitize name;
       sanitize lout;
@@ -383,7 +383,7 @@ let parse_str str =
 let to_db dsl =
   let module DB = DB_dsl in
   List.map dsl.nodes (function
-    | Value (name, record) ->
+    | Record (name, record) ->
       let user_fields =
         List.map record (fun (n, t) ->
           let typ, props = 
@@ -438,7 +438,7 @@ let digraph dsl ?(name="dsl") output_string =
             splines=true overlap=false rankdir = \"LR\"];\n"
     name |> output_string;
   List.iter dsl.nodes (function
-    | Value (name, fields) ->
+    | Record (name, fields) ->
       sprintf "  %s [shape=record, label=\
         <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>"
         name name |> output_string;
@@ -477,7 +477,7 @@ let digraph dsl ?(name="dsl") output_string =
 
 let ocaml_code dsl output_string =
   List.iter dsl.nodes (function
-    | Value (name, fields) ->
+    | Record (name, fields) ->
       (* Function to add a new value: *)
       sprintf "let add_value_%s\n" name |> output_string;
       List.iter fields (fun (n, t) ->
@@ -550,7 +550,7 @@ let ocaml_code dsl output_string =
 
 let testing_inserts dsl amount output_string =
   List.iter dsl.nodes (function
-    | Value (name, fields) ->
+    | Record (name, fields) ->
       let intos =
         "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
       let values i =
