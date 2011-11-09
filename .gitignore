@@ -5,3 +5,5 @@ setup.data
 setup.log
 /src/lib/hitscore_db_access.ml
 /bin/sexp2db.ml.exe
+/hitscore_db_digraph.pdf
+/hitscore_layout_digraph.pdf
