@@ -18,22 +18,19 @@
 
 (record organism
        (name string)
-       notable
-       )
+       notable)
 
 (record sample
        (name        string)
        (organism    organism)
-       notable
-       )
+       notable)
 
-(record bioo_barcode
-       (vendor_id int)
-       (barcode string))
 
-(record truseq_barcode
-       (vendor_id int)
-       (barcode string))
+(subrecord barcode
+           (vendor_id int)
+           (barcode string))
+(record bioo_barcode barcode)
+(record truseq_barcode barcode)
 
 (record protocol
        (name string)
@@ -41,7 +38,7 @@
 
 ;; Functions:
 
-(enumeration read_type read_type_PE read_type_SE)
+(enumeration read_type read_PE_50x50 read_PE_100x100 read_SE_50 read_SE_100)
 
 (record library                  
        (investigator person)
@@ -56,8 +53,6 @@
        (bioo_barcodes bioo_barcode array)
        (truseq_barcodes truseq_barcode array)
        (read_type      read_type)
-       (read_length1   int)
-       (read_length2   int)
        )
 
 (record submitted_spreadsheet is_file_or_dir)
@@ -68,18 +63,17 @@
           (submitted_spreadsheet submitted_spreadsheet))
 
 (record lane
-       (with_phix bool)
-       (libraries library array))
+        (libraries library array))
 
 (function lane lane_mix
           (libraries library array))
 
 (record flowcell
-       (vendor_name string)
-       (lanes lane array))
+        (vendor_name string)
+        (lanes lane array))
 
 (function flowcell flowcell_preparation
-          (unique_name string)
+          (vendor_name string)
           (lanes lane array))
 
 (record qpcr_result 
@@ -113,9 +107,10 @@
 
 (record sample_sheet is_file_or_dir)
         
+(enumeration sample_sheet_kind all_barcodes specific_barcodes)
 
 (function sample_sheet assemble_sample_sheet
-          (kind string) ;; All barcodes or not
+          (kind sample_sheet_kind) ;; All barcodes or not
           (flowcell flowcell)
           )
 
