@@ -1,11 +1,11 @@
 
-(record note
-       (note string))
+(subrecord notable
+           (note string))
 
-(record file ;;Static files
-       (path string)
-       (size int)
-       (filetype string))
+(subrecord is_file_or_dir ;;Static files
+           (path string)
+           (size int)
+           (filetype string))
 
 
 ;; Almost static input data:
@@ -13,18 +13,18 @@
        (print_name      string option)
        (family_name     string)
        (email           string)
-       (note            note option)
+       notable
        )
 
 (record organism
        (name string)
-       (note note option)
+       notable
        )
 
 (record sample
        (name        string)
        (organism    organism)
-       (note        note option)
+       notable
        )
 
 (record bioo_barcode
@@ -37,7 +37,7 @@
 
 (record protocol
        (name string)
-       (dir file))
+       is_file_or_dir)
 
 ;; Functions:
 
@@ -60,11 +60,12 @@
        (read_length2   int)
        )
 
+(record submitted_spreadsheet is_file_or_dir)
+
 (function library library_preparation
           (sample      sample)
           (protocol  protocol)
-          (submitted_spreadsheet file)
-          )
+          (submitted_spreadsheet submitted_spreadsheet))
 
 (record lane
        (with_phix bool)
@@ -89,11 +90,11 @@
           (library library))
 
 (record bioanalyzer_result
-       (pdf file)
-       (mean_fragment_size real))
+        is_file_or_dir
+        (mean_fragment_size real))
 (record agarose_gel_result
-       (pdf file)
-       (mean_fragment_size real))
+        is_file_or_dir
+        (mean_fragment_size real))
 
 (function bioanalyzer_result bioanalyzer
           (library library)
@@ -103,32 +104,28 @@
           (library library)
           (well_number int))
 
-(record hiseq_raw
-        (data file))
+(record hiseq_raw is_file_or_dir)
 
 (function hiseq_raw hiseq_run
           (flowcell flowcell)
           (keep_intensities bool)
           )
 
-(record sample_sheet
-        (csv_file file)
-        )
+(record sample_sheet is_file_or_dir)
+        
 
 (function sample_sheet assemble_sample_sheet
           (kind string) ;; All barcodes or not
           (flowcell flowcell)
           )
 
-(record bcl_to_fastq_unaligned
-        (unaligned file)
-        )
+(record bcl_to_fastq_unaligned is_file_or_dir)
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
           (raw_data hiseq_raw)
           (mismatch int)
           (version string)
-          (sample_sheet file))
+          (sample_sheet sample_sheet))
 
 
 ;; (function file fastqs_dir
