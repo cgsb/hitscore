@@ -528,27 +528,28 @@ let ocaml_code dsl output_string =
     | Array t -> sprintf "%s array" (ocaml_type t)
     | Pointer s -> "int32"
     | Function_name s -> "int32"
-    | Enumeration_name s -> s
+    | Enumeration_name s -> sprintf "Enumeration_%s.t" s
     | Record_name s -> "int32"
   in
   List.iter dsl.nodes (function
     | Enumeration (name, fields) ->
-      sprintf "type %s = [%s]\n\n" name
+      sprintf "module Enumeration_%s = struct\n" name |> output_string;
+      sprintf "type t = [%s]\n\n"
         (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ") |> 
             output_string;
-      sprintf "let string_of_%s : %s -> string = function\n| %s\n" name name
+      sprintf "let to_string : t -> string = function\n| %s\n" 
         (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
             String.concat ~sep:"\n| ") |> 
             output_string;
       output_string "\n";
-      sprintf "let %s_of_string_exn: string -> %s = function\n| %s\n" name name
+      sprintf "let of_string_exn: string -> t = function\n| %s\n" 
         (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
             String.concat ~sep:"\n| ") |> 
             output_string;
       sprintf "| s -> failwith (Printf.sprintf \"%s_of_string_exn: \
                input error: %%s\" s)\n\n" 
         name  |> output_string;
-
+      sprintf "end (* %s *)\n\n" name |> output_string
     | Record (name, fields) ->
       (* Function to add a new value: *)
       sprintf "let add_value_%s\n" name |> output_string;
@@ -572,7 +573,7 @@ let ocaml_code dsl output_string =
       sprintf "    db_handle =\n" |> output_string;
       List.iter fields (function
         | (n, Enumeration_name e) -> 
-          sprintf "  let %s = string_of_%s %s in\n" n e n |>
+          sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n |>
               output_string
         | _ -> ());
       "  PGSQL (db_handle)\n" |> output_string;
