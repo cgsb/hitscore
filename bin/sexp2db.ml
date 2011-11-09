@@ -531,6 +531,7 @@ let ocaml_code dsl output_string =
     | Enumeration_name s -> sprintf "Enumeration_%s.t" s
     | Record_name s -> "int32"
   in
+  output_string "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
   List.iter dsl.nodes (function
     | Enumeration (name, fields) ->
       sprintf "module Enumeration_%s = struct\n" name |> output_string;
@@ -571,24 +572,24 @@ let ocaml_code dsl output_string =
             (match type_is_pointer t with `yes _ -> "_id" | `no -> "")
         in
         "now()" :: List.map fields prefix |> String.concat ~sep:", " in
-      sprintf "    db_handle =\n" |> output_string;
+      sprintf "    (dbh:db_handle) =\n" |> output_string;
       List.iter fields (function
         | (n, Enumeration_name e) -> 
           sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n |>
               output_string
         | _ -> ());
-      "  PGSQL (db_handle)\n" |> output_string;
+      "  PGSQL (dbh)\n" |> output_string;
       sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
                    \     RETURNING g_id \"\n\n" 
         name intos values |> output_string;
       (* Access a value *)
-      sprintf "let get_value_by_id ~id db_handle =\n" |> output_string;
-      output_string "  PGSQL (db_handle)\n";
+      sprintf "let get_value_by_id ~id (dbh:db_handle) =\n" |> output_string;
+      output_string "  PGSQL (dbh)\n";
       sprintf "    \"SELECT * FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
       (* Delete a value *)
-      sprintf "let delete_value_by_id ~id db_handle =\n" |> output_string;
-      output_string "  PGSQL (db_handle)\n";
+      sprintf "let delete_value_by_id ~id (dbh:db_handle) =\n" |> output_string;
+      output_string "  PGSQL (dbh)\n";
       sprintf "    \"DELETE FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
       sprintf "end (* %s *)\n\n" name |> output_string;
@@ -599,7 +600,7 @@ let ocaml_code dsl output_string =
       List.iter args (fun (n, t) -> output_string ("    ~" ^ n ^ "_id\n"));
       output_string "    ?(recomputable=false)\n";
       output_string "    ?(recompute_penalty=0.)\n";
-      output_string "    db_handle =\n  PGSQL (db_handle)\n";
+      output_string "    (dbh:db_handle) =\n  PGSQL (dbh)\n";
       let intos =
         "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
           (List.map args fst) |> String.concat ~sep:", " in
@@ -611,18 +612,18 @@ let ocaml_code dsl output_string =
                    \     RETURNING g_id \"\n\n" 
         name intos values |> output_string;
       (* Access a function *)
-      sprintf "let get_evaluation_by_id ~id db_handle =\n" |> output_string;
-      output_string "  PGSQL (db_handle)\n";
+      sprintf "let get_evaluation_by_id ~id (dbh:db_handle) =\n" |> output_string;
+      output_string "  PGSQL (dbh)\n";
       sprintf "    \"SELECT * FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
       (* Delete a function *)
-      sprintf "let delete_evaluation_by_id ~id db_handle =\n" |> output_string;
-      output_string "  PGSQL (db_handle)\n";
+      sprintf "let delete_evaluation_by_id ~id (dbh:db_handle) =\n" |> output_string;
+      output_string "  PGSQL (dbh)\n";
       sprintf "    \"DELETE FROM %s \
                    WHERE g_id = $id\"\n\n" name |> output_string;
       (* Function to set the state of a function evaluation to 'STARTED': *)
-      sprintf "let set_started ~id db_handle =\n" |> output_string;
-      output_string "  PGSQL (db_handle)\n";
+      sprintf "let set_started ~id (dbh:db_handle) =\n" |> output_string;
+      output_string "  PGSQL (dbh)\n";
       sprintf "    \"UPDATE %s SET g_status = 'STARTED', g_started = now ()\n\
               \    WHERE g_id = $id\"\n\n" name |> output_string;
 
