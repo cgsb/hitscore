@@ -40,27 +40,25 @@
 
 (enumeration read_type read_PE_50x50 read_PE_100x100 read_SE_50 read_SE_100)
 
-(record library                  
-       (investigator person)
-       (contacts     person array)
-       (vial_id        int)
-       (name           string)
-       (application    string)
-       (stranded       bool)
-       (control_type   string)
-       (truseq_control bool)
-       (rnaseq_control string)
-       (bioo_barcodes bioo_barcode array)
-       (truseq_barcodes truseq_barcode array)
-       (read_type      read_type)
-       )
-
-(record submitted_spreadsheet is_file_or_dir)
+(record library
+        (bioo_barcodes bioo_barcode array)
+        (truseq_barcodes truseq_barcode array)
+)
 
 (function library library_preparation
           (sample      sample)
           (protocol  protocol)
-          (submitted_spreadsheet submitted_spreadsheet))
+          (investigator person)
+          (contacts     person array)
+          (vial_id        int)
+          (name           string)
+          (application    string)
+          (stranded       bool)
+          (control_type   string)
+          (truseq_control bool)
+          (rnaseq_control string)
+          (read_type      read_type)
+)
 
 (record lane
         (libraries library array))
