@@ -99,7 +99,7 @@ module DB_dsl = struct
   let digraph db ?(name="db") output_string =
     sprintf "digraph %s {
         graph [fontsize=20 labelloc=\"t\" label=\"\" \
-            splines=true overlap=false rankdir = \"LR\"];\n"
+            splines=true overlap=false ];\n"
       name |> output_string;
     List.iter db (fun table ->
       sprintf "  %s [shape=Mrecord, label=\
@@ -484,12 +484,12 @@ let to_db dsl =
 let digraph dsl ?(name="dsl") output_string =
   sprintf "digraph %s {
         graph [fontsize=20 labelloc=\"t\" label=\"\" \
-            splines=true overlap=false rankdir = \"LR\"];\n"
+            splines=true overlap=false ];\n"
     name |> output_string;
   List.iter dsl.nodes (function
     | Record (name, fields) ->
       sprintf "  %s [shape=record, label=\
-        <<table border=\"0\" ><tr><td border=\"1\">%s</td></tr>"
+        <<table border=\"0\" ><tr><td border=\"2\">%s</td></tr>"
         name name |> output_string;
       let links = ref [] in
       List.iter fields (fun (n, t) ->
@@ -502,11 +502,12 @@ let digraph dsl ?(name="dsl") output_string =
       );
       output_string "</table>>];\n";
       List.iter !links (fun t ->
-        sprintf "%s -> %s [color=\"#888888\"];\n" name t |> output_string
+        sprintf "%s -> %s [style=\"setlinewidth(3)\",color=\"#888888\"];\n"
+          name t |> output_string
       );
     | Function (name, args, result) ->
-      sprintf "  %s [shape=Mrecord, label=\
-        <<table border=\"0\" ><tr><td border=\"4\">%s</td></tr>"
+      sprintf "  %s [shape=Mrecord,color=blue,label=\
+        <<table border=\"0\" ><tr><td border=\"2\">%s</td></tr>"
         name name |> output_string;
       let links = ref [] in
       List.iter args (fun (n, t) ->
@@ -520,13 +521,15 @@ let digraph dsl ?(name="dsl") output_string =
       sprintf "<tr><td align=\"left\"><i>%s</i></td></tr>" result |> output_string;
       output_string "</table>>];\n";
       List.iter !links (fun t ->
-        sprintf "%s -> %s [style=dashed, color=\"#880000\"];\n" t name |> 
+        sprintf "%s -> %s [penwidth=3,style=dashed,\
+                 color=\"#880000\"];\n" t name |> 
             output_string
       );
-      sprintf "%s -> %s [color=\"#008800\"];\n" name result |> output_string
+      sprintf "%s -> %s [penwidth=3,color=\"#008800\"];\n" name result |> output_string
     | Enumeration (name, items) ->
-      sprintf "%s [label=\"%s = %s\"];\n\n" name name 
-        (String.concat ~sep:" | " items) |> output_string
+      sprintf "%s [label=\"%s =\\l  | %s\\l\"];\n\n"
+        name name 
+        (String.concat ~sep:"\\l  | " items) |> output_string
     );
     output_string "}\n"
 
