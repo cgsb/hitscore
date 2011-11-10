@@ -349,7 +349,15 @@ let parse_sexp sexp =
   let rec parse_2nd_type fst = function
     | [] -> fst
     | Sx.Atom "option" :: l -> parse_2nd_type (Option fst) l
-    | Sx.Atom "array" :: l -> parse_2nd_type (Array fst) l
+    | Sx.Atom "array" :: l ->
+      begin match fst with 
+      | Int | Record_name _ ->
+        parse_2nd_type (Array fst) l
+      | _ ->
+        sprintf "PGOCaml will only accept arrays of ints or records, \
+                 so I stop there (%s array)." (string_of_dsl_type fst)
+            |> fail
+      end
     | sx -> fail  (sprintf "I'm lost parsing types with: %s\n"
                      (Sx.to_string (Sx.List sx)))
   in
