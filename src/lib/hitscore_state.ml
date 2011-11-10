@@ -29,7 +29,8 @@ type action =
     | AddPerson of Person.t
 
 let update_exn t = function
-  | AddPerson x ->
+  | AddPerson x -> ()
+(*
       let open Person in
       let f = x.first in
       let m = match x.middle_initial with Some m -> Some (String.make 1 m) | None -> None in
@@ -38,3 +39,4 @@ let update_exn t = function
       PGSQL(t.dbh)
         "INSERT INTO person (first_name,middle_initial,last_name,email)
          VALUES ($f, $?m, $l, $e)"
+*)

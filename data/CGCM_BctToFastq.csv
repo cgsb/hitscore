@@ -1,0 +1,17 @@
+ID,FCID,mismatch,Note,Casava Version
+1,C02FGACXX,0,actual samples,1.8.1
+2,D0560ACXX,0,actual samples,1.8.1
+3,C02FGACXX,0,all possible barcodes,1.8.1
+4,D0560ACXX,0,all possible barcodes,1.8.1
+5,C02FGACXX,1,all possible barcodes,1.8.1
+6,D0560ACXX,1,all possible barcodes,1.8.1
+7,D053MACXX,0,actual samples,1.8.1
+8,D053MACXX,1,actual samples,1.8.1
+9,D053MACXX,0,all possible barcodes,1.8.1
+10,D053MACXX,1,all possible barcodes,1.8.1
+11,D053CACXX,0,actual samples,1.8.1
+12,D053CACXX,1,actual samples,1.8.1
+13,D053CACXX,0,all possible barcodes,1.8.1
+14,D053CACXX,1,all possible barcodes,1.8.1
+15,D053CACXX,0,actual samples,1.8.2
+16,D053CACXX,1,actual samples,1.8.2

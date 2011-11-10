@@ -1,0 +1,140 @@
+
+(subrecord notable
+           (note string))
+
+(subrecord is_file_or_dir ;;Static files
+           (path string)
+           (size int)
+           (filetype string))
+
+
+;; Almost static input data:
+(record person
+       (print_name      string option)
+       (family_name     string)
+       (email           string)
+       notable
+       )
+
+(record organism
+       (name string)
+       notable)
+
+(record sample
+       (name        string)
+       (organism    organism)
+       notable)
+
+
+(subrecord barcode
+           (vendor_id int)
+           (barcode string))
+(record bioo_barcode barcode)
+(record truseq_barcode barcode)
+
+(record protocol
+       (name string)
+       is_file_or_dir)
+
+;; Functions:
+
+(enumeration read_type read_PE_50x50 read_PE_100x100 read_SE_50 read_SE_100)
+
+(record library                  
+       (investigator person)
+       (contacts     person array)
+       (vial_id        int)
+       (name           string)
+       (application    string)
+       (stranded       bool)
+       (control_type   string)
+       (truseq_control bool)
+       (rnaseq_control string)
+       (bioo_barcodes bioo_barcode array)
+       (truseq_barcodes truseq_barcode array)
+       (read_type      read_type)
+       )
+
+(record submitted_spreadsheet is_file_or_dir)
+
+(function library library_preparation
+          (sample      sample)
+          (protocol  protocol)
+          (submitted_spreadsheet submitted_spreadsheet))
+
+(record lane
+        (libraries library array))
+
+(function lane lane_mix
+          (libraries library array))
+
+(record flowcell
+        (vendor_name string)
+        (lanes lane array))
+
+(function flowcell flowcell_preparation
+          (vendor_name string)
+          (lanes lane array))
+
+(record qpcr_result 
+       (concentration real)
+       (volume real))
+
+(function qpcr_result qpcr
+          (library library))
+
+(record bioanalyzer_result
+        is_file_or_dir
+        (mean_fragment_size real))
+(record agarose_gel_result
+        is_file_or_dir
+        (mean_fragment_size real))
+
+(function bioanalyzer_result bioanalyzer
+          (library library)
+          (well_number int))
+
+(function agarose_gel_result agarose_gel
+          (library library)
+          (well_number int))
+
+(record hiseq_raw is_file_or_dir)
+
+(function hiseq_raw hiseq_run
+          (flowcell flowcell)
+          (keep_intensities bool)
+          )
+
+(record sample_sheet is_file_or_dir)
+        
+(enumeration sample_sheet_kind all_barcodes specific_barcodes)
+
+(function sample_sheet assemble_sample_sheet
+          (kind sample_sheet_kind) ;; All barcodes or not
+          (flowcell flowcell)
+          )
+
+(record bcl_to_fastq_unaligned is_file_or_dir)
+
+(function bcl_to_fastq_unaligned bcl_to_fastq
+          (raw_data hiseq_raw)
+          (mismatch int)
+          (version string)
+          (sample_sheet sample_sheet))
+
+
+;; (function file fastqs_dir
+;;           (unaligned file)
+;;           (library library)
+;;           )
+;;  
+;; (function file library_fastx_stats
+;;           (library_fastqs file)
+;;           (other_param int)
+;;           (stats file)
+;;           )
+;;  
+;; (value deliverable
+;;        (fastq_dir file)
+;;        (stats_dir file)
+;;        (email_body string))

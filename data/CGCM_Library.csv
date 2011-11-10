@@ -1,0 +1,96 @@
+ID,Vial ID,Library ID,Sample ID1,Sample ID2,organism,investigator,application,stranded,control_type,truseq_control_used,RNA-seq Control,TruSeq Barcode,BIOO Barcode,library_submitted,Library Quantification Method,Library Conc (nM) - LAB,Library Volume (uL),Fragment Size QC Method,PDF File Path,Well Number,Avg Library Fragment Size,Fragment Size QC Method,PDF File Path,Well Number,Avg Library Fragment Size,Read Type,Read Length,Note
+1,,,PhiX,,,,dna-reseq,FALSE,hiseq_color_balance,FALSE,,AD003,,,,,,,,,,,,,,PE,50x50
+2,,,QG323,,,MR,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,PE,50x50
+3,,,QG325,,,MR,dna-reseq,FALSE,,TRUE,,AD004,,6/24/2011,,,,,,,,,,,,PE,50x50
+4,,,QG329,,,MR,dna-reseq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,PE,50x50
+5,,,QG333,,,MR,dna-reseq,FALSE,,TRUE,,AD007,,6/24/2011,,,,,,,,,,,,PE,50x50
+6,,,QG327,,,MR,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,PE,50x50
+7,,,QG335,,,MR,dna-reseq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,PE,50x50
+8,,,SEA1,,,SE,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,PE,50x50
+9,,,SEA2,,,SE,dna-reseq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,PE,50x50
+10,,,SEA3,,,SE,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,PE,50x50
+11,,,SEA4,,,SE,dna-reseq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,PE,50x50
+12,,,SEA5,,,SE,dna-reseq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,PE,50x50
+13,,,SEA6,,,SE,dna-reseq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,PE,50x50
+14,,,SEA7,,,SE,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,PE,50x50
+15,,,SEA8,,,SE,dna-reseq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,PE,50x50
+16,,,SEA9,,,SE,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,PE,50x50
+17,,,SEA10,,,SE,dna-reseq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,PE,50x50
+18,,,SEA11,,,SE,dna-reseq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,PE,50x50
+19,,,SEA12,,,SE,dna-reseq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,PE,50x50
+20,,,7_300,,,LC,ChIP-seq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,PE,50x50
+21,,,12_300,,,LC,ChIP-seq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,PE,50x50
+22,,,6330,,,MR,dna-reseq,FALSE,internal,FALSE,,"AD004,AD006",,6/24/2011,,,,,,,,,,,,PE,50x50
+23,,,EZ,1,,KB,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,PE,50x50
+24,,,Z,2,,KB,rna-seq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,PE,50x50
+25,,,S2-1-Apr-2010,3,,KB,rna-seq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,PE,50x50
+26,,,Alison_Root,4,,KB,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,PE,50x50
+27,,,R2,7,,KB,rna-seq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,PE,50x50
+28,,,D,8,,KB,rna-seq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,PE,50x50
+29,,,S2-8-Aug-2010,9,,KB,rna-seq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,PE,50x50
+30,,,Z2,10,,KB,rna-seq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,PE,50x50
+31,,,83,1,,DM,rna-seq,FALSE,,TRUE,,AD012,,6/24/2011,,,,,,,,,,,,PE,50x50
+32,,,137,2,,DM,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,PE,50x50
+33,,,168,3,,DM,rna-seq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,PE,50x50
+34,,,QG327-7cyc,,,MR,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,PE,50x50
+35,,Niki1,P6-,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,3,,qPCR,2,11.2,Agarose,,,300,,,,,PE,50x50
+,,Niki2,P6+,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,4,,qPCR,2,13.5,Agarose,,,300,,,,,PE,50x50
+,,Niki3,P32-,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,2,,qPCR,2,12,Agarose,,,300,,,,,PE,50x50
+,,Niki4,P32+,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,1,,qPCR,2,12,Agarose,,,300,,,,,PE,50x50
+,,Niki5,N9-,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,Ambien spike-in 1,,5,,qPCR,2,16,Agarose,,,300,,,,,PE,50x50
+,,Niki6,N9+,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,Ambien spike-in 2,,6,,qPCR,2,12,Agarose,,,300,,,,,PE,50x50
+,,Niki7,N34-,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,Ambien spike-in 1,,5,,qPCR,2,15,Agarose,,,300,,,,,PE,50x50
+,,Niki8,N34+,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,Ambien spike-in 2,,6,,qPCR,2,12,Agarose,,,300,,,,,PE,50x50
+,,Niki9,C9-,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,4,,qPCR,2,16,Agarose,,,300,,,,,PE,50x50
+,,Niki10,C9+,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,1,,qPCR,2,14.4,Agarose,,,300,,,,,PE,50x50
+,,Niki11,C34-,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,2,,qPCR,2,10.2,Agarose,,,300,,,,,PE,50x50
+,,Niki12,C34+,,S. cerevisiae,Gresham,directional RNA-Seq,,,FALSE,,,3,,qPCR,2,12,Agarose,,,300,,,,,PE,50x50
+,,Paul1,P.Coatneyi_140_ng_per_ul,,P. coatneyi,Carlton,de-novo,,,FALSE,,AD002,,,qPCR,2,25,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-02_00-12-08_PCoatneyi-PGonderi_2ndandFinalAmp.pdf,2,512,,,,,PE,100x100,P.Coatneyi (140 ng/ul) 76.8 ng/ul
+,,Paul2,P.Gonderi_234_ng_per_ul,,P. gonderi,Carlton,de-novo,,,FALSE,,AD004,,,qPCR,2,25,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-02_00-12-08_PCoatneyi-PGonderi_2ndandFinalAmp.pdf,3,601,,,,,PE,100x100,P.Gonderi (234 ng/ul) 70.2 ng/ul
+,,Tara 1A,OS3 t=0,,H. sapiens,Vogel,RNA-seq,,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,250,,,,,PE,50x50,The barcodes are #1 and #2 from Bioo Scientific ( CGATGT and TGACCA respectively)
+,,Tara 1B,RS3 t=0,,H. sapiens,Vogel,RNA-seq,,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,250,,,,,PE,50x50
+,,Tara 2A,RS3 t=2,,H. sapiens,Vogel,RNA-seq,,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,250,,,,,PE,50x50
+,,Tara 2B,OS3 t=2,,H. sapiens,Vogel,RNA-seq,,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,250,,,,,PE,50x50
+,,Audrey4,Audrey4,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,1,230,,,,,PE,50x50
+,,Audrey5,Audrey5,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,2,230,,,,,PE,50x50
+,,Audrey6,Audrey6,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,3,230,,,,,PE,50x50
+,,Audrey7,Audrey7,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,4,230,,,,,PE,50x50
+,,Audrey8,Audrey8,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,5,230,,,,,PE,50x50
+,,Audrey9,Audrey9,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,6,230,,,,,PE,50x50
+,,Audrey10,Audrey10,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,7,230,,,,,PE,50x50
+,,Audrey11,Audrey11,,C. elegans,Rockman,RNA-seq,,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,8,230,,,,,PE,50x50
+,,CJ1,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,1,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ2,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,2,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ3,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,3,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ4,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,4,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ5,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,5,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ6,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,6,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ7,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,7,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ8,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,8,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ9,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,12,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ10,,,C. elegans,Ercan,RNA-seq,,,FALSE,,1,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ11,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,2,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ12,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,3,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ13,,,C. elegans,Ercan,RNA-seq,,,FALSE,,4,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ14,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,5,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ15,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,6,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ16,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,7,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,CJ17,,,C. elegans,Ercan,ChIP-seq,,,FALSE,,8,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,350,,,,,PE,50x50
+,,DG1,Junguei1,,Yeast,Gresham,DNA-seq,,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG2,Junguei2,,Yeast,Gresham,DNA-seq,,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG3,Junguei3,,Yeast,Gresham,DNA-seq,,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG4,Junguei4,,Yeast,Gresham,DNA-seq,,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG5,Junguei5,,Yeast,Gresham,DNA-seq,,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG6,Junguei6,,Yeast,Gresham,DNA-seq,,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG7,Junguei7,,Yeast,Gresham,DNA-seq,,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG8,Junguei8,,Yeast,Gresham,DNA-seq,,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG9,Junguei9,,Yeast,Gresham,DNA-seq,,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG10,Junguei10,,Yeast,Gresham,DNA-seq,,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG11,Junguei11,,Yeast,Gresham,DNA-seq,,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG12,Junguei12,,Yeast,Gresham,DNA-seq,,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG13,Junguei13,,Yeast,Gresham,DNA-seq,,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG14,Junguei14,,Yeast,Gresham,DNA-seq,,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG15,Junguei15,,Yeast,Gresham,DNA-seq,,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG16,Junguei16,,Yeast,Gresham,DNA-seq,,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG17,Junguei17,,Yeast,Gresham,DNA-seq,,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
+,,DG18,Junguei18,,Yeast,Gresham,DNA-seq,,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose Gel,,,500,,,,,PE,100x100
