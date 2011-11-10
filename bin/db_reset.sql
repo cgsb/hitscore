@@ -1,9 +1,0 @@
-DROP TABLE agarose_gel;
-DROP TABLE bioanalyzer;
-DROP TABLE qpcr;
-DROP TABLE library;
-DROP TABLE sample;
-DROP TABLE organism;
-DROP TABLE person;
-DROP TABLE note;
-DROP TABLE timelog;
