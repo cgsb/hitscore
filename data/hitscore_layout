@@ -1,6 +1,6 @@
 
 (subrecord notable
-           (note string))
+           (note string option))
 
 (subrecord is_file_or_dir ;;Static files
            (path string)
