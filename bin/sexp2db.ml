@@ -436,7 +436,7 @@ let to_db dsl =
       | Real        -> DB.Real      
       | String      -> DB.Text   
       | Option t2 -> 
-        props := List.filter !props ~f:((=) DB.Not_null);
+        props := List.filter !props ~f:((<>) DB.Not_null);
         convert t2
       | Array t2 ->
         props := DB.Array :: !props;
