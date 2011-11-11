@@ -203,6 +203,7 @@ module DB_dsl = struct
         raise (Parse_error (sprintf "Syntax Error (sexplib): %s" msg))
     in
     (parse_sexp sexp)
+
       
 end
 
@@ -431,59 +432,63 @@ let parse_str str =
       raise (Parse_error (sprintf "Syntax Error (sexplib): %s" msg))
   in
   (parse_sexp sexp)
+
+module DB = DB_dsl
   
-let to_db dsl =
-  let module DB = DB_dsl in
-  let db_type t =
-    let props = ref [ DB.Not_null] in
-    let rec convert t =
-      match t with
-      | Bool        -> DB.Bool      
-      | Timestamp   -> DB.Timestamp 
-      | Int         -> DB.Integer       
-      | Real        -> DB.Real      
-      | String      -> DB.Text   
-      | Option t2 -> 
-        props := List.filter !props ~f:((<>) DB.Not_null);
-        convert t2
-      | Array t2 ->
-        props := DB.Array :: !props;
-        convert t2
-      | Pointer s -> DB.Pointer (s, "g_id")
-      | Function_name s -> DB.Pointer (s, "g_id")
-      | Enumeration_name s -> DB.Text
-      | Record_name s -> DB.Pointer (s, "g_id")
-    in
-    let converted = convert t in
-    (converted, !props)
+let dsl_type_to_db t =
+  let props = ref [ DB.Not_null] in
+  let rec convert t =
+    match t with
+    | Bool        -> DB.Bool      
+    | Timestamp   -> DB.Timestamp 
+    | Int         -> DB.Integer       
+    | Real        -> DB.Real      
+    | String      -> DB.Text   
+    | Option t2 -> 
+      props := List.filter !props ~f:((<>) DB.Not_null);
+      convert t2
+    | Array t2 ->
+      props := DB.Array :: !props;
+      convert t2
+    | Pointer s -> DB.Pointer (s, "g_id")
+    | Function_name s -> DB.Pointer (s, "g_id")
+    | Enumeration_name s -> DB.Text
+    | Record_name s -> DB.Pointer (s, "g_id")
   in
+  let converted = convert t in
+  (converted, !props)
+
+let db_record_standard_fields = [
+  ("g_id", DB.Identifier, [DB.Not_null]);
+  ("g_last_accessed", DB.Timestamp, []);
+]
+let db_function_standard_fields result = [   
+  ("g_id", DB.Identifier, [DB.Not_null]);
+  ("g_result", DB.Pointer (result, "g_id"), []);
+  ("g_recomputable", DB.Bool, [DB.Not_null]);
+  ("g_recompute_penalty", DB.Real, []);
+  ("g_inserted", DB.Timestamp, []);
+  ("g_started", DB.Timestamp, []);
+  ("g_completed", DB.Timestamp, []);
+  ("g_status", DB.Text, [DB.Not_null]);
+]
+
+let to_db dsl =
   List.map dsl.nodes (function
     | Record (name, record) ->
       let user_fields =
         List.map record (fun (n, t) ->
-          let typ, props = db_type t in
+          let typ, props = dsl_type_to_db t in
           (n,  typ, props)) in
-      let fields = 
-        ("g_id", DB.Identifier, [DB.Not_null]) ::
-          ("g_last_accessed", DB.Timestamp, []) ::
-          user_fields
+      let fields = db_record_standard_fields @ user_fields
       in
       [{ DB.name ; DB.fields }]
     | Function (name, args, result) ->
       let arg_fields =
         List.map args (fun (n, t) ->
-          let typ, props = db_type t in
+          let typ, props = dsl_type_to_db t in
           (n,  typ, props)) in
-      let fields =
-        ("g_id", DB.Identifier, [DB.Not_null]) ::
-          ("g_result", DB.Pointer (result, "g_id"), []) ::
-          ("g_recomputable", DB.Bool, []) ::
-          ("g_recompute_penalty", DB.Real, []) ::
-          ("g_inserted", DB.Timestamp, []) ::
-          ("g_started", DB.Timestamp, []) ::
-          ("g_completed", DB.Timestamp, []) ::
-          ("g_status", DB.Text, []) ::
-          arg_fields in
+      let fields = (db_function_standard_fields result) @ arg_fields in
       [ { DB.name; DB.fields } ]
     | Enumeration _ -> []
   ) |> List.flatten
@@ -542,67 +547,94 @@ let digraph dsl ?(name="dsl") output_string =
     output_string "}\n"
 
 
+let pgocaml_type_of_field =
+  let rec props  = function
+    | [ DB.Array    ; DB.Not_null] -> sprintf "PGOCaml.%s_array"
+    | [ DB.Not_null ] -> sprintf "%s"
+    | _ -> sprintf "%s option" in
+  function
+    | (_, DB.Timestamp          , p) -> (props p) "PGOCaml.timestamptz"
+    | (_, DB.Identifier         , p) -> (props p) "int32"              
+    | (_, DB.Text               , p) -> (props p) "string"             
+    | (_, DB.Pointer (r, "g_id"), p) -> (props p) "int32"              
+    | (_, DB.Integer            , p) -> (props p) "int32"              
+    | (_, DB.Real               , p) -> (props p) "float"              
+    | (_, DB.Bool               , p) -> (props p) "bool"               
+    | _ -> failwith "Can't compile DB type to PGOCaml"
+let rec ocaml_type = function
+  | Bool        -> "bool"
+  | Timestamp   -> "PGOCaml.timestamptz"
+  | Int         -> "int32"
+  | Real        -> "float"      
+  | String      -> "string"
+  | Option t -> sprintf "%s option" (ocaml_type t)
+  | Array t -> sprintf "%s array" (ocaml_type t)
+  | Pointer s -> "int32"
+  | Function_name s -> sprintf "Function_%s.t" s
+  | Enumeration_name s -> sprintf "Enumeration_%s.t" s
+  | Record_name s -> sprintf "Record_%s.t" s
+
+let let_in_typed_value  = function
+  | (n, Enumeration_name e) -> 
+    sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n
+  | (n, Record_name r) ->
+    sprintf "  let %s = %s.Record_%s.id in\n" n n r
+  | (n, Option (Record_name r)) ->
+    sprintf "  let %s = option_map %s (fun s -> s.Record_%s.id) in\n" n n r
+  | (n, Array (Record_name r)) ->
+    sprintf "  let %s = array_map %s (fun s -> s.Record_%s.id) in\n" n n r
+  | _ -> ""
+
+let convert_pgocaml_type = function
+  | (n, Enumeration_name e) -> 
+    sprintf "(Enumeration_%s.of_string_exn %s)" e n
+  | (n, Record_name r) ->
+    sprintf "{ Record_%s.id = %s }" r n
+  | (n, Option (Record_name r)) ->
+    sprintf "(option_map %s (fun id -> { Record_%s.id }))" n r
+  | (n, Array (Record_name r)) ->
+    sprintf "(array_map %s (fun id ->  { Record_%s.id }))" n r
+  | (n, _) -> n
+
 let ocaml_code dsl output_string =
-  let rec ocaml_type = function
-    | Bool        -> "bool"
-    | Timestamp   -> "PGOCaml.timestamptz"
-    | Int         -> "int32"
-    | Real        -> "float"      
-    | String      -> "string"
-    | Option t -> sprintf "%s option" (ocaml_type t)
-    | Array t -> sprintf "%s array" (ocaml_type t)
-    | Pointer s -> "int32"
-    | Function_name s -> sprintf "Function_%s.t" s
-    | Enumeration_name s -> sprintf "Enumeration_%s.t" s
-    | Record_name s -> sprintf "Record_%s.t" s
-  in
-  let let_in_typed_value  = function
-    | (n, Enumeration_name e) -> 
-      sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n
-    | (n, Record_name r) ->
-      sprintf "  let %s = %s.Record_%s.id in\n" n n r
-    | (n, Option (Record_name r)) ->
-      sprintf "  let %s = option_map %s (fun s -> s.Record_%s.id) in\n" n n r
-    | (n, Array (Record_name r)) ->
-      sprintf "  let %s = array_map %s (fun s -> s.Record_%s.id) in\n" n n r
-    | _ -> ""
-  in
-  output_string "(** Autogenerated module *)\n\n";
-  output_string "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
-  output_string "(**/**)\n\
+  let print = ksprintf and out = output_string in
+  print out "(** Autogenerated module *)\n\n";
+  print out "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
+  print out "type function_capabilities= [\n\
+                \  | `can_nothing\n  | `can_start\n  | `can_complete\n\
+                | `can_get_result\n]\n";
+  print out "(**/**)\n\
                 \ let option_map o f =\n\
                 \     match o with None -> None | Some s -> Some (f s)\n\n\
                 \ let array_map a f = Array.map f a\n\n\
+                \ let pg_bind_bind amm f =\n\
+                \   PGOCaml.bind amm (fun am -> PGOCaml.bind am f)\n\n\
+                \ let pg_return t = PGOCaml.return t\n\n\
                 (**/**)\n";
   List.iter dsl.nodes (function
     | Enumeration (name, fields) ->
-      sprintf "module Enumeration_%s = struct\n" name |> output_string;
-      sprintf "type t = [%s]\n\n"
-        (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ") |> 
-            output_string;
-      sprintf "let to_string : t -> string = function\n| %s\n" 
+      print out "module Enumeration_%s = struct\n" name;
+      print out "type t = [%s]\n\n"
+        (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
+      print out "let to_string : t -> string = function\n| %s\n" 
         (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
-            String.concat ~sep:"\n| ") |> 
-            output_string;
-      output_string "\n";
-      sprintf "let of_string_exn: string -> t = function\n| %s\n" 
+            String.concat ~sep:"\n| ");
+      print out "\n";
+      print out "let of_string_exn: string -> t = function\n| %s\n" 
         (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
-            String.concat ~sep:"\n| ") |> 
-            output_string;
-      sprintf "| s -> failwith (Printf.sprintf \"%s_of_string_exn: \
-               input error: %%s\" s)\n\n" 
-        name  |> output_string;
-      sprintf "end (* %s *)\n\n" name |> output_string
+            String.concat ~sep:"\n| ");
+      print out "| s -> failwith (Printf.sprintf \"%s_of_string_exn: \
+               input error: %%s\" s)\n\n" name;
+      print out "end (* %s *)\n\n" name
     | Record (name, fields) ->
-      sprintf "module Record_%s = struct\n" name |> output_string;
-      sprintf "type t = { id: int32 }\n" |> output_string;
+      print out "module Record_%s = struct\n" name;
+      print out "type t = { id: int32 }\n";
       (* Function to add a new value: *)
-      sprintf "let add_value\n" |> output_string;
+      print out "let add_value\n";
       List.iter fields (fun (n, t) ->
         let kind_of_arg = 
           match type_is_option t with `yes -> "?" | `no -> "~" in
-        sprintf "    %s(%s:%s)\n" kind_of_arg n (ocaml_type t) |>
-            output_string;
+        print out "    %s(%s:%s)\n" kind_of_arg n (ocaml_type t);
       );
       let intos =
         "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
@@ -610,71 +642,137 @@ let ocaml_code dsl output_string =
         let prefix (n, t) =
           (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
         "now()" :: List.map fields prefix |> String.concat ~sep:", " in
-      sprintf "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n" |> 
-          output_string;
-      List.iter fields (fun tv -> let_in_typed_value tv |> output_string);
-      "  let id_list_monad_monad = PGSQL (dbh)\n" |> output_string;
-      sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
-                   \     RETURNING g_id \" in\n" 
-        name intos values |> output_string;
-      output_string "  PGOCaml.bind id_list_monad_monad \n\
+      print out "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n";
+      List.iter fields (fun tv -> let_in_typed_value tv |> print out "%s");
+      print out "  let id_list_monad_monad = PGSQL (dbh)\n";
+      print out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
+                   \     RETURNING g_id \" in\n" name intos values;
+      print out "  PGOCaml.bind id_list_monad_monad \n\
                     \    (fun id_list_monad ->\n\
                     \      PGOCaml.bind id_list_monad (function\n\
                     \       | [ id ] -> PGOCaml.return { id }\n\
                     \       | _ -> failwith \"Insert did not return one id\"))\n\n";
       (* Access a value *)
-      sprintf "let get_value_by_id ~id (dbh:db_handle) =\n" |> output_string;
-      output_string "  PGSQL (dbh)\n";
-      sprintf "    \"SELECT * FROM %s \
-                   WHERE g_id = $id\"\n\n" name |> output_string;
+      print out "let get_value_by_id ~id (dbh:db_handle) =\n";
+      print out "  PGSQL (dbh)\n";
+      print out "    \"SELECT * FROM %s WHERE g_id = $id\"\n\n" name;
       (* Delete a value *)
-      sprintf "let delete_value_by_id ~id (dbh:db_handle) =\n" |> output_string;
-      output_string "  PGSQL (dbh)\n";
-      sprintf "    \"DELETE FROM %s \
-                   WHERE g_id = $id\"\n\n" name |> output_string;
-      sprintf "end (* %s *)\n\n" name |> output_string;
+      print out "let delete_value_by_id ~id (dbh:db_handle) =\n";
+      print out "  PGSQL (dbh)\n";
+      print out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
+      print out "end (* %s *)\n\n" name;
     | Function (name, args, result) ->
-      sprintf "module Function_%s = struct\n" name |> output_string;
-      sprintf "type t = { id: int32 }\n" |> output_string;
+      print out "module Function_%s = struct\n" name;
+      print out "type 'a t = (* private *) { id: int32 }\n";
       (* Function to insert a new function evaluation: *)
-      sprintf "let add_evaluation\n" |> output_string;
-      List.iter args (fun (n, t) -> output_string ("    ~" ^ n ^ "\n"));
-      output_string "    ?(recomputable=false)\n";
-      output_string "    ?(recompute_penalty=0.)\n";
-      output_string "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n";
-      List.iter args (fun tv -> let_in_typed_value tv |> output_string);
-      output_string "  let id_list_monad_monad = PGSQL (dbh)\n";
+      print out "let add_evaluation\n";
+      List.iter args (fun (n, t) -> print out "    ~%s\n" n);
+      print out "    ?(recomputable=false)\n";
+      print out "    ?(recompute_penalty=0.)\n";
+      print out "    (dbh:db_handle) : \n\
+            \    [ `can_start | `can_complete ] t PGOCaml.monad PGOCaml.monad =\n";
+      List.iter args (fun tv -> let_in_typed_value tv |> print out "%s");
+      print out "  let id_list_monad_monad = PGSQL (dbh)\n";
       let intos =
         "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
           (List.map args fst) |> String.concat ~sep:", " in
       let values =
         "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'INSERTED'" ::
           (List.map args (fun (n, t) -> "$" ^ n)) |> String.concat ~sep:", " in
-      sprintf "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
-                   \     RETURNING g_id \" in\n" 
-        name intos values |> output_string;
-      output_string "  PGOCaml.bind id_list_monad_monad \n\
+      print out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
+                   \     RETURNING g_id \" in\n" name intos values;
+      print out "  PGOCaml.bind id_list_monad_monad \n\
                     \    (fun id_list_monad ->\n\
                     \      PGOCaml.bind id_list_monad (function\n\
                     \       | [ id ] -> PGOCaml.return { id }\n\
                     \       | _ -> failwith \"Insert did not return one id\"))\n\n";
-      (* Access a function *)
-      sprintf "let get_evaluation_by_id ~id (dbh:db_handle) =\n" |> output_string;
-      output_string "  PGSQL (dbh)\n";
-      sprintf "    \"SELECT * FROM %s \
-                   WHERE g_id = $id\"\n\n" name |> output_string;
-      (* Delete a function *)
-      sprintf "let delete_evaluation_by_id ~id (dbh:db_handle) =\n" |> output_string;
-      output_string "  PGSQL (dbh)\n";
-      sprintf "    \"DELETE FROM %s \
-                   WHERE g_id = $id\"\n\n" name |> output_string;
       (* Function to set the state of a function evaluation to 'STARTED': *)
-      sprintf "let set_started ~id (dbh:db_handle) =\n" |> output_string;
-      output_string "  PGSQL (dbh)\n";
-      sprintf "    \"UPDATE %s SET g_status = 'STARTED', g_started = now ()\n\
-              \    WHERE g_id = $id\"\n\n" name |> output_string;
+      print out "let set_started (t : [> `can_start] t) (dbh:db_handle) =\n";
+      print out "  let id = t.id in\n";
+      print out "  let umm = PGSQL (dbh)\n";
+      print out "    \"UPDATE %s SET g_status = 'STARTED', g_started = now ()\n\
+                \    WHERE g_id = $id\" in\n\
+                \    pg_bind_bind umm (fun () -> \
+                pg_return ({ id } : [ `can_complete] t)) 
+                \n\n\n" name;
+      print out "let set_completed (t : [> `can_complete] t) \n\
+                   \     ~result
+                    \    (dbh:db_handle) =\n";
+      let_in_typed_value ("result", Record_name result) |> print out "%s";
+      print out "  let id = t.id in\n";
+      print out "  let umm = PGSQL (dbh)\n";
+      print out "    \"UPDATE %s SET g_status = 'COMPLETED', \
+                g_completed = now (), g_result = $result\n \
+                \    WHERE g_id = $id\" in\n\
+                \    pg_bind_bind umm (fun () -> \
+                pg_return ({ id } : [ `can_get_result] t)) 
+                \n\n\n" name;
+      print out "let set_failed \
+                   (t : [ `can_start | `can_complete] t) (dbh:db_handle) =\n";
+      print out "  let id = t.id in\n";
+      print out "  let umm = PGSQL (dbh)\n";
+      print out "    \"UPDATE %s SET g_status = 'FAILED', g_completed = now ()\n\
+                \    WHERE g_id = $id\" in\n\
+                \    pg_bind_bind umm (fun () -> \
+                pg_return ({ id } : [ `can_nothing ] t)) 
+                \n\n\n" name;
+      (* print out "(\**/**\)\n"; *)
+      let args_in_db = 
+        List.map args (fun (s, t) ->
+          let (t, p) = dsl_type_to_db t in (s, t, p)) in
+      print out "type 'a cache = (** private *) \n(%s)\n\n\n"
+        (List.map (db_function_standard_fields result @ args_in_db)
+           ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+      (* Access a function *)
+      print out "let get_evaluation (t: 'a t) (dbh:db_handle):\
+                 'a cache PGOCaml.monad PGOCaml.monad =\n";
+      print out "  let id = t.id in\n";
+      print out "  let umm = PGSQL (dbh)\n";
+      print out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
+      print out "  pg_bind_bind umm (function [one] -> pg_return one 
+         | _ -> failwith \"get_evaluation(%s) did not \
+         retrieve ONE element\")\n" name;
 
-      sprintf "end (* %s *)\n\n" name |> output_string;
+      print out "type arguments = {\n";
+      List.iter args (fun (v,t) -> 
+        print out "  %s: %s;\n" v (ocaml_type t));
+      print out "}\n";
+      print out "let get_arguments (cache : 'a cache) =\n";
+      print out "  let (%s, %s) = cache in\n"
+        (List.map (db_function_standard_fields result) (fun _ -> "_") |> 
+            String.concat ~sep:", ")
+        (List.map args (fun (s, t) -> s) |> String.concat ~sep:", ");
+      print out "  {\n";
+      List.iter args (fun (v, t) ->
+        print out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
+      print out "  }\n\n";
+
+      print out "let get_status (cache: 'a cache) =\n";
+      print out "  let (%s) = cache in"
+        (List.map (db_function_standard_fields result @ args_in_db)
+           (function ("g_status", _, _) -> "status_str" | (n, _, _) -> "_" ) |>
+               String.concat ~sep:", ");
+      print out "  (Enumeration_process_status.of_string_exn status_str)\n\n";
+
+      print out "let get_result (cache: [> `can_get_result] cache) =\n";
+      print out "  let (%s) = cache in"
+        (List.map (db_function_standard_fields result @ args_in_db)
+           (function ("g_result", _, _) -> "res_pointer" | (n, _, _) -> "_" ) |>
+               String.concat ~sep:", ");
+      print out "  { Record_%s.id = \
+          match res_pointer with Some id -> id | None -> \
+          failwith \"get_result(%s) result (%s) is not set\" }\n\n" 
+        result name result;
+
+
+      (* Delete a function *)
+      print out "let _delete_evaluation_by_id ~id (dbh:db_handle) =\n";
+      print out "  PGSQL (dbh)\n";
+      print out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
+      (* print out "(\**/**\)\n"; *)
+
+
+      print out "end (* %s *)\n\n" name;
   );
   ()
 
