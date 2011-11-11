@@ -606,7 +606,8 @@ let ocaml_code dsl output_string =
   print out "(**/**)\n\
                 \ let option_map o f =\n\
                 \     match o with None -> None | Some s -> Some (f s)\n\n\
-                \ let array_map a f = Array.map f a\n\n\
+                \ let array_map a f = ArrayLabels.map ~f a\n\n\
+                \ let list_map f l = ListLabels.map ~f l\n\n\
                 \ let pg_bind_bind amm f =\n\
                 \   PGOCaml.bind amm (fun am -> PGOCaml.bind am f)\n\n\
                 \ let pg_return t = PGOCaml.return t\n\n\
@@ -782,6 +783,22 @@ let ocaml_code dsl output_string =
                 \    | None -> \
           failwith \"get_result(%s) result (%s) is not set\" }\n\n" 
         result name result;
+
+      List.iter 
+        [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");
+          ("started", "`Started", "[ `can_fail | `can_complete]");
+          ("failed", "`Failed", "[ `can_nothing ]");
+          ("succeeded", "`Succeeded", "[ `can_get_result ]"); ]
+        (fun (suffix, polyvar, phamtom) -> 
+          print out "let get_all_%s (dbh:db_handle): %s t list PGOCaml.monad =\n"
+            suffix phamtom;
+          print out "  let status_str = \n\
+                    \    Enumeration_process_status.to_string %s in\n" polyvar;
+          print out "  let umm = PGSQL(dbh)\n";
+          print out "    \"SELECT g_id FROM %s WHERE g_status = $status_str\" in\n"
+            name;
+          print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n");
+
 
       (* Delete a function *)
       print out "let _delete_evaluation_by_id ~id (dbh:db_handle) =\n";
