@@ -236,7 +236,7 @@ type dsl_runtime_description = {
 
 let built_in_complex_types = [
   Enumeration ("process_status",
-               [ "STARTED"; "INSERTED"; "FAILED"; "COMPLETED" ]);
+               [ "Started"; "Inserted"; "Failed"; "Succeeded" ]);
 ]
 
 let type_name = function
@@ -677,7 +677,7 @@ let ocaml_code dsl output_string =
         "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
           (List.map args fst) |> String.concat ~sep:", " in
       let values =
-        "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'INSERTED'" ::
+        "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'Inserted'" ::
           (List.map args (fun (n, t) -> "$" ^ n)) |> String.concat ~sep:", " in
       print out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
                    \     RETURNING g_id \" in\n" name intos values;
@@ -690,18 +690,18 @@ let ocaml_code dsl output_string =
       print out "let set_started (t : [> `can_start] t) (dbh:db_handle) =\n";
       print out "  let id = t.id in\n";
       print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"UPDATE %s SET g_status = 'STARTED', g_started = now ()\n\
+      print out "    \"UPDATE %s SET g_status = 'Started', g_started = now ()\n\
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind_bind umm (fun () -> \
                 pg_return ({ id } : [ `can_complete] t)) 
                 \n\n\n" name;
-      print out "let set_completed (t : [> `can_complete] t) \n\
+      print out "let set_succeeded (t : [> `can_complete] t) \n\
                    \     ~result
                     \    (dbh:db_handle) =\n";
       let_in_typed_value ("result", Record_name result) |> print out "%s";
       print out "  let id = t.id in\n";
       print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"UPDATE %s SET g_status = 'COMPLETED', \
+      print out "    \"UPDATE %s SET g_status = 'Succeeded', \
                 g_completed = now (), g_result = $result\n \
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind_bind umm (fun () -> \
@@ -711,7 +711,7 @@ let ocaml_code dsl output_string =
                    (t : [ `can_start | `can_complete] t) (dbh:db_handle) =\n";
       print out "  let id = t.id in\n";
       print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"UPDATE %s SET g_status = 'FAILED', g_completed = now ()\n\
+      print out "    \"UPDATE %s SET g_status = 'Failed', g_completed = now ()\n\
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind_bind umm (fun () -> \
                 pg_return ({ id } : [ `can_nothing ] t)) 
@@ -720,9 +720,10 @@ let ocaml_code dsl output_string =
       let args_in_db = 
         List.map args (fun (s, t) ->
           let (t, p) = dsl_type_to_db t in (s, t, p)) in
-      print out "type 'a cache = (** private *) \n(%s)\n\n\n"
+      print out "(**/**)\ntype 'a _cache = \n(%s)\n(**/**)\n\n"
         (List.map (db_function_standard_fields result @ args_in_db)
            ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+      print out "type 'a cache = 'a _cache\n\n";
       (* Access a function *)
       print out "let get_evaluation (t: 'a t) (dbh:db_handle):\
                  'a cache PGOCaml.monad PGOCaml.monad =\n";
@@ -748,22 +749,39 @@ let ocaml_code dsl output_string =
       print out "  }\n\n";
 
       print out "let get_status (cache: 'a cache) =\n";
-      print out "  let (%s) = cache in"
+      print out "  let (%s) = cache in\n"
         (List.map (db_function_standard_fields result @ args_in_db)
-           (function ("g_status", _, _) -> "status_str" | (n, _, _) -> "_" ) |>
+           (function 
+             | ("g_status", _, _) -> "status_str" 
+             | ("g_inserted", _, _) -> "inserted" 
+             | ("g_started", _, _) -> "started" 
+             | ("g_completed", _, _) -> "completed" 
+             | (n, _, _) -> "_" ) |>
                String.concat ~sep:", ");
-      print out "  (Enumeration_process_status.of_string_exn status_str)\n\n";
+      print out "  let status =\n\
+                \    Enumeration_process_status.of_string_exn \
+                 status_str in\n";
+      print out "  let opt = function \n\
+                \    | Some (d, tz) -> (d, tz)\n\
+                \    | None -> failwith \"get_status(%s) can't find timestamp\"
+                \  in\n" name;
+      print out "  (match status with\n\
+                \  | `Inserted ->   (status, opt inserted)\n\
+                \  | `Started ->    (status, opt started)\n\
+                \  | `Failed ->     (status, opt completed)\n\
+                \  | `Succeeded ->  (status, opt completed)\
+                )\n\n";
 
       print out "let get_result (cache: [> `can_get_result] cache) =\n";
       print out "  let (%s) = cache in"
         (List.map (db_function_standard_fields result @ args_in_db)
            (function ("g_result", _, _) -> "res_pointer" | (n, _, _) -> "_" ) |>
                String.concat ~sep:", ");
-      print out "  { Record_%s.id = \
-          match res_pointer with Some id -> id | None -> \
+      print out "  { Record_%s.id = \n\
+                \    match res_pointer with Some id -> id\n\
+                \    | None -> \
           failwith \"get_result(%s) result (%s) is not set\" }\n\n" 
         result name result;
-
 
       (* Delete a function *)
       print out "let _delete_evaluation_by_id ~id (dbh:db_handle) =\n";
