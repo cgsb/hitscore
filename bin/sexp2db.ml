@@ -830,6 +830,24 @@ let ocaml_code dsl output_string =
 
       print out "end (* %s *)\n\n" name;
   );
+  let rec_name = function Record (n, _) -> Some n | _ -> None in
+  let fun_name = function Function (n, _, _) -> Some n | _ -> None in
+  List.iter
+    [("all_records"    , "record_"       , None, rec_name);
+     ("all_values"     , "value_"        , Some "Record", rec_name);
+     ("all_functions"  , "function_"     , None, fun_name);
+     ("'a all_evaluations", "evaluation_", Some "'a Function", fun_name);
+    ]
+    (fun (type_name, prefix, modprefix, get_name) ->
+      print out "type %s = [\n" type_name;
+      List.iter dsl.nodes (fun e ->
+        get_name e |> Option.iter ~f:(fun name ->
+          match modprefix with
+          | Some s -> print out " | `%s%s of %s_%s.t\n" prefix name s name
+          | None -> print out " | `%s%s\n" prefix name)
+      );
+      print out "]\n";
+    );
   ()
 
 let testing_inserts dsl amount output_string =
