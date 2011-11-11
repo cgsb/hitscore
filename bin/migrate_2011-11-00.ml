@@ -6,6 +6,72 @@ Ocaml.packs := ["hitscore"; "csv"]
 open Core.Std
 let (|>) x f = f x
 
+let illumina_barcodes = [
+  1, "ATCACG";
+  2, "CGATGT";
+  3, "TTAGGC";
+  4, "TGACCA";
+  5, "ACAGTG";
+  6, "GCCAAT";
+  7, "CAGATC";
+  8, "ACTTGA";
+  9, "GATCAG";
+  10, "TAGCTT";
+  11, "GGCTAC";
+  12, "CTTGTA"
+]
+let bioo_barcodes = [
+  1 ,"CGATGT";
+  2 ,"TGACCA";
+  3 ,"ACAGTG";
+  4 ,"GCCAAT";
+  5 ,"CAGATC";
+  6 ,"CTTGTA";
+  7 ,"ATCACG";
+  8 ,"TTAGGC";
+  9 ,"ACTTGA";
+  10,"GATCAG";
+  11,"TAGCTT";
+  12,"GGCTAC";
+  13,"AGTCAA";
+  14,"AGTTCC";
+  15,"ATGTCA";
+  16,"CCGTCC";
+  17,"GTAGAG";
+  18,"GTCCGC";
+  19,"GTGAAA";
+  20,"GTGGCC";
+  21,"GTTTCG";
+  22,"CGTACG";
+  23,"GAGTGG";
+  24,"GGTAGC";
+  25,"ACTGAT";
+  26,"ATGAGC";
+  27,"ATTCCT";
+  28,"CAAAAG";
+  29,"CAACTA";
+  30,"CACCGG";
+  31,"CACGAT";
+  32,"CACTCA";
+  33,"CAGGCG";
+  34,"CATGGC";
+  35,"CATTTT";
+  36,"CCAACA";
+  37,"CGGAAT";
+  38,"CTAGCT";
+  39,"CTATAC";
+  40,"CTCAGA";
+  41,"GCGCTA";
+  42,"TAATCG";
+  43,"TACAGC";
+  44,"TATAAT";
+  45,"TCATTC";
+  46,"TCCCGA";
+  47,"TCGAAG";
+  48,"TCGGCA";
+]
+
+
 let prog = Filename.basename Sys.argv.(0)
 let usage = sprintf
 "usage: %s metdata_dir
@@ -27,6 +93,19 @@ let usage = sprintf
 
       
 let main metadata_prefix dbh =
+
+  let bioo_barcodes_db = 
+    List.map bioo_barcodes (fun (vendor_id, barcode) ->
+      (Hitscore_db_access.Record_bioo_barcode.add_value dbh
+         ~vendor_id:(Int32.of_int_exn vendor_id)
+         ~barcode, vendor_id, barcode))
+  in
+  let truseq_barcodes_db = 
+    List.map illumina_barcodes (fun (vendor_id, barcode) ->
+      (Hitscore_db_access.Record_truseq_barcode.add_value dbh
+         ~vendor_id:(Int32.of_int_exn vendor_id)
+         ~barcode, vendor_id, barcode))
+  in
   (* let mkpath = List.fold_left ~f:Filename.concat ~init:metadata_dir in *)
   let load = Csv.load ~separator:',' in
   let load_table t =
@@ -120,27 +199,53 @@ let main metadata_prefix dbh =
             | None -> no_name_person
         (* sprintf "Unknown Investigator: %s" investigator_name |> failwith *)
         in
-        Hitscore_db_access.Function_library_preparation.add_evaluation dbh
-          ~sample ~protocol
-          ~investigator
-          ~contacts:[| |]
-          ~vial_id:999999999l (* Int32.of_string vial_id *)
-          ~name:(if lib_id = "" then "lib_of_sample_" ^ sample_name else lib_id)
-          ~application
-          ~stranded:false
-          ~control_type
-          ~truseq_control:(truseq_control_used = "TRUE")
-          ~rnaseq_control:rna_seq_Control
-          ~read_type:(
-            match readType, readLength with
-            | "PE", "50x50" -> `read_PE_50x50
-            | "SE", "50x50" -> `read_SE_50
-            | "PE", "100x100" -> `read_PE_100x100
-            | "SE", "100x100" -> `read_SE_100
-            | _, _ -> 
-              sprintf "Can't understand read_type/length of %s, %s"
-                lib_id sample_id1 |> failwith)
-          ~recomputable:false
+        let library_prep = 
+          Hitscore_db_access.Function_library_preparation.add_evaluation dbh
+            ~sample ~protocol
+            ~investigator
+            ~contacts:[| |]
+            ~vial_id:999999999l (* Int32.of_string vial_id *)
+            ~name:(if lib_id = "" then "lib_of_sample_" ^ sample_name else lib_id)
+            ~application
+            ~stranded:false
+            ~control_type
+            ~truseq_control:(truseq_control_used = "TRUE")
+            ~rnaseq_control:rna_seq_Control
+            ~read_type:(
+              match readType, readLength with
+              | "PE", "50x50" -> `read_PE_50x50
+              | "SE", "50x50" -> `read_SE_50
+              | "PE", "100x100" -> `read_PE_100x100
+              | "SE", "100x100" -> `read_SE_100
+              | _, _ -> 
+                sprintf "Can't understand read_type/length of %s, %s"
+                  lib_id sample_id1 |> failwith)
+            ~recomputable:false
+        in
+        let library_result = 
+          let bioo_barcodes =
+            List.filter_map bioo_barcodes_db 
+              (fun (handle, nb, bc) ->
+                let snb =  string_of_int nb in
+                if snb = bioo_Barcode then Some handle else None) |> Array.of_list in
+          let truseq_barcodes =
+            List.filter_map truseq_barcodes_db 
+              (fun (handle, nb, bc) ->
+                let snb =  string_of_int nb in
+                if snb = truseq_barcode || sprintf "AD%04d" nb = truseq_barcode then
+                  Some handle else None) |> Array.of_list in
+
+          Hitscore_db_access.Record_library.add_value dbh
+            ~bioo_barcodes
+            (* Hitscore_db_access.Record_bioo_barcode.t array -> *)
+            ~truseq_barcodes
+        (* Hitscore_db_access.Record_truseq_barcode.t array -> *)
+        in
+        let library_prep_can_get_result =
+          Hitscore_db_access.Function_library_preparation.set_succeeded
+            library_prep dbh
+            ~result:library_result in
+        library_prep_can_get_result
 
       | l ->
         sprintf "library: list of %d items: [%s]"
@@ -153,11 +258,39 @@ let () =
   | exec :: dir :: [] -> 
     let dbh = PGOCaml.connect() in
     main dir dbh;
-    Unix.system "
- rm ttt.html
- psql --html -c 'select * from person;' >> ttt.html
- psql --html -c 'select * from organism;' >> ttt.html
- psql --html -c 'select * from sample;' >> ttt.html
- psql --html -c 'select * from library_preparation;' >> ttt.html
- " |> ignore
+    let run_psql s =
+      sprintf "echo '<h3>%s</h3>' >> ttt.html\n\
+               psql --html -c '%s' >> ttt.html\n" s s
+    in
+    let report l = 
+      Unix.system 
+        (sprintf "rm ttt.html\n\
+                 %s\n" (String.concat ~sep:"\n" (List.map l run_psql))) |> ignore in
+    let all = sprintf "select * from %s;" in
+    report [
+      all "person";
+      all "organism";
+      all "sample";
+      all "library_preparation";
+      all "library";
+      "
+select
+  library_preparation.name as lib_name,
+  library_preparation.read_type as read_type,
+  sample.name as sample_name,
+  organism.name as org_name,
+  protocol.name as protcol,
+  library.bioo_barcodes as bioo_bc,
+  library.truseq_barcodes as ts_bc,
+  person.print_name as investigator
+from library_preparation, sample, organism, protocol, library, person
+where
+library_preparation.sample = sample.g_id and
+sample.organism = organism.g_id and
+library_preparation.protocol = protocol.g_id and
+library_preparation.g_result = library.g_id and
+library_preparation.investigator = person.g_id
+
+";
+    ]
   | _ -> ()
