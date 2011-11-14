@@ -160,7 +160,7 @@ let main metadata_prefix dbh =
     let organisms = ref [ ("", unknown_organism) ] in
     let tbl = load_table "Library" in
     List.map tbl (function
-      | [ _; vial_id; lib_id; sample_id1; sample_id2; organism_name; 
+      | [ row_id; vial_id; lib_id; sample_id1; sample_id2; organism_name; 
           investigator_name; application; stranded; control_type;
           truseq_control_used; rna_seq_Control;
           truseq_barcode; bioo_Barcode;
@@ -265,14 +265,45 @@ let main metadata_prefix dbh =
           Hitscore_db_access.Function_qpcr.set_succeeded 
             func dbh ~result |> ignore
         );
-        
-        library_prep_can_get_result
+
+(*
+        eprintf "1: %s,%s,%s,%s\n2: %s,%s,%s,%s\n"
+          fragmentSizeQCMethod pdfPath wellNumber avgLibraryFragmentSize
+          fragmentSizeQCMethod2 pdfPath2 wellNumber2 avgLibraryFragmentSize2;
+*)
+        let row =
+          try int_of_string row_id with e -> 0 in
+        (row, lib_id, sample_id1, library_prep_can_get_result)
 
       | l ->
         sprintf "library: list of %d items: [%s]"
           (List.length l) (String.concat ~sep:", " l) |> failwith) in
+  let flowcells =
+    let tbl = load_table "Flowcell" in
+    List.map tbl (function
+      | fcid :: lane :: library :: sample :: the_rest ->
+        let lib =
+          try 
+            let row_id = int_of_string library in
+            Some (List.find_exn libraries ~f:(fun (a, _, _, _) -> a = row_id))
+          with
+            e ->
+              begin match List.find libraries ~f:(fun (_, _, s, _) -> s = sample) with
+              | None -> 
+                List.find libraries ~f:(fun (_, s, _, _) -> s = sample)
+              | Some s -> Some s
+              end
+        in
+        (match lib with Some _ -> () | None ->
+          eprintf "??%s %s %s %s\n%!" fcid lane library sample);
+        let lane = try int_of_string lane with e -> 9847543987 in
 
-  (persons, libraries) |> ignore
+        (fcid, lane, lib)
+      | _ -> failwith "Flowcell; not enough rows")
+  in
+
+
+  (persons, libraries, flowcells) |> ignore
 
 let () =
   match Array.to_list Sys.argv with
