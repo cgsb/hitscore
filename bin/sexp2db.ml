@@ -217,7 +217,6 @@ type dsl_type =
   | String
   | Option of dsl_type
   | Array of dsl_type 
-  | Pointer of string
   | Record_name of string
   | Enumeration_name of string
   | Function_name of string
@@ -255,7 +254,6 @@ let rec string_of_dsl_type = function
   | String      -> "String"    
   | Option o    -> sprintf "%s option" (string_of_dsl_type o)
   | Array a     -> sprintf "%s array" (string_of_dsl_type a)
-  | Pointer p   -> sprintf "%s ref" p
   | Record_name       n -> n |> sprintf "%s:rec" 
   | Enumeration_name  n -> n |> sprintf "%s:enum" 
   | Function_name     n -> n |> sprintf "%s:fun" 
@@ -268,7 +266,6 @@ let rec type_is_pointer = function
   | String       -> `no
   | Option o     -> type_is_pointer o
   | Array a      -> type_is_pointer a
-  | Pointer p -> `yes p
   | Record_name       n -> `yes n
   | Enumeration_name  n -> `no
   | Function_name     n -> `yes n
@@ -282,7 +279,6 @@ let rec type_is_link = function
   | String       -> `no
   | Option o     -> type_is_link o
   | Array a      -> type_is_link a
-  | Pointer           n
   | Record_name       n
   | Enumeration_name  n
   | Function_name     n -> `yes n
@@ -295,7 +291,6 @@ let rec type_is_option = function
   | String       -> `no
   | Option o     -> `yes
   | Array a      -> type_is_option a
-  | Pointer p -> `no
   | Record_name       n -> `no
   | Enumeration_name  n -> `no
   | Function_name     n -> `no
@@ -306,8 +301,6 @@ let find_type l t =
     | Enumeration_name  n -> n = t
     | Function_name     n -> n = t
     | _ -> false)
-
-
 
 let sanitize s =
   String.iter s ~f:(function
@@ -450,7 +443,6 @@ let dsl_type_to_db t =
     | Array t2 ->
       props := DB.Array :: !props;
       convert t2
-    | Pointer s -> DB.Pointer (s, "g_id")
     | Function_name s -> DB.Pointer (s, "g_id")
     | Enumeration_name s -> DB.Text
     | Record_name s -> DB.Pointer (s, "g_id")
@@ -569,7 +561,6 @@ let rec ocaml_type = function
   | String      -> "string"
   | Option t -> sprintf "%s option" (ocaml_type t)
   | Array t -> sprintf "%s array" (ocaml_type t)
-  | Pointer s -> "int32"
   | Function_name s -> sprintf "Function_%s.t" s
   | Enumeration_name s -> sprintf "Enumeration_%s.t" s
   | Record_name s -> sprintf "Record_%s.t" s
@@ -868,7 +859,7 @@ let testing_inserts dsl amount output_string =
           | Array a     -> 
             sprintf "{%s}" (String.concat ~sep:", "
                               (List.init (Random.int 42 + 1) (fun _ -> g (n, a))))
-          | Pointer _ | Function_name _|Record_name _ -> g (n, Int)
+          | Function_name _|Record_name _ -> g (n, Int)
           | Enumeration_name _ -> g (n, String)
         in
         let f = Fn.compose (sprintf "'%s'") g in
