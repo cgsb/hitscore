@@ -222,6 +222,10 @@ let main metadata_prefix dbh =
                   lib_id sample_id1 |> failwith)
             ~recomputable:false
         in
+        let is_qpcred =
+          match library_QuantificationMethod with
+          | "qPCR" | "qPCR " -> true
+          | _ -> false in
         let library_result = 
           let bioo_barcodes =
             List.filter_map bioo_barcodes_db 
@@ -234,17 +238,34 @@ let main metadata_prefix dbh =
                 let snb =  string_of_int nb in
                 if snb = truseq_barcode || sprintf "AD%04d" nb = truseq_barcode then
                   Some handle else None) |> Array.of_list in
-
+          let note =
+            String.concat ~sep:"; " (List.flatten [
+              ["Pre_db_library"];
+              (if not is_qpcred then
+                  [sprintf "No_qpcr(%S)" library_QuantificationMethod]
+               else []);
+              (if lib_id = "" then ["Lib_name_made_up"] else []);
+            ])
+          in
           Hitscore_db_access.Record_library.add_value dbh
-            ~bioo_barcodes
-            (* Hitscore_db_access.Record_bioo_barcode.t array -> *)
-            ~truseq_barcodes
-        (* Hitscore_db_access.Record_truseq_barcode.t array -> *)
+            ~bioo_barcodes ~truseq_barcodes ~note
         in
         let library_prep_can_get_result =
           Hitscore_db_access.Function_library_preparation.set_succeeded
             library_prep dbh
             ~result:library_result in
+        if is_qpcred then (
+          let result =
+            Hitscore_db_access.Record_qpcr_result.add_value dbh
+              ~concentration:(float_of_string libraryconc_nM_LAB)
+              ~volume:(float_of_string libraryVolumeuL) in 
+          let func = 
+            Hitscore_db_access.Function_qpcr.add_evaluation dbh
+              ~library:library_result ~recomputable:false in
+          Hitscore_db_access.Function_qpcr.set_succeeded 
+            func dbh ~result |> ignore
+        );
+        
         library_prep_can_get_result
 
       | l ->
@@ -273,10 +294,13 @@ let () =
       all "sample";
       all "library_preparation";
       all "library";
+      all "qpcr";
+      all "qpcr_result";
       "
 select
   library_preparation.name as lib_name,
   library_preparation.read_type as read_type,
+  library.note as lib_note,
   sample.name as sample_name,
   organism.name as org_name,
   protocol.name as protcol,
