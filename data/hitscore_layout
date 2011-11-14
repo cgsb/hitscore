@@ -43,6 +43,7 @@
 (record library
         (bioo_barcodes bioo_barcode array)
         (truseq_barcodes truseq_barcode array)
+        notable
 )
 
 (function library library_preparation
