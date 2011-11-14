@@ -38,8 +38,23 @@ let () =
     IO.close_in i;
   );
   
+  let ns = HT.create 6 in
   List.iter (results |> HT.enum |> List.of_enum |> List.fast_sort)
     ~f:(fun (index, count) ->
+      let number_of_Ns = 
+        String.fold_left 
+          (fun x c -> x + (if c = 'N' then 1 else 0)) 0 index in
+        begin match HT.find ns number_of_Ns with
+        | Some count ->
+          HT.replace ns number_of_Ns (count + 1)
+        | None -> 
+          HT.add ns number_of_Ns 1
+        end;
       printf "Index %-20s : %d\n%!" index count;
-    )
+    );
+  List.iter (ns |> HT.enum |> List.of_enum |> List.fast_sort)
+    ~f:(fun (nbs, count) ->
+      printf "%d N's; %d\n%!" nbs count
+    );
+
 
