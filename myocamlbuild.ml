@@ -1,3 +1,22 @@
+
+open Ocamlbuild_plugin;;
+open Command;;
+
+let hitscoregen_cmd = "src/codegen/hitscoregen";;
+let hitscoregen = A hitscoregen_cmd;;
+
+
+rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_db_access.ml"
+  ~prod:"src/lib/hitscore_db_access.ml"
+  ~dep:"data/hitscore_layout"
+  begin
+    fun env build ->
+      Cmd (S [hitscoregen; A "codegen"; P (env "data/hitscore_layout");
+              P (env "src/lib/hitscore_db_access.ml")])
+  end
+;;
+
+
 (* OASIS_START *)
 (* DO NOT EDIT (digest: 101c9d2995c03fb027a54a1aa5aca9e2) *)
 module OASISGettext = struct

@@ -2,20 +2,18 @@
 
 all: build
 
-GEN_DEPS=bin/sexp2db.ml data/hitscore_layout
+GENERATOR=_build/src/codegen/hitscoregen
+$(GENERATOR): build
+LAYOUT_SOURCE=data/hitscore_layout
 
-src/lib/hitscore_db_access.ml: $(GEN_DEPS)
-	./bin/sexp2db.ml codegen data/hitscore_layout src/lib/hitscore_db_access.ml
-
-
-_build/hitscore_layout_digraph.dot: data/hitscore_layout ./bin/sexp2db.ml
-	./bin/sexp2db.ml digraph data/hitscore_layout $@
+_build/hitscore_layout_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
+	$(GENERATOR) digraph $(LAYOUT_SOURCE) $@
 
 hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot
 	dot -Tpdf $< -o$@
 
-_build/hitscore_db_digraph.dot: data/hitscore_layout ./bin/sexp2db.ml
-	./bin/sexp2db.ml db_digraph data/hitscore_layout $@
+_build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
+	$(GENERATOR) db_digraph $(LAYOUT_SOURCE) $@
 
 hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot
 	dot -Tpdf $< -o$@
@@ -24,7 +22,7 @@ dots: hitscore_layout_digraph.pdf hitscore_db_digraph.pdf
 
 
 update_psql: 
-	./bin/sexp2db.ml postgres data/hitscore_layout _build/
+	$(GENERATOR) postgres $(LAYOUT_SOURCE) _build/
 dbinit:
 	psql -1 -q -f _build/hitscore_layout_init.psql
 dbclear:
@@ -32,7 +30,7 @@ dbclear:
 
 dbupdate: dbclear update_psql dbinit
 
-build: src/lib/hitscore_db_access.ml
+build:
 	ocaml setup.ml -build
 
 install:

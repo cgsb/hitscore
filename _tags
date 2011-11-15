@@ -1,5 +1,10 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2afd73a4c66d60acb6ae54b6aeb0c3ec)
+# DO NOT EDIT (digest: 213c03e671a4e122c0b9461f17f138a8)
+# Executable hitscoregen
+<src/codegen/main.{native,byte}>: pkg_threads
+<src/codegen/main.{native,byte}>: pkg_core
+<src/codegen/*.ml{,i}>: pkg_threads
+<src/codegen/*.ml{,i}>: pkg_core
 # Library hitscore
 "src/lib": include
 <src/lib/*.ml{,i}>: pkg_threads
