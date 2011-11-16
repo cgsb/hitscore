@@ -1,7 +1,7 @@
 open Core.Std
 let (|>) x f = f x
 
-
+module Psql = Hitscoregen_psql
 module Sx = Sexplib.Sexp
 
 exception Parse_error of string

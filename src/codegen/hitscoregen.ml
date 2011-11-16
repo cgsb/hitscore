@@ -1,6 +1,7 @@
 open Core.Std
 let (|>) x f = f x
 
+module Psql = Hitscoregen_psql
 open Hitscoregen_layout_dsl
 
 let () =

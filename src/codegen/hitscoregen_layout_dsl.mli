@@ -23,7 +23,7 @@ type dsl_runtime_description = {
 val parse_sexp : Sexplib.Sexp.t -> dsl_runtime_description
 val parse_str : string -> dsl_runtime_description
 
-val to_db : dsl_runtime_description -> Psql.table list
+val to_db : dsl_runtime_description -> Hitscoregen_psql.table list
 
 val digraph :
   dsl_runtime_description -> ?name:string -> (string -> unit) -> unit
