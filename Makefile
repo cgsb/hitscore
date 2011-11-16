@@ -2,10 +2,10 @@
 
 all: build
 
-GENERATOR=_build/src/codegen/hitscoregen
+GENERATOR=_build/src/codegen/hitscoregen.native
 
 $(GENERATOR):
-	ocamlbuild $(GENERATOR)
+	ocamlbuild src/codegen/hitscoregen.native
 
 LAYOUT_SOURCE=data/hitscore_layout
 

@@ -10,7 +10,7 @@ BuildTools:  ocamlbuild
 
 Executable hitscoregen
   Path: src/codegen
-  MainIs: main.ml
+  MainIs: hitscoregen.ml
   BuildDepends: threads, core
   CompiledObject: best
 
