@@ -52,3 +52,7 @@ clean:
 # clean everything and uninstall
 fresh: clean uninstall
 
+# clean setup files, rebuilding may require additional tools
+distclean: fresh
+	ocaml setup.ml -distclean
+	oasis setup-clean
