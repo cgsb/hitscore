@@ -2,10 +2,14 @@
 (subrecord notable
            (note string option))
 
-(subrecord is_file_or_dir ;;Static files
-           (path string)
-           (size int)
-           (filetype string))
+;;Static files, …
+(subrecord is_file 
+           (file_name string)
+           (file_id int)
+           (hr_tag string option))
+(subrecord is_directory
+           (dir_id int)
+           (hr_tag string option))
 
 
 ;; Almost static input data:
@@ -17,13 +21,14 @@
        )
 
 (record organism
-       (name string)
-       notable)
+        (name string option)
+        (informal string option)
+        notable)
 
 (record sample
-       (name        string)
-       (organism    organism)
-       notable)
+        (name        string)
+        (organism    organism)
+        notable)
 
 
 (subrecord barcode
@@ -32,9 +37,11 @@
 (record bioo_barcode barcode)
 (record truseq_barcode barcode)
 
+
 (record protocol
        (name string)
-       is_file_or_dir)
+       is_directory
+       notable)
 
 ;; Functions:
 
@@ -47,12 +54,11 @@
 )
 
 (function library library_preparation
+          (name           string)
           (sample      sample)
           (protocol  protocol)
-          (investigator person)
           (contacts     person array)
           (vial_id        int)
-          (name           string)
           (application    string)
           (stranded       bool)
           (control_type   string)
@@ -83,10 +89,13 @@
           (library library))
 
 (record bioanalyzer_result
-        is_file_or_dir
+        is_directory
+        (pdf_name string option)
+        (xad_name string option)
         (mean_fragment_size real))
 (record agarose_gel_result
-        is_file_or_dir
+        is_directory
+        (pdf_name string option)
         (mean_fragment_size real))
 
 (function bioanalyzer_result bioanalyzer
@@ -97,14 +106,15 @@
           (library library)
           (well_number int))
 
-(record hiseq_raw is_file_or_dir)
+(record hiseq_raw
+        (hiseq_dir_name string))
 
 (function hiseq_raw hiseq_run
           (flowcell flowcell)
           (keep_intensities bool)
           )
 
-(record sample_sheet is_file_or_dir)
+(record sample_sheet is_file)
         
 (enumeration sample_sheet_kind all_barcodes specific_barcodes)
 
@@ -113,7 +123,7 @@
           (flowcell flowcell)
           )
 
-(record bcl_to_fastq_unaligned is_file_or_dir)
+(record bcl_to_fastq_unaligned is_directory)
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
           (raw_data hiseq_raw)
