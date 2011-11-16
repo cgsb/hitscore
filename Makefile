@@ -3,7 +3,10 @@
 all: build
 
 GENERATOR=_build/src/codegen/hitscoregen
-$(GENERATOR): build
+
+$(GENERATOR):
+	ocamlbuild $(GENERATOR)
+
 LAYOUT_SOURCE=data/hitscore_layout
 
 _build/hitscore_layout_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
@@ -21,7 +24,7 @@ hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot
 dots: hitscore_layout_digraph.pdf hitscore_db_digraph.pdf
 
 
-update_psql: 
+update_psql: $(GENERATOR)
 	$(GENERATOR) postgres $(LAYOUT_SOURCE) _build/
 dbinit:
 	psql -1 -q -f _build/hitscore_layout_init.psql
