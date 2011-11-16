@@ -457,12 +457,24 @@ let ocaml_code dsl output_string =
                     \       | _ -> ";
       raise_wrong_db_error out "INSERT did not return a single id";
       print out ")\n\n";
+
+      print out "let get_all (dbh: db_handle): t list PGOCaml.monad = \n";
+      print out "  let umm = PGSQL(dbh)\n";
+      print out "    \"SELECT g_id FROM %s\" in\n" name;
+      print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
+
       (* Access a value *)
-      print out "let get_value_by_id ~id (dbh:db_handle) =\n";
-      print out "  PGSQL (dbh)\n";
-      print out "    \"SELECT * FROM %s WHERE g_id = $id\"\n\n" name;
+      print out "let _get_value_by_id ~id (dbh:db_handle) =\n";
+      print out "  let umm = PGSQL(dbh)\n";
+      print out "    \"SELECT g_id FROM %s WHERE g_id = $id\" in\n" name;
+      print out "  pg_bind_bind umm \n\
+                    \    (function\n\
+                    \       | [ id ] -> PGOCaml.return { id }\n\
+                    \       | _ -> ";
+      raise_wrong_db_error out "INSERT did not return a single id";
+      print out ")\n\n";
       (* Delete a value *)
-      print out "let delete_value_by_id ~id (dbh:db_handle) =\n";
+      print out "let _delete_value_by_id ~id (dbh:db_handle) =\n";
       print out "  PGSQL (dbh)\n";
       print out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
       print out "end (* %s *)\n\n" name;
@@ -608,6 +620,12 @@ let ocaml_code dsl output_string =
           print out "    \"SELECT g_id FROM %s WHERE g_status = $status_str\" in\n"
             name;
           print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n");
+
+      print out "let get_all (dbh: db_handle): \
+                  [ `can_nothing ] t list PGOCaml.monad = \n";
+      print out "  let umm = PGSQL(dbh)\n";
+      print out "    \"SELECT g_id FROM %s\" in\n" name;
+      print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
 
 
       (* Delete a function *)
