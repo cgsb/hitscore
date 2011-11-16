@@ -8,7 +8,7 @@ let hitscoregen = A hitscoregen_cmd;;
 
 rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_db_access.ml"
   ~prod:"src/lib/hitscore_db_access.ml"
-  ~dep:"data/hitscore_layout"
+  ~deps:["data/hitscore_layout"; hitscoregen_cmd]
   begin
     fun env build ->
       Cmd (S [hitscoregen; A "codegen"; P (env "data/hitscore_layout");
