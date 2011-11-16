@@ -223,44 +223,42 @@ let parse_str str =
   in
   (parse_sexp sexp)
 
-module DB = Hitscoregen_db_dsl
-
   
 let dsl_type_to_db t =
-  let props = ref [ DB.Not_null] in
+  let props = ref [ Psql.Not_null] in
   let rec convert t =
     match t with
-    | Bool        -> DB.Bool      
-    | Timestamp   -> DB.Timestamp 
-    | Int         -> DB.Integer       
-    | Real        -> DB.Real      
-    | String      -> DB.Text   
+    | Bool        -> Psql.Bool      
+    | Timestamp   -> Psql.Timestamp 
+    | Int         -> Psql.Integer       
+    | Real        -> Psql.Real      
+    | String      -> Psql.Text   
     | Option t2 -> 
-      props := List.filter !props ~f:((<>) DB.Not_null);
+      props := List.filter !props ~f:((<>) Psql.Not_null);
       convert t2
     | Array t2 ->
-      props := DB.Array :: !props;
+      props := Psql.Array :: !props;
       convert t2
-    | Function_name s -> DB.Pointer (s, "g_id")
-    | Enumeration_name s -> DB.Text
-    | Record_name s -> DB.Pointer (s, "g_id")
+    | Function_name s -> Psql.Pointer (s, "g_id")
+    | Enumeration_name s -> Psql.Text
+    | Record_name s -> Psql.Pointer (s, "g_id")
   in
   let converted = convert t in
   (converted, !props)
 
 let db_record_standard_fields = [
-  ("g_id", DB.Identifier, [DB.Not_null]);
-  ("g_last_accessed", DB.Timestamp, []);
+  ("g_id", Psql.Identifier, [Psql.Not_null]);
+  ("g_last_accessed", Psql.Timestamp, []);
 ]
 let db_function_standard_fields result = [   
-  ("g_id", DB.Identifier, [DB.Not_null]);
-  ("g_result", DB.Pointer (result, "g_id"), []);
-  ("g_recomputable", DB.Bool, [DB.Not_null]);
-  ("g_recompute_penalty", DB.Real, []);
-  ("g_inserted", DB.Timestamp, []);
-  ("g_started", DB.Timestamp, []);
-  ("g_completed", DB.Timestamp, []);
-  ("g_status", DB.Text, [DB.Not_null]);
+  ("g_id", Psql.Identifier, [Psql.Not_null]);
+  ("g_result", Psql.Pointer (result, "g_id"), []);
+  ("g_recomputable", Psql.Bool, [Psql.Not_null]);
+  ("g_recompute_penalty", Psql.Real, []);
+  ("g_inserted", Psql.Timestamp, []);
+  ("g_started", Psql.Timestamp, []);
+  ("g_completed", Psql.Timestamp, []);
+  ("g_status", Psql.Text, [Psql.Not_null]);
 ]
 
 let to_db dsl =
@@ -272,14 +270,14 @@ let to_db dsl =
           (n,  typ, props)) in
       let fields = db_record_standard_fields @ user_fields
       in
-      [{ DB.name ; DB.fields }]
+      [{ Psql.name ; Psql.fields }]
     | Function (name, args, result) ->
       let arg_fields =
         List.map args (fun (n, t) ->
           let typ, props = dsl_type_to_db t in
           (n,  typ, props)) in
       let fields = (db_function_standard_fields result) @ arg_fields in
-      [ { DB.name; DB.fields } ]
+      [ { Psql.name; Psql.fields } ]
     | Enumeration _ -> []
   ) |> List.flatten
 
@@ -339,17 +337,17 @@ let digraph dsl ?(name="dsl") output_string =
 
 let pgocaml_type_of_field =
   let rec props  = function
-    | [ DB.Array    ; DB.Not_null] -> sprintf "PGOCaml.%s_array"
-    | [ DB.Not_null ] -> sprintf "%s"
+    | [ Psql.Array    ; Psql.Not_null] -> sprintf "PGOCaml.%s_array"
+    | [ Psql.Not_null ] -> sprintf "%s"
     | _ -> sprintf "%s option" in
   function
-    | (_, DB.Timestamp          , p) -> (props p) "PGOCaml.timestamptz"
-    | (_, DB.Identifier         , p) -> (props p) "int32"              
-    | (_, DB.Text               , p) -> (props p) "string"             
-    | (_, DB.Pointer (r, "g_id"), p) -> (props p) "int32"              
-    | (_, DB.Integer            , p) -> (props p) "int32"              
-    | (_, DB.Real               , p) -> (props p) "float"              
-    | (_, DB.Bool               , p) -> (props p) "bool"               
+    | (_, Psql.Timestamp          , p) -> (props p) "PGOCaml.timestamptz"
+    | (_, Psql.Identifier         , p) -> (props p) "int32"              
+    | (_, Psql.Text               , p) -> (props p) "string"             
+    | (_, Psql.Pointer (r, "g_id"), p) -> (props p) "int32"              
+    | (_, Psql.Integer            , p) -> (props p) "int32"              
+    | (_, Psql.Real               , p) -> (props p) "float"              
+    | (_, Psql.Bool               , p) -> (props p) "bool"               
     | _ -> failwith "Can't compile DB type to PGOCaml"
 let rec ocaml_type = function
   | Bool        -> "bool"
