@@ -476,12 +476,12 @@ let ocaml_code dsl output_string =
       deprecate out;
       print out "let _get_value_by_id ~id (dbh:db_handle) =\n";
       print out "  let umm = PGSQL(dbh)\n";
-      print out "    \"SELECT g_id FROM %s WHERE g_id = $id\" in\n" name;
+      print out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
       print out "  pg_bind_bind umm \n\
                     \    (function\n\
-                    \       | [ id ] -> PGOCaml.return { id }\n\
+                    \       | [ one ] -> PGOCaml.return one\n\
                     \       | _ -> ";
-      raise_wrong_db_error out "INSERT did not return a single id";
+      raise_wrong_db_error out "SELECT did not return a single tuple";
       print out ")\n\n";
       (* Delete a value *)
       deprecate out;
