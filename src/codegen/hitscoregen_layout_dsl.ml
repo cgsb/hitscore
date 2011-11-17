@@ -472,6 +472,53 @@ let ocaml_code dsl output_string =
       print out "    \"SELECT g_id FROM %s\" in\n" name;
       print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
 
+
+      (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
+      let args_in_db = 
+        List.map fields (fun (s, t) ->
+          let (t, p) = dsl_type_to_db t in (s, t, p)) in
+      print out "(**/**)\ntype _cache = \n(%s)\n(**/**)\n\n"
+        (List.map (db_record_standard_fields @ args_in_db)
+           ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+      doc out "The [cache] is the info retrieved by the database queries.";
+      print out "type cache = _cache\n\n";
+
+      (* Access a function *)
+      doc out "Cache the contents of the record [t].";
+      print out "let cache_value (t: t) (dbh:db_handle): \
+                  cache PGOCaml.monad PGOCaml.monad =\n";
+      print out "  let id = t.id in\n";
+      print out "  let umm = PGSQL (dbh)\n";
+      print out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
+      print out "  pg_bind_bind umm (function [one] -> pg_return one\n    | _ -> ";
+      raise_wrong_db_error out "INSERT did not return one id";
+      print out ")\n";
+
+      doc out "The fields of the Record, the type is intended to \
+        be used for \"record pattern matching\" \
+        [[let { Mod. a ; b } = Mod.get_fields ... ]]";
+      print out "type fields = {\n";
+      List.iter fields (fun (v,t) -> 
+        print out "  %s: %s;\n" v (ocaml_type t));
+      print out "}\n";
+      print out "let get_fields (cache: cache) =\n";
+      print out "  let (%s, %s) = cache in\n"
+        (List.map (db_record_standard_fields) (fun _ -> "_") |> 
+            String.concat ~sep:", ")
+        (List.map fields (fun (s, t) -> s) |> String.concat ~sep:", ");
+      print out "  {\n";
+      List.iter fields (fun (v, t) ->
+        print out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
+      print out "  }\n\n";
+
+      doc out "Get the last time the record was modified (It depends on \
+          the good-will of the people modifying the database {i manually}).";
+      print out "let last_write_access (cache: cache) =\n";
+      print out "  let (_, ts, %s) = cache in\n"
+        (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
+      print out "  ts\n\n";
+
+
       (* Access a value *)
       deprecate out;
       print out "let _get_value_by_id ~id (dbh:db_handle) =\n";
@@ -483,6 +530,7 @@ let ocaml_code dsl output_string =
                     \       | _ -> ";
       raise_wrong_db_error out "SELECT did not return a single tuple";
       print out ")\n\n";
+
       (* Delete a value *)
       deprecate out;
       print out "let _delete_value_by_id ~id (dbh:db_handle) =\n";
