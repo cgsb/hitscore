@@ -564,8 +564,8 @@ let ocaml_code dsl output_string =
       print out "type 'a cache = 'a _cache\n\n";
 
       (* Access a function *)
-      doc out "Cache the contents of the record [t].";
-      print out "let get_evaluation (t: 'a t) (dbh:db_handle):\
+      doc out "Cache the contents of the evaluation [t].";
+      print out "let cache_evaluation (t: 'a t) (dbh:db_handle):\
                  'a cache PGOCaml.monad PGOCaml.monad =\n";
       print out "  let id = t.id in\n";
       print out "  let umm = PGSQL (dbh)\n";
