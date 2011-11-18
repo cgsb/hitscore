@@ -513,7 +513,8 @@ let ocaml_code dsl output_string =
 
       doc out "Get the last time the record was modified (It depends on \
           the good-will of the people modifying the database {i manually}).";
-      print out "let last_write_access (cache: cache) =\n";
+      print out "let last_write_access (cache: cache): \
+          (CalendarLib.Calendar.t * CalendarLib.Time_Zone.t) option =\n";
       print out "  let (_, ts, %s) = cache in\n"
         (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
       print out "  ts\n\n";
