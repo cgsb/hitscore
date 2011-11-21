@@ -389,6 +389,12 @@ let ocaml_exception name =
     ksprintf out "(raise (%s %S))" name str in
   (define, raise_exn )
 
+let new_tmp_output () =
+  let buf = Buffer.create 42 in
+  let tmp_out s = Buffer.add_string buf s in
+  let print_tmp output_string = output_string (Buffer.contents buf) in
+  (tmp_out, print_tmp)
+
 let ocaml_code dsl output_string =
   let print = ksprintf and out = output_string in
   let doc out fmt = (* Doc to put before functions *)
@@ -408,6 +414,7 @@ let ocaml_code dsl output_string =
                 \     match o with None -> None | Some s -> Some (f s)\n\n\
                 \ let array_map a f = ArrayLabels.map ~f a\n\n\
                 \ let list_map f l = ListLabels.map ~f l\n\n\
+                \ let list_flatten l = List.flatten l\n\n\
                 \ let pg_bind_bind amm f =\n\
                 \   PGOCaml.bind amm (fun am -> PGOCaml.bind am f)\n\n\
                 \ let pg_return t = PGOCaml.return t\n\n\
@@ -729,6 +736,26 @@ let ocaml_code dsl output_string =
       );
       print out "]\n";
     );
+
+  let tmprec, print_tmprec = new_tmp_output () in
+  let tmpfun, print_tmpfun = new_tmp_output () in
+  doc tmprec "Get all record values";
+  doc tmpfun "Get all function evaluations";
+  print tmprec "let get_all_values (dbh: db_handle): values list = list_flatten [\n";
+  print tmpfun "let get_all_evaluations (dbh: db_handle):
+                [ `can_nothing ] evaluations list = list_flatten [\n";
+  List.iter dsl.nodes (function
+    | Record (n, fields) ->
+      print tmprec "list_map (fun x -> `value_%s x) \
+              (Record_%s.get_all dbh);\n" n n
+    | Function (n, args, ret) ->
+      print tmpfun "list_map (fun x -> `evaluation_%s x) \
+              (Function_%s.get_all dbh);\n" n n
+    | _ -> ());
+  print tmprec "]\n\n";
+  print tmpfun "]\n\n";
+  print_tmprec out;
+  print_tmpfun out;
   ()
 
 let testing_inserts dsl amount output_string =
