@@ -57,7 +57,6 @@
           (name           string)
           (sample      sample)
           (protocol  protocol)
-          (contacts     person array)
           (vial_id        int)
           (application    string)
           (stranded       bool)
@@ -67,11 +66,28 @@
           (read_type      read_type)
 )
 
+(record key_value
+        (key string)
+        (value string))
+
+(record input_library
+        (submission_date timestamp)
+        (contacts     person array)
+        (volume_uL real)
+        (concentration_nM real)
+        (user_db key_value array)
+        notable
+)
+
+(function input_library library_packaging
+          (library library))
+
+
 (record lane
-        (libraries library array))
+        (libraries input_library array))
 
 (function lane lane_mix
-          (libraries library array))
+          (libraries input_library array))
 
 (record flowcell
         (vendor_name string)
