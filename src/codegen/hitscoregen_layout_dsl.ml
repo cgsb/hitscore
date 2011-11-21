@@ -691,6 +691,15 @@ let ocaml_code dsl output_string =
           ("failed", "`Failed", "[ `can_nothing ]");
           ("succeeded", "`Succeeded", "[ `can_get_result ]"); ]
         (fun (suffix, polyvar, phamtom) -> 
+          doc out "Safe cast of the capabilities to [ %s ]; returns [None] \
+              if the cast is not allowed." phamtom;
+          print out "let is_%s (cache: 'a cache): %s cache option =\n" 
+            suffix phamtom;
+          print out "  match get_status cache with\n\
+                       | %s, _ -> Some (cache: %s cache)\n\
+                       | _ -> None\n\n" polyvar phamtom;
+
+
           doc out "Get all the Functions whose status is [%s]." polyvar;
           print out "let get_all_%s (dbh:db_handle): %s t list PGOCaml.monad =\n"
             suffix phamtom;
