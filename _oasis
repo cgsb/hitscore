@@ -33,7 +33,6 @@ Library hitscore
            , ../script/Gen_all_checkscripts  ($bindir)
            , ../script/Gen_BclToFastq  ($bindir)
            , ../script/hiseq_fastq_index_histogram.ml  ($bindir)
-           , ../script/make_SampleSheet_all_indices.ml  ($bindir)
 
 Executable hitscore
   Path: src/app
