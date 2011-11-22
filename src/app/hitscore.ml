@@ -269,6 +269,7 @@ make -j8 \
         ~nodes:1 ~ppn:8 ~template:(casava_182_template unaligned) 
         (sprintf "PBSRuntime_%s_M%d" name mm);
     in
+    cmd script ". /share/apps/casava/1.8.2/intel/env.sh\n\n";
     List.iter mismatches conf_b2f;
     let tmp = (Filename.temp_file "bcl2fast_preparation" ".sh") in
     Out_channel.(with_file tmp
