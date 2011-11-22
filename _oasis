@@ -13,6 +13,7 @@ Executable hitscoregen
   MainIs: hitscoregen.ml
   BuildDepends: threads, core
   CompiledObject: best
+  Install: false
 
 
 
@@ -33,6 +34,14 @@ Library hitscore
            , ../script/Gen_BclToFastq  ($bindir)
            , ../script/hiseq_fastq_index_histogram.ml  ($bindir)
            , ../script/make_SampleSheet_all_indices.ml  ($bindir)
+
+Executable hitscore
+  Path: src/app
+  MainIs: hitscore.ml
+  BuildDepends: threads, core, hitscore
+  CompiledObject: best
+  Install: true
+
   
 Document hitscoredoc
   Title:      Documentation of the Hitscore library
