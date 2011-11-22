@@ -252,7 +252,7 @@ make -j8 \
       ksprintf (fun s -> os (sprintf "echo %S ; \n%s\n\
             if [ $? -ne 0 ]; then exit 1 ; fi\n" s s)) fmt in
     let conf_b2f mm =
-      let unaligned = sprintf "%s/%s_m%d/Unaligned" root name mm in
+      let unaligned = sprintf "%s/%s_M%d/Unaligned" root name mm in
       cmd script "mkdir %s/%s_M%d" root name mm;
       cmd script "configureBclToFastq.pl --fastq-cluster-count 800000000 \
                   --input-dir %s \
