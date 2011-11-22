@@ -135,6 +135,44 @@ end
 
 module PBS_script_generator = struct
 
+  let make_script
+      ~root ~email ?queue ?(wall_hours=12) ?(nodes=0) ?(ppn=0) 
+      ?(variables=[]) ?template name =
+    let out_dir_name = sprintf "%s/%s" root name in
+    System.command_exn (sprintf "mkdir -p %s" out_dir_name); 
+    let script, script_contents =
+      let buf = Buffer.create 42 in
+      (Buffer.add_string buf, fun () -> Buffer.contents buf) in
+    let pr = ksprintf in
+    pr script "#!/bin/bash\n\n";
+    pr script "#PBS -m abe\n";
+    pr script "#PBS -M %s\n" email;
+    pr script "#PBS -l %swalltime=%d:00:00\n"
+      (match nodes, ppn with
+      | 0, 0 -> ""
+      | n, m -> sprintf "nodes=%d:ppn=%d," n m)
+      wall_hours;
+    pr script "#PBS -V\n#PBS -o %s/%s.stdout\n#PBS -e %s/%s.stderr\n"
+      out_dir_name name out_dir_name name;
+    pr script "#PBS -N %s\n" name;
+    Option.iter queue (fun s -> pr script "#PBS -q %s\n" s);
+    pr script "export NAME=%s\n" name;
+    pr script "export OUT_DIR=%s/\n\n" out_dir_name;
+    pr script "%s\n\n"
+      (String.concat ~sep:"\n" (List.map ~f:(sprintf "export %s") variables));
+    pr script "echo \"Script $NAME Starts on `date -R`\"\n\n";
+
+    Option.iter template (fun s ->
+      pr script "# User script:\n";
+      In_channel.(with_file s ~f:(fun i -> input_all i |> pr script "%s")));
+
+    pr script "echo \"Script $NAME Ends on `date -R`\"\n\n";
+
+    Out_channel.with_file (sprintf "%s/script_%s.pbs" out_dir_name name) 
+      ~f:(fun o -> fprintf o "%s" (script_contents ()));
+    ()
+    
+
 
   let parse_cmdline usage_prefix next_arg =
     Arg.current := next_arg;
@@ -163,7 +201,7 @@ module PBS_script_generator = struct
           (Option.value ~default:"None"  !queue));
       ( "-var", 
         Arg.String (fun s -> variables := s :: !variables),
-        "<path>\n\tAdd an environment variable.");
+        "<NAME=val>\n\tAdd an environment variable.");
       ( "-template", 
         Arg.String (fun s -> template := Some s),
         "<path>\n\tGive a template file.");
@@ -178,50 +216,10 @@ module PBS_script_generator = struct
     let anon s = names := s :: !names in
     let usage = sprintf "%s [OPTIONS] <scriptnames>" usage_prefix in
     Arg.parse options anon usage;
-
-    List.iter ~f:(fun name ->
-      let out_dir_name = sprintf "%s/%s" !root name in
-      System.command_exn (sprintf "mkdir -p %s" out_dir_name); 
-      let script = 
-        sprintf "#!/bin/bash
-
-#PBS -m abe
-#PBS -M %s
-#PBS -l %swalltime=12:00:00
-#PBS -V
-#PBS -o %s/%s.stdout
-#PBS -e %s/%s.stderr
-#PBS -N %s
-%s
-
-export NAME=%s
-export OUT_DIR=%s/
-%s
-echo \"Script $NAME Starts on `date -R`\"
-
-%s
-
-echo \"Script $NAME Ends on `date -R`\"
-
-" !email
-          (match !nodes, !ppn with 0, 0 -> ""
-          | n, m -> sprintf "nodes=%d:ppn=%d," n m)
-          out_dir_name name
-          out_dir_name name
-          name
-          (match !queue with None -> "" | Some s -> sprintf "#PBS -q %s\n" s)
-          name
-          out_dir_name
-          (String.concat ~sep:"\n" (List.map ~f:(sprintf "export %s") !variables))
-          (Option.map ~f:In_channel.(with_file ~f:input_lines) !template |> 
-              Option.value ~default:[] |> 
-                  List.fold ~f:(fun a b -> sprintf "%s\n%s" a b)
-                            ~init:"# User script:")
-      in
-      Out_channel.with_file (sprintf "%s/script_%s.pbs" out_dir_name name) 
-        ~f:(fun o -> fprintf o "%s" script);
-    ) !names;
-    
+    List.iter !names
+      (fun name ->
+        make_script name ~root:!root ~nodes:!nodes ~ppn:!ppn ?template:!template
+          ~variables:!variables ?queue:!queue ~email:!email);
     ()
 
 
