@@ -1,5 +1,22 @@
 
 open Core.Std
+let (|>) x f = f x
+
+module System = struct
+
+  let command_exn s = 
+    let status = Unix.system s in
+    if not (Unix.Process_status.is_ok status) then
+      ksprintf failwith "System.command_exn: %s" 
+        (Unix.Process_status.to_string_hum status)
+    else
+      ()
+
+  let command_to_string s =
+    Unix.open_process_in s |> In_channel.input_all
+        
+end
+
 
 module All_barcodes_sample_sheet = struct
 
@@ -116,6 +133,103 @@ module All_barcodes_sample_sheet = struct
 
 end
 
+module PBS_script_generator = struct
+
+
+  let parse_cmdline usage_prefix next_arg =
+    Arg.current := next_arg;
+    let email = 
+      ref (sprintf "%s@nyu.edu" 
+             (Option.value ~default:"NOTSET" (Sys.getenv "LOGNAME"))) in
+    let queue = 
+      let groups =
+        System.command_to_string "groups" |> 
+            String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
+      match List.find groups ((=) "cgsb") with
+      | Some _ -> ref (Some "cgsb-s")
+      | None -> ref None in
+    let template = ref None in
+    let variables = ref [] in
+    let root = ref (Option.value ~default:"NOTSET" (Sys.getenv "PWD")) in
+    let nodes = ref 0 in
+    let ppn = ref 0 in
+    let options = [
+      ( "-email", 
+        Arg.Set_string email,
+        sprintf "<address>\n\tSet the email (default, inferred: %s)." !email);
+      ( "-queue", 
+        Arg.String (fun s -> queue := Some s),
+        sprintf "<name>\n\tSet the queue (default, inferred: %s)." 
+          (Option.value ~default:"None"  !queue));
+      ( "-var", 
+        Arg.String (fun s -> variables := s :: !variables),
+        "<path>\n\tAdd an environment variable.");
+      ( "-template", 
+        Arg.String (fun s -> template := Some s),
+        "<path>\n\tGive a template file.");
+      ( "-root", 
+        Arg.Set_string root,
+        sprintf "<path>\n\tSet the root directory (default: %s)." !root);
+      ( "-nodes-ppn", 
+        Arg.Tuple [ Arg.Set_int nodes; Arg.Set_int ppn],
+        "<n> <m>\n\tSet the number of nodes and processes per node.");
+    ] in
+    let names = ref [] in
+    let anon s = names := s :: !names in
+    let usage = sprintf "%s [OPTIONS] <scriptnames>" usage_prefix in
+    Arg.parse options anon usage;
+
+    List.iter ~f:(fun name ->
+      let out_dir_name = sprintf "%s/%s" !root name in
+      System.command_exn (sprintf "mkdir -p %s" out_dir_name); 
+      let script = 
+        sprintf "#!/bin/bash
+
+#PBS -m abe
+#PBS -M %s
+#PBS -l %swalltime=12:00:00
+#PBS -V
+#PBS -o %s/%s.stdout
+#PBS -e %s/%s.stderr
+#PBS -N %s
+%s
+
+export NAME=%s
+export OUT_DIR=%s/
+%s
+echo \"Script $NAME Starts on `date -R`\"
+
+%s
+
+echo \"Script $NAME Ends on `date -R`\"
+
+" !email
+          (match !nodes, !ppn with 0, 0 -> ""
+          | n, m -> sprintf "nodes=%d:ppn=%d," n m)
+          out_dir_name name
+          out_dir_name name
+          name
+          (match !queue with None -> "" | Some s -> sprintf "#PBS -q %s\n" s)
+          name
+          out_dir_name
+          (String.concat ~sep:"\n" (List.map ~f:(sprintf "export %s") !variables))
+          (Option.map ~f:In_channel.(with_file ~f:input_lines) !template |> 
+              Option.value ~default:[] |> 
+                  List.fold ~f:(fun a b -> sprintf "%s\n%s" a b)
+                            ~init:"# User script:")
+      in
+      Out_channel.with_file (sprintf "%s/script_%s.pbs" out_dir_name name) 
+        ~f:(fun o -> fprintf o "%s" script);
+    ) !names;
+    
+    ()
+
+
+
+
+end
+
+
 
 let () =
   let usage = function
@@ -132,9 +246,11 @@ let () =
   | exec :: "help" :: _ ->
     usage `ok;
     printf "  where <cmd> is among:\n";
-    printf "    * all_barcodes_sample_sheet | abc: Make sample sheets on stdout\n";
+    printf "    * all-barcodes-sample-sheet | abc : \
+                  Make sample sheets on stdout\n";
+    printf "    * make-pbs | pbs : generate PBS scripts\n";
     printf "  please try `%s <cmd> -help'\n" exec;
-  | exec :: "all_barcodes_sample_sheet" :: args
+  | exec :: "all-barcodes-sample-sheet" :: args
   | exec :: "abc" :: args ->
     begin match args with
     | "-h" :: _
@@ -149,6 +265,10 @@ let () =
       All_barcodes_sample_sheet.make ~flowcell ~specification print_string
     | _ -> usage `error
     end
+
+  | exec :: pbs :: args when pbs = "pbs" || pbs = "make-pbs" ->
+
+    PBS_script_generator.parse_cmdline (sprintf "%s %s" exec pbs) 1
 
  | _ ->
    usage `error
