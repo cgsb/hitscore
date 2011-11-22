@@ -304,7 +304,7 @@ let () =
       fprintf o "  where N1 means no barcode on lane 1, I2 means all \
         Illumina barcodes on lane 2,\n  B4 means all BIOO barcodes on lane \
         4, etc.\n";)
-    ~run:(function
+    ~run:(fun exec cmd -> function
       | flowcell :: specification ->
         Some (All_barcodes_sample_sheet.make ~flowcell ~specification print_string) 
       | _ -> None);
@@ -312,16 +312,18 @@ let () =
   define_command
     ~names:[ "pbs"; "make-pbs" ]
     ~description:"Generate PBS scripts"
-    ~usage:(fun o exec cmd -> fprintf o "see: %s %s -help\n" exec cmd)
-    ~run:(fun _ ->
-      Some (PBS_script_generator.parse_cmdline "hitscore pbs" 1));
+    ~usage:(fun o exec cmd -> 
+      fprintf o "usage: %s %s [OPTIONS] <script-names>\nsee: %s %s -help\n"
+        exec cmd exec cmd)
+    ~run:(fun exec cmd _ ->
+      Some (PBS_script_generator.parse_cmdline (sprintf "%s %s" exec cmd) 1));
 
   define_command
     ~names:["gb2f"; "gen-bcl-to-fastq"]
     ~usage:(fun o exec bcl2fastq ->
       fprintf o  "usage: %s %s name basecalls-dir sample-sheet\n" exec bcl2fastq)
     ~description:"Prepare a BclToFastq run"
-    ~run:(function
+    ~run:(fun exec cmd -> function
       | [ name; basecalls; sample_sheet ] ->
         Some (Gen_BclToFastq.prepare name basecalls sample_sheet)
       | _ -> None);
@@ -355,7 +357,7 @@ let () =
   | exec :: cmd :: args ->
     begin match find_command cmd with
     | Some (names, description, usage, run) ->
-      begin match run args with
+      begin match run exec cmd args with
       | Some _ -> ()
       | None -> 
         eprintf "Wrong arguments!\n";
