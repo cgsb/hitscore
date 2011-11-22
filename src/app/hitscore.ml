@@ -278,59 +278,93 @@ make -j8 \
 
 end
 
+let commands = ref []
+
+let define_command ~names ~description ~usage ~run =
+  commands := (names, description, usage, run) :: !commands
+
+let short_help indent =
+  String.concat ~sep:"\n"
+    (List.map !commands
+       (fun (names, desc, _, _) ->
+         sprintf "%s * %s : %s" indent (String.concat ~sep:"|" names) desc))
+
+let find_command cmd = 
+  List.find !commands (fun (names, _, _, _) -> List.mem cmd ~set:names)
 
 let () =
-  let usage = function
+  define_command 
+    ~names:["all-barcodes-sample-sheet"; "abc"]
+    ~description:"Make a sample sheet with all barcodes"
+    ~usage:(fun o exec cmd ->
+      fprintf o "usage: %s %s <flowcell id>  <list lanes/barcode vendors>\n" 
+        exec cmd;
+      fprintf o "  example: %s %s D03NAKCXX N1 I2 I3 B4 B5 I6 I7 N8\n" exec cmd;
+      fprintf o "  where N1 means no barcode on lane 1, I2 means all \
+        Illumina barcodes on lane 2,\n  B4 means all BIOO barcodes on lane \
+        4, etc.\n";)
+    ~run:(function
+      | flowcell :: specification ->
+        Some (All_barcodes_sample_sheet.make ~flowcell ~specification print_string) 
+      | _ -> None);
+  
+  define_command
+    ~names:[ "pbs"; "make-pbs" ]
+    ~description:"Generate PBS scripts"
+    ~usage:(fun o exec cmd -> fprintf o "see: %s %s -help\n" exec cmd)
+    ~run:(fun _ ->
+      Some (PBS_script_generator.parse_cmdline "hitscore pbs" 1));
+
+  define_command
+    ~names:["gb2f"; "gen-bcl-to-fastq"]
+    ~usage:(fun o exec bcl2fastq ->
+      fprintf o  "usage: %s %s name basecalls-dir sample-sheet\n" exec bcl2fastq)
+    ~description:"Prepare a BclToFastq run"
+    ~run:(function
+      | [ name; basecalls; sample_sheet ] ->
+        Some (Gen_BclToFastq.prepare name basecalls sample_sheet)
+      | _ -> None);
+
+  let global_usage = function
     | `error -> 
-      eprintf "ERROR: usage: %s <cmd> [-help | OPTIONS | ARGS]\n" Sys.argv.(0);
+      eprintf "ERROR: usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0);
       eprintf "       try `%s help'\n" Sys.argv.(0);
     | `ok ->
-      printf  "usage: %s <cmd> [-help | OPTIONS | ARGS]\n" Sys.argv.(0)
+      printf  "usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0)
   in
   match Array.to_list Sys.argv with
-  | exec :: "-h" :: _
-  | exec :: "-help" :: _
-  | exec :: "--help" :: _
-  | exec :: "help" :: _ ->
-    usage `ok;
-    printf "  where <cmd> is among:\n";
-    printf "    * all-barcodes-sample-sheet | abc : \
-                  Make sample sheets on stdout\n";
-    printf "    * make-pbs | pbs : generate PBS scripts\n";
-    printf "    * gb2f | gen-bcl-to-fastq : prepare a BclToFastq run\n";
-    printf "  please try `%s <cmd> -help'\n" exec;
+  | exec :: "-h" :: args
+  | exec :: "-help" :: args
+  | exec :: "--help" :: args
+  | exec :: "help" :: args ->
+    if args = [] then (
+      global_usage `ok;
+      printf "  where <cmd> is among:\n";
+      printf "%s\n" (short_help "    ");
+      printf "  please try `%s -help <cmd>\n" exec;
+    ) else (
+      List.iter args (fun cmd ->
+        match find_command cmd with
+        | Some (names, description, usage, run) ->
+          usage stdout exec cmd
+        | None ->
+          printf "Unknown Command: %S !\n" cmd)
+    )
 
-  | exec :: "all-barcodes-sample-sheet" :: args
-  | exec :: "abc" :: args ->
-    begin match args with
-    | "-h" :: _
-    | "-help" :: _
-    | "--help" :: _ ->
-      printf "usage: %s abc <flowcell id>  <list lanes/barcode vendors>\n" exec;
-      printf "  example: %s abc D03NAKCXX N1 I2 I3 B4 B5 I6 I7 N8\n" exec;
-      printf "  where N1 means no barcode on lane 1, I2 means all \
-        Illumina barcodes on lane 2,\n  B4 means all BIOO barcodes on lane \
-        4, etc.\n";
-    | flowcell :: specification ->
-      All_barcodes_sample_sheet.make ~flowcell ~specification print_string
-    | _ -> usage `error
-    end
-
-  | exec :: pbs :: args when pbs = "pbs" || pbs = "make-pbs" ->
-    PBS_script_generator.parse_cmdline (sprintf "%s %s" exec pbs) 1
-
-  | exec :: bcl2fastq :: args when
-      bcl2fastq = "gb2f" || bcl2fastq = "gen-bcl-to-fastq" ->
-    begin match args with
-    | "-h" :: _
-    | "-help" :: _
-    | "--help" :: _ ->
-      printf "usage: %s %s name basecalls-dir sample-sheet\n" exec bcl2fastq
-    | [ name; basecalls; sample_sheet ] ->
-      Gen_BclToFastq.prepare name basecalls sample_sheet
-    | _ -> usage `error
+  | exec :: cmd :: args ->
+    begin match find_command cmd with
+    | Some (names, description, usage, run) ->
+      begin match run args with
+      | Some _ -> ()
+      | None -> 
+        eprintf "Wrong arguments!\n";
+        usage stderr exec cmd;
+      end
+    | _ -> 
+      eprintf "Unknown Command: %S !\n" cmd; 
+      global_usage `error
     end
 
   | _ ->
-    usage `error
+    global_usage `error
 
