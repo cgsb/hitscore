@@ -163,8 +163,7 @@ module PBS_script_generator = struct
     pr script "echo \"Script $NAME Starts on `date -R`\"\n\n";
 
     Option.iter template (fun s ->
-      pr script "# User script:\n";
-      In_channel.(with_file s ~f:(fun i -> input_all i |> pr script "%s")));
+      pr script "# User script:\n%s" s;);
 
     pr script "echo \"Script $NAME Ends on `date -R`\"\n\n";
 
@@ -216,9 +215,11 @@ module PBS_script_generator = struct
     let anon s = names := s :: !names in
     let usage = sprintf "%s [OPTIONS] <scriptnames>" usage_prefix in
     Arg.parse options anon usage;
+    let template =
+      Option.map !template (fun f -> In_channel.(with_file f ~f:input_all)) in
     List.iter !names
       (fun name ->
-        make_script name ~root:!root ~nodes:!nodes ~ppn:!ppn ?template:!template
+        make_script name ~root:!root ~nodes:!nodes ~ppn:!ppn ?template
           ~variables:!variables ?queue:!queue ~email:!email);
     ()
 
@@ -226,7 +227,6 @@ module PBS_script_generator = struct
 
 
 end
-
 
 
 let () =
