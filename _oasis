@@ -31,7 +31,6 @@ Library hitscore
            , Hitscore_person
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)
-           , ../script/Gen_BclToFastq  ($bindir)
            , ../script/hiseq_fastq_index_histogram.ml  ($bindir)
 
 Executable hitscore
