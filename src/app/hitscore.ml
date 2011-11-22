@@ -229,13 +229,63 @@ module PBS_script_generator = struct
 end
 
 
+module Gen_BclToFastq = struct
+
+
+  let casava_182_template unaligned = 
+    sprintf " 
+. /share/apps/casava/1.8.2/intel/env.sh
+
+cd %s
+
+make -j8 \
+  1> $OUT_DIR/make.stdout \
+  2> $OUT_DIR/make.stderr
+" unaligned
+
+  let prepare ?(mismatches=[0;1]) name basecalls sample_sheet =
+    let root = (Option.value ~default:"NOTSET" (Sys.getenv "PWD")) in
+    let script, script_contents =
+      let buf = Buffer.create 42 in
+      (Buffer.add_string buf, fun () -> Buffer.contents buf) in
+    let cmd os fmt = 
+      ksprintf (fun s -> os (sprintf "echo %S ; \n%s\n\
+            if [ $? -ne 0 ]; then exit 1 ; fi\n" s s)) fmt in
+    let conf_b2f mm =
+      let unaligned = sprintf "%s/%s_m%d/Unaligned" root name mm in
+      cmd script "mkdir %s/%s_M%d" root name mm;
+      cmd script "configureBclToFastq.pl --fastq-cluster-count 800000000 \
+                  --input-dir %s \
+                  --output-dir %s \
+                  --sample-sheet %s \
+                  --mismatches %d"
+        basecalls unaligned sample_sheet mm;
+      PBS_script_generator.make_script  
+        ~root
+        ~email:(sprintf "%s@nyu.edu" 
+                  (Option.value ~default:"NOTSET" (Sys.getenv "LOGNAME"))) 
+        ~queue:"cgsb-s"
+        ~wall_hours:12
+        ~nodes:1 ~ppn:8 ~template:(casava_182_template unaligned) 
+        (sprintf "PBSRuntime_%s_M%d" name mm);
+    in
+    List.iter mismatches conf_b2f;
+    let tmp = (Filename.temp_file "bcl2fast_preparation" ".sh") in
+    Out_channel.(with_file tmp
+                   ~f:(fun o -> output_string o (script_contents ())));
+    System.command_exn (sprintf "sh %s" tmp);
+    ()
+
+end
+
+
 let () =
   let usage = function
     | `error -> 
-      eprintf "ERROR: usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0);
+      eprintf "ERROR: usage: %s <cmd> [-help | OPTIONS | ARGS]\n" Sys.argv.(0);
       eprintf "       try `%s help'\n" Sys.argv.(0);
     | `ok ->
-      printf  "usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0)
+      printf  "usage: %s <cmd> [-help | OPTIONS | ARGS]\n" Sys.argv.(0)
   in
   match Array.to_list Sys.argv with
   | exec :: "-h" :: _
@@ -247,7 +297,9 @@ let () =
     printf "    * all-barcodes-sample-sheet | abc : \
                   Make sample sheets on stdout\n";
     printf "    * make-pbs | pbs : generate PBS scripts\n";
+    printf "    * gb2f | gen-bcl-to-fastq : prepare a BclToFastq run\n";
     printf "  please try `%s <cmd> -help'\n" exec;
+
   | exec :: "all-barcodes-sample-sheet" :: args
   | exec :: "abc" :: args ->
     begin match args with
@@ -265,9 +317,20 @@ let () =
     end
 
   | exec :: pbs :: args when pbs = "pbs" || pbs = "make-pbs" ->
-
     PBS_script_generator.parse_cmdline (sprintf "%s %s" exec pbs) 1
 
- | _ ->
-   usage `error
+  | exec :: bcl2fastq :: args when
+      bcl2fastq = "gb2f" || bcl2fastq = "gen-bcl-to-fastq" ->
+    begin match args with
+    | "-h" :: _
+    | "-help" :: _
+    | "--help" :: _ ->
+      printf "usage: %s %s name basecalls-dir sample-sheet\n" exec bcl2fastq
+    | [ name; basecalls; sample_sheet ] ->
+      Gen_BclToFastq.prepare name basecalls sample_sheet
+    | _ -> usage `error
+    end
+
+  | _ ->
+    usage `error
 
