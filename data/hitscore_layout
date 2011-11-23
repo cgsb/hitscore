@@ -48,12 +48,6 @@
 (enumeration read_type read_PE_50x50 read_PE_100x100 read_SE_50 read_SE_100)
 
 (record library
-        (bioo_barcodes bioo_barcode array)
-        (truseq_barcodes truseq_barcode array)
-        notable
-)
-
-(function library library_preparation
           (name           string)
           (sample      sample)
           (protocol  protocol)
@@ -64,6 +58,9 @@
           (truseq_control bool)
           (rnaseq_control string)
           (read_type      read_type)
+        (bioo_barcodes bioo_barcode array)
+        (truseq_barcodes truseq_barcode array)
+        notable
 )
 
 (record key_value
@@ -71,6 +68,7 @@
         (value string))
 
 (record input_library
+        (library library)
         (submission_date timestamp)
         (contacts     person array)
         (volume_uL real)
@@ -79,58 +77,39 @@
         notable
 )
 
-(function input_library library_packaging
-          (library library))
-
-
 (record lane
         (libraries input_library array))
-
-(function lane lane_mix
-          (libraries input_library array))
 
 (record flowcell
         (vendor_name string)
         (lanes lane array))
 
-(function flowcell flowcell_preparation
-          (vendor_name string)
-          (lanes lane array))
+(record qpcr
+        (library library)
+        (concentration real)
+        (volume real))
 
-(record qpcr_result 
-       (concentration real)
-       (volume real))
-
-(function qpcr_result qpcr
-          (library library))
-
-(record bioanalyzer_result
+(record bioanalyzer
+        (library library)
+        (well_number int)
         is_directory
         (pdf_name string option)
         (xad_name string option)
         (mean_fragment_size real))
-(record agarose_gel_result
+(record agarose_gel
+        (library library)
+        (well_number int)
         is_directory
         (pdf_name string option)
         (mean_fragment_size real))
 
-(function bioanalyzer_result bioanalyzer
-          (library library)
-          (well_number int))
-
-(function agarose_gel_result agarose_gel
-          (library library)
-          (well_number int))
-
 (record hiseq_raw
+        (flowcell_name string)
+        (with_intensities bool)
+        (host string)
         (hiseq_dir_name string))
 
-(function hiseq_raw hiseq_run
-          (flowcell flowcell)
-          (keep_intensities bool)
-          )
-
-(record sample_sheet is_file)
+(record sample_sheet is_file notable)
         
 (enumeration sample_sheet_kind all_barcodes specific_barcodes)
 
@@ -147,11 +126,26 @@
           (version string)
           (sample_sheet sample_sheet))
 
+(function hiseq_raw transfer_hisqeq_raw
+          (hiseq_raw hiseq_raw)
+          (to string))
 
-;; (function file fastqs_dir
-;;           (unaligned file)
-;;           (library library)
-;;           )
+(function hiseq_raw delete_intensities
+          (hiseq_raw hiseq_raw))
+
+(record hiseq_checksum
+        (file string))
+(function hiseq_checksum dircmp_raw
+        (hiseq_raw hiseq_raw))
+
+
+(record client_fastqs_dir
+        (dir__dirfile string))
+
+(function client_fastqs_dir prepare_delivery
+          (unaligned bcl_to_fastq_unaligned)
+          (info flowcell))
+
 ;;  
 ;; (function file library_fastx_stats
 ;;           (library_fastqs file)
