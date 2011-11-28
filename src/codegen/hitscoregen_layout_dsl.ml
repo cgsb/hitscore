@@ -58,10 +58,10 @@ let rec string_of_dsl_type = function
   | String      -> "String"    
   | Option o    -> sprintf "%s option" (string_of_dsl_type o)
   | Array a     -> sprintf "%s array" (string_of_dsl_type a)
-  | Record_name       n -> n |> sprintf "%s:rec" 
-  | Enumeration_name  n -> n |> sprintf "%s:enum" 
-  | Function_name     n -> n |> sprintf "%s:fun" 
-  | Volume_name     n -> n |> sprintf "%s:fun" 
+  | Record_name       n -> n |> sprintf "%s" 
+  | Enumeration_name  n -> n |> sprintf "%s" 
+  | Function_name     n -> n |> sprintf "%s" 
+  | Volume_name     n -> n |> sprintf "%s" 
 
 let rec type_is_pointer = function
   | Bool         -> `no
