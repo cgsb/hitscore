@@ -113,7 +113,7 @@ let sanitize s =
   if String.is_prefix s ~prefix:"g_" then
     sprintf "%S should not start with \"g_\"" s |> failwith;
   begin match s with
-  | "type" | "val" | "let" | "in" | "with" | "match" | "null" ->
+  | "to" | "type" | "val" | "let" | "in" | "with" | "match" | "null" ->
     sprintf "%S is not a good name …" s |> failwith
   | _ -> ()
   end
