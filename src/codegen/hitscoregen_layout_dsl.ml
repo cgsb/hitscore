@@ -427,6 +427,16 @@ let convert_pgocaml_type = function
     sprintf "{ File_system.id = %s } " n
   | (n, _) -> n
 
+
+let raw out fmt = ksprintf out ("" ^^ fmt)
+let doc out fmt = (* Doc to put before values/types *)
+  ksprintf out ("\n(** " ^^ fmt ^^ " *)\n")
+let deprecate out fmt =
+  doc out (" @deprecated This is left there for emergency purposes only." ^^ fmt)
+
+
+
+
 let ocaml_exception name =
   let define out = ksprintf out "exception %s of string\n" name in
   let raise_exn out str =
@@ -440,39 +450,327 @@ let new_tmp_output () =
   (tmp_out, print_tmp)
 
 
-let ocaml_enumeration_module  ~doc ~out ~deprecate name fields =
-  ksprintf out "module Enumeration_%s = struct\n" name;
-  ksprintf out "type t = [%s]\n\n"
+let ocaml_enumeration_module ~out name fields =
+  raw out "module Enumeration_%s = struct\n" name;
+  raw out "type t = [%s]\n\n"
     (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
-  ksprintf out "let to_string : t -> string = function\n| %s\n" 
+  raw out "let to_string : t -> string = function\n| %s\n" 
     (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
         String.concat ~sep:"\n| ");
-  ksprintf out "\n";
+  raw out "\n";
   let def_oserr, raise_oserr = ocaml_exception "Of_string_error" in
   def_oserr out;
-  ksprintf out "let of_string_exn: string -> t = function\n| %s\n" 
+  raw out "let of_string_exn: string -> t = function\n| %s\n" 
     (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
         String.concat ~sep:"\n| ");
-  ksprintf out "| s -> ";
+  raw out "| s -> ";
   raise_oserr out "cannot recognize enumeration element";
-  ksprintf out "\n\nend (* %s *)\n\n" name
+  raw out "\n\nend (* %s *)\n\n" name
 
+let ocaml_record_module ~out name fields = 
+  raw out "module Record_%s = struct\n" name;
+  doc out "Type [t] should be used like a private type, access to \
+          the [id] field is there for hackability/emergency purposes.";
+  raw out "type t = { id: int32 }\n";
+
+  let def_wrong_db_error, raise_wrong_db_error = 
+    ocaml_exception "Wrong_DB_return" in
+  def_wrong_db_error out;
+
+      (* Function to add a new value: *)
+  doc out "Create a new value of type [%s] in the database, and \
+              return a handle to it." name;
+  raw out "let add_value\n";
+  List.iter fields (fun (n, t) ->
+    let kind_of_arg = 
+      match type_is_option t with `yes -> "?" | `no -> "~" in
+    raw out "    %s(%s:%s)\n" kind_of_arg n (ocaml_type t);
+  );
+  let intos =
+    "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
+  let values =
+    let prefix (n, t) =
+      (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
+    "now()" :: List.map fields prefix |> String.concat ~sep:", " in
+  raw out "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n";
+  List.iter fields (fun tv -> let_in_typed_value tv |> raw out "%s");
+  raw out "  let id_list_monad_monad = PGSQL (dbh)\n";
+  raw out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
+                   \     RETURNING g_id \" in\n" name intos values;
+  raw out "  pg_bind_bind id_list_monad_monad \n\
+                    \    (function\n\
+                    \       | [ id ] -> PGOCaml.return { id }\n\
+                    \       | _ -> ";
+  raise_wrong_db_error out "INSERT did not return a single id";
+  raw out ")\n\n";
+
+  doc out "Get all the values of type [%s]." name;
+  raw out "let get_all (dbh: db_handle): t list PGOCaml.monad = \n";
+  raw out "  let umm = PGSQL(dbh)\n";
+  raw out "    \"SELECT g_id FROM %s\" in\n" name;
+  raw out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
+
+
+      (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
+  let args_in_db = 
+    List.map fields (fun (s, t) ->
+      let (t, p) = dsl_type_to_db t in (s, t, p)) in
+  raw out "(**/**)\ntype _cache = \n(%s)\n(**/**)\n\n"
+    (List.map (db_record_standard_fields @ args_in_db)
+       ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+  doc out "The [cache] is the info retrieved by the database queries.";
+  raw out "type cache = _cache\n\n";
+
+      (* Access a function *)
+  doc out "Cache the contents of the record [t].";
+  raw out "let cache_value (t: t) (dbh:db_handle): \
+                  cache PGOCaml.monad PGOCaml.monad =\n";
+  raw out "  let id = t.id in\n";
+  raw out "  let umm = PGSQL (dbh)\n";
+  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
+  raw out "  pg_bind_bind umm (function [one] -> pg_return one\n    | _ -> ";
+  raise_wrong_db_error out "INSERT did not return one id";
+  raw out ")\n";
+
+  doc out "The fields of the Record, the type is intended to \
+        be used for \"record pattern matching\" \
+        [[let { Mod. a ; b } = Mod.get_fields ... ]]";
+  raw out "type fields = {\n";
+  List.iter fields (fun (v,t) -> 
+    raw out "  %s: %s;\n" v (ocaml_type t));
+  raw out "}\n";
+  raw out "let get_fields (cache: cache) =\n";
+  raw out "  let (%s, %s) = cache in\n"
+    (List.map (db_record_standard_fields) (fun _ -> "_") |> 
+        String.concat ~sep:", ")
+    (List.map fields (fun (s, t) -> s) |> String.concat ~sep:", ");
+  raw out "  {\n";
+  List.iter fields (fun (v, t) ->
+    raw out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
+  raw out "  }\n\n";
+
+  doc out "Get the last time the record was modified (It depends on \
+          the good-will of the people modifying the database {i manually}).";
+  raw out "let last_write_access (cache: cache): \
+          (CalendarLib.Calendar.t * CalendarLib.Time_Zone.t) option =\n";
+  raw out "  let (_, ts, %s) = cache in\n"
+    (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
+  raw out "  ts\n\n";
+
+
+      (* Access a value *)
+  deprecate out "Finds a value given its internal identifier ([g_id]).";
+  raw out "let _get_value_by_id ~id (dbh:db_handle) =\n";
+  raw out "  let umm = PGSQL(dbh)\n";
+  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
+  raw out "  pg_bind_bind umm \n\
+                    \    (function\n\
+                    \       | [ one ] -> PGOCaml.return one\n\
+                    \       | _ -> ";
+  raise_wrong_db_error out "SELECT did not return a single tuple";
+  raw out ")\n\n";
+
+      (* Delete a value *)
+  deprecate out "Deletes a values with its internal id.";
+  raw out "let _delete_value_by_id ~id (dbh:db_handle) =\n";
+  raw out "  PGSQL (dbh)\n";
+  raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
+  raw out "end (* %s *)\n\n" name;
+  ()
+
+let ocaml_function_module ~out name args result =
+  raw out "module Function_%s = struct\n" name;
+  raw out "type 'a t = (* private *) { id: int32 }\n";
+
+  let def_wrong_db_error, raise_wrong_db_error = 
+    ocaml_exception "Wrong_DB_return" in
+  def_wrong_db_error out;
+
+      (* Function to insert a new function evaluation: *)
+  raw out "let add_evaluation\n";
+  List.iter args (fun (n, t) -> raw out "    ~%s\n" n);
+  raw out "    ?(recomputable=false)\n";
+  raw out "    ?(recompute_penalty=0.)\n";
+  raw out "    (dbh:db_handle) : \n\
+            \    [ `can_start | `can_complete ] t PGOCaml.monad PGOCaml.monad =\n";
+  List.iter args (fun tv -> let_in_typed_value tv |> raw out "%s");
+  raw out "  let id_list_monad_monad = PGSQL (dbh)\n";
+  let intos =
+    "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
+      (List.map args fst) |> String.concat ~sep:", " in
+  let values =
+    "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'Inserted'" ::
+      (List.map args (fun (n, t) -> "$" ^ n)) |> String.concat ~sep:", " in
+  raw out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
+                   \     RETURNING g_id \" in\n" name intos values;
+  raw out "  pg_bind_bind id_list_monad_monad \n\
+                    \    (function\n\
+                    \       | [ id ] -> PGOCaml.return { id }\n\
+                    \       | _ -> ";
+  raise_wrong_db_error out "INSERT did not return one id";
+  raw out ")\n\n";
+  
+      (* Function to set the state of a function evaluation to 'STARTED': *)
+  raw out "let set_started (t : [> `can_start] t) (dbh:db_handle) =\n";
+  raw out "  let id = t.id in\n";
+  raw out "  let umm = PGSQL (dbh)\n";
+  raw out "    \"UPDATE %s SET g_status = 'Started', g_started = now ()\n\
+                \    WHERE g_id = $id\" in\n\
+                \    pg_bind_bind umm (fun () -> \
+                pg_return ({ id } : [ `can_complete] t)) 
+                \n\n\n" name;
+  raw out "let set_succeeded (t : [> `can_complete] t) \n\
+                   \     ~result (dbh:db_handle) =\n";
+  let_in_typed_value ("result", Record_name result) |> raw out "%s";
+  raw out "  let id = t.id in\n";
+  raw out "  let umm = PGSQL (dbh)\n";
+  raw out "    \"UPDATE %s SET g_status = 'Succeeded', \
+                g_completed = now (), g_result = $result\n \
+                \    WHERE g_id = $id\" in\n\
+                \    pg_bind_bind umm (fun () -> \
+                pg_return ({ id } : [ `can_get_result] t)) 
+                \n\n\n" name;
+  raw out "let set_failed \
+                   (t : [ `can_start | `can_complete] t) (dbh:db_handle) =\n";
+  raw out "  let id = t.id in\n";
+  raw out "  let umm = PGSQL (dbh)\n";
+  raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = now ()\n\
+                \    WHERE g_id = $id\" in\n\
+                \    pg_bind_bind umm (fun () -> \
+                pg_return ({ id } : [ `can_nothing ] t)) 
+                \n\n\n" name;
+
+      (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
+  let args_in_db = 
+    List.map args (fun (s, t) ->
+      let (t, p) = dsl_type_to_db t in (s, t, p)) in
+  raw out "(**/**)\ntype 'a _cache = \n(%s)\n(**/**)\n\n"
+    (List.map (db_function_standard_fields result @ args_in_db)
+       ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+  doc out "The [cache] is the info retrieved by the database queries; \
+               it inherits the capabilities of the handle (type [t]).";
+  raw out "type 'a cache = 'a _cache\n\n";
+
+      (* Access a function *)
+  doc out "Cache the contents of the evaluation [t].";
+  raw out "let cache_evaluation (t: 'a t) (dbh:db_handle):\
+                 'a cache PGOCaml.monad PGOCaml.monad =\n";
+  raw out "  let id = t.id in\n";
+  raw out "  let umm = PGSQL (dbh)\n";
+  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
+  raw out "  pg_bind_bind umm (function [one] -> pg_return one\n    | _ -> ";
+  raise_wrong_db_error out "INSERT did not return one id";
+  raw out ")\n";
+
+  doc out "The arguments of the Function, the type is intended to \
+        be used for \"record pattern matching\" \
+        [[let { Mod. a ; b } = Mod.get_arguments ... ]]";
+  raw out "type arguments = {\n";
+  List.iter args (fun (v,t) -> 
+    raw out "  %s: %s;\n" v (ocaml_type t));
+  raw out "}\n";
+  raw out "let get_arguments (cache : 'a cache) =\n";
+  raw out "  let (%s, %s) = cache in\n"
+    (List.map (db_function_standard_fields result) (fun _ -> "_") |> 
+        String.concat ~sep:", ")
+    (List.map args (fun (s, t) -> s) |> String.concat ~sep:", ");
+  raw out "  {\n";
+  List.iter args (fun (v, t) ->
+    raw out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
+  raw out "  }\n\n";
+
+  doc out "Get the current status of the Function and the last \
+          time the status was updated.";
+  raw out "let get_status (cache: 'a cache) =\n";
+  raw out "  let (%s) = cache in\n"
+    (List.map (db_function_standard_fields result @ args_in_db)
+       (function 
+         | ("g_status", _, _) -> "status_str" 
+         | ("g_inserted", _, _) -> "inserted" 
+         | ("g_started", _, _) -> "started" 
+         | ("g_completed", _, _) -> "completed" 
+         | (n, _, _) -> "_" ) |>
+           String.concat ~sep:", ");
+  raw out "  let status =\n\
+                \    Enumeration_process_status.of_string_exn \
+                 status_str in\n";
+  raw out "  let opt = function \n\
+                \    | Some (d, tz) -> (d, tz)\n\
+                \    | None -> failwith \"get_status(%s) can't find timestamp\"
+                \  in\n" name;
+  raw out "  (match status with\n\
+                \  | `Inserted ->   (status, opt inserted)\n\
+                \  | `Started ->    (status, opt started)\n\
+                \  | `Failed ->     (status, opt completed)\n\
+                \  | `Succeeded ->  (status, opt completed)\
+                )\n\n";
+
+  doc out "Get the result of the function if is available.";
+  raw out "let get_result (cache: [> `can_get_result] cache) =\n";
+  raw out "  let (%s) = cache in"
+    (List.map (db_function_standard_fields result @ args_in_db)
+       (function ("g_result", _, _) -> "res_pointer" | (n, _, _) -> "_" ) |>
+           String.concat ~sep:", ");
+  raw out "  { Record_%s.id = \n\
+                \    match res_pointer with Some id -> id\n\
+                \    | None -> \
+          failwith \"get_result(%s) result (%s) is not set\" }\n\n" 
+    result name result;
+
+  List.iter 
+    [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");
+      ("started", "`Started", "[ `can_fail | `can_complete]");
+      ("failed", "`Failed", "[ `can_nothing ]");
+      ("succeeded", "`Succeeded", "[ `can_get_result ]"); ]
+    (fun (suffix, polyvar, phamtom) -> 
+      doc out "Safe cast of the capabilities to [ %s ]; returns [None] \
+              if the cast is not allowed." phamtom;
+      raw out "let is_%s (cache: 'a cache): %s cache option =\n" 
+        suffix phamtom;
+      raw out "  match get_status cache with\n\
+                       | %s, _ -> Some (cache: %s cache)\n\
+                       | _ -> None\n\n" polyvar phamtom;
+
+
+      doc out "Get all the Functions whose status is [%s]." polyvar;
+      raw out "let get_all_%s (dbh:db_handle): %s t list PGOCaml.monad =\n"
+        suffix phamtom;
+      raw out "  let status_str = \n\
+                    \    Enumeration_process_status.to_string %s in\n" polyvar;
+      raw out "  let umm = PGSQL(dbh)\n";
+      raw out "    \"SELECT g_id FROM %s WHERE g_status = $status_str\" in\n"
+        name;
+      raw out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n");
+
+  doc out "Get all the [%s] functions." name;
+  raw out "let get_all (dbh: db_handle): \
+                  [ `can_nothing ] t list PGOCaml.monad = \n";
+  raw out "  let umm = PGSQL(dbh)\n";
+  raw out "    \"SELECT g_id FROM %s\" in\n" name;
+  raw out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
+
+      (* Delete a function *)
+  deprecate out "Deletes a function using its internal identifier.";
+  raw out "let _delete_evaluation_by_id ~id (dbh:db_handle) =\n";
+  raw out "  PGSQL (dbh)\n";
+  raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
+      (* raw out "(\**/**\)\n"; *)
+
+
+  raw out "end (* %s *)\n\n" name;
+  ()
 
 let ocaml_code dsl output_string =
-  let print = ksprintf and out = output_string in
-  let doc out fmt = (* Doc to put before functions *)
-    ksprintf out ("\n(** " ^^ fmt ^^ " *)\n") in
-  let deprecate out =
-    doc out " @deprecated This is left there for emergency purposes only." in
+  let out = output_string in
   doc out "Autogenerated module.";
   doc out "PG'OCaml's connection handle.";
-  print out "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
+  raw out "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
   doc out "Access rights on [Function_*.{t,cache}].";
-  print out "type function_capabilities= [\n\
+  raw out "type function_capabilities= [\n\
                 \  | `can_nothing\n  | `can_start\n  | `can_complete\n\
                 | `can_get_result\n]\n";
 
-  print out "(**/**)\n\
+  raw out "(**/**)\n\
                 \ let option_map o f =\n\
                 \     match o with None -> None | Some s -> Some (f s)\n\n\
                 \ let array_map a f = ArrayLabels.map ~f a\n\n\
@@ -482,304 +780,18 @@ let ocaml_code dsl output_string =
                 \   PGOCaml.bind amm (fun am -> PGOCaml.bind am f)\n\n\
                 \ let pg_return t = PGOCaml.return t\n\n\
                 (**/**)\n";
-  print out "module File_system = struct type volume = { id : int32} end\n";
-  ocaml_enumeration_module ~doc ~out ~deprecate "volume_kind" 
+  raw out "module File_system = struct type volume = { id : int32} end\n";
+  ocaml_enumeration_module ~out "volume_kind" 
     ("g_trash" :: (List.filter_map dsl.nodes 
                      (function | Volume (n, _) -> Some n | _ -> None)));
-  ocaml_enumeration_module ~doc ~out ~deprecate "file_type" ["blob"; "directory"];
+  ocaml_enumeration_module ~out "file_type" ["blob"; "directory"];
   List.iter dsl.nodes (function
     | Enumeration (name, fields) ->
-      ocaml_enumeration_module ~doc ~out ~deprecate name fields
+      ocaml_enumeration_module ~out name fields
     | Record (name, fields) ->
-      print out "module Record_%s = struct\n" name;
-      doc out "Type [t] should be used like a private type, access to \
-          the [id] field is there for hackability/emergency purposes.";
-      print out "type t = { id: int32 }\n";
-
-      let def_wrong_db_error, raise_wrong_db_error = 
-        ocaml_exception "Wrong_DB_return" in
-      def_wrong_db_error out;
-
-      (* Function to add a new value: *)
-      doc out "Create a new value of type [%s] in the database, and \
-              return a handle to it." name;
-      print out "let add_value\n";
-      List.iter fields (fun (n, t) ->
-        let kind_of_arg = 
-          match type_is_option t with `yes -> "?" | `no -> "~" in
-        print out "    %s(%s:%s)\n" kind_of_arg n (ocaml_type t);
-      );
-      let intos =
-        "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
-      let values =
-        let prefix (n, t) =
-          (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
-        "now()" :: List.map fields prefix |> String.concat ~sep:", " in
-      print out "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n";
-      List.iter fields (fun tv -> let_in_typed_value tv |> print out "%s");
-      print out "  let id_list_monad_monad = PGSQL (dbh)\n";
-      print out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
-                   \     RETURNING g_id \" in\n" name intos values;
-      print out "  pg_bind_bind id_list_monad_monad \n\
-                    \    (function\n\
-                    \       | [ id ] -> PGOCaml.return { id }\n\
-                    \       | _ -> ";
-      raise_wrong_db_error out "INSERT did not return a single id";
-      print out ")\n\n";
-
-      doc out "Get all the values of type [%s]." name;
-      print out "let get_all (dbh: db_handle): t list PGOCaml.monad = \n";
-      print out "  let umm = PGSQL(dbh)\n";
-      print out "    \"SELECT g_id FROM %s\" in\n" name;
-      print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
-
-
-      (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
-      let args_in_db = 
-        List.map fields (fun (s, t) ->
-          let (t, p) = dsl_type_to_db t in (s, t, p)) in
-      print out "(**/**)\ntype _cache = \n(%s)\n(**/**)\n\n"
-        (List.map (db_record_standard_fields @ args_in_db)
-           ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
-      doc out "The [cache] is the info retrieved by the database queries.";
-      print out "type cache = _cache\n\n";
-
-      (* Access a function *)
-      doc out "Cache the contents of the record [t].";
-      print out "let cache_value (t: t) (dbh:db_handle): \
-                  cache PGOCaml.monad PGOCaml.monad =\n";
-      print out "  let id = t.id in\n";
-      print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
-      print out "  pg_bind_bind umm (function [one] -> pg_return one\n    | _ -> ";
-      raise_wrong_db_error out "INSERT did not return one id";
-      print out ")\n";
-
-      doc out "The fields of the Record, the type is intended to \
-        be used for \"record pattern matching\" \
-        [[let { Mod. a ; b } = Mod.get_fields ... ]]";
-      print out "type fields = {\n";
-      List.iter fields (fun (v,t) -> 
-        print out "  %s: %s;\n" v (ocaml_type t));
-      print out "}\n";
-      print out "let get_fields (cache: cache) =\n";
-      print out "  let (%s, %s) = cache in\n"
-        (List.map (db_record_standard_fields) (fun _ -> "_") |> 
-            String.concat ~sep:", ")
-        (List.map fields (fun (s, t) -> s) |> String.concat ~sep:", ");
-      print out "  {\n";
-      List.iter fields (fun (v, t) ->
-        print out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
-      print out "  }\n\n";
-
-      doc out "Get the last time the record was modified (It depends on \
-          the good-will of the people modifying the database {i manually}).";
-      print out "let last_write_access (cache: cache): \
-          (CalendarLib.Calendar.t * CalendarLib.Time_Zone.t) option =\n";
-      print out "  let (_, ts, %s) = cache in\n"
-        (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
-      print out "  ts\n\n";
-
-
-      (* Access a value *)
-      deprecate out;
-      print out "let _get_value_by_id ~id (dbh:db_handle) =\n";
-      print out "  let umm = PGSQL(dbh)\n";
-      print out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
-      print out "  pg_bind_bind umm \n\
-                    \    (function\n\
-                    \       | [ one ] -> PGOCaml.return one\n\
-                    \       | _ -> ";
-      raise_wrong_db_error out "SELECT did not return a single tuple";
-      print out ")\n\n";
-
-      (* Delete a value *)
-      deprecate out;
-      print out "let _delete_value_by_id ~id (dbh:db_handle) =\n";
-      print out "  PGSQL (dbh)\n";
-      print out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
-      print out "end (* %s *)\n\n" name;
-
+      ocaml_record_module ~out name fields
     | Function (name, args, result) ->
-      print out "module Function_%s = struct\n" name;
-      print out "type 'a t = (* private *) { id: int32 }\n";
-
-      let def_wrong_db_error, raise_wrong_db_error = 
-        ocaml_exception "Wrong_DB_return" in
-      def_wrong_db_error out;
-
-      (* Function to insert a new function evaluation: *)
-      print out "let add_evaluation\n";
-      List.iter args (fun (n, t) -> print out "    ~%s\n" n);
-      print out "    ?(recomputable=false)\n";
-      print out "    ?(recompute_penalty=0.)\n";
-      print out "    (dbh:db_handle) : \n\
-            \    [ `can_start | `can_complete ] t PGOCaml.monad PGOCaml.monad =\n";
-      List.iter args (fun tv -> let_in_typed_value tv |> print out "%s");
-      print out "  let id_list_monad_monad = PGSQL (dbh)\n";
-      let intos =
-        "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
-          (List.map args fst) |> String.concat ~sep:", " in
-      let values =
-        "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'Inserted'" ::
-          (List.map args (fun (n, t) -> "$" ^ n)) |> String.concat ~sep:", " in
-      print out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
-                   \     RETURNING g_id \" in\n" name intos values;
-      print out "  pg_bind_bind id_list_monad_monad \n\
-                    \    (function\n\
-                    \       | [ id ] -> PGOCaml.return { id }\n\
-                    \       | _ -> ";
-      raise_wrong_db_error out "INSERT did not return one id";
-      print out ")\n\n";
-      
-      (* Function to set the state of a function evaluation to 'STARTED': *)
-      print out "let set_started (t : [> `can_start] t) (dbh:db_handle) =\n";
-      print out "  let id = t.id in\n";
-      print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"UPDATE %s SET g_status = 'Started', g_started = now ()\n\
-                \    WHERE g_id = $id\" in\n\
-                \    pg_bind_bind umm (fun () -> \
-                pg_return ({ id } : [ `can_complete] t)) 
-                \n\n\n" name;
-      print out "let set_succeeded (t : [> `can_complete] t) \n\
-                   \     ~result (dbh:db_handle) =\n";
-      let_in_typed_value ("result", Record_name result) |> print out "%s";
-      print out "  let id = t.id in\n";
-      print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"UPDATE %s SET g_status = 'Succeeded', \
-                g_completed = now (), g_result = $result\n \
-                \    WHERE g_id = $id\" in\n\
-                \    pg_bind_bind umm (fun () -> \
-                pg_return ({ id } : [ `can_get_result] t)) 
-                \n\n\n" name;
-      print out "let set_failed \
-                   (t : [ `can_start | `can_complete] t) (dbh:db_handle) =\n";
-      print out "  let id = t.id in\n";
-      print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"UPDATE %s SET g_status = 'Failed', g_completed = now ()\n\
-                \    WHERE g_id = $id\" in\n\
-                \    pg_bind_bind umm (fun () -> \
-                pg_return ({ id } : [ `can_nothing ] t)) 
-                \n\n\n" name;
-
-      (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
-      let args_in_db = 
-        List.map args (fun (s, t) ->
-          let (t, p) = dsl_type_to_db t in (s, t, p)) in
-      print out "(**/**)\ntype 'a _cache = \n(%s)\n(**/**)\n\n"
-        (List.map (db_function_standard_fields result @ args_in_db)
-           ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
-      doc out "The [cache] is the info retrieved by the database queries; \
-               it inherits the capabilities of the handle (type [t]).";
-      print out "type 'a cache = 'a _cache\n\n";
-
-      (* Access a function *)
-      doc out "Cache the contents of the evaluation [t].";
-      print out "let cache_evaluation (t: 'a t) (dbh:db_handle):\
-                 'a cache PGOCaml.monad PGOCaml.monad =\n";
-      print out "  let id = t.id in\n";
-      print out "  let umm = PGSQL (dbh)\n";
-      print out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
-      print out "  pg_bind_bind umm (function [one] -> pg_return one\n    | _ -> ";
-      raise_wrong_db_error out "INSERT did not return one id";
-      print out ")\n";
-
-      doc out "The arguments of the Function, the type is intended to \
-        be used for \"record pattern matching\" \
-        [[let { Mod. a ; b } = Mod.get_arguments ... ]]";
-      print out "type arguments = {\n";
-      List.iter args (fun (v,t) -> 
-        print out "  %s: %s;\n" v (ocaml_type t));
-      print out "}\n";
-      print out "let get_arguments (cache : 'a cache) =\n";
-      print out "  let (%s, %s) = cache in\n"
-        (List.map (db_function_standard_fields result) (fun _ -> "_") |> 
-            String.concat ~sep:", ")
-        (List.map args (fun (s, t) -> s) |> String.concat ~sep:", ");
-      print out "  {\n";
-      List.iter args (fun (v, t) ->
-        print out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
-      print out "  }\n\n";
-
-      doc out "Get the current status of the Function and the last \
-          time the status was updated.";
-      print out "let get_status (cache: 'a cache) =\n";
-      print out "  let (%s) = cache in\n"
-        (List.map (db_function_standard_fields result @ args_in_db)
-           (function 
-             | ("g_status", _, _) -> "status_str" 
-             | ("g_inserted", _, _) -> "inserted" 
-             | ("g_started", _, _) -> "started" 
-             | ("g_completed", _, _) -> "completed" 
-             | (n, _, _) -> "_" ) |>
-               String.concat ~sep:", ");
-      print out "  let status =\n\
-                \    Enumeration_process_status.of_string_exn \
-                 status_str in\n";
-      print out "  let opt = function \n\
-                \    | Some (d, tz) -> (d, tz)\n\
-                \    | None -> failwith \"get_status(%s) can't find timestamp\"
-                \  in\n" name;
-      print out "  (match status with\n\
-                \  | `Inserted ->   (status, opt inserted)\n\
-                \  | `Started ->    (status, opt started)\n\
-                \  | `Failed ->     (status, opt completed)\n\
-                \  | `Succeeded ->  (status, opt completed)\
-                )\n\n";
-
-      doc out "Get the result of the function if is available.";
-      print out "let get_result (cache: [> `can_get_result] cache) =\n";
-      print out "  let (%s) = cache in"
-        (List.map (db_function_standard_fields result @ args_in_db)
-           (function ("g_result", _, _) -> "res_pointer" | (n, _, _) -> "_" ) |>
-               String.concat ~sep:", ");
-      print out "  { Record_%s.id = \n\
-                \    match res_pointer with Some id -> id\n\
-                \    | None -> \
-          failwith \"get_result(%s) result (%s) is not set\" }\n\n" 
-        result name result;
-
-      List.iter 
-        [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");
-          ("started", "`Started", "[ `can_fail | `can_complete]");
-          ("failed", "`Failed", "[ `can_nothing ]");
-          ("succeeded", "`Succeeded", "[ `can_get_result ]"); ]
-        (fun (suffix, polyvar, phamtom) -> 
-          doc out "Safe cast of the capabilities to [ %s ]; returns [None] \
-              if the cast is not allowed." phamtom;
-          print out "let is_%s (cache: 'a cache): %s cache option =\n" 
-            suffix phamtom;
-          print out "  match get_status cache with\n\
-                       | %s, _ -> Some (cache: %s cache)\n\
-                       | _ -> None\n\n" polyvar phamtom;
-
-
-          doc out "Get all the Functions whose status is [%s]." polyvar;
-          print out "let get_all_%s (dbh:db_handle): %s t list PGOCaml.monad =\n"
-            suffix phamtom;
-          print out "  let status_str = \n\
-                    \    Enumeration_process_status.to_string %s in\n" polyvar;
-          print out "  let umm = PGSQL(dbh)\n";
-          print out "    \"SELECT g_id FROM %s WHERE g_status = $status_str\" in\n"
-            name;
-          print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n");
-
-      doc out "Get all the [%s] functions." name;
-      print out "let get_all (dbh: db_handle): \
-                  [ `can_nothing ] t list PGOCaml.monad = \n";
-      print out "  let umm = PGSQL(dbh)\n";
-      print out "    \"SELECT g_id FROM %s\" in\n" name;
-      print out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
-
-      (* Delete a function *)
-      deprecate out;
-      print out "let _delete_evaluation_by_id ~id (dbh:db_handle) =\n";
-      print out "  PGSQL (dbh)\n";
-      print out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
-      (* print out "(\**/**\)\n"; *)
-
-
-      print out "end (* %s *)\n\n" name;
+      ocaml_function_module ~out name args result
     | Volume (_, _) -> ()
   );
   let rec_name = function Record (n, _) -> Some n | _ -> None in
@@ -791,33 +803,33 @@ let ocaml_code dsl output_string =
      ("'a evaluations", "evaluation_", Some "'a Function", fun_name);
     ]
     (fun (type_name, prefix, modprefix, get_name) ->
-      print out "type %s = [\n" type_name;
+      raw out "type %s = [\n" type_name;
       List.iter dsl.nodes (fun e ->
         get_name e |> Option.iter ~f:(fun name ->
           match modprefix with
-          | Some s -> print out " | `%s%s of %s_%s.t\n" prefix name s name
-          | None -> print out " | `%s%s\n" prefix name)
+          | Some s -> raw out " | `%s%s of %s_%s.t\n" prefix name s name
+          | None -> raw out " | `%s%s\n" prefix name)
       );
-      print out "]\n";
+      raw out "]\n";
     );
 
   let tmprec, print_tmprec = new_tmp_output () in
   let tmpfun, print_tmpfun = new_tmp_output () in
   doc tmprec "Get all record values";
   doc tmpfun "Get all function evaluations";
-  print tmprec "let get_all_values (dbh: db_handle): values list = list_flatten [\n";
-  print tmpfun "let get_all_evaluations (dbh: db_handle):
+  raw tmprec "let get_all_values (dbh: db_handle): values list = list_flatten [\n";
+  raw tmpfun "let get_all_evaluations (dbh: db_handle):
                 [ `can_nothing ] evaluations list = list_flatten [\n";
   List.iter dsl.nodes (function
     | Record (n, fields) ->
-      print tmprec "list_map (fun x -> `value_%s x) \
+      raw tmprec "list_map (fun x -> `value_%s x) \
               (Record_%s.get_all dbh);\n" n n
     | Function (n, args, ret) ->
-      print tmpfun "list_map (fun x -> `evaluation_%s x) \
+      raw tmpfun "list_map (fun x -> `evaluation_%s x) \
               (Function_%s.get_all dbh);\n" n n
     | _ -> ());
-  print tmprec "]\n\n";
-  print tmpfun "]\n\n";
+  raw tmprec "]\n\n";
+  raw tmpfun "]\n\n";
   print_tmprec out;
   print_tmpfun out;
   ()
