@@ -9,7 +9,8 @@ val to_db : dsl_runtime_description -> Hitscoregen_psql.table list
 val digraph :
   dsl_runtime_description -> ?name:string -> (string -> unit) -> unit
 
-val ocaml_code : dsl_runtime_description -> (string -> unit) -> unit
+val ocaml_code : ?functorize:bool -> dsl_runtime_description -> 
+  (string -> unit) -> unit
 
 val testing_inserts :
   dsl_runtime_description -> int -> (string -> 'a) -> unit
