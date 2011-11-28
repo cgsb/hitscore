@@ -8,6 +8,7 @@
        (print_name      string option)
        (family_name     string)
        (email           string)
+       (login           string option)
        notable
        )
 
@@ -96,7 +97,9 @@
         (flowcell_name string)
         (with_intensities bool)
         (host string)
-        (hiseq_dir_name string))
+        (hiseq_dir_name string)) 
+(record inaccessible_hiseq_raw
+        (deleted hiseq_raw array))
 
 (volume sample_sheet_csv samplesheets)
 (record sample_sheet 
@@ -116,22 +119,26 @@
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
           (raw_data hiseq_raw)
+          (availability inaccessible_hiseq_raw)
           (mismatch int)
           (version string)
           (sample_sheet sample_sheet))
 
 (function hiseq_raw transfer_hisqeq_raw
           (hiseq_raw hiseq_raw)
+          (availability inaccessible_hiseq_raw)
           (dest string))
 
 (function hiseq_raw delete_intensities
-          (hiseq_raw hiseq_raw))
+          (hiseq_raw hiseq_raw)
+          (availability inaccessible_hiseq_raw))
 
 (volume dircmp_result dircmp)
 (record hiseq_checksum
         (file dircmp_result))
 (function hiseq_checksum dircmp_raw
-        (hiseq_raw hiseq_raw))
+          (hiseq_raw hiseq_raw)
+          (availability inaccessible_hiseq_raw))
 
 
 (record client_fastqs_dir
