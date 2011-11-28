@@ -467,6 +467,22 @@ let ocaml_enumeration_module ~out name fields =
   raise_oserr out "cannot recognize enumeration element";
   raw out "\n\nend (* %s *)\n\n" name
 
+
+let pgocaml_add_to_database ~out ~raise_wrong_db  ?(id="id")
+    table_name intos values =
+  raw out "  let id_list_monad_monad = PGSQL (dbh)\n";
+  raw out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
+                   \     RETURNING g_id \" in\n" table_name
+    (intos |> String.concat ~sep:", ")
+    (values|> String.concat ~sep:", ");
+  raw out "  pg_bind_bind id_list_monad_monad \n\
+                    \    (function\n\
+                    \       | [ %s ] -> PGOCaml.return { %s }\n\
+                    \       | _ -> " id id;
+  raise_wrong_db out "INSERT did not return one id";
+  raw out ")\n\n";
+  ()
+
 let ocaml_record_module ~out name fields = 
   raw out "module Record_%s = struct\n" name;
   doc out "Type [t] should be used like a private type, access to \
@@ -486,29 +502,21 @@ let ocaml_record_module ~out name fields =
       match type_is_option t with `yes -> "?" | `no -> "~" in
     raw out "    %s(%s:%s)\n" kind_of_arg n (ocaml_type t);
   );
-  let intos =
-    "g_last_accessed" :: List.map fields fst |> String.concat ~sep:", " in
+  let intos = "g_last_accessed" :: List.map fields fst in
   let values =
     let prefix (n, t) =
       (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
-    "now()" :: List.map fields prefix |> String.concat ~sep:", " in
+    "now()" :: List.map fields prefix  in
   raw out "    (dbh:db_handle) : t PGOCaml.monad PGOCaml.monad =\n";
   List.iter fields (fun tv -> let_in_typed_value tv |> raw out "%s");
-  raw out "  let id_list_monad_monad = PGSQL (dbh)\n";
-  raw out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
-                   \     RETURNING g_id \" in\n" name intos values;
-  raw out "  pg_bind_bind id_list_monad_monad \n\
-                    \    (function\n\
-                    \       | [ id ] -> PGOCaml.return { id }\n\
-                    \       | _ -> ";
-  raise_wrong_db_error out "INSERT did not return a single id";
-  raw out ")\n\n";
+  pgocaml_add_to_database name intos values
+    ~out ~raise_wrong_db:raise_wrong_db_error;
 
   doc out "Get all the values of type [%s]." name;
   raw out "let get_all (dbh: db_handle): t list PGOCaml.monad = \n";
   raw out "  let umm = PGSQL(dbh)\n";
   raw out "    \"SELECT g_id FROM %s\" in\n" name;
-  raw out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
+  raw out "  pg_bind_bind umm (fun l -> list_map l (fun id -> { id }))\n\n";
 
 
       (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
@@ -594,21 +602,14 @@ let ocaml_function_module ~out name args result =
   raw out "    (dbh:db_handle) : \n\
             \    [ `can_start | `can_complete ] t PGOCaml.monad PGOCaml.monad =\n";
   List.iter args (fun tv -> let_in_typed_value tv |> raw out "%s");
-  raw out "  let id_list_monad_monad = PGSQL (dbh)\n";
   let intos =
     "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
-      (List.map args fst) |> String.concat ~sep:", " in
+      (List.map args fst) in
   let values =
     "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'Inserted'" ::
-      (List.map args (fun (n, t) -> "$" ^ n)) |> String.concat ~sep:", " in
-  raw out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
-                   \     RETURNING g_id \" in\n" name intos values;
-  raw out "  pg_bind_bind id_list_monad_monad \n\
-                    \    (function\n\
-                    \       | [ id ] -> PGOCaml.return { id }\n\
-                    \       | _ -> ";
-  raise_wrong_db_error out "INSERT did not return one id";
-  raw out ")\n\n";
+      (List.map args (fun (n, t) -> "$" ^ n)) in
+  pgocaml_add_to_database name intos values
+    ~out ~raise_wrong_db:raise_wrong_db_error;
   
       (* Function to set the state of a function evaluation to 'STARTED': *)
   raw out "let set_started (t : [> `can_start] t) (dbh:db_handle) =\n";
