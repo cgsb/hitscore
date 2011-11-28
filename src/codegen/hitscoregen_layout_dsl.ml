@@ -429,6 +429,7 @@ let convert_pgocaml_type = function
 
 
 let raw out fmt = ksprintf out ("" ^^ fmt)
+let line out fmt = ksprintf out ("" ^^ fmt ^^ "\n")
 let doc out fmt = (* Doc to put before values/types *)
   ksprintf out ("\n(** " ^^ fmt ^^ " *)\n")
 let deprecate out fmt =
@@ -741,14 +742,14 @@ let ocaml_function_module ~out name args result =
       raw out "  let umm = PGSQL(dbh)\n";
       raw out "    \"SELECT g_id FROM %s WHERE g_status = $status_str\" in\n"
         name;
-      raw out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n");
+      raw out "  pg_bind_bind umm (fun l -> list_map l (fun id -> { id }))\n\n");
 
   doc out "Get all the [%s] functions." name;
   raw out "let get_all (dbh: db_handle): \
                   [ `can_nothing ] t list PGOCaml.monad = \n";
   raw out "  let umm = PGSQL(dbh)\n";
   raw out "    \"SELECT g_id FROM %s\" in\n" name;
-  raw out "  pg_bind_bind umm (list_map (fun id -> { id }))\n\n";
+  raw out "  pg_bind_bind umm (fun l -> list_map l (fun id -> { id }))\n\n";
 
       (* Delete a function *)
   deprecate out "Deletes a function using its internal identifier.";
@@ -791,11 +792,10 @@ let ocaml_toplevel_values_and_types ~out dsl =
                 [ `can_nothing ] evaluations list = list_flatten [\n";
   List.iter dsl.nodes (function
     | Record (n, fields) ->
-      raw tmprec "list_map (fun x -> `value_%s x) \
-              (Record_%s.get_all dbh);\n" n n
+      raw tmprec "list_map (Record_%s.get_all dbh) (fun x -> `value_%s x);\n" n n
     | Function (n, args, ret) ->
-      raw tmpfun "list_map (fun x -> `evaluation_%s x) \
-              (Function_%s.get_all dbh);\n" n n
+      raw tmpfun "list_map (Function_%s.get_all dbh) \
+                    (fun x -> `evaluation_%s x);\n" n n
     | _ -> ());
   raw tmprec "]\n\n";
   raw tmpfun "]\n\n";
@@ -804,6 +804,62 @@ let ocaml_toplevel_values_and_types ~out dsl =
 
   ()
 
+let ocaml_file_system_module ~out = (* For now does not depend on the
+                                       actual layout *)
+  let def_wrong_db_error, raise_wrong_db = 
+    ocaml_exception "Wrong_DB_return" in
+
+  line out "module File_system = struct";
+  def_wrong_db_error out;
+  line out "type volume = { id : int32 }";
+  line out "type file = { inode: int32 }";
+  line out "type path = ";
+  line out "  | File of string * Enumeration_file_type.t";
+  line out "  | Directory of string * Enumeration_file_type.t * path list";
+  line out "  | Opaque of string * Enumeration_file_type.t";
+  doc out "Register a new file, directory (with its contents), or opaque \
+        directory in the DB.";
+  line out "let add_file (dbh: db_handle) \
+                ~(kind:Enumeration_volume_kind.t) \
+                ?(hr_tag: string option) \
+                ~(files:path list) = ";
+  line out "let rec add_path = function";
+  line out "  | File (name, t) | Opaque (name, t) -> begin";
+  line out "    let type_str = Enumeration_file_type.to_string t in";
+  pgocaml_add_to_database "g_file" 
+    [ "g_name"; "g_type"; "g_content" ]
+    [ "$name"; "$type_str" ; "NULL" ]
+    ~out ~raise_wrong_db ~id:"inode";
+  line out "    end";
+  line out "  | Directory (name, t, pl) -> begin";
+  line out "    let type_str = Enumeration_file_type.to_string t in";
+  line out "    pg_bind_bind (list_map pl add_path) (fun vol_list -> ";
+  line out "    let inserted_paths = \
+           array_map (list_to_array vol_list) (fun { inode } -> inode) in";
+  pgocaml_add_to_database "g_file" 
+    [ "g_name"; "g_type"; "g_content" ]
+    [ "$name"; "$type_str" ; "$inserted_paths" ]
+    ~out ~raise_wrong_db ~id:"inode";
+
+  line out " ) end in";
+  line out " pg_bind_bind (list_map files add_path) (fun vol_list -> ";
+  line out " let inserted_paths = \
+           array_map (list_to_array vol_list) (fun { inode } -> inode) in";
+  line out " let vol_type_str = Enumeration_volume_kind.to_string kind in";
+  pgocaml_add_to_database "g_volume" 
+    [ "g_toplevel"; "g_hr_tag"; "g_content" ]
+    [ "$vol_type_str" ; "$?hr_tag"; "$inserted_paths" ]
+    ~out ~raise_wrong_db ~id:"id";
+  line out ")";
+
+  doc out "Module for constructing file paths less painfully.";
+  line out "module Path = struct";
+  line out "let file ?(t=`blob) n = File (n, t)";
+  line out "let dir ?(t=`directory) n l = Directory (n, t, l)";
+  line out "let opaque ?(t=`opaque) n = Opaque (n, t)";
+  line out "end";
+  line out "end (* File_system *)"; 
+  ()
 
 let ocaml_code dsl output_string =
   let out = output_string in
@@ -819,8 +875,10 @@ let ocaml_code dsl output_string =
                 \ let option_map o f =\n\
                 \     match o with None -> None | Some s -> Some (f s)\n\n\
                 \ let array_map a f = ArrayLabels.map ~f a\n\n\
-                \ let list_map f l = ListLabels.map ~f l\n\n\
+                \ let list_map l f = ListLabels.map ~f l\n\n\
                 \ let list_flatten l = List.flatten l\n\n\
+                \ let array_to_list a = Array.to_list a\n\n\
+                \ let list_to_array l = Array.of_list l\n\n\
                 \ let pg_bind_bind amm f =\n\
                 \   PGOCaml.bind amm (fun am -> PGOCaml.bind am f)\n\n\
                 \ let pg_return t = PGOCaml.return t\n\n\
@@ -828,10 +886,10 @@ let ocaml_code dsl output_string =
   let volume_kinds = 
     ("g_trash" :: (List.filter_map dsl.nodes 
                      (function | Volume (n, _) -> Some n | _ -> None))) in
-  let file_types =  ["blob"; "directory"] in
-  raw out "module File_system = struct type volume = { id : int32} end\n";
+  let file_types =  ["blob"; "directory"; "opaque"] in
   ocaml_enumeration_module ~out "volume_kind" volume_kinds;
   ocaml_enumeration_module ~out "file_type" file_types;
+  ocaml_file_system_module ~out;
   List.iter dsl.nodes (function
     | Enumeration (name, fields) ->
       ocaml_enumeration_module ~out name fields
