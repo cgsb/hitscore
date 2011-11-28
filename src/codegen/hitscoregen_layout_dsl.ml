@@ -17,6 +17,7 @@ type dsl_type =
   | Record_name of string
   | Enumeration_name of string
   | Function_name of string
+  | Volume_name of string 
 
 type typed_value = string * dsl_type
 
@@ -24,6 +25,7 @@ type dsl_runtime_type =
   | Enumeration of string * string list
   | Record of string * typed_value list
   | Function of string * typed_value list * string
+  | Volume of string * string (* Volume (dsl-name, toplevel-dir) *)
       
 type dsl_runtime_description = {
   nodes: dsl_runtime_type list;
@@ -39,6 +41,7 @@ let type_name = function
   | Enumeration (n, _) -> Enumeration_name n
   | Record (n, _) -> Record_name n
   | Function (n, _, _) -> Function_name n
+  | Volume (n, _) -> Volume_name n
 
 let built_in_types =
   List.map built_in_complex_types ~f:type_name
@@ -58,6 +61,7 @@ let rec string_of_dsl_type = function
   | Record_name       n -> n |> sprintf "%s:rec" 
   | Enumeration_name  n -> n |> sprintf "%s:enum" 
   | Function_name     n -> n |> sprintf "%s:fun" 
+  | Volume_name     n -> n |> sprintf "%s:fun" 
 
 let rec type_is_pointer = function
   | Bool         -> `no
@@ -70,6 +74,7 @@ let rec type_is_pointer = function
   | Record_name       n -> `yes n
   | Enumeration_name  n -> `no
   | Function_name     n -> `yes n
+  | Volume_name     n -> `yes n
 
 (* A link is semantic: a pointer, or a enum-name, etc. *)
 let rec type_is_link = function
@@ -82,7 +87,8 @@ let rec type_is_link = function
   | Array a      -> type_is_link a
   | Record_name       n
   | Enumeration_name  n
-  | Function_name     n -> `yes n
+  | Function_name     n
+  | Volume_name       n -> `yes n
 
 let rec type_is_option = function
   | Bool         -> `no
@@ -95,12 +101,14 @@ let rec type_is_option = function
   | Record_name       n -> `no
   | Enumeration_name  n -> `no
   | Function_name     n -> `no
+  | Volume_name     n -> `no
 
 let find_type l t =
   List.find l ~f:(function
     | Record_name       n -> n = t
     | Enumeration_name  n -> n = t
     | Function_name     n -> n = t
+    | Volume_name     n -> n = t
     | _ -> false)
 
 let sanitize s =
@@ -203,6 +211,9 @@ let parse_sexp sexp =
                            (function Sx.Atom a -> a 
                              | _ -> 
                                fail (sprintf "Enumeration %s has wrong format" name))))
+    | (Sx.Atom "volume") :: (Sx.Atom name) :: (Sx.Atom toplevel) :: [] ->
+      existing_types := Volume_name name :: !existing_types;
+      Some (Volume (name, toplevel))
     | s ->
       fail (sprintf "I'm lost while parsing entry with: %s\n"
               (Sx.to_string (Sx.List s)))
@@ -246,6 +257,7 @@ let dsl_type_to_db t =
     | Function_name s -> Psql.Pointer (s, "g_id")
     | Enumeration_name s -> Psql.Text
     | Record_name s -> Psql.Pointer (s, "g_id")
+    | Volume_name s -> Psql.Pointer ("g_volume", "g_id")
   in
   let converted = convert t in
   (converted, !props)
@@ -266,24 +278,39 @@ let db_function_standard_fields result = [
 ]
 
 let to_db dsl =
-  List.map dsl.nodes (function
-    | Record (name, record) ->
-      let user_fields =
-        List.map record (fun (n, t) ->
-          let typ, props = dsl_type_to_db t in
-          (n,  typ, props)) in
-      let fields = db_record_standard_fields @ user_fields
-      in
-      [{ Psql.name ; Psql.fields }]
-    | Function (name, args, result) ->
-      let arg_fields =
-        List.map args (fun (n, t) ->
-          let typ, props = dsl_type_to_db t in
-          (n,  typ, props)) in
-      let fields = (db_function_standard_fields result) @ arg_fields in
-      [ { Psql.name; Psql.fields } ]
-    | Enumeration _ -> []
-  ) |> List.flatten
+  let filesystem = [
+    Psql.({ name = "g_volume"; fields = [
+      ("g_id", Identifier, [Not_null]);
+      ("g_toplevel", Text, [Not_null]);
+      ("g_hr_tag", Text, []);
+      ("g_content", Pointer ("g_file", "g_id"), [Array]);] });
+    Psql.({ name = "g_file"; fields = [
+      ("g_id", Identifier, [Not_null]);
+      ("g_name", Text, [Not_null]);
+      ("g_type", Text, [Not_null]);
+      ("g_content", Pointer ("g_file", "g_id"), [Array]);] });
+  ] in
+  let nodes =
+    List.map dsl.nodes (function
+      | Record (name, record) ->
+        let user_fields =
+          List.map record (fun (n, t) ->
+            let typ, props = dsl_type_to_db t in
+            (n,  typ, props)) in
+        let fields = db_record_standard_fields @ user_fields in
+        [{ Psql.name ; Psql.fields }]
+      | Function (name, args, result) ->
+        let arg_fields =
+          List.map args (fun (n, t) ->
+            let typ, props = dsl_type_to_db t in
+            (n,  typ, props)) in
+        let fields = (db_function_standard_fields result) @ arg_fields in
+        [ { Psql.name; Psql.fields } ]
+      | Enumeration _ -> []
+      | Volume (_, _) -> []
+    ) |> List.flatten
+  in
+  filesystem @ nodes
 
       
 let digraph dsl ?(name="dsl") output_string =
@@ -340,6 +367,9 @@ let digraph dsl ?(name="dsl") output_string =
         sprintf "%s [label=\"%s =\\l  | %s\\l\"];\n\n"
           name name 
           (String.concat ~sep:"\\l  | " items) |> output_string
+      | Volume (name, toplevel) ->
+        sprintf "%s [shape=folder, fontname=Courier, label=\".../%s/\"];\n\n"
+          name toplevel |> output_string
   );
   output_string "}\n"
 
@@ -369,6 +399,7 @@ let rec ocaml_type = function
   | Function_name s -> sprintf "Function_%s.t" s
   | Enumeration_name s -> sprintf "Enumeration_%s.t" s
   | Record_name s -> sprintf "Record_%s.t" s
+  | Volume_name s -> sprintf "File_system.volume"
 
 let let_in_typed_value  = function
   | (n, Enumeration_name e) -> 
@@ -379,6 +410,8 @@ let let_in_typed_value  = function
     sprintf "  let %s = option_map %s (fun s -> s.Record_%s.id) in\n" n n r
   | (n, Array (Record_name r)) ->
     sprintf "  let %s = array_map %s (fun s -> s.Record_%s.id) in\n" n n r
+  | (n, Volume_name v) ->
+    sprintf "  let %s = %s.File_system.id in\n" n n 
   | _ -> ""
 
 let convert_pgocaml_type = function
@@ -390,6 +423,8 @@ let convert_pgocaml_type = function
     sprintf "(option_map %s (fun id -> { Record_%s.id }))" n r
   | (n, Array (Record_name r)) ->
     sprintf "(array_map %s (fun id ->  { Record_%s.id }))" n r
+  | (n, Volume_name v) ->
+    sprintf "{ File_system.id = %s } " n
   | (n, _) -> n
 
 let ocaml_exception name =
@@ -403,6 +438,25 @@ let new_tmp_output () =
   let tmp_out s = Buffer.add_string buf s in
   let print_tmp output_string = output_string (Buffer.contents buf) in
   (tmp_out, print_tmp)
+
+
+let ocaml_enumeration_module  ~doc ~out ~deprecate name fields =
+  ksprintf out "module Enumeration_%s = struct\n" name;
+  ksprintf out "type t = [%s]\n\n"
+    (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
+  ksprintf out "let to_string : t -> string = function\n| %s\n" 
+    (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
+        String.concat ~sep:"\n| ");
+  ksprintf out "\n";
+  let def_oserr, raise_oserr = ocaml_exception "Of_string_error" in
+  def_oserr out;
+  ksprintf out "let of_string_exn: string -> t = function\n| %s\n" 
+    (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
+        String.concat ~sep:"\n| ");
+  ksprintf out "| s -> ";
+  raise_oserr out "cannot recognize enumeration element";
+  ksprintf out "\n\nend (* %s *)\n\n" name
+
 
 let ocaml_code dsl output_string =
   let print = ksprintf and out = output_string in
@@ -428,23 +482,14 @@ let ocaml_code dsl output_string =
                 \   PGOCaml.bind amm (fun am -> PGOCaml.bind am f)\n\n\
                 \ let pg_return t = PGOCaml.return t\n\n\
                 (**/**)\n";
+  print out "module File_system = struct type volume = { id : int32} end\n";
+  ocaml_enumeration_module ~doc ~out ~deprecate "volume_kind" 
+    ("g_trash" :: (List.filter_map dsl.nodes 
+                     (function | Volume (n, _) -> Some n | _ -> None)));
+  ocaml_enumeration_module ~doc ~out ~deprecate "file_type" ["blob"; "directory"];
   List.iter dsl.nodes (function
     | Enumeration (name, fields) ->
-      print out "module Enumeration_%s = struct\n" name;
-      print out "type t = [%s]\n\n"
-        (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
-      print out "let to_string : t -> string = function\n| %s\n" 
-        (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
-            String.concat ~sep:"\n| ");
-      print out "\n";
-      let def_oserr, raise_oserr = ocaml_exception "Of_string_error" in
-      def_oserr out;
-      print out "let of_string_exn: string -> t = function\n| %s\n" 
-        (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
-            String.concat ~sep:"\n| ");
-      print out "| s -> ";
-      raise_oserr out "cannot recognize enumeration element";
-      print out "\n\nend (* %s *)\n\n" name
+      ocaml_enumeration_module ~doc ~out ~deprecate name fields
     | Record (name, fields) ->
       print out "module Record_%s = struct\n" name;
       doc out "Type [t] should be used like a private type, access to \
@@ -735,6 +780,7 @@ let ocaml_code dsl output_string =
 
 
       print out "end (* %s *)\n\n" name;
+    | Volume (_, _) -> ()
   );
   let rec_name = function Record (n, _) -> Some n | _ -> None in
   let fun_name = function Function (n, _, _) -> Some n | _ -> None in
@@ -778,6 +824,7 @@ let ocaml_code dsl output_string =
 
 let testing_inserts dsl amount output_string =
   List.iter dsl.nodes (function
+    | Volume _ -> ()
     | Enumeration _ -> (* Nothing to do *)()
     | Record (name, fields) ->
       let intos =
@@ -794,7 +841,7 @@ let testing_inserts dsl amount output_string =
           | Array a     -> 
             sprintf "{%s}" (String.concat ~sep:", "
                               (List.init (Random.int 42 + 1) (fun _ -> g (n, a))))
-          | Function_name _|Record_name _ -> g (n, Int)
+          | Volume_name _ | Function_name _|Record_name _ -> g (n, Int)
           | Enumeration_name _ -> g (n, String)
         in
         let f = Fn.compose (sprintf "'%s'") g in
