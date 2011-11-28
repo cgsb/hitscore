@@ -43,6 +43,10 @@ let type_name = function
 let built_in_types =
   List.map built_in_complex_types ~f:type_name
 
+let type_is_built_in t = 
+  List.exists built_in_complex_types 
+    ~f:(fun x -> type_name x = type_name t)
+
 let rec string_of_dsl_type = function
   | Bool        -> "Bool"
   | Timestamp   -> "Timestamp"
@@ -287,52 +291,57 @@ let digraph dsl ?(name="dsl") output_string =
         graph [fontsize=20 labelloc=\"t\" label=\"\" \
             splines=true overlap=false ];\n"
     name |> output_string;
-  List.iter dsl.nodes (function
-    | Record (name, fields) ->
-      sprintf "  %s [shape=record, label=\
+  List.iter dsl.nodes (fun n ->
+    if type_is_built_in n then
+      ()
+    else
+      match n with
+      | Record (name, fields) ->
+        sprintf "  %s [shape=record, label=\
         <<table border=\"0\" ><tr><td border=\"2\">%s</td></tr>"
-        name name |> output_string;
-      let links = ref [] in
-      List.iter fields (fun (n, t) ->
-        sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n (string_of_dsl_type t) 
-                           |> output_string;
-        begin match type_is_link t with
-        | `yes p -> links := p :: !links
-        | `no -> ()
-        end
-      );
-      output_string "</table>>];\n";
-      List.iter !links (fun t ->
-        sprintf "%s -> %s [style=\"setlinewidth(3)\",color=\"#888888\"];\n"
-          name t |> output_string
-      );
-    | Function (name, args, result) ->
-      sprintf "  %s [shape=Mrecord,color=blue,label=\
+          name name |> output_string;
+        let links = ref [] in
+        List.iter fields (fun (n, t) ->
+          sprintf "<tr><td align=\"left\">%s: %s</td></tr>" n (string_of_dsl_type t) 
+                             |> output_string;
+          begin match type_is_link t with
+          | `yes p -> links := p :: !links
+          | `no -> ()
+          end
+        );
+        output_string "</table>>];\n";
+        List.iter !links (fun t ->
+          sprintf "%s -> %s [style=\"setlinewidth(3)\",color=\"#888888\"];\n"
+            name t |> output_string
+        );
+      | Function (name, args, result) ->
+        sprintf "  %s [shape=Mrecord,color=blue,label=\
         <<table border=\"0\" ><tr><td border=\"2\">%s</td></tr>"
-        name name |> output_string;
-      let links = ref [] in
-      List.iter args (fun (n, t) ->
-        sprintf "<tr><td align=\"left\">%s: %s</td></tr>" 
-          n (string_of_dsl_type t) |> output_string;
-        begin match type_is_link t with
-        | `yes p -> links := p :: !links
-        | `no -> ()
-        end
-      );
-      sprintf "<tr><td align=\"left\"><i>%s</i></td></tr>" result |> output_string;
-      output_string "</table>>];\n";
-      List.iter !links (fun t ->
-        sprintf "%s -> %s [penwidth=3,style=dashed,\
+          name name |> output_string;
+        let links = ref [] in
+        List.iter args (fun (n, t) ->
+          sprintf "<tr><td align=\"left\">%s: %s</td></tr>" 
+            n (string_of_dsl_type t) |> output_string;
+          begin match type_is_link t with
+          | `yes p -> links := p :: !links
+          | `no -> ()
+          end
+        );
+        sprintf "<tr><td align=\"left\"><i>%s</i></td></tr>" result |> output_string;
+        output_string "</table>>];\n";
+        List.iter !links (fun t ->
+          sprintf "%s -> %s [penwidth=3,style=dashed,\
                  color=\"#880000\"];\n" t name |> 
+              output_string
+        );
+        sprintf "%s -> %s [penwidth=3,color=\"#008800\"];\n" name result |> 
             output_string
-      );
-      sprintf "%s -> %s [penwidth=3,color=\"#008800\"];\n" name result |> output_string
-    | Enumeration (name, items) ->
-      sprintf "%s [label=\"%s =\\l  | %s\\l\"];\n\n"
-        name name 
-        (String.concat ~sep:"\\l  | " items) |> output_string
-    );
-    output_string "}\n"
+      | Enumeration (name, items) ->
+        sprintf "%s [label=\"%s =\\l  | %s\\l\"];\n\n"
+          name name 
+          (String.concat ~sep:"\\l  | " items) |> output_string
+  );
+  output_string "}\n"
 
 
 let pgocaml_type_of_field =
