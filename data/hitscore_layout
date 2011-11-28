@@ -2,15 +2,6 @@
 (subrecord notable
            (note string option))
 
-;;Static files, …
-(subrecord is_file 
-           (file_name string)
-           (file_id int)
-           (hr_tag string option))
-(subrecord is_directory
-           (dir_id int)
-           (hr_tag string option))
-
 
 ;; Almost static input data:
 (record person
@@ -37,12 +28,11 @@
 (record bioo_barcode barcode)
 (record truseq_barcode barcode)
 
-
+(volume protocol_directory protocols)
 (record protocol
-       (name string)
-       is_directory
-       notable)
-
+        (name string)
+        (doc protocol_directory)
+        notable)
 ;; Functions:
 
 (enumeration read_type read_PE_50x50 read_PE_100x100 read_SE_50 read_SE_100)
@@ -89,18 +79,17 @@
         (concentration real)
         (volume real))
 
+(volume bioanalyzer_directory bioanalyzer)
 (record bioanalyzer
         (library library)
         (well_number int)
-        is_directory
-        (pdf_name string option)
-        (xad_name string option)
+        (files bioanalyzer_directory)
         (mean_fragment_size real))
+(volume agarose_gel_directory agarose_gel)
 (record agarose_gel
         (library library)
         (well_number int)
-        is_directory
-        (pdf_name string option)
+        (files agarose_gel_directory)
         (mean_fragment_size real))
 
 (record hiseq_raw
@@ -109,7 +98,10 @@
         (host string)
         (hiseq_dir_name string))
 
-(record sample_sheet is_file notable)
+(volume sample_sheet_csv samplesheets)
+(record sample_sheet 
+        (file sample_sheet_csv)
+        notable)
         
 (enumeration sample_sheet_kind all_barcodes specific_barcodes)
 
@@ -118,7 +110,9 @@
           (flowcell flowcell)
           )
 
-(record bcl_to_fastq_unaligned is_directory)
+(volume bcl_to_fastq_unaligned_opaque bcl_to_fastq)
+(record bcl_to_fastq_unaligned 
+        (directory bcl_to_fastq_unaligned_opaque))
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
           (raw_data hiseq_raw)
@@ -133,8 +127,9 @@
 (function hiseq_raw delete_intensities
           (hiseq_raw hiseq_raw))
 
+(volume dircmp_result dircmp)
 (record hiseq_checksum
-        (file string))
+        (file dircmp_result))
 (function hiseq_checksum dircmp_raw
         (hiseq_raw hiseq_raw))
 
