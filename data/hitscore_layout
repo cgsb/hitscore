@@ -128,7 +128,7 @@
 
 (function hiseq_raw transfer_hisqeq_raw
           (hiseq_raw hiseq_raw)
-          (to string))
+          (dest string))
 
 (function hiseq_raw delete_intensities
           (hiseq_raw hiseq_raw))
