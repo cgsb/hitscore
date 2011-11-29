@@ -69,13 +69,16 @@ let add_a_file dbh =
                            file "data.db";
                            opaque "opaquedir"] ])
 
-
+let count_all dbh =
+  lwt vals = Hitscore_db.get_all_values ~dbh >|= List.length in
+  lwt evls = Hitscore_db.get_all_evaluations ~dbh >|= List.length in
+  print result "Values: %d, Evaluations: %d\n" vals evls
 
 let test_lwt =
   lwt dbh = PGOCaml.connect () in
   try_lwt 
     notif "Starting" >>
-
+    count_all dbh >>
     count_people dbh >>
     add_random_guy dbh >>
     add_random_guy dbh >>
@@ -87,6 +90,7 @@ let test_lwt =
 
     add_a_file dbh >>
     add_a_file dbh >>
+    count_all dbh >>
 
     print notif "Nice ending" 
   finally
