@@ -450,6 +450,11 @@ let new_tmp_output () =
   let print_tmp output_string = output_string (Buffer.contents buf) in
   (tmp_out, print_tmp)
 
+let pgocaml_do_get_all_ids ~out name = 
+  raw out "  let um = PGSQL(dbh)\n";
+  raw out "    \"SELECT g_id FROM %s\" in\n" name;
+  raw out "  pg_map um (fun l -> list_map l (fun id -> { id }))\n\n";
+  ()
 
 let ocaml_enumeration_module ~out name fields =
   raw out "module Enumeration_%s = struct\n" name;
@@ -515,10 +520,7 @@ let ocaml_record_module ~out name fields =
 
   doc out "Get all the values of type [%s]." name;
   raw out "let get_all (dbh: db_handle): t list PGOCaml.monad = \n";
-  raw out "  let um = PGSQL(dbh)\n";
-  raw out "    \"SELECT g_id FROM %s\" in\n" name;
-  raw out "  pg_map um (fun l -> list_map l (fun id -> { id }))\n\n";
-
+  pgocaml_do_get_all_ids ~out name;
 
       (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
   let args_in_db = 
@@ -747,17 +749,14 @@ let ocaml_function_module ~out name args result =
   doc out "Get all the [%s] functions." name;
   raw out "let get_all (dbh: db_handle): \
                   [ `can_nothing ] t list PGOCaml.monad = \n";
-  raw out "  let umm = PGSQL(dbh)\n";
-  raw out "    \"SELECT g_id FROM %s\" in\n" name;
-  raw out "  pg_map umm (fun l -> list_map l (fun id -> { id }))\n\n";
+  pgocaml_do_get_all_ids ~out name;
 
-      (* Delete a function *)
+  (* Delete a function *)
   deprecate out "Deletes a function using its internal identifier.";
   raw out "let _delete_evaluation_by_id ~id (dbh:db_handle) =\n";
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
-      (* raw out "(\**/**\)\n"; *)
-
+  
 
   raw out "end (* %s *)\n\n" name;
   ()
