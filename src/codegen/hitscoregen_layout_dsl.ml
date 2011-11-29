@@ -473,6 +473,7 @@ let ocaml_enumeration_module ~out name fields =
   raise_oserr out "cannot recognize enumeration element";
   raw out "\n\nend (* %s *)\n\n" name
 
+let pgocaml_db_handle_arg = "~(dbh: db_handle)"
 
 let pgocaml_add_to_database ~out ~raise_wrong_db  ?(id="id")
     table_name intos values =
@@ -513,13 +514,13 @@ let ocaml_record_module ~out name fields =
     let prefix (n, t) =
       (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
     "now()" :: List.map fields prefix  in
-  raw out "    (dbh:db_handle) : t PGOCaml.monad =\n";
+  raw out "    %s : t PGOCaml.monad =\n" pgocaml_db_handle_arg;
   List.iter fields (fun tv -> let_in_typed_value tv |> raw out "%s");
   pgocaml_add_to_database name intos values
     ~out ~raise_wrong_db:raise_wrong_db_error;
 
   doc out "Get all the values of type [%s]." name;
-  raw out "let get_all (dbh: db_handle): t list PGOCaml.monad = \n";
+  raw out "let get_all %s: t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
   pgocaml_do_get_all_ids ~out name;
 
       (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
@@ -534,8 +535,8 @@ let ocaml_record_module ~out name fields =
 
       (* Access a function *)
   doc out "Cache the contents of the record [t].";
-  raw out "let cache_value (t: t) (dbh:db_handle): \
-                  cache PGOCaml.monad =\n";
+  raw out "let cache_value (t: t) %s: \
+                  cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
   raw out "  let um = PGSQL (dbh)\n";
   raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
@@ -571,7 +572,7 @@ let ocaml_record_module ~out name fields =
 
       (* Access a value *)
   deprecate out "Finds a value given its internal identifier ([g_id]).";
-  raw out "let _get_value_by_id ~id (dbh:db_handle) =\n";
+  raw out "let _get_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
   raw out "  let um = PGSQL(dbh)\n";
   raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
   raw out "  pg_bind um \n\
@@ -583,7 +584,7 @@ let ocaml_record_module ~out name fields =
 
       (* Delete a value *)
   deprecate out "Deletes a values with its internal id.";
-  raw out "let _delete_value_by_id ~id (dbh:db_handle) =\n";
+  raw out "let _delete_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
   raw out "end (* %s *)\n\n" name;
@@ -602,8 +603,8 @@ let ocaml_function_module ~out name args result =
   List.iter args (fun (n, t) -> raw out "    ~%s\n" n);
   raw out "    ?(recomputable=false)\n";
   raw out "    ?(recompute_penalty=0.)\n";
-  raw out "    (dbh:db_handle) : \n\
-            \    [ `can_start | `can_complete ] t PGOCaml.monad =\n";
+  raw out "    %s : \n" pgocaml_db_handle_arg;
+  raw out "    [ `can_start | `can_complete ] t PGOCaml.monad =\n";
   List.iter args (fun tv -> let_in_typed_value tv |> raw out "%s");
   let intos =
     "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
@@ -615,7 +616,7 @@ let ocaml_function_module ~out name args result =
     ~out ~raise_wrong_db:raise_wrong_db_error;
   
       (* Function to set the state of a function evaluation to 'STARTED': *)
-  raw out "let set_started (t : [> `can_start] t) (dbh:db_handle) =\n";
+  raw out "let set_started (t : [> `can_start] t) %s =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
   raw out "  let umm = PGSQL (dbh)\n";
   raw out "    \"UPDATE %s SET g_status = 'Started', g_started = now ()\n\
@@ -624,7 +625,7 @@ let ocaml_function_module ~out name args result =
                 pg_return ({ id } : [ `can_complete] t)) 
                 \n\n\n" name;
   raw out "let set_succeeded (t : [> `can_complete] t) \n\
-                   \     ~result (dbh:db_handle) =\n";
+                   \     ~result %s =\n" pgocaml_db_handle_arg;
   let_in_typed_value ("result", Record_name result) |> raw out "%s";
   raw out "  let id = t.id in\n";
   raw out "  let umm = PGSQL (dbh)\n";
@@ -635,7 +636,7 @@ let ocaml_function_module ~out name args result =
                 pg_return ({ id } : [ `can_get_result] t)) 
                 \n\n\n" name;
   raw out "let set_failed \
-                   (t : [ `can_start | `can_complete] t) (dbh:db_handle) =\n";
+           (t : [ `can_start | `can_complete] t) %s =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
   raw out "  let umm = PGSQL (dbh)\n";
   raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = now ()\n\
@@ -657,8 +658,8 @@ let ocaml_function_module ~out name args result =
 
       (* Access a function *)
   doc out "Cache the contents of the evaluation [t].";
-  raw out "let cache_evaluation (t: 'a t) (dbh:db_handle):\
-                 'a cache PGOCaml.monad =\n";
+  raw out "let cache_evaluation (t: 'a t) %s:\
+                 'a cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
   raw out "  let umm = PGSQL (dbh)\n";
   raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
@@ -737,8 +738,8 @@ let ocaml_function_module ~out name args result =
 
 
       doc out "Get all the Functions whose status is [%s]." polyvar;
-      raw out "let get_all_%s (dbh:db_handle): %s t list PGOCaml.monad =\n"
-        suffix phamtom;
+      raw out "let get_all_%s %s: %s t list PGOCaml.monad =\n"
+        suffix pgocaml_db_handle_arg phamtom;
       raw out "  let status_str = \n\
                     \    Enumeration_process_status.to_string %s in\n" polyvar;
       raw out "  let umm = PGSQL(dbh)\n";
@@ -747,13 +748,13 @@ let ocaml_function_module ~out name args result =
       raw out "  pg_map umm (fun l -> list_map l (fun id -> { id }))\n\n");
 
   doc out "Get all the [%s] functions." name;
-  raw out "let get_all (dbh: db_handle): \
-                  [ `can_nothing ] t list PGOCaml.monad = \n";
+  raw out "let get_all %s: \
+          [ `can_nothing ] t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
   pgocaml_do_get_all_ids ~out name;
 
   (* Delete a function *)
   deprecate out "Deletes a function using its internal identifier.";
-  raw out "let _delete_evaluation_by_id ~id (dbh:db_handle) =\n";
+  raw out "let _delete_evaluation_by_id ~id %s =\n" pgocaml_db_handle_arg;
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
   
@@ -786,11 +787,11 @@ let ocaml_toplevel_values_and_types ~out dsl =
   let tmpfun, print_tmpfun = new_tmp_output () in
   doc tmprec "Get all record values";
   doc tmpfun "Get all function evaluations";
-  raw tmprec "let get_all_values (dbh: db_handle): values list PGOCaml.monad =\n\
-       \  let val_list_monad_list = [\n";
-  raw tmpfun "let get_all_evaluations (dbh: db_handle):
+  raw tmprec "let get_all_values %s: values list PGOCaml.monad =\n\
+       \  let val_list_monad_list = [\n" pgocaml_db_handle_arg;
+  raw tmpfun "let get_all_evaluations %s:
                 [ `can_nothing ] evaluations list PGOCaml.monad =\n\
-              \  let val_list_monad_list = [\n";
+              \  let val_list_monad_list = [\n" pgocaml_db_handle_arg;
   List.iter dsl.nodes (function
     | Record (n, fields) ->
       raw tmprec "pg_map (Record_%s.get_all dbh) \
@@ -831,10 +832,10 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "  | Opaque of string * Enumeration_file_type.t";
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
-  line out "let add_file (dbh: db_handle) \
+  line out "let add_file %s \
                 ~(kind:Enumeration_volume_kind.t) \
                 ?(hr_tag: string option) \
-                ~(files:path list) = ";
+                ~(files:path list) = " pgocaml_db_handle_arg;
   line out "let rec add_path = function";
   line out "  | File (name, t) | Opaque (name, t) -> begin";
   line out "    let type_str = Enumeration_file_type.to_string t in";
