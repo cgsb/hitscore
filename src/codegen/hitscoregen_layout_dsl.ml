@@ -900,12 +900,12 @@ let ocaml_code ?(functorize=true) dsl output_string =
   raw out "(**/**)\n\
       \ let option_map o f =\n\
       \     match o with None -> None | Some s -> Some (f s)\n\n\
-      \ let array_map a f = ArrayLabels.map ~f a\n\n\
-      \ let list_map l f = ListLabels.map ~f l\n\n\
-      \ let list_flatten l = List.flatten l\n\n\
+      \ let array_map a f = Core.Std.Array.map ~f a\n\n\
+      \ let list_map l f = Core.Std.List.map ~f l\n\n\
+      \ let list_flatten l = Core.Std.List.flatten l\n\n\
       \ let fold_left = Core.Std.List.fold_left\n\n\
-      \ let array_to_list a = Array.to_list a\n\n\
-      \ let list_to_array l = Array.of_list l\n\n\
+      \ let array_to_list a = Core.Std.Array.to_list a\n\n\
+      \ let list_to_array l = Core.Std.Array.of_list l\n\n\
       \ let pg_bind am f =\nPGOCaml.bind am f\n\n\
       \ let pg_return t = PGOCaml.return t\n\n\
      \ let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
