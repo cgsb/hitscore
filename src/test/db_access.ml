@@ -5,11 +5,10 @@ module Lwt_thread = struct
   include Lwt
   include Lwt_chan
 end
-module PGOCaml = PGOCaml_generic.Make(Lwt_thread)
 open Lwt
 
-module Hitscore_db = Hitscore_db_access.Make(PGOCaml)
-
+module Hitscore_db = Hitscore_db_access.Make(Lwt_thread)
+module PGOCaml = Hitscore_db.PGOCaml
 
 let notif =
   let section = Lwt_log.Section.make "Notifications" in
