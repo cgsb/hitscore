@@ -32,7 +32,7 @@ let result =
 let print = ksprintf
 
 let count_people dbh = 
-  Hitscore_db.Record_person.get_all dbh >>=
+  Hitscore_db.Record_person.get_all ~dbh >>=
     (function
       | [] -> print result "Found no one"
       | l -> print result "Found %d persons" (List.length l))
@@ -44,7 +44,7 @@ let add_random_guy dbh =
   let login = if Random.bool () then Some "login" else None in
   let note = if Random.bool () then Some "some note" else None in
   print result "Adding %s (%s)" family_name email >>
-  Hitscore_db.Record_person.add_value dbh 
+  Hitscore_db.Record_person.add_value ~dbh 
     ?print_name ~family_name ~email ?login ?note
 
 let print_guy dbh guy =
