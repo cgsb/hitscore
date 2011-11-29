@@ -1,9 +1,11 @@
 # OASIS_START
-# DO NOT EDIT (digest: 40db767fd54d6624cb39026907b9813f)
+# DO NOT EDIT (digest: 99cba8738ad7998621828fbc99132839)
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
+<src/codegen/hitscoregen.{native,byte}>: pkg_lwt.syntax
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
 <src/codegen/*.ml{,i}>: pkg_threads
+<src/codegen/*.ml{,i}>: pkg_lwt.syntax
 <src/codegen/*.ml{,i}>: pkg_core
 # Library hitscore
 "src/lib": include
@@ -31,6 +33,29 @@
 <src/app/*.ml{,i}>: pkg_core
 <src/app/*.ml{,i}>: pkg_calendar
 <src/app/*.ml{,i}>: pkg_biocaml
+# Executable db_access_test
+<src/test/db_access.{native,byte}>: use_hitscore
+<src/test/db_access.{native,byte}>: pkg_threads
+<src/test/db_access.{native,byte}>: pkg_sequme
+<src/test/db_access.{native,byte}>: pkg_pgocaml.syntax
+<src/test/db_access.{native,byte}>: pkg_pgocaml
+<src/test/db_access.{native,byte}>: pkg_lwt.unix
+<src/test/db_access.{native,byte}>: pkg_lwt.syntax
+<src/test/db_access.{native,byte}>: pkg_lwt
+<src/test/db_access.{native,byte}>: pkg_core
+<src/test/db_access.{native,byte}>: pkg_calendar
+<src/test/db_access.{native,byte}>: pkg_biocaml
+<src/test/*.ml{,i}>: use_hitscore
+<src/test/*.ml{,i}>: pkg_threads
+<src/test/*.ml{,i}>: pkg_sequme
+<src/test/*.ml{,i}>: pkg_pgocaml.syntax
+<src/test/*.ml{,i}>: pkg_pgocaml
+<src/test/*.ml{,i}>: pkg_lwt.unix
+<src/test/*.ml{,i}>: pkg_lwt.syntax
+<src/test/*.ml{,i}>: pkg_lwt
+<src/test/*.ml{,i}>: pkg_core
+<src/test/*.ml{,i}>: pkg_calendar
+<src/test/*.ml{,i}>: pkg_biocaml
 # OASIS_STOP
 
-<src/lib/*.ml{,i}>: syntax_camlp4o
+<src/*/*.ml{,i}>: syntax_camlp4o

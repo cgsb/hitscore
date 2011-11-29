@@ -11,7 +11,7 @@ BuildTools:  ocamlbuild
 Executable hitscoregen
   Path: src/codegen
   MainIs: hitscoregen.ml
-  BuildDepends: threads, core
+  BuildDepends: threads, core, lwt.syntax
   CompiledObject: best
   Install: false
 
@@ -39,6 +39,14 @@ Executable hitscore
   BuildDepends: threads, core, hitscore
   CompiledObject: best
   Install: true
+
+Executable db_access_test
+  Path: src/test
+  MainIs: db_access.ml
+  BuildDepends: threads, core, hitscore, lwt, lwt.syntax, lwt.unix
+  CompiledObject: best
+  Install: false
+
 
   
 Document hitscoredoc
