@@ -1,14 +1,40 @@
-open Core.Std
-let (|>) x f = f x
-
 module Lwt_thread = struct
   include Lwt
   include Lwt_chan
-end
-open Lwt
+  let map_s = Lwt_list.map_s
+  let err s = output_string Lwt_io.stderr s >> flush Lwt_io.stderr
 
+end
 module Hitscore_db = Hitscore_db_access.Make(Lwt_thread)
 module PGOCaml = Hitscore_db.PGOCaml
+
+
+let testttt dbh =
+  let rec insert name =
+    let type_str = "blob" in
+    let i32_list_monad = PGSQL (dbh)
+    "INSERT INTO g_file (g_name, g_type, g_content)\
+     VALUES ($name, $type_str, NULL)\
+     RETURNING g_id " in
+    PGOCaml.bind i32_list_monad 
+      (function
+        | [ inode ] -> PGOCaml.return  inode
+        | _ ->
+          (Lwt.fail (Failure "not one id")))
+  in
+  insert "tttttt" >>
+  insert "uuuuu" >>
+  let iml = Lwt_list.map_s insert [ "A" ; "B"; "C" ] in
+  (* PGOCaml.return iml  *)
+  iml
+
+
+
+open Core.Std
+let (|>) x f = f x
+open Lwt
+
+
 
 let notif =
   let section = Lwt_log.Section.make "Notifications" in
@@ -55,11 +81,33 @@ let print_guy dbh guy =
         (Option.value_map ~default:"" ~f:(sprintf "(%s)") print_name)
         email)
 
+
+let add_a_file dbh =
+  let open Hitscore_db.File_system in
+  add_file ~dbh
+    ~kind:`bioanalyzer_directory
+    ~hr_tag:"LdfdjkR20111129"
+    ~files: Path.(
+      [ file "foo.pdf"; file "foo.xad"; 
+        dir "otherstuff" [ file ~t:`blob "README"; file "data.db" ] ])
+
+
+
+
 let test_lwt =
   lwt dbh = PGOCaml.connect () in
   try_lwt 
     notif "Starting" >>
-    
+
+    testttt dbh >>
+
+    let l = [ "bi" ; "bou"; "boh"; "lksjdf"; "lsdkjf" ] in
+    let tlm =  List.map (l @ l @ l) notif in
+    List.fold_left tlm ~init:(return []) ~f:(fun lm iom ->
+      lm >>= (fun l -> iom >>= (fun io -> return (io :: l)))) >>=
+    (function ll when List.length ll = List.length (tlm) -> 
+      notif "OK" | _ -> notif "KO") >>
+
     count_people dbh >>
     add_random_guy dbh >>
     add_random_guy dbh >>
@@ -69,6 +117,8 @@ let test_lwt =
     add_random_guy dbh >>=
     print_guy dbh >>
 
+    add_a_file dbh >>
+    add_a_file dbh >>
 
     print notif "Nice ending" 
   finally
