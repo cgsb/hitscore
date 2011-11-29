@@ -792,27 +792,29 @@ let ocaml_toplevel_values_and_types ~out dsl =
   doc tmprec "Get all record values";
   doc tmpfun "Get all function evaluations";
   raw tmprec "let get_all_values %s: values list PGOCaml.monad =\n\
-       \  let val_list_monad_list = [\n" pgocaml_db_handle_arg;
+       \  let thread_fun_list = [\n" pgocaml_db_handle_arg;
   raw tmpfun "let get_all_evaluations %s:
                 [ `can_nothing ] evaluations list PGOCaml.monad =\n\
-              \  let val_list_monad_list = [\n" pgocaml_db_handle_arg;
+              \  let thread_fun_list = [\n" pgocaml_db_handle_arg;
+  let apply_get_tag get tag =
+    sprintf "(fun () -> pg_map (%s dbh) (fun l -> list_map l %s));\n" get tag in
   List.iter dsl.nodes (function
     | Record (n, fields) ->
-      raw tmprec "pg_map (Record_%s.get_all dbh) \
-          (fun l -> list_map l (fun x -> `value_%s x));\n" n n
+      let get, tag = 
+        sprintf "Record_%s.get_all" n, sprintf "(fun x -> `value_%s x)" n in
+      raw tmprec "%s" (apply_get_tag get tag)
     | Function (n, args, ret) ->
-      raw tmpfun "pg_map (Function_%s.get_all dbh) (fun l -> list_map l \
-                    (fun x -> `evaluation_%s x));\n" n n
+      let get, tag = 
+        sprintf "Function_%s.get_all" n, 
+        sprintf "(fun x -> `evaluation_%s x)" n in
+      raw tmpfun "%s" (apply_get_tag get tag);
     | _ -> ());
-  let the_rest = [  
-    "  ] in\n";
-    "  let val_list_list_monad =\n\
-             \    fold_left val_list_monad_list\n\
-             \      ~init:(pg_return []) ~f:(fun lm fm -> \n\
-             \         pg_bind lm (fun l -> pg_bind fm (fun f -> \n\
-             \           pg_return (f :: l)))) in\n";
-    "  pg_map val_list_list_monad list_flatten\n"; 
-  ] |> String.concat in
+  let the_rest =
+    "  ] in\n\
+    \  let v_list_list_monad = \
+         PGThread.map_s (fun f -> f ()) thread_fun_list in\n\
+    \  pg_map v_list_list_monad list_flatten\n\n"
+  in
   raw tmprec "%s" the_rest;
   raw tmpfun "%s" the_rest;
 
