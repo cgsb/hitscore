@@ -1,11 +1,11 @@
 # OASIS_START
-# DO NOT EDIT (digest: 99cba8738ad7998621828fbc99132839)
+# DO NOT EDIT (digest: b573d45ff10eeaed389700661891cbd8)
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
-<src/codegen/hitscoregen.{native,byte}>: pkg_lwt.syntax
+<src/codegen/hitscoregen.{native,byte}>: pkg_pgocaml.syntax
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
 <src/codegen/*.ml{,i}>: pkg_threads
-<src/codegen/*.ml{,i}>: pkg_lwt.syntax
+<src/codegen/*.ml{,i}>: pkg_pgocaml.syntax
 <src/codegen/*.ml{,i}>: pkg_core
 # Library hitscore
 "src/lib": include
