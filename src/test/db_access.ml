@@ -60,7 +60,7 @@ let print_guy dbh guy =
 
 
 let add_a_file dbh =
-  Hitscore_db.File_system.add_file ~dbh
+  Hitscore_db.File_system.add_volume ~dbh
     ~kind:`bioanalyzer_directory
     ~hr_tag:"LdfdjkR20111129"
     ~files:Hitscore_db.File_system.Path.(
@@ -108,7 +108,7 @@ let randomly_cancel_or_fail dbh =
           Hitscore_db.Function_assemble_sample_sheet.set_failed ~dbh f >>
           print result "Set failed\n"
         else
-          Hitscore_db.File_system.add_file ~dbh
+          Hitscore_db.File_system.add_volume ~dbh
             ~kind:`sample_sheet_csv
             ~hr_tag:"AllBC"
             ~files:Hitscore_db.File_system.Path.([file "SampleSheet.csv"]) >>=

@@ -838,7 +838,7 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "  | Opaque of string * Enumeration_file_type.t";
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
-  line out "let add_file %s \
+  line out "let add_volume %s \
                 ~(kind:Enumeration_volume_kind.t) \
                 ?(hr_tag: string option) \
                 ~(files:path list) = " pgocaml_db_handle_arg;
