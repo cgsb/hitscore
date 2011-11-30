@@ -78,7 +78,7 @@ let count_all dbh =
 let add_assemble_sample_sheet dbh =
   lwt flowcell = 
     Hitscore_db.Record_flowcell.add_value 
-      ~vendor_name:"MACO42JXX"
+      ~vendor_name:(sprintf "MAC%dCXX" (Random.int 100))
       ~lanes:[| |]
       ~dbh in
   lwt func =
@@ -90,6 +90,57 @@ let add_assemble_sample_sheet dbh =
       ~dbh in
   print result "Added a function\n" >>
   return func
+
+let start_all_inserted_assemblies dbh =
+  Hitscore_db.Function_assemble_sample_sheet.get_all_inserted ~dbh >>=
+  (fun l ->
+    print result "Got %d inserted assemble_sample_sheet's\n" (List.length l) >>
+    Lwt_list.map_s 
+      (Hitscore_db.Function_assemble_sample_sheet.set_started ~dbh) l)
+
+let randomly_cancel_or_fail dbh =
+  Hitscore_db.Function_assemble_sample_sheet.get_all_started ~dbh >>=
+  (fun l ->
+    print result "Got %d started assemble_sample_sheet's\n" (List.length l) >>
+    Lwt_list.map_s 
+      (fun f ->
+        if Random.bool () then
+          Hitscore_db.Function_assemble_sample_sheet.set_failed ~dbh f >>
+          print result "Set failed\n"
+        else
+          Hitscore_db.File_system.add_file ~dbh
+            ~kind:`sample_sheet_csv
+            ~hr_tag:"AllBC"
+            ~files:Hitscore_db.File_system.Path.([file "SampleSheet.csv"]) >>=
+          (fun file ->
+            Hitscore_db.Record_sample_sheet.add_value
+              ~file ~note:"some note on the sample-sheet …" ~dbh >>=
+            (fun result ->
+              Hitscore_db.Function_assemble_sample_sheet.set_succeeded
+                ~dbh ~result f) >>
+              print result "Added a sample-sheet and set succeeded\n")) l)
+
+let show_success dbh =
+  let open Hitscore_db.Function_assemble_sample_sheet in
+  get_all_succeeded ~dbh >>=
+  Lwt_list.map_s (fun success ->
+    cache_evaluation ~dbh success >>=
+    (fun cache ->
+      let {kind; flowcell} = get_arguments cache in
+      lwt flowcell_name =
+        Hitscore_db.Record_flowcell.(
+          lwt {vendor_name; _ } = (cache_value ~dbh flowcell) >|= get_fields in
+          return vendor_name ) in
+      let kind_str = Hitscore_db.Enumeration_sample_sheet_kind.to_string kind in
+      lwt sample_sheet_note = (* TODO get also the file *)
+        let result = get_result cache in
+        Hitscore_db.Record_sample_sheet.(
+          lwt {note; _} = cache_value ~dbh result >|= get_fields in
+          return note) in
+      print result "Success found for:\n\
+                    \    Flowcell: %s,\n    Kind: %s,\n    Note: %s\n" 
+        flowcell_name kind_str 
+        (Option.value ~default:"NONE" sample_sheet_note) ;))
 
 let test_lwt =
   lwt dbh = PGOCaml.connect () in
@@ -109,8 +160,15 @@ let test_lwt =
     add_a_file dbh >>
     count_all dbh >>
     add_assemble_sample_sheet dbh >>
+    add_assemble_sample_sheet dbh >>
+    add_assemble_sample_sheet dbh >>
+    add_assemble_sample_sheet dbh >>
     count_all dbh >>
+    start_all_inserted_assemblies dbh >>
 
+    randomly_cancel_or_fail dbh >>
+
+    show_success dbh >> 
     print notif "Nice ending" 
   finally
     notif "Closing the DB." >>
