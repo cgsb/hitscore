@@ -404,6 +404,10 @@ let rec ocaml_type = function
 let let_in_typed_value  = function
   | (n, Enumeration_name e) -> 
     sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n
+  | (n, Option (Enumeration_name e)) -> 
+    sprintf "  let %s = option_map %s Enumeration_%s.to_string in\n" n n e
+  | (n, Array (Enumeration_name e)) -> 
+    sprintf "  let %s = array_map Enumeration_%s.to_string %s in\n" n n e
   | (n, Record_name r) ->
     sprintf "  let %s = %s.Record_%s.id in\n" n n r
   | (n, Option (Record_name r)) ->
@@ -412,11 +416,19 @@ let let_in_typed_value  = function
     sprintf "  let %s = array_map %s (fun s -> s.Record_%s.id) in\n" n n r
   | (n, Volume_name v) ->
     sprintf "  let %s = %s.File_system.id in\n" n n 
+  | (n, Option (Volume_name r)) ->
+    sprintf "  let %s = option_map %s (fun s -> s.File_system.id) in\n" n n
+  | (n, Array (Volume_name r)) ->
+    sprintf "  let %s = array_map %s (fun s -> s.File_system.id) in\n" n n
   | _ -> ""
 
 let convert_pgocaml_type = function
   | (n, Enumeration_name e) -> 
     sprintf "(Enumeration_%s.of_string_exn %s)" e n
+  | (n, Option (Enumeration_name e)) -> 
+    sprintf "(option_map %s Enumeration_%s.of_string_exn)" n e
+  | (n, Array (Enumeration_name e)) -> 
+    sprintf "(array_map %s Enumeration_%s.of_string_exn)" n e
   | (n, Record_name r) ->
     sprintf "{ Record_%s.id = %s }" r n
   | (n, Option (Record_name r)) ->
@@ -425,6 +437,10 @@ let convert_pgocaml_type = function
     sprintf "(array_map %s (fun id ->  { Record_%s.id }))" n r
   | (n, Volume_name v) ->
     sprintf "{ File_system.id = %s } " n
+  | (n, Option (Volume_name r)) ->
+    sprintf "(option_map %s (fun id -> { File_system..id }))" n
+  | (n, Array (Volume_name r)) ->
+    sprintf "(array_map %s (fun id ->  { File_system.id }))" n
   | (n, _) -> n
 
 
