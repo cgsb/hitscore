@@ -640,7 +640,7 @@ let ocaml_function_module ~out name args result =
                 pg_return ({ id } : [ `can_get_result] t)) 
                 \n\n\n" name;
   raw out "let set_failed \
-           (t : [ `can_start | `can_complete] t) %s =\n" pgocaml_db_handle_arg;
+           (t : [> `can_complete ] t) %s =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
   raw out "  let umm = PGSQL (dbh)\n";
   raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = now ()\n\
@@ -728,7 +728,7 @@ let ocaml_function_module ~out name args result =
 
   List.iter 
     [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");
-      ("started", "`Started", "[ `can_fail | `can_complete]");
+      ("started", "`Started", "[ `can_complete]");
       ("failed", "`Failed", "[ `can_nothing ]");
       ("succeeded", "`Succeeded", "[ `can_get_result ]"); ]
     (fun (suffix, polyvar, phamtom) -> 
