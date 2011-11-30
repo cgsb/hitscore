@@ -450,15 +450,18 @@ let doc out fmt = (* Doc to put before values/types *)
   ksprintf out ("\n(** " ^^ fmt ^^ " *)\n")
 let deprecate out fmt =
   doc out (" @deprecated This is left there for emergency purposes only." ^^ fmt)
+let debug out metafmt fmt =
+  line out ("Printf.ksprintf PGThread.err \"%s\" " ^^ fmt ^^ ";") metafmt
 
 
 
-
-let ocaml_exception name =
+let ocaml_exception ?(thread=true) name =
   let define out = ksprintf out "exception %s of string\n" name in
   let raise_exn out str =
     ksprintf out "(raise (%s %S))" name str in
-  (define, raise_exn )
+  let thread_fail out str =
+    ksprintf out "(PGThread.fail (%s %S))" name str in
+  (define, if thread then thread_fail else raise_exn)
 
 let new_tmp_output () =
   let buf = Buffer.create 42 in
@@ -480,7 +483,8 @@ let ocaml_enumeration_module ~out name fields =
     (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
         String.concat ~sep:"\n| ");
   raw out "\n";
-  let def_oserr, raise_oserr = ocaml_exception "Of_string_error" in
+  let def_oserr, raise_oserr = 
+    ocaml_exception ~thread:false "Of_string_error" in
   def_oserr out;
   raw out "let of_string_exn: string -> t = function\n| %s\n" 
     (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
@@ -502,7 +506,7 @@ let pgocaml_add_to_database ~out ~raise_wrong_db  ?(id="id")
                     \    (function\n\
                     \       | [ %s ] -> PGOCaml.return { %s }\n\
                     \       | _ -> " id id;
-  raise_wrong_db out "INSERT did not return one id";
+  raise_wrong_db out (sprintf "INSERT (%s) did not return one id" table_name);
   raw out ")\n\n";
   ()
 
@@ -652,7 +656,7 @@ let ocaml_function_module ~out name args result =
                 pg_return ({ id } : [ `can_get_result] t)) 
                 \n\n\n" name;
   raw out "let set_failed \
-           (t : [ `can_start | `can_complete] t) %s =\n" pgocaml_db_handle_arg;
+           (t : [> `can_complete ] t) %s =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
   raw out "  let umm = PGSQL (dbh)\n";
   raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = now ()\n\
@@ -740,7 +744,7 @@ let ocaml_function_module ~out name args result =
 
   List.iter 
     [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");
-      ("started", "`Started", "[ `can_fail | `can_complete]");
+      ("started", "`Started", "[ `can_complete]");
       ("failed", "`Failed", "[ `can_nothing ]");
       ("succeeded", "`Succeeded", "[ `can_get_result ]"); ]
     (fun (suffix, polyvar, phamtom) -> 
@@ -804,27 +808,29 @@ let ocaml_toplevel_values_and_types ~out dsl =
   doc tmprec "Get all record values";
   doc tmpfun "Get all function evaluations";
   raw tmprec "let get_all_values %s: values list PGOCaml.monad =\n\
-       \  let val_list_monad_list = [\n" pgocaml_db_handle_arg;
+       \  let thread_fun_list = [\n" pgocaml_db_handle_arg;
   raw tmpfun "let get_all_evaluations %s:
                 [ `can_nothing ] evaluations list PGOCaml.monad =\n\
-              \  let val_list_monad_list = [\n" pgocaml_db_handle_arg;
+              \  let thread_fun_list = [\n" pgocaml_db_handle_arg;
+  let apply_get_tag get tag =
+    sprintf "(fun () -> pg_map (%s dbh) (fun l -> list_map l %s));\n" get tag in
   List.iter dsl.nodes (function
     | Record (n, fields) ->
-      raw tmprec "pg_map (Record_%s.get_all dbh) \
-          (fun l -> list_map l (fun x -> `value_%s x));\n" n n
+      let get, tag = 
+        sprintf "Record_%s.get_all" n, sprintf "(fun x -> `value_%s x)" n in
+      raw tmprec "%s" (apply_get_tag get tag)
     | Function (n, args, ret) ->
-      raw tmpfun "pg_map (Function_%s.get_all dbh) (fun l -> list_map l \
-                    (fun x -> `evaluation_%s x));\n" n n
+      let get, tag = 
+        sprintf "Function_%s.get_all" n, 
+        sprintf "(fun x -> `evaluation_%s x)" n in
+      raw tmpfun "%s" (apply_get_tag get tag);
     | _ -> ());
-  let the_rest = [  
-    "  ] in\n";
-    "  let val_list_list_monad =\n\
-             \    fold_left val_list_monad_list\n\
-             \      ~init:(pg_return []) ~f:(fun lm fm -> \n\
-             \         pg_bind lm (fun l -> pg_bind fm (fun f -> \n\
-             \           pg_return (f :: l)))) in\n";
-    "  pg_map val_list_list_monad list_flatten\n"; 
-  ] |> String.concat in
+  let the_rest =
+    "  ] in\n\
+    \  let v_list_list_monad = \
+         PGThread.map_s (fun f -> f ()) thread_fun_list in\n\
+    \  pg_map v_list_list_monad list_flatten\n\n"
+  in
   raw tmprec "%s" the_rest;
   raw tmpfun "%s" the_rest;
 
@@ -848,7 +854,7 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "  | Opaque of string * Enumeration_file_type.t";
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
-  line out "let add_file %s \
+  line out "let add_volume %s \
                 ~(kind:Enumeration_volume_kind.t) \
                 ?(hr_tag: string option) \
                 ~(files:path list) = " pgocaml_db_handle_arg;
@@ -862,29 +868,18 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "    end";
   line out "  | Directory (name, t, pl) -> begin";
   line out "    let type_str = Enumeration_file_type.to_string t in";
-  line out "    let added_file_monad_list = (list_map pl add_path) in";
-  line out "    let file_list_monad =
-                 fold_left added_file_monad_list
-                  ~init:(pg_return []) ~f:(fun lm fm -> 
-                  pg_bind lm (fun l -> pg_bind fm (fun f -> \
-                    pg_return (f :: l)))) in ";
-  line out "    pg_bind (file_list_monad) (fun file_list -> \n\
-                  let pg_inodes = array_map (list_to_array file_list) \n\
+  line out "    let added_file_list_monad = PGThread.map_s add_path pl in";
+  line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
+  line out "       let pg_inodes = array_map (list_to_array file_list) \
                        (fun { inode } ->  inode) in";
   pgocaml_add_to_database "g_file" 
     [ "g_name"; "g_type"; "g_content" ]
     [ "$name"; "$type_str" ; "$pg_inodes" ]
     ~out ~raise_wrong_db ~id:"inode";
-
   line out "  )  end in";
-  line out " let added_file_monad_list = (list_map files add_path) in";
-  line out " let file_list_monad =
-              fold_left added_file_monad_list
-               ~init:(pg_return []) ~f:(fun lm fm -> 
-               pg_bind lm (fun l -> pg_bind fm (fun f -> \
-                 pg_return (f :: l)))) in ";
-  line out "    pg_bind (file_list_monad) (fun file_list -> \n\
-                  let pg_inodes = array_map (list_to_array file_list) \n\
+  line out " let added_file_list_monad = PGThread.map_s add_path files in";
+  line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
+  line out "     let pg_inodes = array_map (list_to_array file_list) \n\
                        (fun { inode } ->  inode) in";
   line out " let vol_type_str = Enumeration_volume_kind.to_string kind in";
   pgocaml_add_to_database "g_volume" 
@@ -906,7 +901,15 @@ let ocaml_code ?(functorize=true) dsl output_string =
   let out = output_string in
   doc out "Autogenerated module.";
   if functorize then
-    line out "module Make (PGOCaml : PGOCaml_generic.PGOCAML_GENERIC) = struct";
+    line out "
+module type HDB_THREAD = sig
+include PGOCaml_generic.THREAD
+val err: string -> unit t
+val map_s : ('a -> 'b t) -> 'a list -> 'b list t
+end
+module Make \
+(PGThread : HDB_THREAD) = struct\n\
+module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
   doc out "PG'OCaml's connection handle.";
   raw out "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
   doc out "Access rights on [Function_*.{t,cache}].";
@@ -919,11 +922,11 @@ let ocaml_code ?(functorize=true) dsl output_string =
       \     match o with None -> None | Some s -> Some (f s)\n\n\
       \ let array_map a f = Core.Std.Array.map ~f a\n\n\
       \ let list_map l f = Core.Std.List.map ~f l\n\n\
-      \ let list_flatten l = Core.Std.List.flatten l\n\n\
+      \ let list_flatten (l : 'a list list) : 'a list = Core.Std.List.flatten l\n\n\
       \ let fold_left = Core.Std.List.fold_left\n\n\
       \ let array_to_list a = Core.Std.Array.to_list a\n\n\
       \ let list_to_array l = Core.Std.Array.of_list l\n\n\
-      \ let pg_bind am f =\nPGOCaml.bind am f\n\n\
+      \ let pg_bind am f = PGOCaml.bind am f\n\n\
       \ let pg_return t = PGOCaml.return t\n\n\
      \ let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
       (**/**)\n";

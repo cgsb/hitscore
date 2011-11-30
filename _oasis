@@ -8,10 +8,15 @@ License:     PROP
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
 
+
+Flag lwt
+  Description: Build stuff depending on Lwt
+  Default: false
+
 Executable hitscoregen
   Path: src/codegen
   MainIs: hitscoregen.ml
-  BuildDepends: threads, core
+  BuildDepends: threads, core, pgocaml.syntax
   CompiledObject: best
   Install: false
 
@@ -39,6 +44,17 @@ Executable hitscore
   BuildDepends: threads, core, hitscore
   CompiledObject: best
   Install: true
+
+Executable db_access_test
+  Path: src/test
+  MainIs: db_access.ml
+  if flag(lwt)
+    Build: true
+  else
+    Build: false
+  BuildDepends: threads, core, hitscore, lwt, lwt.syntax, lwt.unix
+  CompiledObject: best
+  Install: false
 
   
 Document hitscoredoc
