@@ -31,11 +31,7 @@
         notable)
 ;; Functions:
 
-(enumeration read_type
-             read_PE_150x150
-             read_PE_50x50 read_PE_100x100
-             read_SE_150
-             read_SE_50 read_SE_100)
+(enumeration read_type paired_end single_end)
 (enumeration barcode_provider bioo illumina nugen)
 (record stock_library
           (name           string)
@@ -46,6 +42,7 @@
           (truseq_control bool)
           (rnaseq_control string option)
           (read_type      read_type option)
+          (read_length int option)
           (barcode_type barcode_provider)
           (barcodes int array)
           notable
@@ -92,6 +89,7 @@
 (record hiseq_raw
         (flowcell_name string)
         (read_type read_type)
+        (read_length int)
         (with_intensities bool)
         (host string)
         (hiseq_dir_name string)) 
