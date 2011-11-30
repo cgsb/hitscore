@@ -23,11 +23,6 @@
         notable)
 
 
-(subrecord barcode
-           (vendor_id int)
-           (barcode string))
-(record bioo_barcode barcode)
-(record truseq_barcode barcode)
 
 (volume protocol_directory protocols)
 (record protocol
@@ -36,22 +31,24 @@
         notable)
 ;; Functions:
 
-(enumeration read_type read_PE_50x50 read_PE_100x100 read_SE_50 read_SE_100)
-
-(record library
+(enumeration read_type
+             read_PE_150x150
+             read_PE_50x50 read_PE_100x100
+             read_SE_150
+             read_SE_50 read_SE_100)
+(enumeration barcode_provider bioo illumina nugen)
+(record stock_library
           (name           string)
           (sample      sample)
-          (protocol  protocol)
-          (vial_id        int)
-          (application    string)
+          (protocol  protocol option)
+          (application    string option)
           (stranded       bool)
-          (control_type   string)
           (truseq_control bool)
-          (rnaseq_control string)
-          (read_type      read_type)
-        (bioo_barcodes bioo_barcode array)
-        (truseq_barcodes truseq_barcode array)
-        notable
+          (rnaseq_control string option)
+          (read_type      read_type option)
+          (barcode_type barcode_provider)
+          (barcodes int array)
+          notable
 )
 
 (record key_value
@@ -59,42 +56,42 @@
         (value string))
 
 (record input_library
-        (library library)
+        (library stock_library)
         (submission_date timestamp)
         (contacts     person array)
-        (volume_uL real)
-        (concentration_nM real)
+        (volume_uL real option)
+        (concentration_nM real option)
         (user_db key_value array)
         notable
 )
 
 (record lane
-        (libraries input_library array))
+        (seeding_concentration real)
+        (total_volume real)
+        (libraries input_library array)
+        (pooled_percentages int array)
+        )
 
 (record flowcell
-        (vendor_name string)
+        (serial_name string)
         (lanes lane array))
-
-(record qpcr
-        (library library)
-        (concentration real)
-        (volume real))
 
 (volume bioanalyzer_directory bioanalyzer)
 (record bioanalyzer
-        (library library)
+        (library stock_library)
         (well_number int)
         (files bioanalyzer_directory)
         (mean_fragment_size real))
 (volume agarose_gel_directory agarose_gel)
 (record agarose_gel
-        (library library)
+        (library stock_library)
         (well_number int)
         (files agarose_gel_directory)
         (mean_fragment_size real))
 
 (record hiseq_raw
         (flowcell_name string)
+        (read_type read_type)
         (with_intensities bool)
         (host string)
         (hiseq_dir_name string)) 
