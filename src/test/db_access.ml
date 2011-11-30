@@ -74,6 +74,23 @@ let count_all dbh =
   lwt evls = Hitscore_db.get_all_evaluations ~dbh >|= List.length in
   print result "Values: %d, Evaluations: %d\n" vals evls
 
+
+let add_assemble_sample_sheet dbh =
+  lwt flowcell = 
+    Hitscore_db.Record_flowcell.add_value 
+      ~vendor_name:"MACO42JXX"
+      ~lanes:[| |]
+      ~dbh in
+  lwt func =
+    Hitscore_db.Function_assemble_sample_sheet.add_evaluation
+      ~kind:`all_barcodes
+      ~flowcell
+      ~recomputable:true
+      ~recompute_penalty:1.
+      ~dbh in
+  print result "Added a function\n" >>
+  return func
+
 let test_lwt =
   lwt dbh = PGOCaml.connect () in
   try_lwt 
@@ -90,6 +107,8 @@ let test_lwt =
 
     add_a_file dbh >>
     add_a_file dbh >>
+    count_all dbh >>
+    add_assemble_sample_sheet dbh >>
     count_all dbh >>
 
     print notif "Nice ending" 
