@@ -73,7 +73,8 @@ let add_a_file dbh =
 let count_all dbh =
   lwt vals = Hitscore_db.get_all_values ~dbh >|= List.length in
   lwt evls = Hitscore_db.get_all_evaluations ~dbh >|= List.length in
-  print result "Values: %d, Evaluations: %d\n" vals evls
+  lwt vols = Hitscore_db.File_system.get_all ~dbh >|= List.length in
+  print result "Values: %d, Evaluations: %d, Volumes: %d\n" vals evls vols
 
 
 let add_assemble_sample_sheet dbh =
@@ -170,6 +171,7 @@ let test_lwt =
     randomly_cancel_or_fail dbh >>
 
     show_success dbh >> 
+    count_all dbh >>
     print notif "Nice ending" 
   finally
     notif "Closing the DB." >>
