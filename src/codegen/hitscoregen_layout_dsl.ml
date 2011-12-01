@@ -932,31 +932,62 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
     List.map (id_field :: volume_fields) (fun (s, t) ->
       let (t, p) = dsl_type_to_db t in (s, t, p)) in
   hide out (fun out ->
-    doc out "[_cache_file] is hidden.";
-    raw out "type _cache_file = \n(%s)\n\n"
+    doc out "[_file_cache] is hidden.";
+    raw out "type _file_cache = \n(%s)\n\n"
       (List.map (file_stuff_in_db)
          ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
-    doc out "[_cache_volume] is hidden.";
-    raw out "type _cache_volume_entry = \n(%s)\n\n"
+    doc out "[_volume_entry_cache] is hidden.";
+    raw out "type _volume_entry_cache = \n(%s)\n\n"
       (List.map (volume_stuff_in_db)
          ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
 
     doc out "Retrieve a file from the DB.";
     raw out "let cache_file (file: file) %s: \
-                  _cache_file PGOCaml.monad =\n" pgocaml_db_handle_arg;
+                  _file_cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
     pgocaml_select_from_one_by_id 
       ~out ~raise_wrong_db ~get_id:"file.inode" "g_file";
+
+    doc out "A whole volume cache is the volume entry and a \
+              list of file caches.";
+    line out "type _volume_cache = (_volume_entry_cache * (_file_cache list))";
   );
 
-  doc out "The [volume_cache] is the info retrieved by the database queries.";
-  raw out "type volume_entry_cache = _cache_volume_entry\n\n";
+  doc out "The [volume_entry_cache] is the info retrieved by the
+      database queries for the \"toplevel part\" of a volume.";
+  raw out "type volume_entry_cache = _volume_entry_cache\n\n";
      
-  doc out "Retrieve the \"toplevel\" part of a volume from the DB.";
+  doc out "Retrieve the \"entry\" part of a volume from the DB.";
   raw out "let cache_volume_entry (volume: volume) %s: \
                   volume_entry_cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
   pgocaml_select_from_one_by_id 
     ~out ~raise_wrong_db ~get_id:"volume.id" "g_volume";
 
+  doc out "The [volume_cache] contains the whole volume (entry and files).";
+  line out "type volume_cache = _volume_cache";
+
+  doc out "Retrieve a \"whole\" volume.";
+  line out "let cache_volume %s (volume: volume) : volume_cache PGOCaml.monad ="
+    pgocaml_db_handle_arg;
+  line out "  let entry_m = cache_volume_entry ~dbh volume in";
+  line out "  pg_bind entry_m (fun entry ->";
+  line out "    let files = ref ([] : _file_cache list) in";
+  line out "    let (%s) = entry in"
+    (List.map (id_field :: volume_fields)
+       (function ("g_content", _) -> "contents" | (n, _) -> "_" ) |>
+           String.concat ~sep:", ");
+  line out "    let rec get_contents arr =";
+  line out "      let contents = array_to_list arr in";
+  line out "      let f inode = cache_file ~dbh { inode } in";
+  line out "      pg_bind (PGThread.map_s f contents) (fun fs ->";
+  line out "        files := list_append fs !files;";
+  line out "        let todo = list_map fs (fun (%s) -> contents) in"
+    (List.map (id_field :: file_fields)
+       (function ("g_content", _) -> "contents" | (n, _) -> "_" ) |>
+           String.concat ~sep:", ");
+  line out "        pg_bind (PGThread.map_s get_contents todo)";
+  line out "          (fun _ -> pg_return ())) in";
+  line out "    pg_bind (PGThread.map_s get_contents [ contents ])";
+  line out "      (fun _ -> pg_return (entry, !files)))";
 
 
   line out "end (* File_system *)";
@@ -987,6 +1018,7 @@ module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
       \     match o with None -> None | Some s -> Some (f s)\n\n\
       \ let array_map a f = Core.Std.Array.map ~f a\n\n\
       \ let list_map l f = Core.Std.List.map ~f l\n\n\
+      \ let list_append l = Core.Std.List.append l\n\n\
       \ let list_flatten (l : 'a list list) : 'a list = Core.Std.List.flatten l\n\n\
       \ let fold_left = Core.Std.List.fold_left\n\n\
       \ let array_to_list a = Core.Std.Array.to_list a\n\n\
