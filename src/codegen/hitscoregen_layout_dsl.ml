@@ -894,7 +894,12 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "let dir ?(t=`directory) n l = Directory (n, t, l)";
   line out "let opaque ?(t=`opaque) n = Opaque (n, t)";
   line out "end";
-  line out "end (* File_system *)"; 
+  
+  doc out "Get all the volumes.";
+  raw out "let get_all %s: volume list PGOCaml.monad = \n" pgocaml_db_handle_arg;
+  pgocaml_do_get_all_ids ~out "g_volume";
+
+  line out "end (* File_system *)";
   ()
 
 let ocaml_code ?(functorize=true) dsl output_string =
