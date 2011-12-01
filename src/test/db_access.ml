@@ -64,7 +64,7 @@ let add_a_file dbh =
   Hitscore_db.File_system.add_volume ~dbh
     ~kind:`bioanalyzer_directory
     ~hr_tag:"LdfdjkR20111129"
-    ~files:Hitscore_db.File_system.Path.(
+    ~files:Hitscore_db.File_system.Tree.(
       [ file "foo.pdf"; file "foo.xad"; 
         dir "otherstuff" [ file ~t:`blob "README"; 
                            file "data.db";
@@ -76,6 +76,17 @@ let count_all dbh =
   lwt vols = Hitscore_db.File_system.get_all ~dbh >|= List.length in
   print result "Values: %d, Evaluations: %d, Volumes: %d\n" vals evls vols
 
+let ls_minus_r dbh =
+  lwt vols = Hitscore_db.File_system.get_all ~dbh  in
+  Lwt_list.map_s (fun vol -> 
+    Hitscore_db.File_system.cache_volume ~dbh vol >|=
+      (fun volume ->
+        print result "Volume: %S\n" 
+          Hitscore_db.File_system.(
+            volume |> volume_entry_cache |> volume_entry |> entry_unix_path) >>
+        let trees = Hitscore_db.File_system.volume_trees volume in
+        let paths = Hitscore_db.File_system.trees_to_unix_paths trees in
+        Lwt_list.map_s (print result "  |-> %s\n") paths)) vols
 
 let add_assemble_sample_sheet dbh =
   lwt flowcell = 
@@ -113,7 +124,7 @@ let randomly_cancel_or_fail dbh =
           Hitscore_db.File_system.add_volume ~dbh
             ~kind:`sample_sheet_csv
             ~hr_tag:"AllBC"
-            ~files:Hitscore_db.File_system.Path.([file "SampleSheet.csv"]) >>=
+            ~files:Hitscore_db.File_system.Tree.([file "SampleSheet.csv"]) >>=
           (fun file ->
             Hitscore_db.Record_sample_sheet.add_value
               ~file ~note:"some note on the sample-sheet …" ~dbh >>=
@@ -172,6 +183,8 @@ let test_lwt =
 
     show_success dbh >> 
     count_all dbh >>
+    ls_minus_r dbh >>
+
     print notif "Nice ending" 
   finally
     notif "Closing the DB." >>
