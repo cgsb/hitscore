@@ -851,7 +851,7 @@ let ocaml_toplevel_values_and_types ~out dsl =
 
   ()
 
-let ocaml_file_system_module ~out = (* For now does not depend on the
+let ocaml_file_system_module ~out dsl = (* For now does not depend on the
                                        actual layout *)
   let def_wrong_db_error, raise_wrong_db = 
     ocaml_exception "Wrong_DB_return" in
@@ -907,10 +907,14 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
   line out "     let pg_inodes = array_map (list_to_array file_list) \n\
                        (fun { inode } ->  inode) in";
-  line out " let vol_type_str = Enumeration_volume_kind.to_string kind in";
+  line out " let toplevel = match kind with";
+  List.iter dsl.nodes (function
+    | Volume (n, t) -> line out "    | `%s -> %S" n t
+    | _ -> ());
+  line out " in";
   pgocaml_add_to_database "g_volume" 
     (List.map volume_fields fst)
-    [ "$vol_type_str" ; "$?hr_tag"; "$pg_inodes" ]
+    [ "$toplevel" ; "$?hr_tag"; "$pg_inodes" ]
     ~out ~raise_wrong_db ~id:"id";
   line out ")";
 
@@ -1028,12 +1032,12 @@ module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
      \ let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
       (**/**)\n";
   let volume_kinds = 
-    ("g_trash" :: (List.filter_map dsl.nodes 
-                     (function | Volume (n, _) -> Some n | _ -> None))) in
+    (List.filter_map dsl.nodes 
+       (function | Volume (n, _) -> Some n | _ -> None)) in
   let file_types =  ["blob"; "directory"; "opaque"] in
   ocaml_enumeration_module ~out "volume_kind" volume_kinds;
   ocaml_enumeration_module ~out "file_type" file_types;
-  ocaml_file_system_module ~out;
+  ocaml_file_system_module ~out dsl;
   List.iter dsl.nodes (function
     | Enumeration (name, fields) ->
       ocaml_enumeration_module ~out name fields
