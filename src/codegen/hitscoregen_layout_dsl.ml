@@ -856,6 +856,19 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   let def_wrong_db_error, raise_wrong_db = 
     ocaml_exception "Wrong_DB_return" in
 
+  let id_field = "g_id", Int in
+  let file_fields = [
+    "g_name", String;
+    "g_type", String;
+    "g_content", Array (Record_name "g_file"); (* A bit hackish, duck-typing. *)
+  ] in
+  let volume_fields = [
+    "g_toplevel", String;
+    "g_hr_tag", Option String;
+    "g_content", Array (Record_name "g_file");
+  ] in
+
+
   line out "module File_system = struct";
   def_wrong_db_error out;
   line out "type volume = { id : int32 }";
@@ -873,9 +886,10 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "let rec add_path = function";
   line out "  | File (name, t) | Opaque (name, t) -> begin";
   line out "    let type_str = Enumeration_file_type.to_string t in";
-  pgocaml_add_to_database "g_file" 
-    [ "g_name"; "g_type"; "g_content" ]
-    [ "$name"; "$type_str" ; "NULL" ]
+  line out "    let empty_array = [| |] in";
+  pgocaml_add_to_database "g_file"
+    (List.map file_fields fst)
+    [ "$name"; "$type_str" ; "$empty_array" ]
     ~out ~raise_wrong_db ~id:"inode";
   line out "    end";
   line out "  | Directory (name, t, pl) -> begin";
@@ -885,7 +899,7 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   line out "       let pg_inodes = array_map (list_to_array file_list) \
                        (fun { inode } ->  inode) in";
   pgocaml_add_to_database "g_file" 
-    [ "g_name"; "g_type"; "g_content" ]
+    (List.map file_fields fst)
     [ "$name"; "$type_str" ; "$pg_inodes" ]
     ~out ~raise_wrong_db ~id:"inode";
   line out "  )  end in";
@@ -895,7 +909,7 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
                        (fun { inode } ->  inode) in";
   line out " let vol_type_str = Enumeration_volume_kind.to_string kind in";
   pgocaml_add_to_database "g_volume" 
-    [ "g_toplevel"; "g_hr_tag"; "g_content" ]
+    (List.map volume_fields fst)
     [ "$vol_type_str" ; "$?hr_tag"; "$pg_inodes" ]
     ~out ~raise_wrong_db ~id:"id";
   line out ")";
@@ -910,6 +924,40 @@ let ocaml_file_system_module ~out = (* For now does not depend on the
   doc out "Get all the volumes.";
   raw out "let get_all %s: volume list PGOCaml.monad = \n" pgocaml_db_handle_arg;
   pgocaml_do_get_all_ids ~out "g_volume";
+
+  let file_stuff_in_db = 
+    List.map (id_field :: file_fields) (fun (s, t) ->
+      let (t, p) = dsl_type_to_db t in (s, t, p)) in
+  let volume_stuff_in_db =
+    List.map (id_field :: volume_fields) (fun (s, t) ->
+      let (t, p) = dsl_type_to_db t in (s, t, p)) in
+  hide out (fun out ->
+    doc out "[_cache_file] is hidden.";
+    raw out "type _cache_file = \n(%s)\n\n"
+      (List.map (file_stuff_in_db)
+         ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+    doc out "[_cache_volume] is hidden.";
+    raw out "type _cache_volume_entry = \n(%s)\n\n"
+      (List.map (volume_stuff_in_db)
+         ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+
+    doc out "Retrieve a file from the DB.";
+    raw out "let cache_file (file: file) %s: \
+                  _cache_file PGOCaml.monad =\n" pgocaml_db_handle_arg;
+    pgocaml_select_from_one_by_id 
+      ~out ~raise_wrong_db ~get_id:"file.inode" "g_file";
+  );
+
+  doc out "The [volume_cache] is the info retrieved by the database queries.";
+  raw out "type volume_entry_cache = _cache_volume_entry\n\n";
+     
+  doc out "Retrieve the \"toplevel\" part of a volume from the DB.";
+  raw out "let cache_volume_entry (volume: volume) %s: \
+                  volume_entry_cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
+  pgocaml_select_from_one_by_id 
+    ~out ~raise_wrong_db ~get_id:"volume.id" "g_volume";
+
+
 
   line out "end (* File_system *)";
   ()
