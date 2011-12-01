@@ -6,9 +6,10 @@
 ;; Almost static input data:
 (record person
        (print_name      string option)
-       (family_name     string)
-       (email           string)
+       (family_name     string option)
+       (email           string option)
        (login           string option)
+       (nickname        string option)
        notable
        )
 
