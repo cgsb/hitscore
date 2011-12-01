@@ -47,16 +47,17 @@ let add_random_guy dbh =
   let note = if Random.bool () then Some "some note" else None in
   print result "Adding %s (%s)" family_name email >>
   Hitscore_db.Record_person.add_value ~dbh 
-    ?print_name ~family_name ~email ?login ?note
+    ?print_name ~family_name ~email ?login ?note ?nickname:None
 
 let print_guy dbh guy =
   let open Hitscore_db.Record_person in
   cache_value guy dbh >>=
     (fun cache ->
       let {print_name; family_name; email; login; note } = get_fields cache in
-      print result "%s %s <%s>" family_name
+      print result "%s %s %s"
+        (Option.value ~default:"" family_name)
         (Option.value_map ~default:"" ~f:(sprintf "(%s)") print_name)
-        email)
+        (Option.value_map ~default:"NoEmail" ~f:(sprintf "<%s>") email))
 
 
 let add_a_file dbh =
