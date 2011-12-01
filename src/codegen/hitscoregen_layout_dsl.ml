@@ -482,17 +482,23 @@ let ocaml_exception ?(thread=true) name =
     ksprintf out "(PGThread.fail (%s %S))" name str in
   (define, if thread then thread_fail else raise_exn)
 
-let new_tmp_output () =
-  let buf = Buffer.create 42 in
-  let tmp_out s = Buffer.add_string buf s in
-  let print_tmp output_string = output_string (Buffer.contents buf) in
-  (tmp_out, print_tmp)
-
 let pgocaml_do_get_all_ids ~out name = 
   raw out "  let um = PGSQL(dbh)\n";
   raw out "    \"SELECT g_id FROM %s\" in\n" name;
   raw out "  pg_map um (fun l -> list_map l (fun id -> { id }))\n\n";
   ()
+
+let pgocaml_select_from_one_by_id 
+    ~out ~raise_wrong_db ?(get_id="t.id") table_name  =
+  raw out "  let id = %s in\n" get_id;
+  raw out "  let um = PGSQL (dbh)\n";
+  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" table_name;
+  raw out "  pg_bind um (function [one] -> pg_return one\n    | _ -> ";
+  raise_wrong_db out (sprintf "SELECT (%s of %s) did not return one id" 
+                        get_id table_name);
+  raw out ")\n";
+  ()
+
 
 let ocaml_enumeration_module ~out name fields =
   raw out "module Enumeration_%s = struct\n" name;
