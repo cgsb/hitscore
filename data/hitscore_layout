@@ -30,10 +30,10 @@
         (name string)
         (doc protocol_directory)
         notable)
-;; Functions:
 
-(enumeration read_type paired_end single_end)
+
 (enumeration barcode_provider bioo illumina nugen)
+
 (record stock_library
           (name           string)
           (sample      sample)
@@ -42,8 +42,8 @@
           (stranded       bool)
           (truseq_control bool)
           (rnaseq_control string option)
-          (read_type      read_type option)
-          (read_length int option)
+          (read_length_1 int)
+          (read_length_2 int option)
           (barcode_type barcode_provider)
           (barcodes int array)
           notable
@@ -89,8 +89,8 @@
 
 (record hiseq_raw
         (flowcell_name string)
-        (read_type read_type)
-        (read_length int)
+        (read_length_1 int)
+        (read_length_2 int option)
         (with_intensities bool)
         (host string)
         (hiseq_dir_name string)) 
