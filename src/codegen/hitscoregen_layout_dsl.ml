@@ -572,22 +572,18 @@ let ocaml_record_module ~out name fields =
   let args_in_db = 
     List.map fields (fun (s, t) ->
       let (t, p) = dsl_type_to_db t in (s, t, p)) in
-  raw out "(**/**)\ntype _cache = \n(%s)\n(**/**)\n\n"
+  hide out (fun out ->
+    raw out "type _cache = \n(%s)\n\n"
     (List.map (db_record_standard_fields @ args_in_db)
        ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+  );
   doc out "The [cache] is the info retrieved by the database queries.";
   raw out "type cache = _cache\n\n";
 
-      (* Access a function *)
   doc out "Cache the contents of the record [t].";
   raw out "let cache_value (t: t) %s: \
                   cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
-  raw out "  let id = t.id in\n";
-  raw out "  let um = PGSQL (dbh)\n";
-  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
-  raw out "  pg_bind um (function [one] -> pg_return one\n    | _ -> ";
-  raise_wrong_db_error out "INSERT did not return one id";
-  raw out ")\n";
+  pgocaml_select_from_one_by_id ~out ~raise_wrong_db:raise_wrong_db_error name;
 
   doc out "The fields of the Record, the type is intended to \
         be used for \"record pattern matching\" \
@@ -615,19 +611,13 @@ let ocaml_record_module ~out name fields =
   raw out "  ts\n\n";
 
 
-      (* Access a value *)
+  (* Access a value *)
   deprecate out "Finds a value given its internal identifier ([g_id]).";
   raw out "let _get_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
-  raw out "  let um = PGSQL(dbh)\n";
-  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
-  raw out "  pg_bind um \n\
-            \    (function\n\
-            \       | [ one ] -> pg_return one\n\
-            \       | _ -> ";
-  raise_wrong_db_error out "SELECT did not return a single tuple";
-  raw out ")\n\n";
+  pgocaml_select_from_one_by_id 
+    ~out ~raise_wrong_db:raise_wrong_db_error ~get_id:"id" name;
 
-      (* Delete a value *)
+  (* Delete a value *)
   deprecate out "Deletes a values with its internal id.";
   raw out "let _delete_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
   raw out "  PGSQL (dbh)\n";
@@ -694,23 +684,20 @@ let ocaml_function_module ~out name args result =
   let args_in_db = 
     List.map args (fun (s, t) ->
       let (t, p) = dsl_type_to_db t in (s, t, p)) in
-  raw out "(**/**)\ntype 'a _cache = \n(%s)\n(**/**)\n\n"
-    (List.map (db_function_standard_fields result @ args_in_db)
-       ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+  hide out (fun out ->
+    raw out "type 'a _cache = \n(%s)\n"
+      (List.map (db_function_standard_fields result @ args_in_db)
+         ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
+  );
   doc out "The [cache] is the info retrieved by the database queries; \
                it inherits the capabilities of the handle (type [t]).";
   raw out "type 'a cache = 'a _cache\n\n";
 
-      (* Access a function *)
+  (* Access a function *)
   doc out "Cache the contents of the evaluation [t].";
   raw out "let cache_evaluation (t: 'a t) %s:\
                  'a cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
-  raw out "  let id = t.id in\n";
-  raw out "  let umm = PGSQL (dbh)\n";
-  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" name;
-  raw out "  pg_bind umm (function [one] -> pg_return one\n    | _ -> ";
-  raise_wrong_db_error out "INSERT did not return one id";
-  raw out ")\n";
+  pgocaml_select_from_one_by_id ~out ~raise_wrong_db:raise_wrong_db_error name;
 
   doc out "The arguments of the Function, the type is intended to \
         be used for \"record pattern matching\" \
