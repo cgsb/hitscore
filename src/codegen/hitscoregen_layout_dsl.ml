@@ -482,10 +482,10 @@ let ocaml_exception ?(thread=true) name =
     ksprintf out "(PGThread.fail (%s %S))" name str in
   (define, if thread then thread_fail else raise_exn)
 
-let pgocaml_do_get_all_ids ~out name = 
+let pgocaml_do_get_all_ids ~out ?(id="id") name = 
   raw out "  let um = PGSQL(dbh)\n";
   raw out "    \"SELECT g_id FROM %s\" in\n" name;
-  raw out "  pg_map um (fun l -> list_map l (fun id -> { id }))\n\n";
+  raw out "  pg_map um (fun l -> list_map l (fun %s -> { %s }))\n\n" id id;
   ()
 
 let pgocaml_select_from_one_by_id 
@@ -855,6 +855,8 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
                                        actual layout *)
   let def_wrong_db_error, raise_wrong_db = 
     ocaml_exception "Wrong_DB_return" in
+  let def_inconsistency_error, raise_inconsistency_error = 
+    ocaml_exception ~thread:false "DB_inconsistency" in
 
   let id_field = "g_id", Int in
   let file_fields = [
@@ -871,19 +873,20 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
   line out "module File_system = struct";
   def_wrong_db_error out;
+  def_inconsistency_error out;
   line out "type volume = { id : int32 }";
   line out "type file = { inode: int32 }";
-  line out "type path = ";
+  line out "type tree = ";
   line out "  | File of string * Enumeration_file_type.t";
-  line out "  | Directory of string * Enumeration_file_type.t * path list";
+  line out "  | Directory of string * Enumeration_file_type.t * tree list";
   line out "  | Opaque of string * Enumeration_file_type.t";
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
   line out "let add_volume %s \
                 ~(kind:Enumeration_volume_kind.t) \
                 ?(hr_tag: string option) \
-                ~(files:path list) = " pgocaml_db_handle_arg;
-  line out "let rec add_path = function";
+                ~(files:tree list) = " pgocaml_db_handle_arg;
+  line out "let rec add_tree = function";
   line out "  | File (name, t) | Opaque (name, t) -> begin";
   line out "    let type_str = Enumeration_file_type.to_string t in";
   line out "    let empty_array = [| |] in";
@@ -894,7 +897,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "    end";
   line out "  | Directory (name, t, pl) -> begin";
   line out "    let type_str = Enumeration_file_type.to_string t in";
-  line out "    let added_file_list_monad = PGThread.map_s add_path pl in";
+  line out "    let added_file_list_monad = PGThread.map_s add_tree pl in";
   line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
   line out "       let pg_inodes = array_map (list_to_array file_list) \
                        (fun { inode } ->  inode) in";
@@ -903,7 +906,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     [ "$name"; "$type_str" ; "$pg_inodes" ]
     ~out ~raise_wrong_db ~id:"inode";
   line out "  )  end in";
-  line out " let added_file_list_monad = PGThread.map_s add_path files in";
+  line out " let added_file_list_monad = PGThread.map_s add_tree files in";
   line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
   line out "     let pg_inodes = array_map (list_to_array file_list) \n\
                        (fun { inode } ->  inode) in";
@@ -918,8 +921,8 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     ~out ~raise_wrong_db ~id:"id";
   line out ")";
 
-  doc out "Module for constructing file paths less painfully.";
-  line out "module Path = struct";
+  doc out "Module for constructing file trees less painfully.";
+  line out "module Tree = struct";
   line out "let file ?(t=`blob) n = File (n, t)";
   line out "let dir ?(t=`directory) n l = Directory (n, t, l)";
   line out "let opaque ?(t=`opaque) n = Opaque (n, t)";
@@ -927,7 +930,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   
   doc out "Get all the volumes.";
   raw out "let get_all %s: volume list PGOCaml.monad = \n" pgocaml_db_handle_arg;
-  pgocaml_do_get_all_ids ~out "g_volume";
+  pgocaml_do_get_all_ids ~out ~id:"id" "g_volume";
 
   let file_stuff_in_db = 
     List.map (id_field :: file_fields) (fun (s, t) ->
@@ -994,21 +997,81 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "      (fun _ -> pg_return (entry, !files)))";
 
   doc out "Get the entry from the whole volume.";
-  line out "let entry (vec: volume_cache): volume_entry_cache = fst vec";
+  line out "let volume_entry_cache (vec: volume_cache): \
+      volume_entry_cache = fst vec";
+
+  doc out "Toplevel volume information.";
+  line out "type volume_entry = \
+        {vol_id: int32; toplevel: string; hr_tag: string option }";
+
+  doc out "Convert a [volume_entry_cache] to an [volume_entry].";
+  line out "let volume_entry (vec: volume_entry_cache) =";
+  line out "  let (%s) = vec in"
+    (List.map (id_field :: volume_fields)
+       (function 
+         | ("g_id", _) -> "vol_id" 
+         | ("g_toplevel", _) -> "toplevel" 
+         | ("g_hr_tag", _) -> "hr_tag" 
+         | (n, _) -> "_" ) |> String.concat ~sep:", ");
+  line out "  {vol_id; toplevel; hr_tag}";
 
   doc out "Create a Unix directory path for a volume-entry (relative
             to a `root').";
-  line out  "let entry_unix_path (vc: volume_entry_cache): string =";
-  line out "  let (%s) = vc in"
+  line out  "let entry_unix_path (ve: volume_entry): string =";
+  line out "  Printf.sprintf \"%%s/%%09ld%%s\" ve.toplevel ve.vol_id";
+  line out "    (option_value_map ~default:\"\" ve.hr_tag ~f:((^) \"_\"))";
+
+  doc out "Get a list of trees `known' for a given volume.";
+  line out "let volume_trees (vc : volume_cache) : tree list =";
+  line out "  let files = snd vc in";
+  line out "  let find_file i = \
+            match list_find files (fun (%s) -> inode = i) with"
+    (List.map (id_field :: file_fields)
+       (function ("g_id", _) -> "inode" | (n, _) -> "_" ) |>
+           String.concat ~sep:", ");
+  line out "    | Some (%s) ->"
+    (List.map (id_field :: file_fields)
+       (function 
+         | ("g_name", _) -> "name" 
+         | ("g_type", _) -> "type_str" 
+         | ("g_content", _) -> "more_inodes" 
+         | (n, _) -> "_" ) |> String.concat ~sep:", ");
+  line out "      (name, Enumeration_file_type.of_string_exn type_str, \
+                    array_to_list more_inodes)";
+  line out "     | None -> ";
+  raise_inconsistency_error out "volume_unix_paths: did not find an inode";
+  raw out " in\n";
+  line out "  let rec go_through_cache inode =";
+  line out "    match find_file inode with";
+  (* For the future: when the file types are customizable, 
+     this will have to change.  *)
+  line out "    | name, `opaque, [] -> Opaque (name, `opaque)";
+  line out "    | name, `directory, l -> ";
+  line out "      Directory (name, `directory, (list_map l go_through_cache))";
+  line out "    | name, `blob, [] -> File (name, `blob)";
+  line out "    | name, _, _ -> ";
+  raise_inconsistency_error out "volume_unix_paths: did not find an inode";
+  line out "  in";
+  line out "  let (%s) = fst vc in"
     (List.map (id_field :: volume_fields)
        (function 
-         | ("g_id", _) -> "id" 
-         | ("g_toplevel", _) -> "toplevel" 
-         | ("g_hr_tag", _) -> "hrt" 
+         | ("g_content", _) -> "vol_content"
          | (n, _) -> "_" ) |> String.concat ~sep:", ");
-  line out "  Printf.sprintf \"%%s/%%09ld%%s\" toplevel id";
-  line out "    (option_value_map ~default:\"\" hrt ~f:((^) \"_\"))";
 
+  line out "  list_map (array_to_list vol_content) go_through_cache\n";
+
+  let unix_sep = "/" in
+  doc out "Convert a bunch of trees to a list of Unix paths.";
+  line out "let trees_to_unix_paths trees =";
+  line out "  let paths = ref [] in";
+  line out "  let rec descent parent = function";
+  line out "  | File (n, _) -> paths := (parent ^ n) :: !paths";
+  line out "  | Opaque (n, _) -> paths := (parent ^ n ^ %S) :: !paths" unix_sep;
+  line out "  | Directory (n, _, l) -> list_iter l (descent (parent ^ n ^ %S))"
+    unix_sep;
+  line out "  in";
+  line out "  list_iter trees (descent \"\");";
+  line out "  !paths";
   line out "end (* File_system *)";
   ()
 
@@ -1038,6 +1101,8 @@ module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
       \ let option_value_map = Core.Std.Option.value_map \n\n\
       \ let array_map a f = Core.Std.Array.map ~f a\n\n\
       \ let list_map l f = Core.Std.List.map ~f l\n\n\
+      \ let list_iter l f = Core.Std.List.iter ~f l\n\n\
+      \ let list_find l f = Core.Std.List.find ~f l\n\n\
       \ let list_append l = Core.Std.List.append l\n\n\
       \ let list_flatten (l : 'a list list) : 'a list = Core.Std.List.flatten l\n\n\
       \ let fold_left = Core.Std.List.fold_left\n\n\
