@@ -12,5 +12,3 @@ val digraph :
 val ocaml_code : ?functorize:bool -> dsl_runtime_description -> 
   (string -> unit) -> unit
 
-val testing_inserts :
-  dsl_runtime_description -> int -> (string -> 'a) -> unit
