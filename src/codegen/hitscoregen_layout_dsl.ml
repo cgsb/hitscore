@@ -444,6 +444,12 @@ let convert_pgocaml_type = function
   | (n, _) -> n
 
 
+let new_tmp_output () =
+  let buf = Buffer.create 42 in
+  let tmp_out s = Buffer.add_string buf s in
+  let print_tmp output_string = output_string (Buffer.contents buf) in
+  (tmp_out, print_tmp)
+
 let raw out fmt = ksprintf out ("" ^^ fmt)
 let line out fmt = ksprintf out ("" ^^ fmt ^^ "\n")
 let doc out fmt = (* Doc to put before values/types *)
@@ -453,7 +459,20 @@ let deprecate out fmt =
 let debug out metafmt fmt =
   line out ("Printf.ksprintf PGThread.err \"%s\" " ^^ fmt ^^ ";") metafmt
 
-
+let hide out (f: (string -> unit) -> unit) =
+  let actually_hide = false in
+  let tmpout, printtmp =  new_tmp_output () in
+  if actually_hide then
+    raw tmpout "\n(**/**)\n"
+  else
+    raw tmpout "\n(** {4 Begin: Hidden} *)\n\n";
+  f tmpout;
+  if actually_hide then
+    raw tmpout "\n(**/**)\n"
+  else
+    raw tmpout "\n(** {4 End: Hidden} *)\n\n";
+  printtmp out;
+  ()
 
 let ocaml_exception ?(thread=true) name =
   let define out = ksprintf out "exception %s of string\n" name in
