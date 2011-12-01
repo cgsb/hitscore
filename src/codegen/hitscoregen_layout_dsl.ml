@@ -993,6 +993,21 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "    pg_bind (PGThread.map_s get_contents [ contents ])";
   line out "      (fun _ -> pg_return (entry, !files)))";
 
+  doc out "Get the entry from the whole volume.";
+  line out "let entry (vec: volume_cache): volume_entry_cache = fst vec";
+
+  doc out "Create a Unix directory path for a volume-entry (relative
+            to a `root').";
+  line out  "let entry_unix_path (vc: volume_entry_cache): string =";
+  line out "  let (%s) = vc in"
+    (List.map (id_field :: volume_fields)
+       (function 
+         | ("g_id", _) -> "id" 
+         | ("g_toplevel", _) -> "toplevel" 
+         | ("g_hr_tag", _) -> "hrt" 
+         | (n, _) -> "_" ) |> String.concat ~sep:", ");
+  line out "  Printf.sprintf \"%%s/%%09ld%%s\" toplevel id";
+  line out "    (option_value_map ~default:\"\" hrt ~f:((^) \"_\"))";
 
   line out "end (* File_system *)";
   ()
@@ -1020,6 +1035,7 @@ module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
   raw out "(**/**)\n\
       \ let option_map o f =\n\
       \     match o with None -> None | Some s -> Some (f s)\n\n\
+      \ let option_value_map = Core.Std.Option.value_map \n\n\
       \ let array_map a f = Core.Std.Array.map ~f a\n\n\
       \ let list_map l f = Core.Std.List.map ~f l\n\n\
       \ let list_append l = Core.Std.List.append l\n\n\
