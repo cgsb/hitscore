@@ -1163,6 +1163,8 @@ let ocaml_dump_and_reload ~out dsl =
   let tmp_get_fun, print_tmp_get_fun = new_tmp_output () in
   let tmp_get_fun2, print_tmp_get_fun2 = new_tmp_output () in
 
+  let tmp_ins_fun, print_tmp_ins_fun = new_tmp_output () in
+
   doc tmp_type "An OCaml record containing the whole data-base.";
   line tmp_type "type dump = {";
   line tmp_type "  version: string;";
@@ -1170,14 +1172,31 @@ let ocaml_dump_and_reload ~out dsl =
  
   doc tmp_get_fun "Retrieve the whole data-base.";
   line tmp_get_fun "let get_dump %s = " pgocaml_db_handle_arg;
-  let closing = ref [] in
+  let close_get_fun = ref [] in
   line tmp_get_fun2 "pg_return { version = %S;" dump_version_string;
 
   line tmp_get_fun "pg_bind (File_system.get_all ~dbh) (fun t_list ->";
   line tmp_get_fun "pg_bind (PGThread.map_s (File_system.cache_volume ~dbh) \
                                     t_list) (fun file_system ->";
   line tmp_get_fun2 "     file_system;";
-  closing := "))" :: !closing;
+  close_get_fun := "))" :: !close_get_fun;
+
+
+  doc tmp_ins_fun "Insert the contents of a [dump] in the data-base
+                  ({b Unsafe!}).";
+  line tmp_ins_fun "let insert_dump %s dump: \
+                    [`ok | `wrong_version_error] PGOCaml.monad ="
+    pgocaml_db_handle_arg;
+  let close_ins_fun = ref [] in
+  line tmp_ins_fun "  if dump.version <> %S then \
+                      pg_return `wrong_version_error else (" 
+    dump_version_string;
+  line tmp_ins_fun "    let fs_m = \
+                         PGThread.map_s (File_system.insert_cached ~dbh) \
+                         dump.file_system in";
+  line tmp_ins_fun "    pg_bind fs_m (fun _ ->";
+  close_ins_fun := "))" :: !close_ins_fun;
+
 
   List.iter dsl.nodes (function
     | Enumeration (name, fields) -> ()
@@ -1187,7 +1206,13 @@ let ocaml_dump_and_reload ~out dsl =
       line tmp_get_fun "pg_bind (PGThread.map_s (Record_%s.cache_value ~dbh) \
                                     t_list) (fun record_%s ->" name name;
       line tmp_get_fun2 "     record_%s;" name;
-      closing := "))" :: !closing;
+      close_get_fun := "))" :: !close_get_fun;
+
+      line tmp_ins_fun "     let r_m = PGThread.map_s (Record_%s.insert_cached \
+                              ~dbh) dump.record_%s in\n\
+                       \     pg_bind r_m (fun _ ->" name name;
+      close_ins_fun := ")" :: !close_ins_fun;
+
     | Function (name, args, result) ->
       line tmp_type "  function_%s: [ `can_nothing ] Function_%s.cache list;" 
         name name;
@@ -1195,7 +1220,13 @@ let ocaml_dump_and_reload ~out dsl =
       line tmp_get_fun "pg_bind (PGThread.map_s (Function_%s.cache_evaluation \
                                     ~dbh) t_list) (fun function_%s ->" name name;
       line tmp_get_fun2 "     function_%s;" name;
-      closing := "))" :: !closing;
+      close_get_fun := "))" :: !close_get_fun;
+
+      line tmp_ins_fun "     let f_m = PGThread.map_s (Function_%s.insert_cached \
+                              ~dbh) dump.function_%s in\n\
+                       \     pg_bind f_m (fun _ ->" name name;
+      close_ins_fun := ")" :: !close_ins_fun;
+
     | Volume (_, _) -> ()
   );
   line tmp_type "} with sexp";
@@ -1203,7 +1234,11 @@ let ocaml_dump_and_reload ~out dsl =
   print_tmp_type out;
   print_tmp_get_fun out;
   print_tmp_get_fun2 out;
-  line out "%s" (String.concat ~sep:"" !closing);
+  line out "%s" (String.concat ~sep:"" !close_get_fun);
+  print_tmp_ins_fun out;
+  line out "pg_return `ok";
+  line out "%s" (String.concat ~sep:"" !close_ins_fun);
+
   ()
 
 let ocaml_code ?(functorize=true) dsl output_string =
