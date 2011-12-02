@@ -279,6 +279,29 @@ make -j8 \
 
 end
 
+module Dumps = struct
+
+  module Basic_threading =
+  struct
+    include PGOCaml.Simple_thread
+    let map_s f l = List.map ~f l
+    let err = eprintf "%s"
+  end
+
+  let to_file file =
+    let module Hitscore_db = Hitscore_db_access.Make(Basic_threading) in
+    let dbh = Hitscore_db.PGOCaml.connect () in
+    let dump =
+      Hitscore_db.get_dump ~dbh |>
+          Hitscore_db.sexp_of_dump |>
+              Sexplib.Sexp.to_string_hum in
+    Out_channel.(with_file file ~f:(fun o -> output_string o dump));
+    Hitscore_db.PGOCaml.close dbh 
+      
+
+end
+
+
 let commands = ref []
 
 let define_command ~names ~description ~usage ~run =
@@ -326,6 +349,15 @@ let () =
     ~run:(fun exec cmd -> function
       | [ name; basecalls; sample_sheet ] ->
         Some (Gen_BclToFastq.prepare name basecalls sample_sheet)
+      | _ -> None);
+
+  define_command
+    ~names:["dump-to-file"]
+    ~description:"Dump the database to a S-Exp file"
+    ~usage:(fun o exec cmd ->
+      fprintf o "usage: %s %s <filename>\n" exec cmd)
+    ~run:(fun exec cmd -> function
+      | [file] -> Some (Dumps.to_file file)
       | _ -> None);
 
   let global_usage = function
