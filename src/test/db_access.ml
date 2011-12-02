@@ -185,6 +185,11 @@ let test_lwt =
     count_all dbh >>
     ls_minus_r dbh >>
 
+    Hitscore_db.get_dump ~dbh >>=
+    (fun dump ->
+      print result "DUMP: \n%s\n"
+        (Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum)) >>
+
     print notif "Nice ending" 
   finally
     notif "Closing the DB." >>
