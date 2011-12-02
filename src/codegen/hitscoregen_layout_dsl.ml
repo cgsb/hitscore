@@ -460,7 +460,7 @@ let debug out metafmt fmt =
   line out ("Printf.ksprintf PGThread.err \"%s\" " ^^ fmt ^^ ";") metafmt
 
 let hide out (f: (string -> unit) -> unit) =
-  let actually_hide = false in
+  let actually_hide = true in
   let tmpout, printtmp =  new_tmp_output () in
   if actually_hide then
     raw tmpout "\n(**/**)\n"
@@ -499,6 +499,18 @@ let pgocaml_select_from_one_by_id
   raw out ")\n";
   ()
 
+let sexp_functions_for_hidden ~out ?param type_name =
+  let param_str = Option.value_map ~default:"" ~f:(sprintf "%s ") param in
+  let param_arg = Option.value_map ~default:"" ~f:(fun _ -> " x") param in
+  doc out "Dump a [%s%s] to a S-Expression." param_str type_name;
+  line out "let sexp_of_%s%s:" type_name param_arg;
+  line out " %s%s -> Sexplib.Sexp.t = sexp_of__%s%s" 
+    param_str type_name type_name param_arg;
+  doc out "Create a [%s%s] from a {i dump}." param_str type_name;
+  line out "let %s_of_sexp%s:" type_name param_arg; 
+  line out " Sexplib.Sexp.t -> %s%s = _%s_of_sexp%s"
+    param_str type_name type_name param_arg;
+  ()
 
 let ocaml_enumeration_module ~out name fields =
   raw out "module Enumeration_%s = struct\n" name;
@@ -578,7 +590,7 @@ let ocaml_record_module ~out name fields =
        ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
   );
   doc out "The [cache] is the info retrieved by the database queries.";
-  raw out "type cache = _cache with sexp\n\n";
+  raw out "type cache = _cache\n\n";
 
   doc out "Cache the contents of the record [t].";
   raw out "let cache_value (t: t) %s: \
@@ -610,7 +622,10 @@ let ocaml_record_module ~out name fields =
     (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
   raw out "  ts\n\n";
 
+  doc out "{3 S-Expression Dumps}";
+  sexp_functions_for_hidden ~out "cache";
 
+  doc out "{3 Low Level Access}";
   (* Access a value *)
   deprecate out "Finds a value given its internal identifier ([g_id]).";
   raw out "let _get_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
@@ -691,7 +706,7 @@ let ocaml_function_module ~out name args result =
   );
   doc out "The [cache] is the info retrieved by the database queries; \
                it inherits the capabilities of the handle (type [t]).";
-  raw out "type 'a cache = 'a _cache with sexp\n\n";
+  raw out "type 'a cache = 'a _cache\n\n";
 
   (* Access a function *)
   doc out "Cache the contents of the evaluation [t].";
@@ -784,6 +799,10 @@ let ocaml_function_module ~out name args result =
           [ `can_nothing ] t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
   pgocaml_do_get_all_ids ~out name;
 
+  doc out "{3 S-Expression Dumps}";
+  sexp_functions_for_hidden ~out ~param:"'a" "cache";
+
+  doc out "{3 Low Level Access}";
   (* Delete a function *)
   deprecate out "Deletes a function using its internal identifier.";
   raw out "let _delete_evaluation_by_id ~id %s =\n" pgocaml_db_handle_arg;
@@ -962,7 +981,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
   doc out "The [volume_entry_cache] is the info retrieved by the
       database queries for the \"toplevel part\" of a volume.";
-  raw out "type volume_entry_cache = _volume_entry_cache with sexp\n\n";
+  raw out "type volume_entry_cache = _volume_entry_cache\n\n";
      
   doc out "Retrieve the \"entry\" part of a volume from the DB.";
   raw out "let cache_volume_entry (volume: volume) %s: \
@@ -971,7 +990,8 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     ~out ~raise_wrong_db ~get_id:"volume.id" "g_volume";
 
   doc out "The [volume_cache] contains the whole volume (entry and files).";
-  line out "type volume_cache = _volume_cache with sexp";
+  line out "type volume_cache = _volume_cache";
+
 
   doc out "Retrieve a \"whole\" volume.";
   line out "let cache_volume %s (volume: volume) : volume_cache PGOCaml.monad ="
@@ -1016,12 +1036,6 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
          | (n, _) -> "_" ) |> String.concat ~sep:", ");
   line out "  {vol_id; toplevel; hr_tag}";
 
-  doc out "Create a Unix directory path for a volume-entry (relative
-            to a `root').";
-  line out  "let entry_unix_path (ve: volume_entry): string =";
-  line out "  Printf.sprintf \"%%s/%%09ld%%s\" ve.toplevel ve.vol_id";
-  line out "    (option_value_map ~default:\"\" ve.hr_tag ~f:((^) \"_\"))";
-
   doc out "Get a list of trees `known' for a given volume.";
   line out "let volume_trees (vc : volume_cache) : tree list =";
   line out "  let files = snd vc in";
@@ -1061,7 +1075,19 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
   line out "  list_map (array_to_list vol_content) go_through_cache\n";
 
+  doc out "{3 S-Expression Dumps}";
+  sexp_functions_for_hidden ~out "volume_entry_cache";
+  sexp_functions_for_hidden ~out "volume_cache";
+  
+
   let unix_sep = "/" in
+  doc out "{3 Unix paths }";
+  doc out "Create a Unix directory path for a volume-entry (relative
+            to a `root').";
+  line out  "let entry_unix_path (ve: volume_entry): string =";
+  line out "  Printf.sprintf \"%%s/%%09ld%%s\" ve.toplevel ve.vol_id";
+  line out "    (option_value_map ~default:\"\" ve.hr_tag ~f:((^) \"_\"))";
+
   doc out "Convert a bunch of trees to a list of Unix paths.";
   line out "let trees_to_unix_paths trees =";
   line out "  let paths = ref [] in";
