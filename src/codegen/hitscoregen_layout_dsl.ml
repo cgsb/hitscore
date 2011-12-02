@@ -125,7 +125,8 @@ let sanitize s =
   if String.is_prefix s ~prefix:"g_" then
     sprintf "%S should not start with \"g_\"" s |> failwith;
   begin match s with
-  | "to" | "type" | "val" | "let" | "in" | "with" | "match" | "null" ->
+  | "to" | "type" | "val" | "let" | "in" | "with" | "match" 
+  | "null" | "process_status" ->
     sprintf "%S is not a good name …" s |> failwith
   | _ -> ()
   end
@@ -244,7 +245,7 @@ let dsl_type_to_db t =
   let rec convert t =
     match t with
     | Bool        -> Psql.Bool      
-    | Timestamp   -> Psql.Timestamp 
+    | Timestamp   -> Psql.Text
     | Int         -> Psql.Integer       
     | Real        -> Psql.Real      
     | String      -> Psql.Text   
@@ -264,17 +265,17 @@ let dsl_type_to_db t =
 
 let db_record_standard_fields = [
   ("g_id", Psql.Identifier, [Psql.Not_null]);
-  ("g_last_accessed", Psql.Timestamp, []);
+  ("g_last_accessed", Psql.Text, []);
 ]
 let db_function_standard_fields result = [   
-  ("g_id", Psql.Identifier, [Psql.Not_null]);
-  ("g_result", Psql.Pointer (result, "g_id"), []);
-  ("g_recomputable", Psql.Bool, [Psql.Not_null]);
-  ("g_recompute_penalty", Psql.Real, []);
-  ("g_inserted", Psql.Timestamp, []);
-  ("g_started", Psql.Timestamp, []);
-  ("g_completed", Psql.Timestamp, []);
-  ("g_status", Psql.Text, [Psql.Not_null]);
+  ("g_id"                , Psql.Identifier, [Psql.Not_null]);
+  ("g_result"            , Psql.Pointer (result, "g_id"), []);
+  ("g_recomputable"      , Psql.Bool, [Psql.Not_null]);
+  ("g_recompute_penalty" , Psql.Real, []);
+  ("g_inserted"          , Psql.Text, []);
+  ("g_started"           , Psql.Text, []);
+  ("g_completed"         , Psql.Text, []);
+  ("g_status"            , Psql.Text, [Psql.Not_null]);
 ]
 
 let to_db dsl =
@@ -380,7 +381,7 @@ let pgocaml_type_of_field =
     | [ Psql.Not_null ] -> sprintf "%s"
     | _ -> sprintf "%s option" in
   function
-    | (_, Psql.Timestamp          , p) -> (props p) "pg_timestamptz"
+    | (_, Psql.Timestamp          , p) -> (props p) "inexistent_timestamptz"
     | (_, Psql.Identifier         , p) -> (props p) "int32"              
     | (_, Psql.Text               , p) -> (props p) "string"             
     | (_, Psql.Pointer (r, "g_id"), p) -> (props p) "int32"              
@@ -390,7 +391,7 @@ let pgocaml_type_of_field =
     | _ -> failwith "Can't compile DB type to PGOCaml"
 let rec ocaml_type = function
   | Bool        -> "bool"
-  | Timestamp   -> "pg_timestamptz"
+  | Timestamp   -> "string"
   | Int         -> "int32"
   | Real        -> "float"      
   | String      -> "string"
@@ -581,12 +582,13 @@ let ocaml_record_module ~out name fields =
       match type_is_option t with `yes -> "?" | `no -> "~" in
     raw out "    %s(%s:%s)\n" kind_of_arg n (ocaml_type t);
   );
+  raw out "    %s : t PGOCaml.monad =\n" pgocaml_db_handle_arg;
+  line out "  let now = Timestamp.(to_string (now ())) in";
   let intos = "g_last_accessed" :: List.map fields fst in
   let values =
     let prefix (n, t) =
       (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
-    "now()" :: List.map fields prefix  in
-  raw out "    %s : t PGOCaml.monad =\n" pgocaml_db_handle_arg;
+    "$now" :: List.map fields prefix  in
   List.iter fields (fun tv -> let_in_typed_value tv |> raw out "%s");
   pgocaml_add_to_database name intos values
     ~out ~raise_wrong_db:raise_wrong_db_error;
@@ -631,11 +633,10 @@ let ocaml_record_module ~out name fields =
 
   doc out "Get the last time the record was modified (It depends on \
           the good-will of the people modifying the database {i manually}).";
-  raw out "let last_write_access (cache: cache): \
-          (CalendarLib.Calendar.t * CalendarLib.Time_Zone.t) option =\n";
+  raw out "let last_write_access (cache: cache): Timestamp.t option =\n";
   raw out "  let (_, ts, %s) = cache in\n"
     (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
-  raw out "  ts\n\n";
+  raw out "  option_map ts Timestamp.of_string\n\n";
 
   doc out "{3 S-Expression Dumps}";
   sexp_functions_for_hidden ~out "cache";
@@ -671,6 +672,9 @@ let ocaml_function_module ~out name args result =
     ocaml_exception "Wrong_DB_return" in
   def_wrong_db_error out;
 
+  let let_now out =
+    line out "  let now = Timestamp.(to_string (now ())) in" in
+
       (* Function to insert a new function evaluation: *)
   raw out "let add_evaluation\n";
   List.iter args (fun (n, t) -> raw out "    ~%s\n" n);
@@ -679,11 +683,12 @@ let ocaml_function_module ~out name args result =
   raw out "    %s : \n" pgocaml_db_handle_arg;
   raw out "    [ `can_start | `can_complete ] t PGOCaml.monad =\n";
   List.iter args (fun tv -> let_in_typed_value tv |> raw out "%s");
+  let_now out;
   let intos =
     "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
       (List.map args fst) in
   let values =
-    "$recomputable" :: "$recompute_penalty" :: "now ()" :: "'Inserted'" ::
+    "$recomputable" :: "$recompute_penalty" :: "$now" :: "'Inserted'" ::
       (List.map args (fun (n, t) -> "$" ^ n)) in
   pgocaml_add_to_database name intos values
     ~out ~raise_wrong_db:raise_wrong_db_error;
@@ -691,8 +696,9 @@ let ocaml_function_module ~out name args result =
       (* Function to set the state of a function evaluation to 'STARTED': *)
   raw out "let set_started (t : [> `can_start] t) %s =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
+  let_now out;
   raw out "  let umm = PGSQL (dbh)\n";
-  raw out "    \"UPDATE %s SET g_status = 'Started', g_started = now ()\n\
+  raw out "    \"UPDATE %s SET g_status = 'Started', g_started = $now\n\
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind umm (fun () -> \
                 pg_return ({ id } : [ `can_complete] t)) 
@@ -701,9 +707,10 @@ let ocaml_function_module ~out name args result =
                    \     ~result %s =\n" pgocaml_db_handle_arg;
   let_in_typed_value ("result", Record_name result) |> raw out "%s";
   raw out "  let id = t.id in\n";
+  let_now out;
   raw out "  let umm = PGSQL (dbh)\n";
   raw out "    \"UPDATE %s SET g_status = 'Succeeded', \
-                g_completed = now (), g_result = $result\n \
+                g_completed = $now, g_result = $result\n \
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind umm (fun () -> \
                 pg_return ({ id } : [ `can_get_result] t)) 
@@ -711,8 +718,9 @@ let ocaml_function_module ~out name args result =
   raw out "let set_failed \
            (t : [> `can_complete ] t) %s =\n" pgocaml_db_handle_arg;
   raw out "  let id = t.id in\n";
+  let_now out;
   raw out "  let umm = PGSQL (dbh)\n";
-  raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = now ()\n\
+  raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = $now\n\
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind umm (fun () -> \
                 pg_return ({ id } : [ `can_nothing ] t)) 
@@ -769,10 +777,7 @@ let ocaml_function_module ~out name args result =
   raw out "  let status =\n\
                 \    Enumeration_process_status.of_string_exn \
                  status_str in\n";
-  raw out "  let opt = function \n\
-                \    | Some (d, tz) -> (d, tz)\n\
-                \    | None -> failwith \"get_status(%s) can't find timestamp\"
-                \  in\n" name;
+  line out "  let opt ts = option_map ts Timestamp.of_string in";
   raw out "  (match status with\n\
                 \  | `Inserted ->   (status, opt inserted)\n\
                 \  | `Started ->    (status, opt started)\n\
@@ -1265,12 +1270,7 @@ module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
   hide out (fun out ->
     raw out "\
 open Sexplib.Conv\n\
-type pg_timestamptz = PGOCaml.timestamptz\n\
-let pg_timestamptz_of_sexp = function \n\
-  | Sexplib.Sexp.Atom s -> (PGOCaml.timestamptz_of_string s)\n\
-  | _ -> failwith \"pg_timestamptz_of_sexp\"\n\
-let sexp_of_pg_timestamptz s = \
-    Sexplib.Sexp.Atom (PGOCaml.string_of_timestamptz s)\n\
+
 let option_map o f =\n\
     match o with None -> None | Some s -> Some (f s)\n\n\
 let option_value_map = Core.Std.Option.value_map \n\n\
@@ -1286,6 +1286,13 @@ let list_to_array l = Core.Std.Array.of_list l\n\n\
 let pg_bind am f = PGOCaml.bind am f\n\n\
 let pg_return t = PGOCaml.return t\n\n\
 let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
+
+module Timestamp = struct 
+  include Core.Std.Time
+  let () = use_new_string_and_sexp_formats ()
+ 
+end
+
 ";
   );
   let volume_kinds = 
