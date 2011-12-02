@@ -187,8 +187,19 @@ let test_lwt =
 
     Hitscore_db.get_dump ~dbh >>=
     (fun dump ->
-      print result "DUMP: \n%s\n"
-        (Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum)) >>
+      let extract s = try String.sub ~pos:0 ~len:200 s with e -> s in 
+      print result "DUMP (extract, 200 characters): \n%s...\n"
+        (Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum |> extract) >>
+      try_lwt (* This should fail: *)
+        Lwt_list.map_s
+          (Hitscore_db.Function_assemble_sample_sheet.insert_cached ~dbh)
+          dump.Hitscore_db.function_assemble_sample_sheet >>
+        print notif "SHOULD NOT BE THERE !!!!"
+      with
+      | exn ->
+        print result "Inserting an evaluation fails because the ID is \
+                      already used:\n%s\n" (Exn.to_string exn);
+    ) >>
 
     print notif "Nice ending" 
   finally
@@ -201,6 +212,6 @@ let () =
   | Return _ -> eprintf "returns\n"
   | Fail _ -> eprintf "fails\n"
   | Sleep ->
-    eprintf "Still sleeping …\n"; 
+    eprintf "Still sleeping …\n%!"; 
     Lwt_main.run test_lwt
 
