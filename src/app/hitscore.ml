@@ -287,9 +287,9 @@ module Dumps = struct
     let map_s f l = List.map ~f l
     let err = eprintf "%s"
   end
+  module Hitscore_db = Hitscore_db_access.Make(Basic_threading)
 
   let to_file file =
-    let module Hitscore_db = Hitscore_db_access.Make(Basic_threading) in
     let dbh = Hitscore_db.PGOCaml.connect () in
     let dump =
       Hitscore_db.get_dump ~dbh |>
@@ -298,6 +298,18 @@ module Dumps = struct
     Out_channel.(with_file file ~f:(fun o -> output_string o dump));
     Hitscore_db.PGOCaml.close dbh 
       
+  let load_file file =
+    let dbh = Hitscore_db.PGOCaml.connect () in
+    let insert_result = 
+      In_channel.with_file file ~f:(fun i ->
+        Sexplib.Sexp.input_sexp i |> Hitscore_db.dump_of_sexp |>
+            Hitscore_db.insert_dump ~dbh) in
+    begin match insert_result with 
+    | `ok -> eprintf "Load: Ok\n%!"
+    | `wrong_version_error ->
+      eprintf "Load: Wrong Version Error\n%!"
+    end;
+    Hitscore_db.PGOCaml.close dbh
 
 end
 
@@ -358,6 +370,15 @@ let () =
       fprintf o "usage: %s %s <filename>\n" exec cmd)
     ~run:(fun exec cmd -> function
       | [file] -> Some (Dumps.to_file file)
+      | _ -> None);
+
+  define_command
+    ~names:["load-file"]
+    ~description:"Load a dump the database (S-Exp file)"
+    ~usage:(fun o exec cmd ->
+      fprintf o "usage: %s %s <filename>\n" exec cmd)
+    ~run:(fun exec cmd -> function
+      | [file] -> Some (Dumps.load_file file)
       | _ -> None);
 
   let global_usage = function
