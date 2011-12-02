@@ -25,7 +25,8 @@ Executable hitscoregen
 Library hitscore
   Path: src/lib
   FindlibName: hitscore
-  BuildDepends: threads, core, pgocaml, pgocaml.syntax, calendar, biocaml, sequme
+  BuildDepends: threads, core, pgocaml, pgocaml.syntax, sexplib.syntax,
+               biocaml, sequme
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore

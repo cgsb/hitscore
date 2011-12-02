@@ -1,8 +1,10 @@
 # OASIS_START
-# DO NOT EDIT (digest: bfdb192ab7cee71d7932c134e1a722ad)
+# DO NOT EDIT (digest: 8f634ab0476754c15f9b0323dd401b69)
 version = "0.1"
 description = "CGSB Core Library"
-requires = "threads core pgocaml pgocaml.syntax calendar biocaml sequme"
+requires
+ =
+ "threads core pgocaml pgocaml.syntax sexplib.syntax biocaml sequme"
 archive(byte) = "hitscore.cma"
 archive(native) = "hitscore.cmxa"
 exists_if = "hitscore.cma"

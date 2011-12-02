@@ -376,11 +376,11 @@ let digraph dsl ?(name="dsl") output_string =
 
 let pgocaml_type_of_field =
   let rec props  = function
-    | [ Psql.Array    ; Psql.Not_null] -> sprintf "PGOCaml.%s_array"
+    | [ Psql.Array    ; Psql.Not_null] -> sprintf "%s array"
     | [ Psql.Not_null ] -> sprintf "%s"
     | _ -> sprintf "%s option" in
   function
-    | (_, Psql.Timestamp          , p) -> (props p) "PGOCaml.timestamptz"
+    | (_, Psql.Timestamp          , p) -> (props p) "pg_timestamptz"
     | (_, Psql.Identifier         , p) -> (props p) "int32"              
     | (_, Psql.Text               , p) -> (props p) "string"             
     | (_, Psql.Pointer (r, "g_id"), p) -> (props p) "int32"              
@@ -390,7 +390,7 @@ let pgocaml_type_of_field =
     | _ -> failwith "Can't compile DB type to PGOCaml"
 let rec ocaml_type = function
   | Bool        -> "bool"
-  | Timestamp   -> "PGOCaml.timestamptz"
+  | Timestamp   -> "pg_timestamptz"
   | Int         -> "int32"
   | Real        -> "float"      
   | String      -> "string"
@@ -573,12 +573,12 @@ let ocaml_record_module ~out name fields =
     List.map fields (fun (s, t) ->
       let (t, p) = dsl_type_to_db t in (s, t, p)) in
   hide out (fun out ->
-    raw out "type _cache = \n(%s)\n\n"
+    raw out "type _cache = \n(%s) with sexp\n\n"
     (List.map (db_record_standard_fields @ args_in_db)
        ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
   );
   doc out "The [cache] is the info retrieved by the database queries.";
-  raw out "type cache = _cache\n\n";
+  raw out "type cache = _cache with sexp\n\n";
 
   doc out "Cache the contents of the record [t].";
   raw out "let cache_value (t: t) %s: \
@@ -685,13 +685,13 @@ let ocaml_function_module ~out name args result =
     List.map args (fun (s, t) ->
       let (t, p) = dsl_type_to_db t in (s, t, p)) in
   hide out (fun out ->
-    raw out "type 'a _cache = \n(%s)\n"
+    raw out "type 'a _cache = \n(%s) with sexp\n"
       (List.map (db_function_standard_fields result @ args_in_db)
          ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
   );
   doc out "The [cache] is the info retrieved by the database queries; \
                it inherits the capabilities of the handle (type [t]).";
-  raw out "type 'a cache = 'a _cache\n\n";
+  raw out "type 'a cache = 'a _cache with sexp\n\n";
 
   (* Access a function *)
   doc out "Cache the contents of the evaluation [t].";
@@ -940,11 +940,11 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
       let (t, p) = dsl_type_to_db t in (s, t, p)) in
   hide out (fun out ->
     doc out "[_file_cache] is hidden.";
-    raw out "type _file_cache = \n(%s)\n\n"
+    raw out "type _file_cache = \n(%s) with sexp\n\n"
       (List.map (file_stuff_in_db)
          ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
     doc out "[_volume_entry_cache] is hidden.";
-    raw out "type _volume_entry_cache = \n(%s)\n\n"
+    raw out "type _volume_entry_cache = \n(%s) with sexp\n\n"
       (List.map (volume_stuff_in_db)
          ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
 
@@ -956,12 +956,13 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
     doc out "A whole volume cache is the volume entry and a \
               list of file caches.";
-    line out "type _volume_cache = (_volume_entry_cache * (_file_cache list))";
+    line out "type _volume_cache = (_volume_entry_cache * (_file_cache list)) \
+              with sexp";
   );
 
   doc out "The [volume_entry_cache] is the info retrieved by the
       database queries for the \"toplevel part\" of a volume.";
-  raw out "type volume_entry_cache = _volume_entry_cache\n\n";
+  raw out "type volume_entry_cache = _volume_entry_cache with sexp\n\n";
      
   doc out "Retrieve the \"entry\" part of a volume from the DB.";
   raw out "let cache_volume_entry (volume: volume) %s: \
@@ -970,7 +971,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     ~out ~raise_wrong_db ~get_id:"volume.id" "g_volume";
 
   doc out "The [volume_cache] contains the whole volume (entry and files).";
-  line out "type volume_cache = _volume_cache";
+  line out "type volume_cache = _volume_cache with sexp";
 
   doc out "Retrieve a \"whole\" volume.";
   line out "let cache_volume %s (volume: volume) : volume_cache PGOCaml.monad ="
@@ -1075,6 +1076,53 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "end (* File_system *)";
   ()
 
+let ocaml_dump_and_reload ~out dsl =
+  let tmp_type, print_tmp_type = new_tmp_output () in
+  let tmp_get_fun, print_tmp_get_fun = new_tmp_output () in
+  let tmp_get_fun2, print_tmp_get_fun2 = new_tmp_output () in
+
+  doc tmp_type "An OCaml record containing the whole data-base.";
+  line tmp_type "type dump = {";
+  line tmp_type "  file_system: File_system.volume_cache list;";
+ 
+  doc tmp_get_fun "Retrieve the whole data-base.";
+  line tmp_get_fun "let get_dump %s = " pgocaml_db_handle_arg;
+  let closing = ref [] in
+  line tmp_get_fun2 "pg_return {";
+
+  line tmp_get_fun "pg_bind (File_system.get_all ~dbh) (fun t_list ->";
+  line tmp_get_fun "pg_bind (PGThread.map_s (File_system.cache_volume ~dbh) \
+                                    t_list) (fun file_system ->";
+  line tmp_get_fun2 "     file_system;";
+  closing := "))" :: !closing;
+
+  List.iter dsl.nodes (function
+    | Enumeration (name, fields) -> ()
+    | Record (name, fields) ->
+      line tmp_type "  record_%s: Record_%s.cache list;" name name;
+      line tmp_get_fun "pg_bind (Record_%s.get_all ~dbh) (fun t_list ->" name;
+      line tmp_get_fun "pg_bind (PGThread.map_s (Record_%s.cache_value ~dbh) \
+                                    t_list) (fun record_%s ->" name name;
+      line tmp_get_fun2 "     record_%s;" name;
+      closing := "))" :: !closing;
+    | Function (name, args, result) ->
+      line tmp_type "  function_%s: [ `can_nothing ] Function_%s.cache list;" 
+        name name;
+      line tmp_get_fun "pg_bind (Function_%s.get_all ~dbh) (fun t_list ->" name;
+      line tmp_get_fun "pg_bind (PGThread.map_s (Function_%s.cache_evaluation \
+                                    ~dbh) t_list) (fun function_%s ->" name name;
+      line tmp_get_fun2 "     function_%s;" name;
+      closing := "))" :: !closing;
+    | Volume (_, _) -> ()
+  );
+  line tmp_type "} with sexp";
+  line tmp_get_fun2 "}";
+  print_tmp_type out;
+  print_tmp_get_fun out;
+  print_tmp_get_fun2 out;
+  line out "%s" (String.concat ~sep:"" !closing);
+  ()
+
 let ocaml_code ?(functorize=true) dsl output_string =
   let out = output_string in
   doc out "Autogenerated module.";
@@ -1096,24 +1144,32 @@ module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
   raw out "type function_capabilities= [\n\
                 \  | `can_nothing\n  | `can_start\n  | `can_complete\n\
                 | `can_get_result\n]\n";
-
-  raw out "(**/**)\n\
-      \ let option_map o f =\n\
-      \     match o with None -> None | Some s -> Some (f s)\n\n\
-      \ let option_value_map = Core.Std.Option.value_map \n\n\
-      \ let array_map a f = Core.Std.Array.map ~f a\n\n\
-      \ let list_map l f = Core.Std.List.map ~f l\n\n\
-      \ let list_iter l f = Core.Std.List.iter ~f l\n\n\
-      \ let list_find l f = Core.Std.List.find ~f l\n\n\
-      \ let list_append l = Core.Std.List.append l\n\n\
-      \ let list_flatten (l : 'a list list) : 'a list = Core.Std.List.flatten l\n\n\
-      \ let fold_left = Core.Std.List.fold_left\n\n\
-      \ let array_to_list a = Core.Std.Array.to_list a\n\n\
-      \ let list_to_array l = Core.Std.Array.of_list l\n\n\
-      \ let pg_bind am f = PGOCaml.bind am f\n\n\
-      \ let pg_return t = PGOCaml.return t\n\n\
-     \ let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
-      (**/**)\n";
+  hide out (fun out ->
+    raw out "\
+open Sexplib.Conv\n\
+type pg_timestamptz = PGOCaml.timestamptz\n\
+let pg_timestamptz_of_sexp = function \n\
+  | Sexplib.Sexp.Atom s -> (PGOCaml.timestamptz_of_string s)\n\
+  | _ -> failwith \"pg_timestamptz_of_sexp\"\n\
+let sexp_of_pg_timestamptz s = \
+    Sexplib.Sexp.Atom (PGOCaml.string_of_timestamptz s)\n\
+let option_map o f =\n\
+    match o with None -> None | Some s -> Some (f s)\n\n\
+let option_value_map = Core.Std.Option.value_map \n\n\
+let array_map a f = Core.Std.Array.map ~f a\n\n\
+let list_map l f = Core.Std.List.map ~f l\n\n\
+let list_iter l f = Core.Std.List.iter ~f l\n\n\
+let list_find l f = Core.Std.List.find ~f l\n\n\
+let list_append l = Core.Std.List.append l\n\n\
+let list_flatten (l : 'a list list) : 'a list = Core.Std.List.flatten l\n\n\
+let fold_left = Core.Std.List.fold_left\n\n\
+let array_to_list a = Core.Std.Array.to_list a\n\n\
+let list_to_array l = Core.Std.Array.of_list l\n\n\
+let pg_bind am f = PGOCaml.bind am f\n\n\
+let pg_return t = PGOCaml.return t\n\n\
+let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
+";
+  );
   let volume_kinds = 
     (List.filter_map dsl.nodes 
        (function | Volume (n, _) -> Some n | _ -> None)) in
@@ -1138,6 +1194,8 @@ module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
   doc out "{3 Top-level Queries On The Data-base }";
   doc out "";
   ocaml_toplevel_values_and_types ~out dsl;
+  doc out "\n{3 Dump and Reload The Data-base}\n";
+  ocaml_dump_and_reload ~out dsl;
   if functorize then
     line out "end (* Make *)";
   ()
