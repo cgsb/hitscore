@@ -512,6 +512,37 @@ let sexp_functions_for_hidden ~out ?param type_name =
     param_str type_name type_name param_arg;
   ()
 
+let pgocaml_db_handle_arg = "~(dbh: db_handle)"
+
+let pgocaml_add_to_database ~out ~raise_wrong_db  ?(id="id")
+    table_name intos values =
+  raw out "  let i32_list_monad = PGSQL (dbh)\n";
+  raw out "    \"INSERT INTO %s (%s)\n     VALUES (%s)\n\
+                   \     RETURNING g_id \" in\n" table_name
+    (intos |> String.concat ~sep:", ")
+    (values|> String.concat ~sep:", ");
+  raw out "  pg_bind i32_list_monad \n\
+                    \    (function\n\
+                    \       | [ %s ] -> PGOCaml.return { %s }\n\
+                    \       | _ -> " id id;
+  raise_wrong_db out (sprintf "INSERT (%s) did not return one id" table_name);
+  raw out ")\n\n";
+  ()
+
+let pgocaml_insert_cached ~out ~raise_wrong_db ~all_fields name =
+  let all_db_fields = List.map all_fields (fun (n, _, _) -> n) in
+  line out "  let (%s) = cache in" (all_db_fields |> String.concat ~sep:", ");
+  let values =
+    let prefix (n, _, p) =
+      match p with
+      | [Psql.Not_null] | [_; Psql.Not_null] -> sprintf "$%s" n
+      | _ -> "$?" ^ n in
+    List.map all_fields prefix  in
+  pgocaml_add_to_database name all_db_fields values
+    ~out ~raise_wrong_db;
+  ()
+
+
 let ocaml_enumeration_module ~out name fields =
   raw out "module Enumeration_%s = struct\n" name;
   raw out "type t = [%s]\n\n"
@@ -530,22 +561,6 @@ let ocaml_enumeration_module ~out name fields =
   raise_oserr out "cannot recognize enumeration element";
   raw out "\n\nend (* %s *)\n\n" name
 
-let pgocaml_db_handle_arg = "~(dbh: db_handle)"
-
-let pgocaml_add_to_database ~out ~raise_wrong_db  ?(id="id")
-    table_name intos values =
-  raw out "  let i32_list_monad = PGSQL (dbh)\n";
-  raw out "    \"INSERT INTO %s (%s)\\\n     VALUES (%s)\\\n\
-                   \     RETURNING g_id \" in\n" table_name
-    (intos |> String.concat ~sep:", ")
-    (values|> String.concat ~sep:", ");
-  raw out "  pg_bind i32_list_monad \n\
-                    \    (function\n\
-                    \       | [ %s ] -> PGOCaml.return { %s }\n\
-                    \       | _ -> " id id;
-  raise_wrong_db out (sprintf "INSERT (%s) did not return one id" table_name);
-  raw out ")\n\n";
-  ()
 
 let ocaml_record_module ~out name fields = 
   raw out "module Record_%s = struct\n" name;
@@ -637,6 +652,14 @@ let ocaml_record_module ~out name fields =
   raw out "let _delete_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
+  
+  doc out "Load a cached value in the database ({b Unsafe!}).";
+  line out "let insert_cached %s (cache: cache): t PGOCaml.monad = " 
+    pgocaml_db_handle_arg;
+  pgocaml_insert_cached ~out ~raise_wrong_db:raise_wrong_db_error
+    ~all_fields:(db_record_standard_fields @ args_in_db) name;
+
+
   raw out "end (* %s *)\n\n" name;
   ()
 
@@ -808,7 +831,12 @@ let ocaml_function_module ~out name args result =
   raw out "let _delete_evaluation_by_id ~id %s =\n" pgocaml_db_handle_arg;
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
-  
+
+  doc out "Load a cached evaluation in the database ({b Unsafe!}).";
+  line out "let insert_cached %s (cache: 'a cache): \
+      [`can_nothing] t PGOCaml.monad = " pgocaml_db_handle_arg;
+  pgocaml_insert_cached ~out ~raise_wrong_db:raise_wrong_db_error
+    ~all_fields:(db_function_standard_fields result @ args_in_db) name;
 
   raw out "end (* %s *)\n\n" name;
   ()
@@ -1078,7 +1106,32 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   doc out "{3 S-Expression Dumps}";
   sexp_functions_for_hidden ~out "volume_entry_cache";
   sexp_functions_for_hidden ~out "volume_cache";
-  
+
+  doc out "{3 Low-level Access}";
+  doc out "Load a cached evaluation in the database (More {b Unsafe!}
+          than for records and functions: if one fails the ones already
+          successful won't be cleaned-up).";
+  line out "let insert_cached %s (cache: volume_cache): \
+            volume PGOCaml.monad = " pgocaml_db_handle_arg;
+  line out "  let inserted_files_monad = PGThread.map_s (fun f ->";
+  line out "      let (%s) = f in" 
+    (List.map (id_field :: file_fields) fst |> String.concat ~sep:", ");
+  pgocaml_add_to_database "g_file" 
+    (List.map (id_field :: file_fields) fst)
+    (List.map (id_field :: file_fields) (fun (n, _) -> sprintf "$%s" n))
+    ~out ~raise_wrong_db ~id:"inode";
+  line out "      )  (snd cache) in";
+  line out "  pg_bind inserted_files_monad (fun _ ->";
+  line out "    let (%s) = fst cache in" 
+    (List.map (id_field :: volume_fields) fst |> String.concat ~sep:", ");
+  pgocaml_add_to_database "g_volume" 
+    (List.map (id_field :: volume_fields) fst)
+    (List.map (id_field :: volume_fields) 
+       (function ("g_hr_tag", _) -> "$?g_hr_tag" | (n, _) -> sprintf "$%s" n))
+    ~out ~raise_wrong_db ~id:"id";
+  line out ")";
+
+
 
   let unix_sep = "/" in
   doc out "{3 Unix paths }";
