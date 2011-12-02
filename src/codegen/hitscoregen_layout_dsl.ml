@@ -1102,6 +1102,9 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "end (* File_system *)";
   ()
 
+(* This goes to the dump files through sexplib. *)
+let dump_version_string = "0.1-dev"
+
 let ocaml_dump_and_reload ~out dsl =
   let tmp_type, print_tmp_type = new_tmp_output () in
   let tmp_get_fun, print_tmp_get_fun = new_tmp_output () in
@@ -1109,12 +1112,13 @@ let ocaml_dump_and_reload ~out dsl =
 
   doc tmp_type "An OCaml record containing the whole data-base.";
   line tmp_type "type dump = {";
+  line tmp_type "  version: string;";
   line tmp_type "  file_system: File_system.volume_cache list;";
  
   doc tmp_get_fun "Retrieve the whole data-base.";
   line tmp_get_fun "let get_dump %s = " pgocaml_db_handle_arg;
   let closing = ref [] in
-  line tmp_get_fun2 "pg_return {";
+  line tmp_get_fun2 "pg_return { version = %S;" dump_version_string;
 
   line tmp_get_fun "pg_bind (File_system.get_all ~dbh) (fun t_list ->";
   line tmp_get_fun "pg_bind (PGThread.map_s (File_system.cache_volume ~dbh) \
