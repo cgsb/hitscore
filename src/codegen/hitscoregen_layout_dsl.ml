@@ -265,7 +265,8 @@ let dsl_type_to_db t =
 
 let db_record_standard_fields = [
   ("g_id", Psql.Identifier, [Psql.Not_null]);
-  ("g_last_accessed", Psql.Text, []);
+  ("g_created", Psql.Text, []);
+  ("g_last_modified", Psql.Text, []);
 ]
 let db_function_standard_fields result = [   
   ("g_id"                , Psql.Identifier, [Psql.Not_null]);
@@ -584,11 +585,11 @@ let ocaml_record_module ~out name fields =
   );
   raw out "    %s : t PGOCaml.monad =\n" pgocaml_db_handle_arg;
   line out "  let now = Timestamp.(to_string (now ())) in";
-  let intos = "g_last_accessed" :: List.map fields fst in
+  let intos = "g_created" :: "g_last_modified" :: List.map fields fst in
   let values =
     let prefix (n, t) =
       (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
-    "$now" :: List.map fields prefix  in
+    "$now" :: "$now" :: List.map fields prefix  in
   List.iter fields (fun tv -> let_in_typed_value tv |> raw out "%s");
   pgocaml_add_to_database name intos values
     ~out ~raise_wrong_db:raise_wrong_db_error;
@@ -631,10 +632,17 @@ let ocaml_record_module ~out name fields =
     raw out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
   raw out "  }\n\n";
 
+  doc out "Get the time when the record was created modified (It depends on \
+          the good-will of the people modifying the database {i manually}).";
+  raw out "let created (cache: cache): Timestamp.t option =\n";
+  raw out "  let (_, ts, _, %s) = cache in\n"
+    (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
+  raw out "  option_map ts Timestamp.of_string\n\n";
+
   doc out "Get the last time the record was modified (It depends on \
           the good-will of the people modifying the database {i manually}).";
-  raw out "let last_write_access (cache: cache): Timestamp.t option =\n";
-  raw out "  let (_, ts, %s) = cache in\n"
+  raw out "let last_modified (cache: cache): Timestamp.t option =\n";
+  raw out "  let (_, _, ts, %s) = cache in\n"
     (List.map fields (fun (s, t) -> "_") |> String.concat ~sep:", ");
   raw out "  option_map ts Timestamp.of_string\n\n";
 
@@ -1259,7 +1267,13 @@ val map_s : ('a -> 'b t) -> 'a list -> 'b list t
 end\n\n
 module Make \
 (PGThread : HDB_THREAD) = struct\n\
-module PGOCaml = PGOCaml_generic.Make(PGThread)\n";
+module PGOCaml = PGOCaml_generic.Make(PGThread)
+
+module Timestamp = struct 
+  include Core.Std.Time
+  let () = use_new_string_and_sexp_formats ()
+ end
+";
   );
   doc out "PG'OCaml's connection handle.";
   raw out "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
@@ -1286,12 +1300,6 @@ let list_to_array l = Core.Std.Array.of_list l\n\n\
 let pg_bind am f = PGOCaml.bind am f\n\n\
 let pg_return t = PGOCaml.return t\n\n\
 let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
-
-module Timestamp = struct 
-  include Core.Std.Time
-  let () = use_new_string_and_sexp_formats ()
- 
-end
 
 ";
   );
