@@ -136,10 +136,10 @@ ID,Vial ID,Library ID,Sample ID1,Sample ID2,Protocol,organism,Contact1,Contact2,
 14,,SEA7,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 15,,SEA8,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 16,,SEA9,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-,,Tara1A,OS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50,The barcodes are #1 and #2 from Bioo Scientific ( CGATGT and TGACCA respectively)
-,,Tara1B,RS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
-,,Tara2A,RS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
-,,Tara2B,OS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
+,,Tara1,OS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50,The barcodes are #1 and #2 from Bioo Scientific ( CGATGT and TGACCA respectively)
+,,Tara2,RS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
+,,Tara3,RS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
+,,Tara4,OS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
 ,,wox5cell-gc1-1,wox5cell-gc1,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD001,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,1,266,,,,,,PE,50x50
 ,,wox5cell-gc2-1,wox5cell-gc2,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD002,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,2,266,,,,,,PE,50x50
 ,,wox5cell-gc3-1,wox5cell-gc3,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD003,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,3,264,,,,,,PE,50x50
