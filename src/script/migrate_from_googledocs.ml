@@ -294,8 +294,46 @@ let main metadata_prefix dbh =
 
         (library_id, sample_id1, input_library)
       | _ -> failwith "libraries don't fit") in
-
-  (persons, libraries) |> ignore
+  let flowcells_stage_1 =
+    let fcs = ref [] in
+    let tbl = load_table "Flowcell" in
+    List.iter tbl ~f:(function
+      | [ fcid; lane; library_id; sample_name1; sequencing_started_;
+        sequencing_completed; truseq_cluster_kit___barcode;
+        truseq_sbs_kit___barcode; multiplexing_kit___barcode] ->
+        begin match List.Assoc.find !fcs fcid with
+        | Some lanes -> lanes := (fcid, lane, sample_name1) :: !lanes
+        | None -> fcs := (fcid, ref [(fcid, lane, sample_name1)]) :: !fcs
+        end
+      | _ -> failwith "flowcells don't fit");
+    List.rev_map !fcs ~f:(fun (f, r) -> (f, List.rev !r))
+  in
+  let flowcells =
+    List.map flowcells_stage_1 ~f:(fun (fcid, runplan) ->
+      let lanes =
+        let libraries_of_lane n =
+          List.filter_map runplan ~f:(fun (_, lane, sample_name1) ->
+            if lane = string_of_int (n + 1) then 
+              begin match 
+                  List.find libraries (fun (l, s, i) ->
+                    l = sample_name1 || s = sample_name1) with
+                  | Some (l, s, i) -> Some i
+                  | None ->
+                    failwithf "Can't find the %S library" sample_name1 ()
+              end
+            else 
+              None) in
+        Array.init 8 (fun i ->
+          Hitscore_db.Record_lane.add_value ~dbh
+            ?seeding_concentration:None
+            ?total_volume:None
+            ~libraries:(Array.of_list (libraries_of_lane i))
+            ~pooled_percentages:[| |])
+      in
+      Hitscore_db.Record_flowcell.add_value ~dbh
+        ~serial_name:fcid ~lanes)
+  in
+  (persons, flowcells) |> ignore
 
 let () =
   match Array.to_list Sys.argv with
@@ -318,6 +356,8 @@ let () =
       all "sample";
       all "stock_library";
       all "input_library";
+      all "lane";
+      all "flowcell";
       all "g_volume";
       "
 select
