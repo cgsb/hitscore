@@ -20,7 +20,7 @@
 
 (record sample
         (name        string)
-        (organism    organism)
+        (organism    organism option)
         notable)
 
 
@@ -36,7 +36,7 @@
 
 (record stock_library
           (name           string)
-          (sample      sample)
+          (sample      sample option)
           (protocol  protocol option)
           (application    string option)
           (stranded       bool)
