@@ -105,6 +105,14 @@ module PGOCaml = Hitscore_db.PGOCaml
 let pcre_matches rex str = 
   try ignore (Pcre.exec ~rex str); true with Not_found -> false
 
+let sanitize_for_filename str = 
+  String.concat_map ~sep:"" str
+    ~f:(function
+      | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' as c -> String.of_char c
+      | _ -> "")
+
+let optify_string s =
+  if s = "" then None else Some s
 
 let main metadata_prefix dbh =
   
@@ -112,8 +120,9 @@ let main metadata_prefix dbh =
   let load = Csv.load ~separator:',' in
   let load_table t =
     load (sprintf "%s%s.csv" metadata_prefix t) |> Csv.square |> List.tl_exn in
+  let migration_note = sprintf "(From_migration %S)" Time.(to_string (now ())) in
   let persons =
-    let note = sprintf "(From_migration %S)" Time.(to_string (now ())) in
+    let note = migration_note in
     let nyu_login_email = Pcre.regexp "[a-z]+[0-9]+@nyu.edu" in
     let tbl = load_table "Person" in
     List.map tbl ~f:(function
@@ -134,10 +143,159 @@ let main metadata_prefix dbh =
             ~print_name:(sprintf "%s %s" first surname)
             ~family_name:surname ~note ?login
             ~email ?nickname ~dbh in
-        (id, surname)
+        (surname, id)
       | _ -> failwith "persons") in
+  let organisms = ref [] in
+  let samples = ref [] in
+  let protocols = ref [] in
+  let stock_libraries = ref [] in
+  let try_previous assoc_list str ~new_one =
+    if str = "" then None
+    else
+      begin match List.Assoc.find !assoc_list str with
+      | Some id -> Some id
+      | None ->
+        let id = new_one str in
+        assoc_list := (str, id) :: !assoc_list;
+        Some id
+      end in
+  
+  let libraries =
+    let tbl = load_table "Library" in
+    List.map tbl ~f:(function
+      | [id; vial_id; library_id; sample_id1; sample_id2; protocol;
+        organism; contact1; contact2; contact3; contact4; contact5;
+        application; stranded; control_type; truseq_control_used;
+        rna_seq_control; truseq_barcode; bioo_barcode;
+        library_submitted; library_quantification_method;
+        library_conc__nm____lab; library_volume__ul_;
+        fragment_size_qc_method; pdf_file_path; xad_file_path;
+        well_number; avg_library_fragment_size;
+        fragment_size_qc_method_2; pdf_file_path_2; xad_file_path_2;
+        well_number_2; avg_library_fragment_size_2;
+        read_type; read_length; note ] ->
+        let organism =
+          try_previous organisms organism ~new_one:(fun str ->
+            Hitscore_db.Record_organism.add_value
+              ~name:organism ~dbh ?informal:None
+              ~note:(migration_note ^ "(TODO Fix_names)")
+          ) in
+        let sample = 
+          try_previous samples sample_id1 ~new_one:(fun str ->
+            Hitscore_db.Record_sample.add_value ~dbh
+              ~name:str ?organism ~note:migration_note) in
+        let protocol =
+          try_previous protocols protocol ~new_one:(fun str ->
+            Hitscore_db.Record_protocol.add_value ~dbh
+              ~name:str ~note:migration_note
+              ~doc:(Hitscore_db.File_system.add_volume ~dbh
+                      ~kind:`protocol_directory
+                      ~hr_tag:(sanitize_for_filename str)
+                      ~files:[])) in
+        let stock_library =
+          let note =
+            migration_note ^ 
+              (if note = "" then "" else sprintf "(spread_sheet_note %S)" note) in
+          let application = optify_string application in
+          let truseq_control = 
+            match truseq_control_used with
+            | "TRUE" -> true
+            | "FALSE" -> false
+            | "" -> false
+            | s -> 
+              failwithf "cannot recognize the truseq_control_used: %S" s ()
+          in
+          let stranded =
+            match stranded with
+            | "TRUE" -> true
+            | "FALSE" -> false
+            | "" -> false
+            | s -> 
+              failwithf "cannot recognize the `stranded': %S" s ()
+          in
+          let rnaseq_control = optify_string rna_seq_control in
+          let read_length_1, read_length_2 =
+            match read_type, read_length with
+            | "PE", "50x50" ->   (50l,  Some 50l) 
+            | "PE", "100x100" -> (100l, Some 100l)
+            | t, l ->
+              if library_id = "PhiX_v3" then
+                (100l, Some 100l)
+              else
+                failwithf "[%s] did not get read_length's from (%S, %S)" 
+                  library_id t l () in
+          let barcode_type, barcodes =
+            let i32 s = try Int32.of_string s with e -> 
+              failwithf "Int32.of_string %S failed" s () in
+            match truseq_barcode, bioo_barcode with
+            | "", "" -> `none, [| |]
+            | "", bb ->
+              `bioo, [| i32 bb |]
+            | "AD004,AD006", "" -> `illumina, [| 4l; 6l |]
+            | ib, "" ->
+              begin match String.chop_prefix ib ~prefix:"AD0" with
+              | Some s ->
+                `illumina, [| i32 s |]
+              | None ->
+                `illumina, [| i32 ib |]
+              end
+            | t, l ->
+                failwithf "[%s] did not get barcodes from (%S, %S)" 
+                  library_id t l () in
+        
+          try_previous stock_libraries library_id ~new_one:(fun str ->
+            Hitscore_db.Record_stock_library.add_value ~dbh
+              ~name:str ?sample ?protocol ?application
+              ~stranded ~note ?rnaseq_control
+              ~truseq_control ~read_length_1 ?read_length_2
+              ~barcode_type ~barcodes
+          ) in
+        let input_library: Hitscore_db.Record_input_library.t =
+          let submission_date =
+            match String.split ~on:'/' library_submitted with
+            | [ m; d; y ] ->
+              Time.of_string (sprintf "%d-%02d-%02d 00:00:00-05:00" 
+                                (int_of_string y)
+                                (int_of_string m)
+                                (int_of_string d))
+            | l ->
+              if pcre_matches  (Pcre.regexp "Niki.*") library_id then
+                Time.of_string "2011-10-03 00:00:00-05:00"
+              else if pcre_matches (Pcre.regexp "Paul.*") library_id then
+                Time.of_string "2011-10-03 00:00:00-05:00"
+              else
+                Time.of_string "2011-06-24 00:00:00-05:00"
+          in
+          let contacts =
+            Array.filter_map [|
+              contact1;
+              contact2;
+              contact3;
+              contact4;
+              contact5; |] ~f:(fun ctct ->
+                if ctct = "" then None else
+                  Some (List.Assoc.find_exn persons ctct))
+          in
+          let volume_uL =
+            Option.map (optify_string library_volume__ul_) ~f:Float.of_string in
+          let concentration_nM = 
+            Option.map (optify_string library_conc__nm____lab) ~f:Float.of_string in
+          Hitscore_db.Record_input_library.add_value ~dbh
+            ~library:(Option.value_exn stock_library) 
+            ~submission_date ~note
+            ~contacts ?volume_uL ?concentration_nM ~user_db:[| |]
+        in
+        eprintf "[%s] %s %s %s %s %s\n"  library_id
+          fragment_size_qc_method pdf_file_path xad_file_path
+          well_number avg_library_fragment_size;
+        eprintf "[%s] %s %s %s %s %s\n"  library_id
+          fragment_size_qc_method_2 pdf_file_path_2 xad_file_path_2
+          well_number_2 avg_library_fragment_size_2;
 
-  (persons) |> ignore
+        (library_id, sample_id1, input_library)
+      | _ -> failwith "libraries don't fit") in
+
+  (persons, libraries) |> ignore
 
 let () =
   match Array.to_list Sys.argv with
@@ -155,5 +313,24 @@ let () =
     let all = sprintf "select * from %s;" in
     report [
       all "person";
+      all "protocol";
+      all "organism";
+      all "sample";
+      all "stock_library";
+      all "input_library";
+      all "g_volume";
+      "
+select
+  stock_library.name as lib_name,
+  sample.name as sample_name,
+  protocol.name as protocol_name
+from stock_library, sample, protocol
+where
+  stock_library.sample = sample.g_id and
+  stock_library.protocol = protocol.g_id
+";
+" select name from stock_library where sample is null";
+" select stock_library.name from stock_library
+   where stock_library.protocol is null";
     ]
   | _ -> ()
