@@ -32,7 +32,7 @@
         notable)
 
 
-(enumeration barcode_provider bioo illumina nugen)
+(enumeration barcode_provider none bioo illumina nugen)
 
 (record stock_library
           (name           string)
