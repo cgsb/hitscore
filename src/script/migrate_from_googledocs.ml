@@ -359,18 +359,44 @@ let () =
       all "lane";
       all "flowcell";
       all "g_volume";
-      "
-select
-  stock_library.name as lib_name,
-  sample.name as sample_name,
-  protocol.name as protocol_name
-from stock_library, sample, protocol
-where
-  stock_library.sample = sample.g_id and
-  stock_library.protocol = protocol.g_id
-";
-" select name from stock_library where sample is null";
-" select stock_library.name from stock_library
-   where stock_library.protocol is null";
-    ]
+    ];
+    Out_channel.with_file "uuuu.brtx" ~f:(fun o ->
+      let open Hitscore_db.Record_flowcell in
+      List.iter (get_all ~dbh) (fun f ->
+        let { serial_name ; lanes } = get_fields (cache_value ~dbh f) in
+        fprintf o "{section|Flowcell %s}\n" serial_name;
+        fprintf o "{begin table 4}\n";
+        fprintf o "{c h|Lane} {c h|Lib} {c h|Sample} {c h|Contacts}\n";
+        Array.iteri lanes ~f:(fun i l ->
+          let open Hitscore_db.Record_lane in
+          let { libraries; _ } = get_fields (cache_value ~dbh l) in
+          fprintf o "{c h %dx1|%d}\n" (Array.length libraries) i;
+          Array.iter libraries ~f:(fun il ->
+            let open Hitscore_db.Record_input_library in
+            let { library; contacts; _ } = get_fields (cache_value ~dbh il) in
+            let open Hitscore_db.Record_stock_library in
+            let { name; sample } = get_fields (cache_value ~dbh library) in
+            fprintf o "  {c|%s}" name;
+            begin match sample with
+            | None -> fprintf o "{c|{i|NO SAMPLE}}"
+            | Some sample ->
+              let open Hitscore_db.Record_sample in
+              let { name; _ } = get_fields (cache_value ~dbh sample) in
+              fprintf o "{c|%s}" name;
+            end;
+            let people =
+              let open Hitscore_db.Record_person in
+              Array.map contacts ~f:(fun p ->
+                let { print_name; email; _ } = get_fields (cache_value ~dbh p) in
+                sprintf "%s <%s>"
+                  (Option.value ~default:"{i|NO NAME}" print_name)
+                  (Option.value ~default:"{i|NO-EMAIL}" email)) |> Array.to_list in
+            fprintf o "{c|%s}\n"
+              (String.concat ~sep:", " people)
+          );
+        );
+        fprintf o "{end}\n";
+      );
+    )
+
   | _ -> ()
