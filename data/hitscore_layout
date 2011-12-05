@@ -64,8 +64,8 @@
 )
 
 (record lane
-        (seeding_concentration real)
-        (total_volume real)
+        (seeding_concentration real option)
+        (total_volume real option)
         (libraries input_library array)
         (pooled_percentages int array)
         )
