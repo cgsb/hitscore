@@ -392,7 +392,7 @@ let pgocaml_type_of_field =
     | _ -> failwith "Can't compile DB type to PGOCaml"
 let rec ocaml_type = function
   | Bool        -> "bool"
-  | Timestamp   -> "string"
+  | Timestamp   -> "Timestamp.t"
   | Int         -> "int32"
   | Real        -> "float"      
   | String      -> "string"
@@ -422,6 +422,12 @@ let let_in_typed_value  = function
     sprintf "  let %s = option_map %s (fun s -> s.File_system.id) in\n" n n
   | (n, Array (Volume_name r)) ->
     sprintf "  let %s = array_map %s (fun s -> s.File_system.id) in\n" n n
+  | (n, Timestamp) ->
+    sprintf "let %s = Timestamp.to_string %s in"  n n
+  | (n, Option Timestamp) ->
+    sprintf "let %s = option_map %s Timestamp.to_string in"  n n
+  | (n, Array Timestamp) ->
+    sprintf "let %s = array_map %s Timestamp.to_string in"  n n
   | _ -> ""
 
 let convert_pgocaml_type = function
@@ -443,6 +449,12 @@ let convert_pgocaml_type = function
     sprintf "(option_map %s (fun id -> { File_system..id }))" n
   | (n, Array (Volume_name r)) ->
     sprintf "(array_map %s (fun id ->  { File_system.id }))" n
+  | (n, Timestamp) ->
+    sprintf "(Timestamp.of_string %s)" n
+  | (n, Option Timestamp) ->
+    sprintf "(option_map %s Timestamp.of_string)" n
+  | (n, Array Timestamp) ->
+    sprintf "(array_map %s Timestamp.of_string)" n
   | (n, _) -> n
 
 
