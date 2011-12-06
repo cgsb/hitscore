@@ -1,6 +1,6 @@
-(** The configuration module types (parameter(s) of [Hitscore.Make])  *)
+(** The configuration module types (parameter(s) of [Hitscore.Make]).  *)
 
-(** The I/O configuration module type is the main parameter of [Make].  *)
+(** The I/O configuration module type is the main parameter of [Hitscore.Make].  *)
 module type IO_CONFIGURATION = sig
 
   (** The threading and I/O (for now) follows PG'OCaml's conventions:
@@ -30,7 +30,7 @@ module type IO_CONFIGURATION = sig
   val log_error: string -> unit t
 
   (** This is the sequential threaded-map over lists, i.e.
-    [{{:http://ocsigen.org/lwt/api/Lwt_list}Lwt_list}.map_s] but with {i
+    {i {{:http://ocsigen.org/lwt/api/Lwt_list}Lwt_list}.map_s} but with a {i
     Core-like} API. *)
   val map_sequential : 'a list -> f:('a -> 'b t) -> 'b list t
 
