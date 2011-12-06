@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 86bd4aa14ceb5abe6ea99230a8bf6a69)
+# DO NOT EDIT (digest: d851f4641c3151365970c67f9160e998)
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
 <src/codegen/hitscoregen.{native,byte}>: pkg_pgocaml.syntax
@@ -17,14 +17,14 @@
 <src/lib/*.ml{,i}>: pkg_core
 <src/lib/*.ml{,i}>: pkg_biocaml
 # Executable hitscore
-<src/app/hitscore.{native,byte}>: use_hitscore
-<src/app/hitscore.{native,byte}>: pkg_threads
-<src/app/hitscore.{native,byte}>: pkg_sexplib.syntax
-<src/app/hitscore.{native,byte}>: pkg_sequme
-<src/app/hitscore.{native,byte}>: pkg_pgocaml.syntax
-<src/app/hitscore.{native,byte}>: pkg_pgocaml
-<src/app/hitscore.{native,byte}>: pkg_core
-<src/app/hitscore.{native,byte}>: pkg_biocaml
+<src/app/hitscore_main.{native,byte}>: use_hitscore
+<src/app/hitscore_main.{native,byte}>: pkg_threads
+<src/app/hitscore_main.{native,byte}>: pkg_sexplib.syntax
+<src/app/hitscore_main.{native,byte}>: pkg_sequme
+<src/app/hitscore_main.{native,byte}>: pkg_pgocaml.syntax
+<src/app/hitscore_main.{native,byte}>: pkg_pgocaml
+<src/app/hitscore_main.{native,byte}>: pkg_core
+<src/app/hitscore_main.{native,byte}>: pkg_biocaml
 <src/app/*.ml{,i}>: use_hitscore
 <src/app/*.ml{,i}>: pkg_threads
 <src/app/*.ml{,i}>: pkg_sexplib.syntax

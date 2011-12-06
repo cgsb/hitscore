@@ -39,7 +39,7 @@ Library hitscore
 
 Executable hitscore
   Path: src/app
-  MainIs: hitscore.ml
+  MainIs: hitscore_main.ml
   BuildDepends: threads, core, hitscore
   CompiledObject: best
   Install: true
