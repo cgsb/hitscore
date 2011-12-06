@@ -13,6 +13,9 @@ open Core.Std
 let (|>) x f = f x
 open Lwt
 
+let lwt_reraise = function
+  | Ok o -> return o
+  | Error e -> Lwt.fail e
 
 let notif =
   let section = Lwt_log.Section.make "Notifications" in
@@ -158,7 +161,7 @@ let show_success dbh =
 
 let test_lwt =
   let hitscore_configuration = Hitscore_lwt.configure () in
-  lwt dbh = Hitscore_lwt.db_connect hitscore_configuration in
+  lwt dbh = Hitscore_lwt.db_connect hitscore_configuration >>= lwt_reraise in
   try_lwt 
     notif "Starting" >>
     count_all dbh >>
@@ -206,7 +209,7 @@ let test_lwt =
     print notif "Nice ending" 
   finally
     notif "Closing the DB." >>
-    Hitscore_lwt.db_disconnect hitscore_configuration dbh 
+    Hitscore_lwt.db_disconnect hitscore_configuration dbh >>= lwt_reraise
 
 
 let () =

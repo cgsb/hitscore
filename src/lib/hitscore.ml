@@ -1,7 +1,30 @@
+open Hitscore_std
 
 module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
   module Layout = Hitscore_db_access.Make(IO_configuration)
+
+  module Result_IO = struct
+
+    include  Monad.Make2(struct 
+      type ('a, 'b) t = ('a, 'b) Result.t IO_configuration.t
+
+      let return x = IO_configuration.return (Ok x) 
+      let bind x f = 
+        IO_configuration.(>>=) x (function
+          | Error e -> IO_configuration.return (Error e)
+          | Ok o -> f o)
+    end)
+    
+    let catch_io ~f x =
+      IO_configuration.catch 
+        (fun () -> 
+          let a_exn_m : 'a IO_configuration.t = f x in
+          IO_configuration.(>>=) a_exn_m
+            (fun x -> IO_configuration.return (Ok x)))
+        (fun e -> IO_configuration.return (Error e))
+
+  end
 
   type db_configuration = {
     db_host     : string;
@@ -27,21 +50,17 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
   let db_connect t =
     match t.db_configuration with
-    | None -> Layout.PGOCaml.connect ()
-    | Some {
-      db_host    ; 
-      db_port    ; 
-      db_database; 
-      db_username; 
-      db_password; } ->
-      Layout.PGOCaml.connect ()
-        ~host:db_host
-        ~port:db_port
-        ~database:db_database
-        ~user:db_username
-        ~password:db_password
-
-  let db_disconnect t dbh = Layout.PGOCaml.close dbh 
+    | None -> 
+      Result_IO.catch_io Layout.PGOCaml.connect ()
+    | Some {db_host; db_port; db_database; db_username; db_password} ->
+      Result_IO.catch_io (Layout.PGOCaml.connect
+                            ~host:db_host
+                            ~port:db_port
+                            ~database:db_database
+                            ~user:db_username
+                            ~password:db_password) ()
+        
+  let db_disconnect t dbh = Result_IO.catch_io Layout.PGOCaml.close dbh 
 
 
 end

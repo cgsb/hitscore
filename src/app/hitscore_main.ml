@@ -6,6 +6,8 @@ module Basic_threading_config = struct
   include PGOCaml.Simple_thread
   let map_sequential l ~f = List.map ~f l
   let log_error = eprintf "%s"
+  let catch f e =
+    try f () with ex -> e ex
 end
 
 module Hitscore_threaded = Hitscore.Make(Basic_threading_config)
@@ -292,27 +294,34 @@ module Dumps = struct
 
   let to_file file =
     let hsc = Hitscore_threaded.configure () in
-    let dbh = Hitscore_threaded.db_connect hsc in
-    let dump =
-      Hitscore_db.get_dump ~dbh |>
-          Hitscore_db.sexp_of_dump |>
-              Sexplib.Sexp.to_string_hum in
-    Out_channel.(with_file file ~f:(fun o -> output_string o dump));
-    Hitscore_threaded.db_disconnect hsc dbh 
+    match Hitscore_threaded.db_connect hsc with
+    | Ok dbh ->
+      let dump =
+        Hitscore_db.get_dump ~dbh |>
+            Hitscore_db.sexp_of_dump |>
+                Sexplib.Sexp.to_string_hum in
+      Out_channel.(with_file file ~f:(fun o -> output_string o dump));
+      ignore (Hitscore_threaded.db_disconnect hsc dbh)
+    | Error e ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
       
   let load_file file =
     let hsc = Hitscore_threaded.configure () in
-    let dbh = Hitscore_threaded.db_connect hsc in
-    let insert_result = 
-      In_channel.with_file file ~f:(fun i ->
-        Sexplib.Sexp.input_sexp i |> Hitscore_db.dump_of_sexp |>
-            Hitscore_db.insert_dump ~dbh) in
-    begin match insert_result with 
-    | `ok -> eprintf "Load: Ok\n%!"
-    | `wrong_version_error ->
-      eprintf "Load: Wrong Version Error\n%!"
-    end;
-    Hitscore_threaded.db_disconnect hsc dbh 
+    match Hitscore_threaded.db_connect hsc with
+    | Ok dbh ->
+      let insert_result = 
+        In_channel.with_file file ~f:(fun i ->
+          Sexplib.Sexp.input_sexp i |> Hitscore_db.dump_of_sexp |>
+              Hitscore_db.insert_dump ~dbh) in
+      begin match insert_result with 
+      | `ok -> eprintf "Load: Ok\n%!"
+      | `wrong_version_error ->
+        eprintf "Load: Wrong Version Error\n%!"
+      end;
+      Hitscore_threaded.db_disconnect hsc dbh  |> ignore
+    | Error e ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+        
 
 
 end

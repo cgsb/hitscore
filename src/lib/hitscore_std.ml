@@ -1,5 +1,7 @@
 include Core.Std
 
+let (|>) x f = f x
+(*
 module Util = struct
 
   let now () =
@@ -14,5 +16,5 @@ end
 
 module IntMap = Map.Make(Int)
 module StringSet = Set.Make(String)
+*)
 
-type dbh = (string, bool) Hashtbl.t PGOCaml.t

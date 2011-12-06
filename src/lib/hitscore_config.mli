@@ -34,6 +34,7 @@ module type IO_CONFIGURATION = sig
     Core-like} API. *)
   val map_sequential : 'a list -> f:('a -> 'b t) -> 'b list t
 
+  val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
 
 end
 
