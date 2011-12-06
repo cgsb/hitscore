@@ -1273,7 +1273,7 @@ let ocaml_code ?(functorize=true) dsl output_string =
     doc out "Make a [db_access] module given an \"Outside word model\".";
     line out "\
 module Make \
-(PGThread : module type of Hitscore_config) = struct\n\
+(PGThread : Hitscore_config.IO_CONFIGURATION) = struct\n\
 module PGOCaml = PGOCaml_generic.Make(PGThread)
 
 module Timestamp = struct 
