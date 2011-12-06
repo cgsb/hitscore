@@ -2,15 +2,7 @@
 open Core.Std
 let (|>) x f = f x
 
-module Basic_threading_config = struct
-  include PGOCaml.Simple_thread
-  let map_sequential l ~f = List.map ~f l
-  let log_error = eprintf "%s"
-  let catch f e =
-    try f () with ex -> e ex
-end
-
-module Hitscore_threaded = Hitscore.Make(Basic_threading_config)
+module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
 module Hitscore_db = Hitscore_threaded.Layout
 
 module System = struct

@@ -91,15 +91,10 @@ let usage = sprintf
   tables but all tables should be empty.
 " prog
 
-module Usual_thread = struct
-  include PGOCaml.Simple_thread
 
-  let err = eprintf "%s%!"
-  let map_s f l = List.map ~f l
-
-end      
-module Hitscore_db = Hitscore_db_access.Make(Usual_thread)
-module PGOCaml = Hitscore_db.PGOCaml
+module Hitscore_threaded = 
+  Hitscore.Make(Hitscore.Preemptive_threading_config)
+module Hitscore_db = Hitscore_threaded.Layout
 
 
 let pcre_matches rex str = 
@@ -338,7 +333,9 @@ let main metadata_prefix dbh =
 let () =
   match Array.to_list Sys.argv with
   | exec :: dir :: [] -> 
-    let dbh = PGOCaml.connect() in
+    let hsconf = Hitscore_threaded.configure () in
+    let fail = Failure "connection error" in
+    let dbh = Hitscore_threaded.db_connect hsconf |> Result.ok_exn ~fail  in
     main dir dbh;
     let run_psql s =
       sprintf "echo '<h3>%s</h3>' >> ttt.html\n\
@@ -370,7 +367,7 @@ let () =
         Array.iteri lanes ~f:(fun i l ->
           let open Hitscore_db.Record_lane in
           let { libraries; _ } = get_fields (cache_value ~dbh l) in
-          fprintf o "{c h %dx1|%d}\n" (Array.length libraries) i;
+          fprintf o "{c h %dx1|%d}\n" (Array.length libraries) (i + 1);
           Array.iter libraries ~f:(fun il ->
             let open Hitscore_db.Record_input_library in
             let { library; contacts; _ } = get_fields (cache_value ~dbh il) in
@@ -397,6 +394,10 @@ let () =
         );
         fprintf o "{end}\n";
       );
-    )
+    );
+    let fail = Failure "disconnection error !" in
+    Hitscore_threaded.db_disconnect hsconf dbh |> Result.ok_exn ~fail;
+    eprintf "----- DONE -----\n%!";
+
 
   | _ -> ()

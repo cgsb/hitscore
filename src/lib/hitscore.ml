@@ -1,5 +1,16 @@
 open Hitscore_std
 
+
+module Preemptive_threading_config : 
+  Hitscore_config.IO_CONFIGURATION with type 'a t = 'a = struct
+    include PGOCaml.Simple_thread
+    let map_sequential l ~f = List.map ~f l
+    let log_error = eprintf "%s"
+    let catch f e =
+      try f () with ex -> e ex
+end
+
+
 module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
   module Layout = Hitscore_db_access.Make(IO_configuration)
