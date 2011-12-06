@@ -1,9 +1,7 @@
 # OASIS_START
-# DO NOT EDIT (digest: 0a04237d5b77e686ec4ff5be164a4df9)
+# DO NOT EDIT (digest: ccaf5c8a74435d9aaffb1c6af3db02e8)
 Hitscore
 Hitscore_std
-Hitscore_db_access
 Hitscore_config
-Hitscore_state
-Hitscore_person
+Hitscore_db_access
 # OASIS_STOP
