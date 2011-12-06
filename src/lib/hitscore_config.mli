@@ -1,7 +1,5 @@
 (** The configuration module type is the main parameter of [Hitscore.Make]  *)
 
-(** The root directory managed by Hitscore.  *)
-val root_directory : string
 
 (** The threading and I/O (for now) follows PG'OCaml's conventions:
 {[

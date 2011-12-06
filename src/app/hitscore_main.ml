@@ -2,6 +2,15 @@
 open Core.Std
 let (|>) x f = f x
 
+module Basic_threading_config = struct
+  include PGOCaml.Simple_thread
+  let map_sequential l ~f = List.map ~f l
+  let log_error = eprintf "%s"
+end
+
+module Hitscore_threaded = Hitscore.Make(Basic_threading_config)
+module Hitscore_db = Hitscore_threaded.Layout
+
 module System = struct
 
   let command_exn s = 
@@ -281,31 +290,19 @@ end
 
 module Dumps = struct
 
-  module Basic_threading_config =
-  struct
-    let root_directory = "/hopefullynotused"
-    include PGOCaml.Simple_thread
-    let map_sequential l ~f = List.map ~f l
-    let log_error = eprintf "%s"
-  end
-(*
-  module Hitscore_threaded = 
-    Hitscore.Make(Basic_threading)
-  module Hitscore_db = Hitscore_threaded.Layout
-*)
-  module Hitscore_db = Hitscore_db_access.Make(Basic_threading_config)
-
   let to_file file =
-    let dbh = Hitscore_db.PGOCaml.connect () in
+    let hsc = Hitscore_threaded.configure () in
+    let dbh = Hitscore_threaded.db_connect hsc in
     let dump =
       Hitscore_db.get_dump ~dbh |>
           Hitscore_db.sexp_of_dump |>
               Sexplib.Sexp.to_string_hum in
     Out_channel.(with_file file ~f:(fun o -> output_string o dump));
-    Hitscore_db.PGOCaml.close dbh 
+    Hitscore_threaded.db_disconnect hsc dbh 
       
   let load_file file =
-    let dbh = Hitscore_db.PGOCaml.connect () in
+    let hsc = Hitscore_threaded.configure () in
+    let dbh = Hitscore_threaded.db_connect hsc in
     let insert_result = 
       In_channel.with_file file ~f:(fun i ->
         Sexplib.Sexp.input_sexp i |> Hitscore_db.dump_of_sexp |>
@@ -315,7 +312,8 @@ module Dumps = struct
     | `wrong_version_error ->
       eprintf "Load: Wrong Version Error\n%!"
     end;
-    Hitscore_db.PGOCaml.close dbh
+    Hitscore_threaded.db_disconnect hsc dbh 
+
 
 end
 

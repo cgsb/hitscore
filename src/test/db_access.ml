@@ -1,5 +1,4 @@
 module Lwt_config = struct
-  let root_directory = "/hopefully/unused"
   include Lwt
   include Lwt_chan
   let map_sequential l ~f = Lwt_list.map_s f l
@@ -158,7 +157,8 @@ let show_success dbh =
         (Option.value ~default:"NONE" sample_sheet_note) ;))
 
 let test_lwt =
-  lwt dbh = PGOCaml.connect () in
+  let hitscore_configuration = Hitscore_lwt.configure () in
+  lwt dbh = Hitscore_lwt.db_connect hitscore_configuration in
   try_lwt 
     notif "Starting" >>
     count_all dbh >>
@@ -206,7 +206,7 @@ let test_lwt =
     print notif "Nice ending" 
   finally
     notif "Closing the DB." >>
-    PGOCaml.close dbh 
+    Hitscore_lwt.db_disconnect hitscore_configuration dbh 
 
 
 let () =
