@@ -283,6 +283,7 @@ module Dumps = struct
 
   module Basic_threading =
   struct
+    let root = "/hopefullynotused"
     include PGOCaml.Simple_thread
     let map_s f l = List.map ~f l
     let err = eprintf "%s"

@@ -1,4 +1,5 @@
 module Lwt_thread = struct
+  let root = "/hopefully/unused"
   include Lwt
   include Lwt_chan
   let map_s = Lwt_list.map_s
