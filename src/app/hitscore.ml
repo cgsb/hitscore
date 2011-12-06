@@ -281,14 +281,19 @@ end
 
 module Dumps = struct
 
-  module Basic_threading =
+  module Basic_threading_config =
   struct
-    let root = "/hopefullynotused"
+    let root_directory = "/hopefullynotused"
     include PGOCaml.Simple_thread
-    let map_s f l = List.map ~f l
-    let err = eprintf "%s"
+    let map_sequential l ~f = List.map ~f l
+    let log_error = eprintf "%s"
   end
-  module Hitscore_db = Hitscore_db_access.Make(Basic_threading)
+(*
+  module Hitscore_threaded = 
+    Hitscore.Make(Basic_threading)
+  module Hitscore_db = Hitscore_threaded.Layout
+*)
+  module Hitscore_db = Hitscore_db_access.Make(Basic_threading_config)
 
   let to_file file =
     let dbh = Hitscore_db.PGOCaml.connect () in

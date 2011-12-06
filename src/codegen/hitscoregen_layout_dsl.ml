@@ -912,7 +912,7 @@ let ocaml_toplevel_values_and_types ~out dsl =
   let the_rest =
     "  ] in\n\
     \  let v_list_list_monad = \
-         PGThread.map_s (fun f -> f ()) thread_fun_list in\n\
+         map_s ~f:(fun f -> f ()) thread_fun_list in\n\
     \  pg_map v_list_list_monad list_flatten\n\n"
   in
   raw tmprec "%s" the_rest;
@@ -969,7 +969,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "    end";
   line out "  | Directory (name, t, pl) -> begin";
   line out "    let type_str = Enumeration_file_type.to_string t in";
-  line out "    let added_file_list_monad = PGThread.map_s add_tree pl in";
+  line out "    let added_file_list_monad = map_s ~f:add_tree pl in";
   line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
   line out "       let pg_inodes = array_map (list_to_array file_list) \
                        (fun { inode } ->  inode) in";
@@ -978,7 +978,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     [ "$name"; "$type_str" ; "$pg_inodes" ]
     ~out ~raise_wrong_db ~id:"inode";
   line out "  )  end in";
-  line out " let added_file_list_monad = PGThread.map_s add_tree files in";
+  line out " let added_file_list_monad = map_s ~f:add_tree files in";
   line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
   line out "     let pg_inodes = array_map (list_to_array file_list) \n\
                        (fun { inode } ->  inode) in";
@@ -1059,15 +1059,15 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "    let rec get_contents arr =";
   line out "      let contents = array_to_list arr in";
   line out "      let f inode = cache_file ~dbh { inode } in";
-  line out "      pg_bind (PGThread.map_s f contents) (fun fs ->";
+  line out "      pg_bind (map_s ~f contents) (fun fs ->";
   line out "        files := list_append fs !files;";
   line out "        let todo = list_map fs (fun (%s) -> contents) in"
     (List.map (id_field :: file_fields)
        (function ("g_content", _) -> "contents" | (n, _) -> "_" ) |>
            String.concat ~sep:", ");
-  line out "        pg_bind (PGThread.map_s get_contents todo)";
+  line out "        pg_bind (map_s ~f:get_contents todo)";
   line out "          (fun _ -> pg_return ())) in";
-  line out "    pg_bind (PGThread.map_s get_contents [ contents ])";
+  line out "    pg_bind (map_s ~f:get_contents [ contents ])";
   line out "      (fun _ -> pg_return (entry, !files)))";
 
   doc out "Get the entry from the whole volume.";
@@ -1138,7 +1138,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
           successful won't be cleaned-up).";
   line out "let insert_cached %s (cache: volume_cache): \
             volume PGOCaml.monad = " pgocaml_db_handle_arg;
-  line out "  let inserted_files_monad = PGThread.map_s (fun f ->";
+  line out "  let inserted_files_monad = map_s ~f:(fun f ->";
   line out "      let (%s) = f in" 
     (List.map (id_field :: file_fields) fst |> String.concat ~sep:", ");
   pgocaml_add_to_database "g_file" 
@@ -1201,7 +1201,7 @@ let ocaml_dump_and_reload ~out dsl =
   line tmp_get_fun2 "pg_return { version = %S;" dump_version_string;
 
   line tmp_get_fun "pg_bind (File_system.get_all ~dbh) (fun t_list ->";
-  line tmp_get_fun "pg_bind (PGThread.map_s (File_system.cache_volume ~dbh) \
+  line tmp_get_fun "pg_bind (map_s ~f:(File_system.cache_volume ~dbh) \
                                     t_list) (fun file_system ->";
   line tmp_get_fun2 "     file_system;";
   close_get_fun := "))" :: !close_get_fun;
@@ -1217,7 +1217,7 @@ let ocaml_dump_and_reload ~out dsl =
                       pg_return `wrong_version_error else (" 
     dump_version_string;
   line tmp_ins_fun "    let fs_m = \
-                         PGThread.map_s (File_system.insert_cached ~dbh) \
+                         map_s ~f:(File_system.insert_cached ~dbh) \
                          dump.file_system in";
   line tmp_ins_fun "    pg_bind fs_m (fun _ ->";
   close_ins_fun := "))" :: !close_ins_fun;
@@ -1228,12 +1228,12 @@ let ocaml_dump_and_reload ~out dsl =
     | Record (name, fields) ->
       line tmp_type "  record_%s: Record_%s.cache list;" name name;
       line tmp_get_fun "pg_bind (Record_%s.get_all ~dbh) (fun t_list ->" name;
-      line tmp_get_fun "pg_bind (PGThread.map_s (Record_%s.cache_value ~dbh) \
+      line tmp_get_fun "pg_bind (map_s ~f:(Record_%s.cache_value ~dbh) \
                                     t_list) (fun record_%s ->" name name;
       line tmp_get_fun2 "     record_%s;" name;
       close_get_fun := "))" :: !close_get_fun;
 
-      line tmp_ins_fun "     let r_m = PGThread.map_s (Record_%s.insert_cached \
+      line tmp_ins_fun "     let r_m = map_s ~f:(Record_%s.insert_cached \
                               ~dbh) dump.record_%s in\n\
                        \     pg_bind r_m (fun _ ->" name name;
       close_ins_fun := ")" :: !close_ins_fun;
@@ -1242,12 +1242,12 @@ let ocaml_dump_and_reload ~out dsl =
       line tmp_type "  function_%s: [ `can_nothing ] Function_%s.cache list;" 
         name name;
       line tmp_get_fun "pg_bind (Function_%s.get_all ~dbh) (fun t_list ->" name;
-      line tmp_get_fun "pg_bind (PGThread.map_s (Function_%s.cache_evaluation \
+      line tmp_get_fun "pg_bind (map_s ~f:(Function_%s.cache_evaluation \
                                     ~dbh) t_list) (fun function_%s ->" name name;
       line tmp_get_fun2 "     function_%s;" name;
       close_get_fun := "))" :: !close_get_fun;
 
-      line tmp_ins_fun "     let f_m = PGThread.map_s (Function_%s.insert_cached \
+      line tmp_ins_fun "     let f_m = map_s ~f:(Function_%s.insert_cached \
                               ~dbh) dump.function_%s in\n\
                        \     pg_bind f_m (fun _ ->" name name;
       close_ins_fun := ")" :: !close_ins_fun;
@@ -1291,7 +1291,9 @@ module Timestamp = struct
   hide out (fun out ->
     raw out "\
 open Sexplib.Conv\n\
-
+(* Legacy stuff: *)\n\
+let err = PGThread.log_error\n\n\
+let map_s = PGThread.map_sequential
 let option_map o f =\n\
     match o with None -> None | Some s -> Some (f s)\n\n\
 let option_value_map = Core.Std.Option.value_map \n\n\

@@ -1,11 +1,12 @@
-module Lwt_thread = struct
-  let root = "/hopefully/unused"
+module Lwt_config = struct
+  let root_directory = "/hopefully/unused"
   include Lwt
   include Lwt_chan
-  let map_s = Lwt_list.map_s
-  let err s = output_string Lwt_io.stderr s >> flush Lwt_io.stderr
+  let map_sequential l ~f = Lwt_list.map_s f l
+  let log_error s = output_string Lwt_io.stderr s >> flush Lwt_io.stderr
 end
-module Hitscore_db = Hitscore_db_access.Make(Lwt_thread)
+module Hitscore_lwt = Hitscore.Make(Lwt_config)
+module Hitscore_db = Hitscore_lwt.Layout
 module PGOCaml = Hitscore_db.PGOCaml
 
 
