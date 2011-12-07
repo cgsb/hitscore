@@ -471,7 +471,7 @@ let doc out fmt = (* Doc to put before values/types *)
 let deprecate out fmt =
   doc out (" @deprecated This is left there for emergency purposes only." ^^ fmt)
 let debug out metafmt fmt =
-  line out ("Printf.ksprintf PGThread.err \"%s\" " ^^ fmt ^^ ";") metafmt
+  line out ("Printf.ksprintf Outside.log_error \"%s\" " ^^ fmt ^^ ";") metafmt
 
 let hide out (f: (string -> unit) -> unit) =
   let actually_hide = true in
@@ -493,7 +493,7 @@ let ocaml_exception ?(thread=true) name =
   let raise_exn out str =
     ksprintf out "(raise (%s %S))" name str in
   let thread_fail out str =
-    ksprintf out "(PGThread.fail (%s %S))" name str in
+    ksprintf out "(Outside.fail (%s %S))" name str in
   (define, if thread then thread_fail else raise_exn)
 
 let pgocaml_do_get_all_ids ~out ?(id="id") name = 
@@ -1211,11 +1211,11 @@ let ocaml_dump_and_reload ~out dsl =
                   ({b Unsafe!}).";
   line tmp_ins_fun "let insert_dump %s dump : \n  \
                     (unit, [`wrong_version | `pg_exn of exn]) \
-                    PGThread.Result_IO.monad ="
+                    Outside.Result_IO.monad ="
     pgocaml_db_handle_arg;
   let close_ins_fun = ref [] in
   line tmp_ins_fun "  if dump.version <> %S then (" dump_version_string;
-  line tmp_ins_fun "    PGThread.Result_IO.error `wrong_version";
+  line tmp_ins_fun "    Outside.Result_IO.error `wrong_version";
   line tmp_ins_fun "  ) else";
   line tmp_ins_fun "   let insert_dump_exn () =";
   line tmp_ins_fun "    let fs_m = \
@@ -1267,7 +1267,7 @@ let ocaml_dump_and_reload ~out dsl =
   line out "pg_return ()";
   line out "%s" (String.concat ~sep:"" !close_ins_fun);
   line out " in";
-  line out " PGThread.Result_IO.(bind_on_error (catch_io insert_dump_exn ())";
+  line out " Outside.Result_IO.(bind_on_error (catch_io insert_dump_exn ())";
   line out "   (fun e -> error (`pg_exn e)))";
   ()
 
@@ -1290,8 +1290,8 @@ module type OUTSIDE_WORLD = sig
 end
 
 module Make \
-(PGThread : OUTSIDE_WORLD) = struct\n\
-  module PGOCaml = PGOCaml_generic.Make(PGThread)
+(Outside : OUTSIDE_WORLD) = struct\n\
+  module PGOCaml = PGOCaml_generic.Make(Outside)
 
 module Timestamp = struct 
   include Core.Std.Time
@@ -1309,8 +1309,8 @@ module Timestamp = struct
     raw out "\
 open Sexplib.Conv\n\
 (* Legacy stuff: *)\n\
-let err = PGThread.log_error\n\n\
-let map_s = PGThread.map_sequential
+let err = Outside.log_error\n\n\
+let map_s = Outside.map_sequential
 let option_map o f =\n\
     match o with None -> None | Some s -> Some (f s)\n\n\
 let option_value_map = Core.Std.Option.value_map \n\n\
