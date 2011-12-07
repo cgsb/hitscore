@@ -670,22 +670,26 @@ let pgocaml_insert_cached ~out ~raise_wrong_db ~all_fields name =
 
 let ocaml_enumeration_module ~out name fields =
   raw out "module Enumeration_%s = struct\n" name;
+  
+  doc out "The type of {i %s} items." name;
   raw out "type t = [%s]\n\n"
     (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
   raw out "let to_string : t -> string = function\n| %s\n" 
     (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
         String.concat ~sep:"\n| ");
   raw out "\n";
-  let def_oserr, raise_oserr = 
-    ocaml_exception ~thread:false "Of_string_error" in
-  def_oserr out;
-  raw out "let of_string_exn: string -> t = function\n| %s\n" 
-    (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
-        String.concat ~sep:"\n| ");
-  raw out "| s -> ";
-  raise_oserr out "s";
-  raw out "\n\nend (* %s *)\n\n" name
-
+  hide out (fun out ->
+    line out "exception Of_string_error of string";
+    raw out "let of_string_exn: string -> t = function\n| %s\n" 
+      (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
+          String.concat ~sep:"\n| ");
+    line out "| s -> raise (Of_string_error s)";
+  );
+  doc out "[of_string s] returns [Error s] if [s] cannot be recognized";
+  line out "let of_string s = try Core.Std.Ok (of_string_exn s) \
+                  with e -> Core.Std.Error s";
+  raw  out "\n\nend (* %s *)\n\n" name;
+  ()
 
 let ocaml_record_module ~out name fields = 
   raw out "module Record_%s = struct\n" name;
