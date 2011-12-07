@@ -534,18 +534,16 @@ module OCaml_hiden_exception = struct
       
   let poly_type_local tl = 
     sprintf "`layout_inconsistency of [%s]"
-      (String.concat ~sep:"\n  | " (List.map tl (fun t ->
-        sprintf "`%s of (%s)" t.name (String.concat ~sep:" * " t.types)
-       )))
+      (String.concat ~sep:"\n  | " (List.dedup (List.map tl (fun t ->
+        sprintf "`%s of (%s)" t.name (String.concat ~sep:" * " t.types)))))
       
   let poly_type_global tl =
     sprintf "`layout_inconsistency of [`%s] * [%s]"
       (String.concat ~sep:"\n | `"
          (List.dedup (List.map tl (fun t -> String.lowercase t.module_name))))
-      (String.concat ~sep:"\n  | " (List.map tl (fun t ->
+      (String.concat ~sep:"\n  | " (List.dedup (List.map tl (fun t ->
         sprintf "`%s of (%s)" t.name
-          (String.concat ~sep:" * " t.types)
-       )))
+          (String.concat ~sep:" * " t.types)))))
 
   let all_dumps () = 
     List.filter !_all_exceptions ~f:(fun t -> t.in_dumps)
