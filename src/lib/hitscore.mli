@@ -33,10 +33,18 @@ val ignore : ('a, 'b) monad -> (unit, 'b) monad
         exceptions in the result. *)
     val catch_io : f:('b -> 'a IO_configuration.t) -> 'b -> ('a, exn) monad
 
+    (** Use anything as an Error thread.  *)
+    val error: 'a -> ('any, 'a) monad
+
+    (** Do something on errors (generally augment them). *)
+    val bind_on_error: ('a, 'err) monad -> f:('err -> ('a, 'b) monad) -> ('a, 'b) monad
   end
 
   (** The Layout is the thing defined by the layout DSL.  *)
-  module Layout: module type of Hitscore_db_access.Make(IO_configuration)
+  module Layout: module type of Hitscore_db_access.Make(struct
+    include IO_configuration
+    module Result_IO = Result_IO
+  end)
 
   (** [db_configuration] keeps track of the db-connection parameters. *)
   type db_configuration

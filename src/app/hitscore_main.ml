@@ -306,9 +306,11 @@ module Dumps = struct
           Sexplib.Sexp.input_sexp i |> Hitscore_db.dump_of_sexp |>
               Hitscore_db.insert_dump ~dbh) in
       begin match insert_result with 
-      | `ok -> eprintf "Load: Ok\n%!"
-      | `wrong_version_error ->
+      | Ok () -> eprintf "Load: Ok\n%!"
+      | Error `wrong_version ->
         eprintf "Load: Wrong Version Error\n%!"
+      | Error (`pg_exn e) ->
+        eprintf "Load: Got a DB exception: %s" (Exn.to_string e)
       end;
       Hitscore_threaded.db_disconnect hsc dbh  |> ignore
     | Error e ->

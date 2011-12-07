@@ -11,9 +11,8 @@ module Preemptive_threading_config :
 end
 
 
-module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
-  module Layout = Hitscore_db_access.Make(IO_configuration)
+module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
   module Result_IO = struct
 
@@ -26,7 +25,13 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
           | Error e -> IO_configuration.return (Error e)
           | Ok o -> f o)
     end)
+
+    let error e = IO_configuration.return (Error e)
     
+    let bind_on_error m ~f = IO_configuration.(>>=) m (function
+      | Ok o -> IO_configuration.return (Ok o)
+      | Error e -> (f e))
+
     let catch_io ~f x =
       IO_configuration.catch 
         (fun () -> 
@@ -36,6 +41,11 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
         (fun e -> IO_configuration.return (Error e))
 
   end
+
+  module Layout = Hitscore_db_access.Make(struct
+    include IO_configuration
+    module Result_IO = Result_IO 
+  end)
 
   type db_configuration = {
     db_host     : string;
