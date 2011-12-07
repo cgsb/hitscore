@@ -289,9 +289,19 @@ module Dumps = struct
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       let dump =
-        Hitscore_db.get_dump ~dbh |>
-            Hitscore_db.sexp_of_dump |>
-                Sexplib.Sexp.to_string_hum in
+        match Hitscore_db.get_dump ~dbh with
+        | Ok dump ->
+          Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum
+        | Error (`file_system_inconsistency_select_returned_not_one_length 
+                    (tbl, l)) ->
+          eprintf "get_dump detected a file system inconsistency: \n\
+                   table %s returned %d caches for a given id" tbl l;
+          failwith "Dumps.to_file"
+        | Error (`pg_exn e) ->
+          eprintf "Getting the dump from the DB failed:\n  %s" 
+            (Exn.to_string e);
+          failwith "Dumps.to_file"
+      in
       Out_channel.(with_file file ~f:(fun o -> output_string o dump));
       ignore (Hitscore_threaded.db_disconnect hsc dbh)
     | Error e ->
@@ -309,8 +319,13 @@ module Dumps = struct
       | Ok () -> eprintf "Load: Ok\n%!"
       | Error `wrong_version ->
         eprintf "Load: Wrong Version Error\n%!"
+      | Error (`inconsistency_file_system_insert_cache_returned_not_one_int32 
+                  (table, ids)) ->
+        eprintf "Load: insert_dump detected an inconsistency: inserting in %S \
+                 returned more than one id: [%s]\n%!" 
+          table (String.concat ~sep:"; " (List.map ids Int32.to_string))
       | Error (`pg_exn e) ->
-        eprintf "Load: Got a DB exception: %s" (Exn.to_string e)
+        eprintf "Load: Got a DB exception: %s\n" (Exn.to_string e)
       end;
       Hitscore_threaded.db_disconnect hsc dbh  |> ignore
     | Error e ->

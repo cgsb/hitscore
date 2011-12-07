@@ -513,6 +513,17 @@ let pgocaml_select_from_one_by_id
   raw out ")\n";
   ()
 
+let pgocaml_select_from_one_by_id_exn 
+    ~out ~on_not_one_id ?(get_id="t.id") table_name  =
+  raw out "  let id = %s in\n" get_id;
+  raw out "  let um = PGSQL (dbh)\n";
+  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" table_name;
+  raw out "  pg_bind um (function [one] -> pg_return one\n    | l -> ";
+  on_not_one_id ~out ~table_name ~returned:"l";
+  raw out ")\n";
+  ()
+
+
 let sexp_functions_for_hidden ~out ?param type_name =
   let param_str = Option.value_map ~default:"" ~f:(sprintf "%s ") param in
   let param_arg = Option.value_map ~default:"" ~f:(fun _ -> " x") param in
@@ -543,6 +554,38 @@ let pgocaml_add_to_database ~out ~raise_wrong_db  ?(id="id")
   raw out ")\n\n";
   ()
 
+let pgocaml_add_to_database_exn ~out ~on_not_one_id  ?(id="id")
+    table_name intos values =
+  raw out "  let i32_list_monad = PGSQL (dbh)\n";
+  raw out "    \"INSERT INTO %s (%s)\n     VALUES (%s)\n\
+                   \     RETURNING g_id \" in\n" table_name
+    (intos |> String.concat ~sep:", ")
+    (values|> String.concat ~sep:", ");
+  raw out "  pg_bind i32_list_monad \n\
+                    \    (function\n\
+                    \       | [ %s ] -> PGOCaml.return { %s }\n\
+                    \       | l -> " id id;
+  on_not_one_id ~out  ~table_name ~returned:"l";
+  raw out ")\n\n";
+  ()
+
+
+let pgocaml_to_result_io out ?transform_exceptions f =
+  line out "let _exn_version () =";
+  f out;
+  line out "in";
+  begin match transform_exceptions with
+  | None ->
+    line out "catch_pg_exn _exn_version ()";
+  | Some l ->
+    line out "Outside.Result_IO.bind_on_error (catch_pg_exn _exn_version ())";
+    line out "  (fun e -> Outside.Result_IO.error \
+                  (match e with %s | `pg_exn e -> `pg_exn e))"
+      (String.concat ~sep:"\n   | " l);
+  end;
+  ()
+
+
 let pgocaml_insert_cached ~out ~raise_wrong_db ~all_fields name =
   let all_db_fields = List.map all_fields (fun (n, _, _) -> n) in
   line out "  let (%s) = cache in" (all_db_fields |> String.concat ~sep:", ");
@@ -572,7 +615,7 @@ let ocaml_enumeration_module ~out name fields =
     (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |>
         String.concat ~sep:"\n| ");
   raw out "| s -> ";
-  raise_oserr out "cannot recognize enumeration element";
+  raise_oserr out "s";
   raw out "\n\nend (* %s *)\n\n" name
 
 
@@ -923,12 +966,9 @@ let ocaml_toplevel_values_and_types ~out dsl =
 
   ()
 
+    
 let ocaml_file_system_module ~out dsl = (* For now does not depend on the
                                        actual layout *)
-  let def_wrong_db_error, raise_wrong_db = 
-    ocaml_exception "Wrong_DB_return" in
-  let def_inconsistency_error, raise_inconsistency_error = 
-    ocaml_exception ~thread:false "DB_inconsistency" in
 
   let id_field = "g_id", Int in
   let file_fields = [
@@ -944,54 +984,69 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
 
   line out "module File_system = struct";
-  def_wrong_db_error out;
-  def_inconsistency_error out;
   line out "type volume = { id : int32 }";
   line out "type file = { inode: int32 }";
   line out "type tree = ";
   line out "  | File of string * Enumeration_file_type.t";
   line out "  | Directory of string * Enumeration_file_type.t * tree list";
   line out "  | Opaque of string * Enumeration_file_type.t";
+  
+  hide out (fun out ->
+    line out "exception Add_returned_not_one_int32 of string * int32 list";
+  );
+  let on_not_one_id ~out ~table_name  ~returned  =
+    line out "(Outside.fail (Add_returned_not_one_int32 (%S, %s)))" 
+      table_name returned in
+  let transform_not_one_id =
+    "`pg_exn (Add_returned_not_one_int32 (tbl, l)) -> \
+      `inconsistency_add_returned_not_one (tbl, l)" in 
+
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
   line out "let add_volume %s \
                 ~(kind:Enumeration_volume_kind.t) \
                 ?(hr_tag: string option) \
-                ~(files:tree list) = " pgocaml_db_handle_arg;
-  line out "let rec add_tree = function";
-  line out "  | File (name, t) | Opaque (name, t) -> begin";
-  line out "    let type_str = Enumeration_file_type.to_string t in";
-  line out "    let empty_array = [| |] in";
-  pgocaml_add_to_database "g_file"
-    (List.map file_fields fst)
-    [ "$name"; "$type_str" ; "$empty_array" ]
-    ~out ~raise_wrong_db ~id:"inode";
-  line out "    end";
-  line out "  | Directory (name, t, pl) -> begin";
-  line out "    let type_str = Enumeration_file_type.to_string t in";
-  line out "    let added_file_list_monad = map_s ~f:add_tree pl in";
-  line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
-  line out "       let pg_inodes = array_map (list_to_array file_list) \
+                ~(files:tree list) : \
+                (volume, \
+                  [ `inconsistency_add_returned_not_one of string * int32 list \
+                   | `pg_exn of exn ]) \
+                 Outside.Result_IO.monad = " pgocaml_db_handle_arg;
+  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] (fun out ->
+    line out "let rec add_tree = function";
+    line out "  | File (name, t) | Opaque (name, t) -> begin";
+    line out "    let type_str = Enumeration_file_type.to_string t in";
+    line out "    let empty_array = [| |] in";
+    pgocaml_add_to_database_exn "g_file"
+      (List.map file_fields fst)
+      [ "$name"; "$type_str" ; "$empty_array" ]
+      ~out ~on_not_one_id ~id:"inode";
+    line out "    end";
+    line out "  | Directory (name, t, pl) -> begin";
+    line out "    let type_str = Enumeration_file_type.to_string t in";
+    line out "    let added_file_list_monad = map_s ~f:add_tree pl in";
+    line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
+    line out "       let pg_inodes = array_map (list_to_array file_list) \
                        (fun { inode } ->  inode) in";
-  pgocaml_add_to_database "g_file" 
-    (List.map file_fields fst)
-    [ "$name"; "$type_str" ; "$pg_inodes" ]
-    ~out ~raise_wrong_db ~id:"inode";
-  line out "  )  end in";
-  line out " let added_file_list_monad = map_s ~f:add_tree files in";
-  line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
-  line out "     let pg_inodes = array_map (list_to_array file_list) \n\
+    pgocaml_add_to_database_exn "g_file" 
+      (List.map file_fields fst)
+      [ "$name"; "$type_str" ; "$pg_inodes" ]
+      ~out ~on_not_one_id ~id:"inode";
+    line out "  )  end in";
+    line out " let added_file_list_monad = map_s ~f:add_tree files in";
+    line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
+    line out "     let pg_inodes = array_map (list_to_array file_list) \n\
                        (fun { inode } ->  inode) in";
-  line out " let toplevel = match kind with";
-  List.iter dsl.nodes (function
-    | Volume (n, t) -> line out "    | `%s -> %S" n t
-    | _ -> ());
-  line out " in";
-  pgocaml_add_to_database "g_volume" 
-    (List.map volume_fields fst)
-    [ "$toplevel" ; "$?hr_tag"; "$pg_inodes" ]
-    ~out ~raise_wrong_db ~id:"id";
-  line out ")";
+    line out " let toplevel = match kind with";
+    List.iter dsl.nodes (function
+      | Volume (n, t) -> line out "    | `%s -> %S" n t
+      | _ -> ());
+    line out " in";
+    pgocaml_add_to_database_exn "g_volume" 
+      (List.map volume_fields fst)
+      [ "$toplevel" ; "$?hr_tag"; "$pg_inodes" ]
+      ~out ~on_not_one_id ~id:"id";
+    line out ")";
+  );
 
   doc out "Module for constructing file trees less painfully.";
   line out "module Tree = struct";
@@ -999,10 +1054,30 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "let dir ?(t=`directory) n l = Directory (n, t, l)";
   line out "let opaque ?(t=`opaque) n = Opaque (n, t)";
   line out "end";
+
+  hide out (fun out ->
+    line out "let get_all_exn %s: \
+            volume list PGOCaml.monad =" pgocaml_db_handle_arg;
+    pgocaml_do_get_all_ids ~out ~id:"id" "g_volume";
+  );
   
   doc out "Get all the volumes.";
-  raw out "let get_all %s: volume list PGOCaml.monad = \n" pgocaml_db_handle_arg;
-  pgocaml_do_get_all_ids ~out ~id:"id" "g_volume";
+  line out "let get_all %s: \
+            (volume list, [`pg_exn of exn]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg;
+  pgocaml_to_result_io out (fun out ->
+    pgocaml_do_get_all_ids ~out ~id:"id" "g_volume";
+  );
+
+  hide out (fun out ->
+    line out "exception Select_returned_not_one_length of string * int";
+  );
+  let on_not_one_id ~out ~table_name  ~returned  =
+    line out "(Outside.fail (Select_returned_not_one_length (%S, List.length %s)))" 
+      table_name returned in
+  let transform_not_one_id =
+    "`pg_exn (Select_returned_not_one_length (tbl, l)) -> \
+      `inconsistency_select_returned_not_one_length (tbl, l)" in 
 
   let file_stuff_in_db = 
     List.map (id_field :: file_fields) (fun (s, t) ->
@@ -1021,10 +1096,10 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
          ~f:pgocaml_type_of_field |> String.concat ~sep:" *\n ");
 
     doc out "Retrieve a file from the DB.";
-    raw out "let cache_file (file: file) %s: \
+    raw out "let cache_file_exn (file: file) %s: \
                   _file_cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
-    pgocaml_select_from_one_by_id 
-      ~out ~raise_wrong_db ~get_id:"file.inode" "g_file";
+    pgocaml_select_from_one_by_id_exn 
+      ~out ~on_not_one_id ~get_id:"file.inode" "g_file";
 
     doc out "A whole volume cache is the volume entry and a \
               list of file caches.";
@@ -1035,40 +1110,64 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   doc out "The [volume_entry_cache] is the info retrieved by the
       database queries for the \"toplevel part\" of a volume.";
   raw out "type volume_entry_cache = _volume_entry_cache\n\n";
-     
-  doc out "Retrieve the \"entry\" part of a volume from the DB.";
-  raw out "let cache_volume_entry (volume: volume) %s: \
+
+  hide out (fun out ->     
+    raw out "let cache_volume_entry_exn (volume: volume) %s: \
                   volume_entry_cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
-  pgocaml_select_from_one_by_id 
-    ~out ~raise_wrong_db ~get_id:"volume.id" "g_volume";
+    pgocaml_select_from_one_by_id_exn 
+      ~out ~on_not_one_id ~get_id:"volume.id" "g_volume";
+  );
+
+  doc out "Retrieve the \"entry\" part of a volume from the DB.";
+  line  out "let cache_volume_entry (volume: volume) %s: \n\
+            (volume_entry_cache,
+              [ `inconsistency_select_returned_not_one_length of string * int \
+                 | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg;
+  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] (fun out ->
+    line out "cache_volume_entry_exn ~dbh volume";
+  );
 
   doc out "The [volume_cache] contains the whole volume (entry and files).";
   line out "type volume_cache = _volume_cache";
 
 
+  hide out (fun out ->
+    doc out "[cache_volume_exn] is for internal use only.";
+    line out "let cache_volume_exn %s (volume: volume) : \
+              volume_cache Outside.t ="
+      pgocaml_db_handle_arg;
+    line out "  let entry_m = cache_volume_entry_exn ~dbh volume in";
+    line out "  pg_bind entry_m (fun entry ->";
+    line out "    let files = ref ([] : _file_cache list) in";
+    line out "    let (%s) = entry in"
+      (List.map (id_field :: volume_fields)
+         (function ("g_content", _) -> "contents" | (n, _) -> "_" ) |>
+             String.concat ~sep:", ");
+    line out "    let rec get_contents arr =";
+    line out "      let contents = array_to_list arr in";
+    line out "      let f inode = cache_file_exn ~dbh { inode } in";
+    line out "      pg_bind (map_s ~f contents) (fun fs ->";
+    line out "        files := list_append fs !files;";
+    line out "        let todo = list_map fs (fun (%s) -> contents) in"
+      (List.map (id_field :: file_fields)
+         (function ("g_content", _) -> "contents" | (n, _) -> "_" ) |>
+             String.concat ~sep:", ");
+    line out "        pg_bind (map_s ~f:get_contents todo)";
+    line out "          (fun _ -> pg_return ())) in";
+    line out "    pg_bind (map_s ~f:get_contents [ contents ])";
+    line out "      (fun _ -> pg_return (entry, !files)))";
+  );
+
   doc out "Retrieve a \"whole\" volume.";
-  line out "let cache_volume %s (volume: volume) : volume_cache PGOCaml.monad ="
+  line out "let cache_volume %s (volume: volume) : \
+            (volume_cache,
+              [ `inconsistency_select_returned_not_one_length of string * int \
+                 | `pg_exn of exn ]) Outside.Result_IO.monad ="
     pgocaml_db_handle_arg;
-  line out "  let entry_m = cache_volume_entry ~dbh volume in";
-  line out "  pg_bind entry_m (fun entry ->";
-  line out "    let files = ref ([] : _file_cache list) in";
-  line out "    let (%s) = entry in"
-    (List.map (id_field :: volume_fields)
-       (function ("g_content", _) -> "contents" | (n, _) -> "_" ) |>
-           String.concat ~sep:", ");
-  line out "    let rec get_contents arr =";
-  line out "      let contents = array_to_list arr in";
-  line out "      let f inode = cache_file ~dbh { inode } in";
-  line out "      pg_bind (map_s ~f contents) (fun fs ->";
-  line out "        files := list_append fs !files;";
-  line out "        let todo = list_map fs (fun (%s) -> contents) in"
-    (List.map (id_field :: file_fields)
-       (function ("g_content", _) -> "contents" | (n, _) -> "_" ) |>
-           String.concat ~sep:", ");
-  line out "        pg_bind (map_s ~f:get_contents todo)";
-  line out "          (fun _ -> pg_return ())) in";
-  line out "    pg_bind (map_s ~f:get_contents [ contents ])";
-  line out "      (fun _ -> pg_return (entry, !files)))";
+  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] (fun out ->
+    line out "cache_volume_exn ~dbh volume";
+  );
 
   doc out "Get the entry from the whole volume.";
   line out "let volume_entry_cache (vec: volume_cache): \
@@ -1089,8 +1188,13 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
          | (n, _) -> "_" ) |> String.concat ~sep:", ");
   line out "  {vol_id; toplevel; hr_tag}";
 
+  hide out (fun out -> line out "exception Inode_not_found of int32");
+
   doc out "Get a list of trees `known' for a given volume.";
-  line out "let volume_trees (vc : volume_cache) : tree list =";
+  line out "let volume_trees (vc : volume_cache) : \
+            (tree list, [ `inconsistency_inode_not_found of int32 \
+                         | `cannot_recognize_file_type of string ]) \
+             Core.Std.Result.t =";
   line out "  let files = snd vc in";
   line out "  let find_file i = \
             match list_find files (fun (%s) -> inode = i) with"
@@ -1106,8 +1210,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
          | (n, _) -> "_" ) |> String.concat ~sep:", ");
   line out "      (name, Enumeration_file_type.of_string_exn type_str, \
                     array_to_list more_inodes)";
-  line out "     | None -> ";
-  raise_inconsistency_error out "volume_unix_paths: did not find an inode";
+  line out "     | None -> raise (Inode_not_found i)";
   raw out " in\n";
   line out "  let rec go_through_cache inode =";
   line out "    match find_file inode with";
@@ -1117,8 +1220,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "    | name, `directory, l -> ";
   line out "      Directory (name, `directory, (list_map l go_through_cache))";
   line out "    | name, `blob, [] -> File (name, `blob)";
-  line out "    | name, _, _ -> ";
-  raise_inconsistency_error out "volume_unix_paths: did not find an inode";
+  line out "    | name, _, _ -> raise (Inode_not_found inode)";
   line out "  in";
   line out "  let (%s) = fst vc in"
     (List.map (id_field :: volume_fields)
@@ -1126,36 +1228,65 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
          | ("g_content", _) -> "vol_content"
          | (n, _) -> "_" ) |> String.concat ~sep:", ");
 
-  line out "  list_map (array_to_list vol_content) go_through_cache\n";
+  line out "  begin try Core.Std.Ok (list_map (array_to_list vol_content) \
+                    go_through_cache)";
+  line out "  with\n  | Inode_not_found inode ->";
+  line out "    Core.Std.Error (`inconsistency_inode_not_found inode)";
+  line out "  | Enumeration_file_type.Of_string_error s ->";
+  line out "    Core.Std.Error (`cannot_recognize_file_type s)";
+  line out "  end";
 
   doc out "{3 S-Expression Dumps}";
   sexp_functions_for_hidden ~out "volume_entry_cache";
   sexp_functions_for_hidden ~out "volume_cache";
 
   doc out "{3 Low-level Access}";
+
+  hide out (fun out ->
+    line out "exception Insert_cache_returned_not_one_int32 of string * int32 list";
+  );
+  let on_not_one_id ~out ~table_name  ~returned  =
+    line out "(Outside.fail (Insert_cache_returned_not_one_int32 (%S, %s)))" 
+      table_name returned in
+  let transform_not_one_id =
+    "`pg_exn (Insert_cache_returned_not_one_int32 (tbl, l)) -> \
+      `inconsistency_insert_cache_returned_not_one_int32 (tbl, l)" in 
+
   doc out "Load a cached evaluation in the database (More {b Unsafe!}
           than for records and functions: if one fails the ones already
           successful won't be cleaned-up).";
+  let insert_cache_exn out =
+    line out "  let inserted_files_monad = map_s ~f:(fun f ->";
+    line out "      let (%s) = f in" 
+      (List.map (id_field :: file_fields) fst |> String.concat ~sep:", ");
+    pgocaml_add_to_database_exn "g_file" 
+      (List.map (id_field :: file_fields) fst)
+      (List.map (id_field :: file_fields) (fun (n, _) -> sprintf "$%s" n))
+      ~out ~on_not_one_id ~id:"inode";
+    line out "      )  (snd cache) in";
+    line out "  pg_bind inserted_files_monad (fun _ ->";
+    line out "    let (%s) = fst cache in" 
+      (List.map (id_field :: volume_fields) fst |> String.concat ~sep:", ");
+    pgocaml_add_to_database_exn "g_volume" 
+      (List.map (id_field :: volume_fields) fst)
+      (List.map (id_field :: volume_fields) 
+         (function ("g_hr_tag", _) -> "$?g_hr_tag" | (n, _) -> sprintf "$%s" n))
+      ~out ~on_not_one_id ~id:"id";
+    line out ")";
+  in
   line out "let insert_cached %s (cache: volume_cache): \
-            volume PGOCaml.monad = " pgocaml_db_handle_arg;
-  line out "  let inserted_files_monad = map_s ~f:(fun f ->";
-  line out "      let (%s) = f in" 
-    (List.map (id_field :: file_fields) fst |> String.concat ~sep:", ");
-  pgocaml_add_to_database "g_file" 
-    (List.map (id_field :: file_fields) fst)
-    (List.map (id_field :: file_fields) (fun (n, _) -> sprintf "$%s" n))
-    ~out ~raise_wrong_db ~id:"inode";
-  line out "      )  (snd cache) in";
-  line out "  pg_bind inserted_files_monad (fun _ ->";
-  line out "    let (%s) = fst cache in" 
-    (List.map (id_field :: volume_fields) fst |> String.concat ~sep:", ");
-  pgocaml_add_to_database "g_volume" 
-    (List.map (id_field :: volume_fields) fst)
-    (List.map (id_field :: volume_fields) 
-       (function ("g_hr_tag", _) -> "$?g_hr_tag" | (n, _) -> sprintf "$%s" n))
-    ~out ~raise_wrong_db ~id:"id";
-  line out ")";
+      (volume,
+      [ `inconsistency_insert_cache_returned_not_one_int32 of string * int32 list \
+       | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg;
+  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] 
+    insert_cache_exn;
 
+  hide out (fun out ->
+    line out "let insert_cached_exn %s (cache: volume_cache): \
+            volume PGOCaml.monad = " pgocaml_db_handle_arg;
+    insert_cache_exn out;
+  );
 
 
   let unix_sep = "/" in
@@ -1195,31 +1326,18 @@ let ocaml_dump_and_reload ~out dsl =
   line tmp_type "  version: string;";
   line tmp_type "  file_system: File_system.volume_cache list;";
  
-  doc tmp_get_fun "Retrieve the whole data-base.";
-  line tmp_get_fun "let get_dump %s = " pgocaml_db_handle_arg;
   let close_get_fun = ref [] in
   line tmp_get_fun2 "pg_return { version = %S;" dump_version_string;
 
-  line tmp_get_fun "pg_bind (File_system.get_all ~dbh) (fun t_list ->";
-  line tmp_get_fun "pg_bind (map_s ~f:(File_system.cache_volume ~dbh) \
+  line tmp_get_fun "pg_bind (File_system.get_all_exn ~dbh) (fun t_list ->";
+  line tmp_get_fun "pg_bind (map_s ~f:(File_system.cache_volume_exn ~dbh) \
                                     t_list) (fun file_system ->";
   line tmp_get_fun2 "     file_system;";
   close_get_fun := "))" :: !close_get_fun;
 
-
-  doc tmp_ins_fun "Insert the contents of a [dump] in the data-base
-                  ({b Unsafe!}).";
-  line tmp_ins_fun "let insert_dump %s dump : \n  \
-                    (unit, [`wrong_version | `pg_exn of exn]) \
-                    Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg;
   let close_ins_fun = ref [] in
-  line tmp_ins_fun "  if dump.version <> %S then (" dump_version_string;
-  line tmp_ins_fun "    Outside.Result_IO.error `wrong_version";
-  line tmp_ins_fun "  ) else";
-  line tmp_ins_fun "   let insert_dump_exn () =";
   line tmp_ins_fun "    let fs_m = \
-                         map_s ~f:(File_system.insert_cached ~dbh) \
+                         map_s ~f:(File_system.insert_cached_exn ~dbh) \
                          dump.file_system in";
   line tmp_ins_fun "    pg_bind fs_m (fun _ ->";
   close_ins_fun := ")" :: !close_ins_fun;
@@ -1259,16 +1377,43 @@ let ocaml_dump_and_reload ~out dsl =
   line tmp_type "} with sexp";
   line tmp_get_fun2 "}";
   print_tmp_type out;
-  print_tmp_get_fun out;
-  print_tmp_get_fun2 out;
-  line out "%s" (String.concat ~sep:"" !close_get_fun);
-  
-  print_tmp_ins_fun out;
-  line out "pg_return ()";
-  line out "%s" (String.concat ~sep:"" !close_ins_fun);
-  line out " in";
-  line out " Outside.Result_IO.(bind_on_error (catch_io insert_dump_exn ())";
-  line out "   (fun e -> error (`pg_exn e)))";
+
+  doc  out "Retrieve the whole data-base.";
+  line out "let get_dump %s : \
+            (dump,
+      [ `file_system_inconsistency_select_returned_not_one_length of string * int \
+         | `pg_exn of exn ]) \
+       Outside.Result_IO.monad = " pgocaml_db_handle_arg;
+  pgocaml_to_result_io out ~transform_exceptions:[
+    "`pg_exn (File_system.Select_returned_not_one_length (tbl, l)) -> \
+      `file_system_inconsistency_select_returned_not_one_length (tbl, l)";
+  ] (fun out ->
+    print_tmp_get_fun out;
+    print_tmp_get_fun2 out;
+    line out "%s" (String.concat ~sep:"" !close_get_fun);
+  );
+
+
+  doc out "Insert the contents of a [dump] in the data-base
+                  ({b Unsafe!}).";
+  line out "let insert_dump %s dump : \n  \
+      (unit, [`wrong_version \n\
+          | `inconsistency_file_system_insert_cache_returned_not_one_int32 of \
+               string * int32 list \n\
+          | `pg_exn of exn]) \
+                    Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg;
+  line out "  if dump.version <> %S then (" dump_version_string;
+  line out "    Outside.Result_IO.error `wrong_version";
+  line out "  ) else";
+  pgocaml_to_result_io out ~transform_exceptions:[
+    "`pg_exn (File_system.Insert_cache_returned_not_one_int32 (tbl, l)) -> \
+      `inconsistency_file_system_insert_cache_returned_not_one_int32 (tbl, l)";
+  ] (fun out -> 
+    print_tmp_ins_fun out;
+    line out "pg_return ()";
+    line out "%s" (String.concat ~sep:"" !close_ins_fun);
+  );
   ()
 
 let ocaml_code ?(functorize=true) dsl output_string =
@@ -1310,7 +1455,10 @@ module Timestamp = struct
 open Sexplib.Conv\n\
 (* Legacy stuff: *)\n\
 let err = Outside.log_error\n\n\
-let map_s = Outside.map_sequential
+let map_s = Outside.map_sequential\n\
+let catch_pg_exn f x =\n\
+ Outside.Result_IO.(bind_on_error (catch_io f x)\n\
+  (fun e -> error (`pg_exn e)))\n\n\
 let option_map o f =\n\
     match o with None -> None | Some s -> Some (f s)\n\n\
 let option_value_map = Core.Std.Option.value_map \n\n\
