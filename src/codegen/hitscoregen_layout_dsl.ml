@@ -1100,11 +1100,11 @@ let ocaml_function_module ~out name args result =
 let ocaml_toplevel_values_and_types ~out dsl =
   let rec_name = function Record (n, _) -> Some n | _ -> None in
   let fun_name = function Function (n, _, _) -> Some n | _ -> None in
-  List.iter
-    [("records"    , "record_"       , None, rec_name);
-     ("values"     , "value_"        , Some "Record", rec_name);
-     ("functions"  , "function_"     , None, fun_name);
-     ("'a evaluations", "evaluation_", Some "'a Function", fun_name);
+  List.iter [
+     (* ("records"    , "record_"       , None, rec_name); *)
+     ("value"     , "value_"        , Some "Record", rec_name);
+     (* ("functions"  , "function_"     , None, fun_name); *)
+    ("'a evaluation", "evaluation_", Some "'a Function", fun_name);
     ]
     (fun (type_name, prefix, modprefix, get_name) ->
       raw out "type %s = [\n" type_name;
@@ -1121,10 +1121,10 @@ let ocaml_toplevel_values_and_types ~out dsl =
   let tmpfun, print_tmpfun = new_tmp_output () in
   doc tmprec "Get all record values";
   doc tmpfun "Get all function evaluations";
-  raw tmprec "let get_all_values %s: values list PGOCaml.monad =\n\
+  raw tmprec "let get_all_values_exn %s: value list PGOCaml.monad =\n\
        \  let thread_fun_list = [\n" pgocaml_db_handle_arg;
-  raw tmpfun "let get_all_evaluations %s:
-                [ `can_nothing ] evaluations list PGOCaml.monad =\n\
+  raw tmpfun "let get_all_evaluations_exn %s:
+                [ `can_nothing ] evaluation list PGOCaml.monad =\n\
               \  let thread_fun_list = [\n" pgocaml_db_handle_arg;
   let apply_get_tag get tag =
     sprintf "(fun () -> pg_map (%s dbh) (fun l -> list_map l %s));\n" get tag in
@@ -1148,8 +1148,33 @@ let ocaml_toplevel_values_and_types ~out dsl =
   raw tmprec "%s" the_rest;
   raw tmpfun "%s" the_rest;
 
-  print_tmprec out;
-  print_tmpfun out;
+  hide out (fun out ->
+    print_tmprec out;
+    print_tmpfun out;
+  );
+
+  doc out "Get all the values in the database.";
+  line out "let get_all_values %s:" pgocaml_db_handle_arg;
+  line out "(value list, [ `pg_exn of exn ]) Outside.Result_IO.monad =";
+  (* FUTURE: (OCaml_hiden_exception.(poly_type_global (all_gets ()))) *)
+  pgocaml_to_result_io out 
+    ~transform_exceptions:
+    (OCaml_hiden_exception.(List.map ~f:transform_global (all_gets ())))
+    (fun out ->
+      line out "get_all_values_exn ~dbh";
+    );
+
+  doc out "Get all the evaluations in the database.";
+  line out "let get_all_evaluations %s:" pgocaml_db_handle_arg;
+  line out "([ `can_nothing ] evaluation list, \
+           [ `pg_exn of exn ]) Outside.Result_IO.monad =";
+  (* FUTURE: (OCaml_hiden_exception.(poly_type_global (all_gets ()))) *)
+  pgocaml_to_result_io out 
+    ~transform_exceptions:
+    (OCaml_hiden_exception.(List.map ~f:transform_global (all_gets ())))
+    (fun out ->
+      line out "get_all_evaluations_exn ~dbh";
+    );
 
   ()
 
