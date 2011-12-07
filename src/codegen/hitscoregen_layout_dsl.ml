@@ -748,11 +748,18 @@ let ocaml_record_module ~out name fields =
     pgocaml_add_to_database_exn name intos values ~out ~on_not_one_id;
   );
 
+  hide out (fun out ->
+    raw out "let get_all_exn %s: t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
+    pgocaml_do_get_all_ids ~out name;
+  );
   doc out "Get all the values of type [%s]." name;
-  raw out "let get_all %s: t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
-  pgocaml_do_get_all_ids ~out name;
+  line  out "let get_all %s:" pgocaml_db_handle_arg;
+  line out " (t list, [ `pg_exn of exn ]) Outside.Result_IO.monad =";
+  pgocaml_to_result_io out (fun out ->
+    line out "get_all_exn ~dbh";
+  );
 
-      (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
+  (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
   let args_in_db = 
     List.map fields (fun (s, t) ->
       let (t, p) = dsl_type_to_db t in (s, t, p)) in
@@ -868,63 +875,85 @@ let ocaml_function_module ~out name args result =
   raw out "module Function_%s = struct\n" name;
   raw out "type 'a t = (* private *) { id: int32 }\n";
 
-  let def_wrong_db_error, raise_wrong_db_error = 
-    ocaml_exception "Wrong_DB_return" in
-  def_wrong_db_error out;
-
   let let_now out =
     line out "  let now = Timestamp.(to_string (now ())) in" in
 
-      (* Function to insert a new function evaluation: *)
+
+  let wrong_add = 
+    OCaml_hiden_exception.make 
+      (sprintf "Function_%s" name) 
+      "insert_did_not_return_one_id"
+      [ "string"; "int32 list" ] in
+  let on_not_one_id ~out ~table_name  ~returned  =
+    OCaml_hiden_exception.throw wrong_add out
+      (sprintf "(%S, %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_add out;
+
+  (* Function to insert a new function evaluation: *)
   raw out "let add_evaluation\n";
   List.iter args (fun (n, t) -> raw out "    ~%s\n" n);
   raw out "    ?(recomputable=false)\n";
   raw out "    ?(recompute_penalty=0.)\n";
   raw out "    %s : \n" pgocaml_db_handle_arg;
-  raw out "    [ `can_start | `can_complete ] t PGOCaml.monad =\n";
-  List.iter args (fun tv -> let_in_typed_value tv |> raw out "%s");
-  let_now out;
-  let intos =
-    "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
-      (List.map args fst) in
-  let values =
-    "$recomputable" :: "$recompute_penalty" :: "$now" :: "'Inserted'" ::
-      (List.map args (fun (n, t) -> "$" ^ n)) in
-  pgocaml_add_to_database name intos values
-    ~out ~raise_wrong_db:raise_wrong_db_error;
-  
-      (* Function to set the state of a function evaluation to 'STARTED': *)
-  raw out "let set_started (t : [> `can_start] t) %s =\n" pgocaml_db_handle_arg;
-  raw out "  let id = t.id in\n";
-  let_now out;
-  raw out "  let umm = PGSQL (dbh)\n";
-  raw out "    \"UPDATE %s SET g_status = 'Started', g_started = $now\n\
-                \    WHERE g_id = $id\" in\n\
-                \    pg_bind umm (fun () -> \
-                pg_return ({ id } : [ `can_complete] t)) 
-                \n\n\n" name;
+  raw out "    ([ `can_start | `can_complete ] t,
+                [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    (OCaml_hiden_exception.poly_type_local [wrong_add]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_add;
+  ] (fun out ->
+    List.iter args (fun tv -> let_in_typed_value tv |> raw out "%s");
+    let_now out;
+    let intos =
+      "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
+        (List.map args fst) in
+    let values =
+      "$recomputable" :: "$recompute_penalty" :: "$now" :: "'Inserted'" ::
+        (List.map args (fun (n, t) -> "$" ^ n)) in
+    pgocaml_add_to_database_exn name intos values ~out ~on_not_one_id
+  );
+
+  (* Function to set the state of a function evaluation to 'STARTED': *)
+  raw out "let set_started (t : [> `can_start] t) %s:\n" pgocaml_db_handle_arg;
+  line out "([`can_complete] t, [`pg_exn of exn]) Outside.Result_IO.monad =";
+  pgocaml_to_result_io out (fun out ->
+    raw out "  let id = t.id in\n";
+    let_now out;
+    raw out "  let umm = PGSQL (dbh)\n";
+    raw out "    \"UPDATE %s SET g_status = 'Started', g_started = $now\n\
+              \    WHERE g_id = $id\" in\n\
+              \    pg_bind umm (fun () -> \
+              pg_return ({ id } : [ `can_complete] t)) 
+              \n" name;
+  );
+
   raw out "let set_succeeded (t : [> `can_complete] t) \n\
-                   \     ~result %s =\n" pgocaml_db_handle_arg;
-  let_in_typed_value ("result", Record_name result) |> raw out "%s";
-  raw out "  let id = t.id in\n";
-  let_now out;
-  raw out "  let umm = PGSQL (dbh)\n";
-  raw out "    \"UPDATE %s SET g_status = 'Succeeded', \
+                   \     ~result %s:\n" pgocaml_db_handle_arg;
+  line out "([`can_get_result] t, [`pg_exn of exn]) Outside.Result_IO.monad =";
+  pgocaml_to_result_io out (fun out ->
+    let_in_typed_value ("result", Record_name result) |> raw out "%s";
+    raw out "  let id = t.id in\n";
+    let_now out;
+    raw out "  let umm = PGSQL (dbh)\n";
+    raw out "    \"UPDATE %s SET g_status = 'Succeeded', \
                 g_completed = $now, g_result = $result\n \
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind umm (fun () -> \
                 pg_return ({ id } : [ `can_get_result] t)) 
-                \n\n\n" name;
-  raw out "let set_failed \
-           (t : [> `can_complete ] t) %s =\n" pgocaml_db_handle_arg;
-  raw out "  let id = t.id in\n";
-  let_now out;
-  raw out "  let umm = PGSQL (dbh)\n";
-  raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = $now\n\
+                \n" name;
+  );
+  line out "let set_failed \
+           (t : [> `can_complete ] t) %s:" pgocaml_db_handle_arg;
+  line out "([`can_nothing] t, [`pg_exn of exn]) Outside.Result_IO.monad =";
+  pgocaml_to_result_io out (fun out ->
+    raw out "  let id = t.id in\n";
+    let_now out;
+    raw out "  let umm = PGSQL (dbh)\n";
+    raw out "    \"UPDATE %s SET g_status = 'Failed', g_completed = $now\n\
                 \    WHERE g_id = $id\" in\n\
                 \    pg_bind umm (fun () -> \
                 pg_return ({ id } : [ `can_nothing ] t)) 
-                \n\n\n" name;
+                \n" name;
+  );
 
       (* Create the type 'cache' (hidden in documentation thanks to '_cache') *)
   let args_in_db = 
@@ -939,11 +968,32 @@ let ocaml_function_module ~out name args result =
                it inherits the capabilities of the handle (type [t]).";
   raw out "type 'a cache = 'a _cache\n\n";
 
+  let wrong_cache = 
+    OCaml_hiden_exception.make ~in_dumps:true
+      (sprintf "Function_%s" name) 
+      "select_did_not_return_one_cache"
+      [ "string"; "int" ] in
+  let on_not_one_id ~out ~table_name  ~returned  =
+    OCaml_hiden_exception.throw wrong_cache out
+      (sprintf "(%S, List.length %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_cache out;
+
   (* Access a function *)
+  hide out (fun out ->
+    line out "let cache_evaluation_exn %s t ="
+      pgocaml_db_handle_arg;
+    pgocaml_select_from_one_by_id_exn ~out ~on_not_one_id name;
+  );
+
   doc out "Cache the contents of the evaluation [t].";
-  raw out "let cache_evaluation (t: 'a t) %s:\
-                 'a cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
-  pgocaml_select_from_one_by_id ~out ~raise_wrong_db:raise_wrong_db_error name;
+  line out "let cache_evaluation (t: 'a t) %s : " pgocaml_db_handle_arg;
+  line out "('a cache , [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    (OCaml_hiden_exception.poly_type_local [wrong_cache]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_cache;
+  ] (fun out ->
+    pgocaml_select_from_one_by_id_exn ~out ~on_not_one_id name;
+  );
 
   doc out "The arguments of the Function, the type is intended to \
         be used for \"record pattern matching\" \
@@ -957,14 +1007,17 @@ let ocaml_function_module ~out name args result =
     (List.map (db_function_standard_fields result) (fun _ -> "_") |> 
         String.concat ~sep:", ")
     (List.map args (fun (s, t) -> s) |> String.concat ~sep:", ");
-  raw out "  {\n";
+  raw out "  try Core.Std.Ok {\n";
   List.iter args (fun (v, t) ->
     raw out "    %s = %s;\n" v (convert_pgocaml_type (v, t)));
-  raw out "  }\n\n";
+  raw out "  } with e -> Core.Std.Error e\n\n";
 
   doc out "Get the current status of the Function and the last \
-          time the status was updated.";
-  raw out "let get_status (cache: 'a cache) =\n";
+          time the status was updated (if available).";
+  raw out "let get_status (cache: 'a cache) :\n";
+  line out "(Enumeration_process_status.t * Timestamp.t option,
+             [ `status_parsing_error of string]) \
+            Core.Std.Result.t =";
   raw out "  let (%s) = cache in\n"
     (List.map (db_function_standard_fields result @ args_in_db)
        (function 
@@ -975,15 +1028,15 @@ let ocaml_function_module ~out name args result =
          | (n, _, _) -> "_" ) |>
            String.concat ~sep:", ");
   raw out "  let status =\n\
-                \    Enumeration_process_status.of_string_exn \
-                 status_str in\n";
+            \    Enumeration_process_status.of_string status_str in\n";
   line out "  let opt ts = option_map ts Timestamp.of_string in";
   raw out "  (match status with\n\
-                \  | `Inserted ->   (status, opt inserted)\n\
-                \  | `Started ->    (status, opt started)\n\
-                \  | `Failed ->     (status, opt completed)\n\
-                \  | `Succeeded ->  (status, opt completed)\
-                )\n\n";
+    \  | Core.Std.Ok `Inserted  -> Core.Std.Ok (`Inserted , opt inserted)\n\
+    \  | Core.Std.Ok `Started   -> Core.Std.Ok (`Started  , opt started)\n\
+    \  | Core.Std.Ok `Failed    -> Core.Std.Ok (`Failed   , opt completed)\n\
+    \  | Core.Std.Ok `Succeeded -> Core.Std.Ok (`Succeeded, opt completed)\n\
+    \  | Core.Std.Error e       -> Core.Std.Error (`status_parsing_error e)\
+    )\n\n";
 
   doc out "Get the result of the function if is available.";
   raw out "let get_result (cache: [> `can_get_result] cache) =\n";
@@ -991,11 +1044,11 @@ let ocaml_function_module ~out name args result =
     (List.map (db_function_standard_fields result @ args_in_db)
        (function ("g_result", _, _) -> "res_pointer" | (n, _, _) -> "_" ) |>
            String.concat ~sep:", ");
-  raw out "  { Record_%s.id = \n\
-                \    match res_pointer with Some id -> id\n\
-                \    | None -> \
-          failwith \"get_result(%s) result (%s) is not set\" }\n\n" 
-    result name result;
+  raw out " match res_pointer with\n\
+            | Some i -> Core.Std.Ok { Record_%s.id = i } \n\
+            | None -> \
+              Core.Std.Error (`layout_inconsistency `result_not_available)\n\n"
+    result;
 
   List.iter 
     [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");
@@ -1005,27 +1058,52 @@ let ocaml_function_module ~out name args result =
     (fun (suffix, polyvar, phamtom) -> 
       doc out "Safe cast of the capabilities to [ %s ]; returns [None] \
               if the cast is not allowed." phamtom;
-      raw out "let is_%s (cache: 'a cache): %s cache option =\n" 
-        suffix phamtom;
+      line out "let is_%s (cache: 'a cache): " suffix;
+      line out " (%s cache,\n\
+              [ `status_parsing_error of string\n\
+               | `wrong_status of Enumeration_process_status.t ] )
+              Core.Std.Result.t =\n" phamtom; 
+      line out "  let open Core.Std in";
       raw out "  match get_status cache with\n\
-                       | %s, _ -> Some (cache: %s cache)\n\
-                       | _ -> None\n\n" polyvar phamtom;
+         | Ok (%s, _) -> Ok (cache: %s cache)\n\
+         | Error (`status_parsing_error e) -> Error (`status_parsing_error e)\n\
+         | Ok other -> Error (`wrong_status (fst other))\n\n"
+        polyvar phamtom;
 
-
-      doc out "Get all the Functions whose status is [%s]." polyvar;
-      raw out "let get_all_%s %s: %s t list PGOCaml.monad =\n"
-        suffix pgocaml_db_handle_arg phamtom;
-      raw out "  let status_str = \n\
+      hide out (fun out ->
+        raw out "let get_all_%s_exn %s: %s t list PGOCaml.monad =\n"
+          suffix pgocaml_db_handle_arg phamtom;
+        raw out "  let status_str = \n\
                     \    Enumeration_process_status.to_string %s in\n" polyvar;
-      raw out "  let umm = PGSQL(dbh)\n";
-      raw out "    \"SELECT g_id FROM %s WHERE g_status = $status_str\" in\n"
-        name;
-      raw out "  pg_map umm (fun l -> list_map l (fun id -> { id }))\n\n");
+        raw out "  let umm = PGSQL(dbh)\n";
+        raw out "    \"SELECT g_id FROM %s WHERE g_status = $status_str\" in\n"
+          name;
+        raw out "  pg_map umm (fun l -> list_map l (fun id -> { id }))\n\n";
+      );
+      
+      doc out "Get all the Functions whose status is [%s]." polyvar;
+      raw out "let get_all_%s %s: (%s t list,
+                  [ `pg_exn of exn ]) Outside.Result_IO.monad ="
+        suffix pgocaml_db_handle_arg phamtom;
+      pgocaml_to_result_io out (fun out ->
+        line out "get_all_%s_exn ~dbh" suffix
+      );
 
-  doc out "Get all the [%s] functions." name;
-  raw out "let get_all %s: \
+    );
+
+  hide out (fun out ->
+    raw out "let get_all_exn %s: \
           [ `can_nothing ] t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
-  pgocaml_do_get_all_ids ~out name;
+    pgocaml_do_get_all_ids ~out name;
+  );
+  doc out "Get all the [%s] functions." name;
+  line out "let get_all %s: ([`can_nothing] t list,
+                  [ `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg;
+  pgocaml_to_result_io out (fun out ->
+    line out "get_all_exn ~dbh" 
+  );
+
 
   doc out "{3 S-Expression Dumps}";
   sexp_functions_for_hidden ~out ~param:"'a" "cache";
@@ -1037,11 +1115,33 @@ let ocaml_function_module ~out name args result =
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
 
-  doc out "Load a cached evaluation in the database ({b Unsafe!}).";
-  line out "let insert_cached %s (cache: 'a cache): \
+  let wrong_insert_cached = 
+    OCaml_hiden_exception.make ~in_loads:true
+      (sprintf "Function_%s" name) 
+      "insert_cache_did_not_return_one_id"
+      [ "string"; "int32 list" ] in
+  let on_not_one_id ~out ~table_name  ~returned  =
+    OCaml_hiden_exception.throw wrong_insert_cached out
+      (sprintf "(%S, %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_insert_cached out;
+
+  hide out (fun out ->
+    line out "let insert_cached_exn %s (cache: 'a cache): \
       [`can_nothing] t PGOCaml.monad = " pgocaml_db_handle_arg;
-  pgocaml_insert_cached ~out ~raise_wrong_db:raise_wrong_db_error
-    ~all_fields:(db_function_standard_fields result @ args_in_db) name;
+    pgocaml_insert_cached_exn ~out ~on_not_one_id
+      ~all_fields:(db_function_standard_fields result @ args_in_db) name;
+  );
+  doc out "Load a cached evaluation in the database ({b Unsafe!}).";
+  line out "let insert_cached %s (cache: 'a cache):"
+    pgocaml_db_handle_arg;
+  line out "([`can_nothing] t, \
+              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    (OCaml_hiden_exception.poly_type_local [wrong_insert_cached]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_insert_cached;
+  ] (fun out ->
+    line out "insert_cached_exn ~dbh cache";
+  );
 
   raw out "end (* %s *)\n\n" name;
   ()
@@ -1081,11 +1181,11 @@ let ocaml_toplevel_values_and_types ~out dsl =
   List.iter dsl.nodes (function
     | Record (n, fields) ->
       let get, tag = 
-        sprintf "Record_%s.get_all" n, sprintf "(fun x -> `value_%s x)" n in
+        sprintf "Record_%s.get_all_exn" n, sprintf "(fun x -> `value_%s x)" n in
       raw tmprec "%s" (apply_get_tag get tag)
     | Function (n, args, ret) ->
       let get, tag = 
-        sprintf "Function_%s.get_all" n, 
+        sprintf "Function_%s.get_all_exn" n, 
         sprintf "(fun x -> `evaluation_%s x)" n in
       raw tmpfun "%s" (apply_get_tag get tag);
     | _ -> ());
@@ -1489,7 +1589,7 @@ let ocaml_dump_and_reload ~out dsl =
     | Enumeration (name, fields) -> ()
     | Record (name, fields) ->
       line tmp_type "  record_%s: Record_%s.cache list;" name name;
-      line tmp_get_fun "pg_bind (Record_%s.get_all ~dbh) (fun t_list ->" name;
+      line tmp_get_fun "pg_bind (Record_%s.get_all_exn ~dbh) (fun t_list ->" name;
       line tmp_get_fun "pg_bind (map_s ~f:(Record_%s.cache_value_exn ~dbh) \
                                     t_list) (fun record_%s ->" name name;
       line tmp_get_fun2 "     record_%s;" name;
@@ -1503,13 +1603,13 @@ let ocaml_dump_and_reload ~out dsl =
     | Function (name, args, result) ->
       line tmp_type "  function_%s: [ `can_nothing ] Function_%s.cache list;" 
         name name;
-      line tmp_get_fun "pg_bind (Function_%s.get_all ~dbh) (fun t_list ->" name;
-      line tmp_get_fun "pg_bind (map_s ~f:(Function_%s.cache_evaluation \
+      line tmp_get_fun "pg_bind (Function_%s.get_all_exn ~dbh) (fun t_list ->" name;
+      line tmp_get_fun "pg_bind (map_s ~f:(Function_%s.cache_evaluation_exn \
                                     ~dbh) t_list) (fun function_%s ->" name name;
       line tmp_get_fun2 "     function_%s;" name;
       close_get_fun := "))" :: !close_get_fun;
 
-      line tmp_ins_fun "     let f_m = map_s ~f:(Function_%s.insert_cached \
+      line tmp_ins_fun "     let f_m = map_s ~f:(Function_%s.insert_cached_exn \
                               ~dbh) dump.function_%s in\n\
                        \     pg_bind f_m (fun _ ->" name name;
       close_ins_fun := ")" :: !close_ins_fun;
