@@ -496,6 +496,74 @@ let ocaml_exception ?(thread=true) name =
     ksprintf out "(Outside.fail (%s %S))" name str in
   (define, if thread then thread_fail else raise_exn)
 
+module OCaml_hiden_exception = struct 
+  type t = {
+    module_name: string;
+    name: string;
+    types: string list;
+    in_dumps: bool;
+    in_loads: bool;
+    in_gets: bool;
+  } 
+  let _all_exceptions = ref []
+
+  let make ?(in_dumps=false) ?(in_loads=false) ?(in_gets=false)
+      module_name name types =
+    let ohe = 
+      { module_name ; name ; types; in_dumps; in_loads; in_gets } in
+    _all_exceptions := ohe :: !_all_exceptions;
+    ohe
+      
+  let define t out = 
+    hide out (fun out ->
+      line out "exception Local_exn_%s of %s" 
+        t.name (String.concat ~sep:" * " t.types);
+    )
+      
+  let throw t out what =
+    line out "(Outside.fail (Local_exn_%s %s))" t.name what
+  
+  let transform_local t =
+    let vals = 
+      (String.concat ~sep:", " (List.mapi t.types (fun i x -> sprintf "x%d" i)))
+    in
+    sprintf 
+      "`pg_exn (Local_exn_%s (%s)) -> \
+        `layout_inconsistency (`%s (%s))"
+      t.name vals t.name vals
+
+  let transform_global t =
+    let vals = 
+      (String.concat ~sep:", " (List.mapi t.types (fun i x -> sprintf "x%d" i))) in
+    sprintf 
+      "`pg_exn (%s.Local_exn_%s (%s)) -> \
+        `layout_inconsistency (`%s_%s (%s))"
+      t.module_name t.name vals t.module_name t.name vals
+      
+  let poly_type_local tl = 
+    sprintf "`layout_inconsistency of [%s]"
+      (String.concat ~sep:"\n  | " (List.map tl (fun t ->
+        sprintf "`%s of (%s)" t.name (String.concat ~sep:" * " t.types)
+       )))
+      
+  let poly_type_global tl =
+    sprintf "`layout_inconsistency of [%s]"
+      (String.concat ~sep:"\n  | " (List.map tl (fun t ->
+        sprintf "`%s_%s of (%s)" t.module_name t.name
+          (String.concat ~sep:" * " t.types)
+       )))
+
+  let all_dumps () = 
+    List.filter !_all_exceptions ~f:(fun t -> t.in_dumps)
+  let all_gets () = 
+    List.filter !_all_exceptions ~f:(fun t -> t.in_gets)
+  let all_loads () = 
+    List.filter !_all_exceptions ~f:(fun t -> t.in_loads)
+
+end
+
+
+
 let pgocaml_do_get_all_ids ~out ?(id="id") name = 
   raw out "  let um = PGSQL(dbh)\n";
   raw out "    \"SELECT g_id FROM %s\" in\n" name;
@@ -990,16 +1058,15 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "  | File of string * Enumeration_file_type.t";
   line out "  | Directory of string * Enumeration_file_type.t * tree list";
   line out "  | Opaque of string * Enumeration_file_type.t";
-  
-  hide out (fun out ->
-    line out "exception Add_returned_not_one_int32 of string * int32 list";
-  );
+
+  let wrong_insert = 
+    OCaml_hiden_exception.make "File_system" "add_did_not_return_one"
+      [ "string"; "int32 list" ] in
   let on_not_one_id ~out ~table_name  ~returned  =
-    line out "(Outside.fail (Add_returned_not_one_int32 (%S, %s)))" 
-      table_name returned in
-  let transform_not_one_id =
-    "`pg_exn (Add_returned_not_one_int32 (tbl, l)) -> \
-      `inconsistency_add_returned_not_one (tbl, l)" in 
+    OCaml_hiden_exception.throw wrong_insert out
+      (sprintf "(%S, %s)" table_name returned) in
+
+  OCaml_hiden_exception.define wrong_insert out;
 
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
@@ -1008,10 +1075,13 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
                 ?(hr_tag: string option) \
                 ~(files:tree list) : \
                 (volume, \
-                  [ `inconsistency_add_returned_not_one of string * int32 list \
-                   | `pg_exn of exn ]) \
-                 Outside.Result_IO.monad = " pgocaml_db_handle_arg;
-  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] (fun out ->
+                  [ %s | `pg_exn of exn ]) \
+                 Outside.Result_IO.monad = " 
+    pgocaml_db_handle_arg
+    (OCaml_hiden_exception.poly_type_local [wrong_insert]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_insert;
+  ] (fun out ->
     line out "let rec add_tree = function";
     line out "  | File (name, t) | Opaque (name, t) -> begin";
     line out "    let type_str = Enumeration_file_type.to_string t in";
@@ -1069,15 +1139,14 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     pgocaml_do_get_all_ids ~out ~id:"id" "g_volume";
   );
 
-  hide out (fun out ->
-    line out "exception Select_returned_not_one_length of string * int";
-  );
+  let wrong_cache_select = 
+    OCaml_hiden_exception.make ~in_dumps:true "File_system" 
+      "select_did_not_return_one_cache"
+      [ "string"; "int" ] in
   let on_not_one_id ~out ~table_name  ~returned  =
-    line out "(Outside.fail (Select_returned_not_one_length (%S, List.length %s)))" 
-      table_name returned in
-  let transform_not_one_id =
-    "`pg_exn (Select_returned_not_one_length (tbl, l)) -> \
-      `inconsistency_select_returned_not_one_length (tbl, l)" in 
+    OCaml_hiden_exception.throw wrong_cache_select out
+      (sprintf "(%S, List.length %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_cache_select out;
 
   let file_stuff_in_db = 
     List.map (id_field :: file_fields) (fun (s, t) ->
@@ -1121,10 +1190,12 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   doc out "Retrieve the \"entry\" part of a volume from the DB.";
   line  out "let cache_volume_entry (volume: volume) %s: \n\
             (volume_entry_cache,
-              [ `inconsistency_select_returned_not_one_length of string * int \
-                 | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg;
-  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] (fun out ->
+              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg
+    (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_cache_select;
+  ] (fun out ->
     line out "cache_volume_entry_exn ~dbh volume";
   );
 
@@ -1162,10 +1233,12 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   doc out "Retrieve a \"whole\" volume.";
   line out "let cache_volume %s (volume: volume) : \
             (volume_cache,
-              [ `inconsistency_select_returned_not_one_length of string * int \
-                 | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg;
-  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] (fun out ->
+              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg
+    (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_cache_select;
+  ] (fun out ->
     line out "cache_volume_exn ~dbh volume";
   );
 
@@ -1242,15 +1315,15 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
   doc out "{3 Low-level Access}";
 
-  hide out (fun out ->
-    line out "exception Insert_cache_returned_not_one_int32 of string * int32 list";
-  );
+
+  let wrong_cache_insert = 
+    OCaml_hiden_exception.make ~in_loads:true "File_system" 
+      "insert_cache_did_not_return_one_id"
+      [ "string"; "int32 list" ] in
   let on_not_one_id ~out ~table_name  ~returned  =
-    line out "(Outside.fail (Insert_cache_returned_not_one_int32 (%S, %s)))" 
-      table_name returned in
-  let transform_not_one_id =
-    "`pg_exn (Insert_cache_returned_not_one_int32 (tbl, l)) -> \
-      `inconsistency_insert_cache_returned_not_one_int32 (tbl, l)" in 
+    OCaml_hiden_exception.throw wrong_cache_insert out
+      (sprintf "(%S, %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_cache_insert out;
 
   doc out "Load a cached evaluation in the database (More {b Unsafe!}
           than for records and functions: if one fails the ones already
@@ -1275,13 +1348,13 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     line out ")";
   in
   line out "let insert_cached %s (cache: volume_cache): \
-      (volume,
-      [ `inconsistency_insert_cache_returned_not_one_int32 of string * int32 list \
-       | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg;
-  pgocaml_to_result_io out ~transform_exceptions:[transform_not_one_id] 
-    insert_cache_exn;
-
+      (volume, [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg
+    (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_cache_insert;
+  ] insert_cache_exn;
+  
   hide out (fun out ->
     line out "let insert_cached_exn %s (cache: volume_cache): \
             volume PGOCaml.monad = " pgocaml_db_handle_arg;
@@ -1380,40 +1453,37 @@ let ocaml_dump_and_reload ~out dsl =
 
   doc  out "Retrieve the whole data-base.";
   line out "let get_dump %s : \
-            (dump,
-      [ `file_system_inconsistency_select_returned_not_one_length of string * int \
-         | `pg_exn of exn ]) \
-       Outside.Result_IO.monad = " pgocaml_db_handle_arg;
-  pgocaml_to_result_io out ~transform_exceptions:[
-    "`pg_exn (File_system.Select_returned_not_one_length (tbl, l)) -> \
-      `file_system_inconsistency_select_returned_not_one_length (tbl, l)";
-  ] (fun out ->
-    print_tmp_get_fun out;
-    print_tmp_get_fun2 out;
-    line out "%s" (String.concat ~sep:"" !close_get_fun);
-  );
-
+            (dump, [ %s | `pg_exn of exn ]) \
+       Outside.Result_IO.monad = " pgocaml_db_handle_arg
+    (OCaml_hiden_exception.(poly_type_global (all_dumps ())));
+  pgocaml_to_result_io out
+    ~transform_exceptions:
+    (OCaml_hiden_exception.(List.map ~f:transform_global (all_dumps ())))
+    (fun out ->
+      print_tmp_get_fun out;
+      print_tmp_get_fun2 out;
+      line out "%s" (String.concat ~sep:"" !close_get_fun);
+    );
+  
 
   doc out "Insert the contents of a [dump] in the data-base
                   ({b Unsafe!}).";
   line out "let insert_dump %s dump : \n  \
       (unit, [`wrong_version \n\
-          | `inconsistency_file_system_insert_cache_returned_not_one_int32 of \
-               string * int32 list \n\
-          | `pg_exn of exn]) \
-                    Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg;
+          | %s | `pg_exn of exn]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg
+    (OCaml_hiden_exception.(poly_type_global (all_loads ())));
   line out "  if dump.version <> %S then (" dump_version_string;
   line out "    Outside.Result_IO.error `wrong_version";
   line out "  ) else";
-  pgocaml_to_result_io out ~transform_exceptions:[
-    "`pg_exn (File_system.Insert_cache_returned_not_one_int32 (tbl, l)) -> \
-      `inconsistency_file_system_insert_cache_returned_not_one_int32 (tbl, l)";
-  ] (fun out -> 
-    print_tmp_ins_fun out;
-    line out "pg_return ()";
-    line out "%s" (String.concat ~sep:"" !close_ins_fun);
-  );
+  pgocaml_to_result_io out 
+    ~transform_exceptions:
+    (OCaml_hiden_exception.(List.map ~f:transform_global (all_loads ())))
+    (fun out -> 
+      print_tmp_ins_fun out;
+      line out "pg_return ()";
+      line out "%s" (String.concat ~sep:"" !close_ins_fun);
+    );
   ()
 
 let ocaml_code ?(functorize=true) dsl output_string =
