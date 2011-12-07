@@ -488,14 +488,6 @@ let hide out (f: (string -> unit) -> unit) =
   printtmp out;
   ()
 
-let ocaml_exception ?(thread=true) name =
-  let define out = ksprintf out "exception %s of string\n" name in
-  let raise_exn out str =
-    ksprintf out "(raise (%s %S))" name str in
-  let thread_fail out str =
-    ksprintf out "(Outside.fail (%s %S))" name str in
-  (define, if thread then thread_fail else raise_exn)
-
 module OCaml_hiden_exception = struct 
   type t = {
     module_name: string;
@@ -572,17 +564,6 @@ let pgocaml_do_get_all_ids ~out ?(id="id") name =
   raw out "  pg_map um (fun l -> list_map l (fun %s -> { %s }))\n\n" id id;
   ()
 
-let pgocaml_select_from_one_by_id 
-    ~out ~raise_wrong_db ?(get_id="t.id") table_name  =
-  raw out "  let id = %s in\n" get_id;
-  raw out "  let um = PGSQL (dbh)\n";
-  raw out "    \"SELECT * FROM %s WHERE g_id = $id\" in\n" table_name;
-  raw out "  pg_bind um (function [one] -> pg_return one\n    | _ -> ";
-  raise_wrong_db out (sprintf "SELECT (%s of %s) did not return one id" 
-                        get_id table_name);
-  raw out ")\n";
-  ()
-
 let pgocaml_select_from_one_by_id_exn 
     ~out ~on_not_one_id ?(get_id="t.id") table_name  =
   raw out "  let id = %s in\n" get_id;
@@ -592,7 +573,6 @@ let pgocaml_select_from_one_by_id_exn
   on_not_one_id ~out ~table_name ~returned:"l";
   raw out ")\n";
   ()
-
 
 let sexp_functions_for_hidden ~out ?param type_name =
   let param_str = Option.value_map ~default:"" ~f:(sprintf "%s ") param in
@@ -609,21 +589,6 @@ let sexp_functions_for_hidden ~out ?param type_name =
 
 let pgocaml_db_handle_arg = "~(dbh: db_handle)"
 
-let pgocaml_add_to_database ~out ~raise_wrong_db  ?(id="id")
-    table_name intos values =
-  raw out "  let i32_list_monad = PGSQL (dbh)\n";
-  raw out "    \"INSERT INTO %s (%s)\n     VALUES (%s)\n\
-                   \     RETURNING g_id \" in\n" table_name
-    (intos |> String.concat ~sep:", ")
-    (values|> String.concat ~sep:", ");
-  raw out "  pg_bind i32_list_monad \n\
-                    \    (function\n\
-                    \       | [ %s ] -> PGOCaml.return { %s }\n\
-                    \       | _ -> " id id;
-  raise_wrong_db out (sprintf "INSERT (%s) did not return one id" table_name);
-  raw out ")\n\n";
-  ()
-
 let pgocaml_add_to_database_exn ~out ~on_not_one_id  ?(id="id")
     table_name intos values =
   raw out "  let i32_list_monad = PGSQL (dbh)\n";
@@ -639,7 +604,6 @@ let pgocaml_add_to_database_exn ~out ~on_not_one_id  ?(id="id")
   raw out ")\n\n";
   ()
 
-
 let pgocaml_to_result_io out ?transform_exceptions f =
   line out "let _exn_version () =";
   f out;
@@ -653,20 +617,6 @@ let pgocaml_to_result_io out ?transform_exceptions f =
                   (match e with %s | `pg_exn e -> `pg_exn e))"
       (String.concat ~sep:"\n   | " l);
   end;
-  ()
-
-
-let pgocaml_insert_cached ~out ~raise_wrong_db ~all_fields name =
-  let all_db_fields = List.map all_fields (fun (n, _, _) -> n) in
-  line out "  let (%s) = cache in" (all_db_fields |> String.concat ~sep:", ");
-  let values =
-    let prefix (n, _, p) =
-      match p with
-      | [Psql.Not_null] | [_; Psql.Not_null] -> sprintf "$%s" n
-      | _ -> "$?" ^ n in
-    List.map all_fields prefix  in
-  pgocaml_add_to_database name all_db_fields values
-    ~out ~raise_wrong_db;
   ()
 
 let pgocaml_insert_cached_exn ~out ~on_not_one_id ~all_fields name =
