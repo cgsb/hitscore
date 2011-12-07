@@ -537,8 +537,8 @@ module OCaml_hiden_exception = struct
       (String.concat ~sep:", " (List.mapi t.types (fun i x -> sprintf "x%d" i))) in
     sprintf 
       "`pg_exn (%s.Local_exn_%s (%s)) -> \
-        `layout_inconsistency (`%s_%s (%s))"
-      t.module_name t.name vals t.module_name t.name vals
+        `layout_inconsistency (`%s, `%s (%s))"
+      t.module_name t.name vals (String.lowercase t.module_name) t.name vals
       
   let poly_type_local tl = 
     sprintf "`layout_inconsistency of [%s]"
@@ -547,9 +547,11 @@ module OCaml_hiden_exception = struct
        )))
       
   let poly_type_global tl =
-    sprintf "`layout_inconsistency of [%s]"
+    sprintf "`layout_inconsistency of [`%s] * [%s]"
+      (String.concat ~sep:"\n | `"
+         (List.dedup (List.map tl (fun t -> String.lowercase t.module_name))))
       (String.concat ~sep:"\n  | " (List.map tl (fun t ->
-        sprintf "`%s_%s of (%s)" t.module_name t.name
+        sprintf "`%s of (%s)" t.name
           (String.concat ~sep:" * " t.types)
        )))
 
@@ -824,12 +826,6 @@ let ocaml_record_module ~out name fields =
   sexp_functions_for_hidden ~out "cache";
 
   doc out "{3 Low Level Access}";
-(*  (* Access a value *)
-  deprecate out "Finds a value given its internal identifier ([g_id]).";
-  raw out "let _get_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
-  pgocaml_select_from_one_by_id 
-    ~out ~raise_wrong_db:raise_wrong_db_error ~get_id:"id" name;
-*)
   (* Delete a value *)
   deprecate out "Deletes a values with its internal id.";
   raw out "let _delete_value_by_id ~id %s =\n" pgocaml_db_handle_arg;

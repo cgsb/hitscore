@@ -293,7 +293,7 @@ module Dumps = struct
         | Ok dump ->
           Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum
         | Error (`layout_inconsistency 
-                    (`File_system_select_did_not_return_one_cache (tbl, l))) ->
+                    (`file_system, `select_did_not_return_one_cache (tbl, l))) ->
           eprintf "get_dump detected a file system inconsistency: \n\
                    table %s returned %d caches for a given id" tbl l;
           failwith "Dumps.to_file"
@@ -324,7 +324,7 @@ module Dumps = struct
       | Error `wrong_version ->
         eprintf "Load: Wrong Version Error\n%!"
       | Error (`layout_inconsistency
-                  (`File_system_insert_cache_did_not_return_one_id (table, ids))) ->
+                  (`file_system, `insert_cache_did_not_return_one_id (table, ids))) ->
         eprintf "Load: insert_dump detected an inconsistency: inserting in %S \
                  returned more than one id: [%s]\n%!" 
           table (String.concat ~sep:"; " (List.map ids Int32.to_string))
