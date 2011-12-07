@@ -297,6 +297,10 @@ module Dumps = struct
           eprintf "get_dump detected a file system inconsistency: \n\
                    table %s returned %d caches for a given id" tbl l;
           failwith "Dumps.to_file"
+        | Error (`layout_inconsistency _) -> (* TODO *)
+          eprintf "get_dump detected a layout inconsistency:
+                   UNKNOWN -- WORK IN PROGRESS \n";
+          failwith "Dumps.to_file"
         | Error (`pg_exn e) ->
           eprintf "Getting the dump from the DB failed:\n  %s" 
             (Exn.to_string e);
@@ -324,6 +328,10 @@ module Dumps = struct
         eprintf "Load: insert_dump detected an inconsistency: inserting in %S \
                  returned more than one id: [%s]\n%!" 
           table (String.concat ~sep:"; " (List.map ids Int32.to_string))
+      | Error (`layout_inconsistency _) -> (* TODO *)
+        eprintf "get_dump detected a layout inconsistency:
+                   UNKNOWN -- WORK IN PROGRESS \n";
+        failwith "Dumps.to_file"
       | Error (`pg_exn e) ->
         eprintf "Load: Got a DB exception: %s\n" (Exn.to_string e)
       end;

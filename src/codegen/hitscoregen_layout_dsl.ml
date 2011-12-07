@@ -667,6 +667,19 @@ let pgocaml_insert_cached ~out ~raise_wrong_db ~all_fields name =
     ~out ~raise_wrong_db;
   ()
 
+let pgocaml_insert_cached_exn ~out ~on_not_one_id ~all_fields name =
+  let all_db_fields = List.map all_fields (fun (n, _, _) -> n) in
+  line out "  let (%s) = cache in" (all_db_fields |> String.concat ~sep:", ");
+  let values =
+    let prefix (n, _, p) =
+      match p with
+      | [Psql.Not_null] | [_; Psql.Not_null] -> sprintf "$%s" n
+      | _ -> "$?" ^ n in
+    List.map all_fields prefix  in
+  pgocaml_add_to_database_exn name all_db_fields values
+    ~out ~on_not_one_id;
+  ()
+
 
 let ocaml_enumeration_module ~out name fields =
   raw out "module Enumeration_%s = struct\n" name;
@@ -697,9 +710,16 @@ let ocaml_record_module ~out name fields =
           the [id] field is there for hackability/emergency purposes.";
   raw out "type t = { id: int32 }\n";
 
-  let def_wrong_db_error, raise_wrong_db_error = 
-    ocaml_exception "Wrong_DB_return" in
-  def_wrong_db_error out;
+
+  let wrong_add_value = 
+    OCaml_hiden_exception.make 
+      (sprintf "Record_%s" name) 
+      "insert_did_not_return_one_id"
+      [ "string"; "int32 list" ] in
+  let on_not_one_id ~out ~table_name  ~returned  =
+    OCaml_hiden_exception.throw wrong_add_value out
+      (sprintf "(%S,  %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_add_value out;
 
       (* Function to add a new value: *)
   doc out "Create a new value of type [%s] in the database, and \
@@ -708,18 +728,23 @@ let ocaml_record_module ~out name fields =
   List.iter fields (fun (n, t) ->
     let kind_of_arg = 
       match type_is_option t with `yes -> "?" | `no -> "~" in
-    raw out "    %s(%s:%s)\n" kind_of_arg n (ocaml_type t);
+    line out "    %s(%s:%s)" kind_of_arg n (ocaml_type t);
   );
-  raw out "    %s : t PGOCaml.monad =\n" pgocaml_db_handle_arg;
-  line out "  let now = Timestamp.(to_string (now ())) in";
-  let intos = "g_created" :: "g_last_modified" :: List.map fields fst in
-  let values =
-    let prefix (n, t) =
-      (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
-    "$now" :: "$now" :: List.map fields prefix  in
-  List.iter fields (fun tv -> let_in_typed_value tv |> raw out "%s");
-  pgocaml_add_to_database name intos values
-    ~out ~raise_wrong_db:raise_wrong_db_error;
+  line out "    %s :" pgocaml_db_handle_arg;
+  line out " (t, [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    (OCaml_hiden_exception.poly_type_local [wrong_add_value]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_add_value;
+  ] (fun out ->
+    line out "  let now = Timestamp.(to_string (now ())) in";
+    let intos = "g_created" :: "g_last_modified" :: List.map fields fst in
+    let values =
+      let prefix (n, t) =
+        (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
+      "$now" :: "$now" :: List.map fields prefix  in
+    List.iter fields (fun tv -> let_in_typed_value tv |> raw out "%s");
+    pgocaml_add_to_database_exn name intos values ~out ~on_not_one_id;
+  );
 
   doc out "Get all the values of type [%s]." name;
   raw out "let get_all %s: t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
@@ -737,10 +762,32 @@ let ocaml_record_module ~out name fields =
   doc out "The [cache] is the info retrieved by the database queries.";
   raw out "type cache = _cache\n\n";
 
+
+  let wrong_cache_select = 
+    OCaml_hiden_exception.make ~in_dumps:true 
+      (sprintf "Record_%s" name) 
+      "select_did_not_return_one_cache"
+      [ "string"; "int" ] in
+  let on_not_one_id ~out ~table_name  ~returned  =
+    OCaml_hiden_exception.throw wrong_cache_select out
+      (sprintf "(%S, List.length %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_cache_select out;
+
   doc out "Cache the contents of the record [t].";
-  raw out "let cache_value (t: t) %s: \
-                  cache PGOCaml.monad =\n" pgocaml_db_handle_arg;
-  pgocaml_select_from_one_by_id ~out ~raise_wrong_db:raise_wrong_db_error name;
+  line out "let cache_value (t: t) %s: \n\
+           (cache, [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg
+    (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_cache_select;
+  ] (fun out ->
+    pgocaml_select_from_one_by_id_exn ~out ?get_id:None ~on_not_one_id name;
+  );
+  hide out (fun out ->
+    line out "let cache_value_exn t %s =" pgocaml_db_handle_arg;
+    pgocaml_select_from_one_by_id_exn ~out ?get_id:None ~on_not_one_id name;
+  );
+  
 
   doc out "The fields of the Record, the type is intended to \
         be used for \"record pattern matching\" \
@@ -777,24 +824,46 @@ let ocaml_record_module ~out name fields =
   sexp_functions_for_hidden ~out "cache";
 
   doc out "{3 Low Level Access}";
-  (* Access a value *)
+(*  (* Access a value *)
   deprecate out "Finds a value given its internal identifier ([g_id]).";
   raw out "let _get_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
   pgocaml_select_from_one_by_id 
     ~out ~raise_wrong_db:raise_wrong_db_error ~get_id:"id" name;
-
+*)
   (* Delete a value *)
   deprecate out "Deletes a values with its internal id.";
   raw out "let _delete_value_by_id ~id %s =\n" pgocaml_db_handle_arg;
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
-  
-  doc out "Load a cached value in the database ({b Unsafe!}).";
-  line out "let insert_cached %s (cache: cache): t PGOCaml.monad = " 
-    pgocaml_db_handle_arg;
-  pgocaml_insert_cached ~out ~raise_wrong_db:raise_wrong_db_error
-    ~all_fields:(db_record_standard_fields @ args_in_db) name;
 
+
+  let wrong_cache_insert = 
+    OCaml_hiden_exception.make ~in_loads:true
+      (sprintf "Record_%s" name)
+      "insert_cache_did_not_return_one_id"
+      [ "string"; "int32 list" ] in
+  let on_not_one_id ~out ~table_name  ~returned  =
+    OCaml_hiden_exception.throw wrong_cache_insert out
+      (sprintf "(%S, %s)" table_name returned) in
+  OCaml_hiden_exception.define wrong_cache_insert out;
+
+  hide out (fun out ->  
+    line out "let insert_cached_exn %s (cache: cache): t PGOCaml.monad = " 
+      pgocaml_db_handle_arg;
+    pgocaml_insert_cached_exn ~out ~on_not_one_id
+      ~all_fields:(db_record_standard_fields @ args_in_db) name;
+  );
+
+  doc out "Load a cached value in the database ({b Unsafe!}).";
+  line out "let insert_cached %s (cache: cache): (t, 
+              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+    pgocaml_db_handle_arg
+    (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_cache_insert;
+  ] (fun out ->
+    line out "insert_cached_exn ~dbh cache";
+  );
 
   raw out "end (* %s *)\n\n" name;
   ()
@@ -1425,12 +1494,12 @@ let ocaml_dump_and_reload ~out dsl =
     | Record (name, fields) ->
       line tmp_type "  record_%s: Record_%s.cache list;" name name;
       line tmp_get_fun "pg_bind (Record_%s.get_all ~dbh) (fun t_list ->" name;
-      line tmp_get_fun "pg_bind (map_s ~f:(Record_%s.cache_value ~dbh) \
+      line tmp_get_fun "pg_bind (map_s ~f:(Record_%s.cache_value_exn ~dbh) \
                                     t_list) (fun record_%s ->" name name;
       line tmp_get_fun2 "     record_%s;" name;
       close_get_fun := "))" :: !close_get_fun;
 
-      line tmp_ins_fun "     let r_m = map_s ~f:(Record_%s.insert_cached \
+      line tmp_ins_fun "     let r_m = map_s ~f:(Record_%s.insert_cached_exn \
                               ~dbh) dump.record_%s in\n\
                        \     pg_bind r_m (fun _ ->" name name;
       close_ins_fun := ")" :: !close_ins_fun;
