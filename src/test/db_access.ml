@@ -2,22 +2,24 @@ module Lwt_config = struct
   include Lwt
   include Lwt_chan
   let map_sequential l ~f = Lwt_list.map_s f l
-  let log_error s = output_string Lwt_io.stderr s >> flush Lwt_io.stderr
+  let log_error s = output_string Lwt_io.stderr s >>= fun () -> flush Lwt_io.stderr
 end
 module Hitscore_lwt = Hitscore.Make(Lwt_config)
 module Hitscore_db = Hitscore_lwt.Layout
 module PGOCaml = Hitscore_db.PGOCaml
 
+open Hitscore_lwt.Result_IO
 
 open Core.Std
 let (|>) x f = f x
-open Lwt
+(* open Lwt 
 
 let lwt_reraise = function
   | Ok o -> return o
   | Error e -> Lwt.fail e
+*)
 
-let notif =
+let notif s =
   let section = Lwt_log.Section.make "Notifications" in
   let logger = 
     Lwt_log.channel 
@@ -25,19 +27,24 @@ let notif =
                   $(section)/$(level)]: $(message)"
       ~close_mode:`Keep
       ~channel:Lwt_io.stderr () in
-  Lwt_log.notice ~section ~logger
-let result =
+  bind_on_error
+    (catch_io (Lwt_log.notice ~section ~logger) s)
+    (fun e -> error (`lwt_log_exn e))
+
+let result s =
   let section = Lwt_log.Section.make "Results" in
   let logger = 
     Lwt_log.channel 
       ~template:"[$(section)]: $(message)"
       ~close_mode:`Keep
       ~channel:Lwt_io.stderr () in
-  Lwt_log.notice ~section ~logger
+  bind_on_error
+    (catch_io (Lwt_log.notice ~section ~logger) s)
+    (fun e -> error (`lwt_log_exn e))
     
 let print = ksprintf
 
-let count_people dbh = 
+let count_people dbh =
   Hitscore_db.Record_person.get_all ~dbh >>=
     (function
       | [] -> print result "Found no one"
@@ -49,9 +56,10 @@ let add_random_guy dbh =
   let email = sprintf "pn%d@nyu.edu" (Random.int 9090) in
   let login = if Random.bool () then Some "login" else None in
   let note = if Random.bool () then Some "some note" else None in
-  print result "Adding %s (%s)" family_name email >>
-  Hitscore_db.Record_person.add_value ~dbh 
-    ?print_name ~family_name ~email ?login ?note ?nickname:None
+  print result "Adding %s (%s)" family_name email >>=
+    (fun () ->
+      Hitscore_db.Record_person.add_value ~dbh 
+        ?print_name ~family_name ~email ?login ?note ?nickname:None)
 
 let print_guy dbh guy =
   let open Hitscore_db.Record_person in
@@ -75,148 +83,190 @@ let add_a_file dbh =
                            opaque "opaquedir"] ])
 
 let count_all dbh =
-  lwt vals = Hitscore_db.get_all_values ~dbh >|= List.length in
-  lwt evls = Hitscore_db.get_all_evaluations ~dbh >|= List.length in
-  lwt vols = Hitscore_db.File_system.get_all ~dbh >|= List.length in
-  print result "Values: %d, Evaluations: %d, Volumes: %d\n" vals evls vols
+  Hitscore_db.get_all_values ~dbh >>| List.length >>=
+  fun vals ->
+  Hitscore_db.get_all_evaluations ~dbh >>| List.length >>=
+  fun evls ->
+  Hitscore_db.File_system.get_all ~dbh >>| List.length >>=
+  fun vols ->
+  print result "Values: %d, Evaluations: %d, Volumes: %d\n" 
+    vals evls vols
 
 let ls_minus_r dbh =
-  lwt vols = Hitscore_db.File_system.get_all ~dbh  in
-  Lwt_list.map_s (fun vol -> 
-    Hitscore_db.File_system.cache_volume ~dbh vol >|=
+  Hitscore_db.File_system.get_all ~dbh >>=
+  fun vols ->
+    map_sequential (List.map vols return) (fun vol -> 
+    Hitscore_db.File_system.cache_volume ~dbh vol >>|
       (fun volume ->
         print result "Volume: %S\n" 
           Hitscore_db.File_system.(
-            volume |> volume_entry_cache |> volume_entry |> entry_unix_path) >>
-        let trees = Hitscore_db.File_system.volume_trees volume in
-        let paths = Hitscore_db.File_system.trees_to_unix_paths trees in
-        Lwt_list.map_s (print result "  |-> %s\n") paths)) vols
+            volume |> volume_entry_cache |> volume_entry |> entry_unix_path) >>=
+        fun () ->
+        match Hitscore_db.File_system.volume_trees volume with
+        | Error (`cannot_recognize_file_type s) ->
+          print notif "cannot_recognize_file_type %S??\n" s
+        | Error (`inconsistency_inode_not_found i) ->
+          print notif "inconsistency_inode_not_found %ld" i
+        | Ok trees ->
+          let paths = Hitscore_db.File_system.trees_to_unix_paths trees in
+          map_sequential ~f:(print result "  |-> %s\n") (List.map paths return) >>=
+          fun _ -> return ()))
 
 let add_assemble_sample_sheet dbh =
-  lwt flowcell = 
-    Hitscore_db.Record_flowcell.add_value 
-      ~serial_name:(sprintf "MAC%dCXX" (Random.int 100))
-      ~lanes:[| |]
-      ~dbh in
-  lwt func =
+  Hitscore_db.Record_flowcell.add_value 
+    ~serial_name:(sprintf "MAC%dCXX" (Random.int 100))
+    ~lanes:[| |]
+    ~dbh >>=
+  fun flowcell ->
     Hitscore_db.Function_assemble_sample_sheet.add_evaluation
       ~kind:`all_barcodes
       ~flowcell
       ~recomputable:true
       ~recompute_penalty:1.
-      ~dbh in
-  print result "Added a function\n" >>
-  return func
+      ~dbh >>=
+  fun func ->
+    print result "Added a function\n" >>=
+  fun () ->
+    return func
 
 let start_all_inserted_assemblies dbh =
-  Hitscore_db.Function_assemble_sample_sheet.get_all_inserted ~dbh >>=
-  (fun l ->
-    print result "Got %d inserted assemble_sample_sheet's\n" (List.length l) >>
-    Lwt_list.map_s 
-      (Hitscore_db.Function_assemble_sample_sheet.set_started ~dbh) l)
+  Hitscore_db.Function_assemble_sample_sheet.get_all_inserted ~dbh >>= fun l ->
+  print result "Got %d inserted assemble_sample_sheet's\n" 
+    (List.length l) >>= fun () ->
+  map_sequential (List.map l return)
+    ~f:(Hitscore_db.Function_assemble_sample_sheet.set_started ~dbh)
 
 let randomly_cancel_or_fail dbh =
   Hitscore_db.Function_assemble_sample_sheet.get_all_started ~dbh >>=
-  (fun l ->
-    print result "Got %d started assemble_sample_sheet's\n" (List.length l) >>
-    Lwt_list.map_s 
-      (fun f ->
-        if Random.bool () then
-          Hitscore_db.Function_assemble_sample_sheet.set_failed ~dbh f >>
-          print result "Set failed\n"
-        else
-          Hitscore_db.File_system.add_volume ~dbh
-            ~kind:`sample_sheet_csv
-            ~hr_tag:"AllBC"
-            ~files:Hitscore_db.File_system.Tree.([file "SampleSheet.csv"]) >>=
-          (fun file ->
-            Hitscore_db.Record_sample_sheet.add_value
-              ~file ~note:"some note on the sample-sheet …" ~dbh >>=
-            (fun result ->
-              Hitscore_db.Function_assemble_sample_sheet.set_succeeded
-                ~dbh ~result f) >>
-              print result "Added a sample-sheet and set succeeded\n")) l)
+  fun l ->
+  print result "Got %d started assemble_sample_sheet's\n" (List.length l) >>=
+  fun () ->
+  map_sequential (List.map l return)
+    (fun f ->
+      if Random.bool () then
+        Hitscore_db.Function_assemble_sample_sheet.set_failed ~dbh f >>= fun _ ->
+        print result "Set failed\n"
+      else
+        Hitscore_db.File_system.add_volume ~dbh
+          ~kind:`sample_sheet_csv
+          ~hr_tag:"AllBC"
+          ~files:Hitscore_db.File_system.Tree.([file "SampleSheet.csv"]) >>=
+        fun file ->
+        Hitscore_db.Record_sample_sheet.add_value
+          ~file ~note:"some note on the sample-sheet …" ~dbh >>=
+        fun new_sample_sheet ->
+          Hitscore_db.Function_assemble_sample_sheet.set_succeeded
+            ~dbh ~result:new_sample_sheet f >>=
+        fun _ ->
+          print result "Added a sample-sheet and set succeeded\n")
 
 let show_success dbh =
   let open Hitscore_db.Function_assemble_sample_sheet in
   get_all_succeeded ~dbh >>=
-  Lwt_list.map_s (fun success ->
-    cache_evaluation ~dbh success >>=
-    (fun cache ->
-      let {kind; flowcell} = get_arguments cache in
-      lwt flowcell_name =
+  fun successes ->
+  map_sequential (List.map successes return)
+    ~f:(fun success ->
+      cache_evaluation ~dbh success >>=
+      fun cache ->
+      begin match get_arguments cache with
+      | Error e ->
+        print notif "get_arguments returned %s" (Exn.to_string e)
+      | Ok {kind; flowcell} ->
         Hitscore_db.Record_flowcell.(
-          lwt {serial_name; _ } = (cache_value ~dbh flowcell) >|= get_fields in
-          return serial_name ) in
-      let kind_str = Hitscore_db.Enumeration_sample_sheet_kind.to_string kind in
-      lwt sample_sheet_note = (* TODO get also the file *)
-        let result = get_result cache in
-        Hitscore_db.Record_sample_sheet.(
-          lwt {note; _} = cache_value ~dbh result >|= get_fields in
-          return note) in
-      print result "Success found for:\n\
+          (cache_value ~dbh flowcell) >>| get_fields >>=
+              fun fields -> return fields.serial_name 
+        ) >>=
+        fun flowcell_name ->
+        let kind_str =
+          Hitscore_db.Enumeration_sample_sheet_kind.to_string kind in
+        begin match get_result cache with
+        | Ok assembled ->
+          Hitscore_db.Record_sample_sheet.(
+            cache_value ~dbh assembled >>| get_fields >>=
+              fun f -> return f.note) >>=
+          fun sample_sheet_note -> (* TODO: get also the file *)
+          print result "Success found for:\n\
                     \    Flowcell: %s,\n    Kind: %s,\n    Note: %s\n" 
-        flowcell_name kind_str 
-        (Option.value ~default:"NONE" sample_sheet_note) ;))
+            flowcell_name kind_str  
+            (Option.value ~default:"NONE" sample_sheet_note)
+        | Error (`layout_inconsistency (`result_not_available)) ->
+          print notif "get_result detected a DB inconsistency: \
+                      result_not_available!\n"
+        end
+      end)
 
-let test_lwt =
+let test_lwt () =
   let hitscore_configuration = Hitscore_lwt.configure () in
-  lwt dbh = Hitscore_lwt.db_connect hitscore_configuration >>= lwt_reraise in
-  try_lwt 
-    notif "Starting" >>
-    count_all dbh >>
-    count_people dbh >>
-    add_random_guy dbh >>
-    add_random_guy dbh >>
-    add_random_guy dbh >>
-    count_people dbh >>
+  Hitscore_lwt.db_connect hitscore_configuration >>= 
+  fun dbh ->
+  notif "Starting" >>= fun _ ->
+  count_all dbh >>= fun _ ->
+  count_people dbh >>= fun _ ->
+  add_random_guy dbh >>= fun _ ->
+  add_random_guy dbh >>= fun _ ->
+  add_random_guy dbh >>= fun _ ->
+  count_people dbh >>= fun _ ->
 
-    add_random_guy dbh >>=
-    print_guy dbh >>
+  add_random_guy dbh >>=
+  print_guy dbh >>= fun _ ->
 
-    add_a_file dbh >>
-    add_a_file dbh >>
-    count_all dbh >>
-    add_assemble_sample_sheet dbh >>
-    add_assemble_sample_sheet dbh >>
-    add_assemble_sample_sheet dbh >>
-    add_assemble_sample_sheet dbh >>
-    count_all dbh >>
-    start_all_inserted_assemblies dbh >>
-
-    randomly_cancel_or_fail dbh >>
-
-    show_success dbh >> 
-    count_all dbh >>
-    ls_minus_r dbh >>
-
-    Hitscore_db.get_dump ~dbh >>=
+  add_a_file dbh >>= fun _ ->
+  add_a_file dbh >>= fun _ ->
+  count_all dbh >>= fun _ ->
+  add_assemble_sample_sheet dbh >>= fun _ ->
+  add_assemble_sample_sheet dbh >>= fun _ ->
+  add_assemble_sample_sheet dbh >>= fun _ ->
+  add_assemble_sample_sheet dbh >>= fun _ ->
+  count_all dbh >>= fun _ ->
+  start_all_inserted_assemblies dbh >>= fun _ ->
+  
+  randomly_cancel_or_fail dbh >>= fun _ ->
+  
+  show_success dbh >>= fun _ -> 
+  count_all dbh >>= fun _ ->
+  ls_minus_r dbh >>= fun _ ->
+  
+  Hitscore_db.get_dump ~dbh >>=
     (fun dump ->
-      let extract s = try String.sub ~pos:0 ~len:200 s with e -> s in 
+      let extract len s = try String.sub ~pos:0 ~len s with e -> s in 
       print result "DUMP (extract, 200 characters): \n%s...\n"
-        (Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum |> extract) >>
-      try_lwt (* This should fail: *)
-        Lwt_list.map_s
+        (Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum
+            |> (extract 200)) >>= fun _ ->
+      let should_be_error = 
+        map_sequential
+          (List.map dump.Hitscore_db.function_assemble_sample_sheet return)
           (Hitscore_db.Function_assemble_sample_sheet.insert_cached ~dbh)
-          dump.Hitscore_db.function_assemble_sample_sheet >>
-        print notif "SHOULD NOT BE THERE !!!!"
-      with
-      | exn ->
-        print result "Inserting an evaluation fails because the ID is \
-                      already used:\n%s\n" (Exn.to_string exn);
-    ) >>
+      in
+      double_bind should_be_error
+        ~ok:(fun _ ->
+          print notif "SHOULD NOT BE THERE !!!!")
+        ~error:(function
+          | `layout_inconsistency
+              (`function_assemble_sample_sheet, 
+               `insert_cache_did_not_return_one_id (table_name, i32l)) ->
+            print notif "insert_cached detected a DB inconsistency: \
+                      INSERT in %S did not return one id but all these: [%s]"
+              table_name
+              (String.concat ~sep:"; " (List.map i32l (sprintf "%ld")))
+          | `pg_exn exn ->
+            print result "Inserting an evaluation fails because the ID is \
+                      already used:\n%s...\n" (Exn.to_string exn |> (extract 70))
+          | (`layout_inconsistency (_, _)) | (`lwt_log_exn _) as lle ->
+            error lle)
+    ) >>= fun _ ->
 
-    print notif "Nice ending" 
-  finally
-    notif "Closing the DB." >>
-    Hitscore_lwt.db_disconnect hitscore_configuration dbh >>= lwt_reraise
+  print notif "Nice ending" >>= fun () ->
+  notif "Closing the DB." >>= fun () ->
+  Hitscore_lwt.db_disconnect hitscore_configuration dbh
 
 
 let () =
-  match state test_lwt with
-  | Return _ -> eprintf "returns\n"
-  | Fail _ -> eprintf "fails\n"
-  | Sleep ->
-    eprintf "Still sleeping …\n%!"; 
-    Lwt_main.run test_lwt
-
+  begin match Lwt_main.run (test_lwt ()) with
+  | Error (`layout_inconsistency (m, e)) ->
+    eprintf "\n=== BAD!! ====\nThe test ended with a layout_inconsistency!\n\n"
+  | Error (`lwt_log_exn e) | Error (`pg_exn e) ->
+    eprintf "\n=== BAD!! ====\nThe test ended with an exn:\n%s\n"
+      (Exn.to_string e)
+  | Ok () ->
+    eprintf "Still good after Lwt_main.run\n"
+  end
