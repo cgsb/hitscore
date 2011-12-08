@@ -1,11 +1,9 @@
 # OASIS_START
-# DO NOT EDIT (digest: d851f4641c3151365970c67f9160e998)
+# DO NOT EDIT (digest: f73fdced219f7ee98e6957424b00d794)
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
-<src/codegen/hitscoregen.{native,byte}>: pkg_pgocaml.syntax
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
 <src/codegen/*.ml{,i}>: pkg_threads
-<src/codegen/*.ml{,i}>: pkg_pgocaml.syntax
 <src/codegen/*.ml{,i}>: pkg_core
 # Library hitscore
 "src/lib": include
@@ -41,7 +39,6 @@
 <src/test/db_access.{native,byte}>: pkg_pgocaml.syntax
 <src/test/db_access.{native,byte}>: pkg_pgocaml
 <src/test/db_access.{native,byte}>: pkg_lwt.unix
-<src/test/db_access.{native,byte}>: pkg_lwt.syntax
 <src/test/db_access.{native,byte}>: pkg_lwt
 <src/test/db_access.{native,byte}>: pkg_core
 <src/test/db_access.{native,byte}>: pkg_biocaml
@@ -52,10 +49,9 @@
 <src/test/*.ml{,i}>: pkg_pgocaml.syntax
 <src/test/*.ml{,i}>: pkg_pgocaml
 <src/test/*.ml{,i}>: pkg_lwt.unix
-<src/test/*.ml{,i}>: pkg_lwt.syntax
 <src/test/*.ml{,i}>: pkg_lwt
 <src/test/*.ml{,i}>: pkg_core
 <src/test/*.ml{,i}>: pkg_biocaml
 # OASIS_STOP
 
-<src/*/*.ml{,i}>: syntax_camlp4o
+<src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o

@@ -16,7 +16,7 @@ Flag lwt
 Executable hitscoregen
   Path: src/codegen
   MainIs: hitscoregen.ml
-  BuildDepends: threads, core, pgocaml.syntax
+  BuildDepends: threads, core
   CompiledObject: best
   Install: false
 
@@ -51,7 +51,7 @@ Executable db_access_test
     Build: true
   else
     Build: false
-  BuildDepends: threads, core, hitscore, lwt, lwt.syntax, lwt.unix
+  BuildDepends: threads, core, hitscore, lwt, lwt.unix
   CompiledObject: best
   Install: false
 
