@@ -231,7 +231,7 @@ let test_lwt () =
             |> (extract 200)) >>= fun _ ->
       let should_be_error = 
         of_list_sequential dump.Hitscore_db.function_assemble_sample_sheet 
-          (Hitscore_db.Function_assemble_sample_sheet.insert_cached ~dbh)
+          (Hitscore_db.Function_assemble_sample_sheet.insert_cache ~dbh)
       in
       double_bind should_be_error
         ~ok:(fun _ ->
@@ -240,7 +240,7 @@ let test_lwt () =
           | `layout_inconsistency
               (`function_assemble_sample_sheet, 
                `insert_cache_did_not_return_one_id (table_name, i32l)) ->
-            print notif "insert_cached detected a DB inconsistency: \
+            print notif "insert_cache detected a DB inconsistency: \
                       INSERT in %S did not return one id but all these: [%s]"
               table_name
               (String.concat ~sep:"; " (List.map i32l (sprintf "%ld")))

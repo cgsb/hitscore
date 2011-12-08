@@ -615,7 +615,7 @@ let pgocaml_to_result_io out ?transform_exceptions f =
   end;
   ()
 
-let pgocaml_insert_cached_exn ~out ~on_not_one_id ~all_fields name =
+let pgocaml_insert_cache_exn ~out ~on_not_one_id ~all_fields name =
   let all_db_fields = List.map all_fields (fun (n, _, _) -> n) in
   line out "  let (%s) = cache in" (all_db_fields |> String.concat ~sep:", ");
   let values =
@@ -803,14 +803,14 @@ let ocaml_record_module ~out name fields =
   OCaml_hiden_exception.define wrong_cache_insert out;
 
   hide out (fun out ->  
-    line out "let insert_cached_exn %s (cache: cache): t PGOCaml.monad = " 
+    line out "let insert_cache_exn %s (cache: cache): t PGOCaml.monad = " 
       pgocaml_db_handle_arg;
-    pgocaml_insert_cached_exn ~out ~on_not_one_id
+    pgocaml_insert_cache_exn ~out ~on_not_one_id
       ~all_fields:(db_record_standard_fields @ args_in_db) name;
   );
 
   doc out "Load a cached value in the database ({b Unsafe!}).";
-  line out "let insert_cached %s (cache: cache):" pgocaml_db_handle_arg;
+  line out "let insert_cache %s (cache: cache):" pgocaml_db_handle_arg;
   ocaml_poly_result_io out "t" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
     "`pg_exn of exn";
@@ -820,7 +820,7 @@ let ocaml_record_module ~out name fields =
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_insert;
   ] (fun out ->
-    line out "insert_cached_exn ~dbh cache";
+    line out "insert_cache_exn ~dbh cache";
   );
 
   raw out "end (* %s *)\n\n" name;
@@ -1078,34 +1078,34 @@ let ocaml_function_module ~out name args result =
   raw out "  PGSQL (dbh)\n";
   raw out "    \"DELETE FROM %s WHERE g_id = $id\"\n\n" name;
 
-  let wrong_insert_cached = 
+  let wrong_insert_cache = 
     OCaml_hiden_exception.make ~in_loads:true
       (sprintf "Function_%s" name) 
       "insert_cache_did_not_return_one_id"
       [ "string"; "int32 list" ] in
   let on_not_one_id ~out ~table_name  ~returned  =
-    OCaml_hiden_exception.throw wrong_insert_cached out
+    OCaml_hiden_exception.throw wrong_insert_cache out
       (sprintf "(%S, %s)" table_name returned) in
-  OCaml_hiden_exception.define wrong_insert_cached out;
+  OCaml_hiden_exception.define wrong_insert_cache out;
 
   hide out (fun out ->
-    line out "let insert_cached_exn %s (cache: 'a cache): \
+    line out "let insert_cache_exn %s (cache: 'a cache): \
       [`can_nothing] t PGOCaml.monad = " pgocaml_db_handle_arg;
-    pgocaml_insert_cached_exn ~out ~on_not_one_id
+    pgocaml_insert_cache_exn ~out ~on_not_one_id
       ~all_fields:(db_function_standard_fields result @ args_in_db) name;
   );
   doc out "Load a cached evaluation in the database ({b Unsafe!}).";
-  line out "let insert_cached %s (cache: 'a cache):"
+  line out "let insert_cache %s (cache: 'a cache):"
     pgocaml_db_handle_arg;
   ocaml_poly_result_io out "[`can_nothing] t" [
-    (OCaml_hiden_exception.poly_type_local [wrong_insert_cached]);
+    (OCaml_hiden_exception.poly_type_local [wrong_insert_cache]);
     "`pg_exn of exn";
   ];
   line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
-    OCaml_hiden_exception.transform_local wrong_insert_cached;
+    OCaml_hiden_exception.transform_local wrong_insert_cache;
   ] (fun out ->
-    line out "insert_cached_exn ~dbh cache";
+    line out "insert_cache_exn ~dbh cache";
   );
 
   raw out "end (* %s *)\n\n" name;
@@ -1510,7 +1510,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
       ~out ~on_not_one_id ~id:"id";
     line out ")";
   in
-  line out "let insert_cached %s (cache: volume_cache):" pgocaml_db_handle_arg;
+  line out "let insert_cache %s (cache: volume_cache):" pgocaml_db_handle_arg;
   ocaml_poly_result_io out "volume" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
     "`pg_exn of exn";
@@ -1521,7 +1521,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   ] insert_cache_exn;
   
   hide out (fun out ->
-    line out "let insert_cached_exn %s (cache: volume_cache): \
+    line out "let insert_cache_exn %s (cache: volume_cache): \
             volume PGOCaml.monad = " pgocaml_db_handle_arg;
     insert_cache_exn out;
   );
@@ -1575,7 +1575,7 @@ let ocaml_dump_and_reload ~out dsl =
 
   let close_ins_fun = ref [] in
   line tmp_ins_fun "    let fs_m = \
-                         map_s ~f:(File_system.insert_cached_exn ~dbh) \
+                         map_s ~f:(File_system.insert_cache_exn ~dbh) \
                          dump.file_system in";
   line tmp_ins_fun "    pg_bind fs_m (fun _ ->";
   close_ins_fun := ")" :: !close_ins_fun;
@@ -1591,7 +1591,7 @@ let ocaml_dump_and_reload ~out dsl =
       line tmp_get_fun2 "     record_%s;" name;
       close_get_fun := "))" :: !close_get_fun;
 
-      line tmp_ins_fun "     let r_m = map_s ~f:(Record_%s.insert_cached_exn \
+      line tmp_ins_fun "     let r_m = map_s ~f:(Record_%s.insert_cache_exn \
                               ~dbh) dump.record_%s in\n\
                        \     pg_bind r_m (fun _ ->" name name;
       close_ins_fun := ")" :: !close_ins_fun;
@@ -1605,7 +1605,7 @@ let ocaml_dump_and_reload ~out dsl =
       line tmp_get_fun2 "     function_%s;" name;
       close_get_fun := "))" :: !close_get_fun;
 
-      line tmp_ins_fun "     let f_m = map_s ~f:(Function_%s.insert_cached_exn \
+      line tmp_ins_fun "     let f_m = map_s ~f:(Function_%s.insert_cache_exn \
                               ~dbh) dump.function_%s in\n\
                        \     pg_bind f_m (fun _ ->" name name;
       close_ins_fun := ")" :: !close_ins_fun;
