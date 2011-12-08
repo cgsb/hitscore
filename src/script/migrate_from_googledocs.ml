@@ -108,9 +108,11 @@ let sanitize_for_filename str =
 
 let optify_string s =
   if s = "" then None else Some s
+let fail msg = Failure msg
 
 let main metadata_prefix dbh =
-  
+
+
   (* let mkpath = List.fold_left ~f:Filename.concat ~init:metadata_dir in *)
   let load = Csv.load ~separator:',' in
   let load_table t =
@@ -137,7 +139,7 @@ let main metadata_prefix dbh =
           Hitscore_db.Record_person.add_value
             ~print_name:(sprintf "%s %s" first surname)
             ~family_name:surname ~note ?login
-            ~email ?nickname ~dbh in
+            ~email ?nickname ~dbh |> Result.ok_exn ~fail:(fail "person") in
         (surname, id)
       | _ -> failwith "persons") in
   let organisms = ref [] in
@@ -150,7 +152,8 @@ let main metadata_prefix dbh =
       begin match List.Assoc.find !assoc_list str with
       | Some id -> Some id
       | None ->
-        let id = new_one str in
+        let id = new_one str |> 
+            Result.ok_exn ~fail:(fail (sprintf "try_previous: %s" str)) in
         assoc_list := (str, id) :: !assoc_list;
         Some id
       end in
@@ -186,7 +189,7 @@ let main metadata_prefix dbh =
               ~doc:(Hitscore_db.File_system.add_volume ~dbh
                       ~kind:`protocol_directory
                       ~hr_tag:(sanitize_for_filename str)
-                      ~files:[])) in
+                      ~files:[] |> Result.ok_exn ~fail:(fail "add_volume"))) in
         let stock_library =
           let note =
             migration_note ^ 
@@ -278,7 +281,8 @@ let main metadata_prefix dbh =
           Hitscore_db.Record_input_library.add_value ~dbh
             ~library:(Option.value_exn stock_library) 
             ~submission_date ~note
-            ~contacts ?volume_uL ?concentration_nM ~user_db:[| |]
+            ~contacts ?volume_uL ?concentration_nM ~user_db:[| |] |> 
+                Result.ok_exn  ~fail:(fail "Record_input_library.add_value")
         in
         eprintf "[%s] %s %s %s %s %s\n"  library_id
           fragment_size_qc_method pdf_file_path xad_file_path
@@ -323,10 +327,12 @@ let main metadata_prefix dbh =
             ?seeding_concentration:None
             ?total_volume:None
             ~libraries:(Array.of_list (libraries_of_lane i))
-            ~pooled_percentages:[| |])
+            ~pooled_percentages:[| |] |>
+            Result.ok_exn ~fail:(fail "Record_lane.add_value"))
       in
       Hitscore_db.Record_flowcell.add_value ~dbh
-        ~serial_name:fcid ~lanes)
+        ~serial_name:fcid ~lanes |> 
+            Result.ok_exn ~fail:(fail "Record_flowcell.add_value"))
   in
   (persons, flowcells) |> ignore
 
@@ -334,8 +340,8 @@ let () =
   match Array.to_list Sys.argv with
   | exec :: dir :: [] -> 
     let hsconf = Hitscore_threaded.configure () in
-    let fail = Failure "connection error" in
-    let dbh = Hitscore_threaded.db_connect hsconf |> Result.ok_exn ~fail  in
+    let dbh = Hitscore_threaded.db_connect hsconf |> 
+        Result.ok_exn ~fail:(fail "connection error")  in
     main dir dbh;
     let run_psql s =
       sprintf "echo '<h3>%s</h3>' >> ttt.html\n\
@@ -359,32 +365,40 @@ let () =
     ];
     Out_channel.with_file "uuuu.brtx" ~f:(fun o ->
       let open Hitscore_db.Record_flowcell in
-      List.iter (get_all ~dbh) (fun f ->
-        let { serial_name ; lanes } = get_fields (cache_value ~dbh f) in
+      List.iter (get_all ~dbh |> 
+          Result.ok_exn ~fail:(fail "Record_flowcell.get_all")) (fun f ->
+        let { serial_name ; lanes } = get_fields (cache_value ~dbh f |>
+            Result.ok_exn ~fail:(fail "get_fields cache_value")) in
         fprintf o "{section|Flowcell %s}\n" serial_name;
         fprintf o "{begin table 4}\n";
         fprintf o "{c h|Lane} {c h|Lib} {c h|Sample} {c h|Contacts}\n";
         Array.iteri lanes ~f:(fun i l ->
           let open Hitscore_db.Record_lane in
-          let { libraries; _ } = get_fields (cache_value ~dbh l) in
+          let { libraries; _ } = get_fields (cache_value ~dbh l |>
+              Result.ok_exn ~fail:(fail "Record_lame.cache_value")) in
           fprintf o "{c h %dx1|%d}\n" (Array.length libraries) (i + 1);
           Array.iter libraries ~f:(fun il ->
             let open Hitscore_db.Record_input_library in
-            let { library; contacts; _ } = get_fields (cache_value ~dbh il) in
+            let { library; contacts; _ } = 
+              get_fields (cache_value ~dbh il |>
+                  Result.ok_exn ~fail:(fail "Record_input_library")) in
             let open Hitscore_db.Record_stock_library in
-            let { name; sample } = get_fields (cache_value ~dbh library) in
+            let { name; sample } = get_fields (cache_value ~dbh library |>
+                Result.ok_exn ~fail:(fail "stock_library")) in
             fprintf o "  {c|%s}" name;
             begin match sample with
             | None -> fprintf o "{c|{i|NO SAMPLE}}"
             | Some sample ->
               let open Hitscore_db.Record_sample in
-              let { name; _ } = get_fields (cache_value ~dbh sample) in
+              let { name; _ } = get_fields (cache_value ~dbh sample |>
+                  Result.ok_exn ~fail:(fail "Record_sample")) in
               fprintf o "{c|%s}" name;
             end;
             let people =
               let open Hitscore_db.Record_person in
               Array.map contacts ~f:(fun p ->
-                let { print_name; email; _ } = get_fields (cache_value ~dbh p) in
+                let { print_name; email; _ } = get_fields (cache_value ~dbh p |>
+                    Result.ok_exn ~fail:(fail "Record_person")) in
                 sprintf "%s <%s>"
                   (Option.value ~default:"{i|NO NAME}" print_name)
                   (Option.value ~default:"{i|NO-EMAIL}" email)) |> Array.to_list in
