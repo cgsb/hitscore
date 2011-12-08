@@ -37,7 +37,17 @@ val ignore : ('a, 'b) monad -> (unit, 'b) monad
     val error: 'a -> ('any, 'a) monad
 
     (** Do something on errors (generally augment them). *)
-    val bind_on_error: ('a, 'err) monad -> f:('err -> ('a, 'b) monad) -> ('a, 'b) monad
+    val bind_on_error: ('a, 'err) monad -> f:('err -> ('a, 'b) monad) -> 
+      ('a, 'b) monad
+      
+    (** Do something on both sides. *)
+    val double_bind: ('a, 'b) monad ->
+      ok:('a -> ('c, 'd) monad) ->
+      error:('b -> ('c, 'd) monad) -> ('c, 'd) monad
+
+    (** Apply [f] to all the [Ok]'s or propagate an error. *)
+    val map_sequential: ('a, 'b) monad list -> f:('a -> ('c, 'b) monad) ->
+      ('c list, 'b) monad
   end
 
   (** The Layout is the thing defined by the layout DSL.  *)
@@ -70,10 +80,10 @@ val ignore : ('a, 'b) monad -> (unit, 'b) monad
     
   (** Attempt to connect to the database. *)
   val db_connect : local_configuration -> 
-    (Layout.db_handle, exn) Result_IO.monad
+    (Layout.db_handle, [> `pg_exn of exn]) Result_IO.monad
       
   (** Close a data-base handle. *)
-  val db_disconnect : 
-    local_configuration -> Layout.db_handle -> (unit, exn) Result_IO.monad
+  val db_disconnect : local_configuration -> Layout.db_handle -> 
+    (unit, [> `pg_exn of exn]) Result_IO.monad
     
 end 

@@ -308,7 +308,7 @@ module Dumps = struct
       in
       Out_channel.(with_file file ~f:(fun o -> output_string o dump));
       ignore (Hitscore_threaded.db_disconnect hsc dbh)
-    | Error e ->
+    | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
       
   let load_file file =
@@ -336,7 +336,7 @@ module Dumps = struct
         eprintf "Load: Got a DB exception: %s\n" (Exn.to_string e)
       end;
       Hitscore_threaded.db_disconnect hsc dbh  |> ignore
-    | Error e ->
+    | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
         
 

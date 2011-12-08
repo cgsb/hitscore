@@ -32,6 +32,11 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
       | Ok o -> IO_configuration.return (Ok o)
       | Error e -> (f e))
 
+    let double_bind m ~ok ~error = 
+      IO_configuration.(>>=) m (function
+        | Ok o -> ok o
+        | Error e -> error e)
+
     let catch_io ~f x =
       IO_configuration.catch 
         (fun () -> 
@@ -39,6 +44,26 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
           IO_configuration.(>>=) a_exn_m
             (fun x -> IO_configuration.return (Ok x)))
         (fun e -> IO_configuration.return (Error e))
+
+    let map_sequential (type b) (l: ('a, b) monad list) ~f =
+      let module Map_sequential = struct
+        exception Local_exception of b
+        let ms l f =
+          bind_on_error 
+            (catch_io
+               (IO_configuration.map_sequential ~f:(fun m ->
+                 IO_configuration.(>>=) m (function
+                   | Ok o -> 
+                     IO_configuration.(>>=) (f o) (function
+                       | Ok oo -> IO_configuration.return oo
+                       | Error ee -> IO_configuration.fail (Local_exception ee))
+                   | Error e -> IO_configuration.fail (Local_exception e))))
+               l)
+            (function Local_exception e -> error e 
+              | e -> failwithf "Expecting only Local_exception, but got: %s"
+                (Exn.to_string e) ())
+      end in
+      Map_sequential.ms l f
 
   end
 
@@ -72,16 +97,23 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
   let db_connect t =
     match t.db_configuration with
     | None -> 
-      Result_IO.catch_io Layout.PGOCaml.connect ()
+      Result_IO.(bind_on_error
+                   (catch_io Layout.PGOCaml.connect ())
+                   (fun e -> error (`pg_exn e)))
     | Some {db_host; db_port; db_database; db_username; db_password} ->
-      Result_IO.catch_io (Layout.PGOCaml.connect
-                            ~host:db_host
-                            ~port:db_port
-                            ~database:db_database
-                            ~user:db_username
-                            ~password:db_password) ()
+      Result_IO.(bind_on_error
+                   (catch_io (Layout.PGOCaml.connect
+                                ~host:db_host
+                                ~port:db_port
+                                ~database:db_database
+                                ~user:db_username
+                                ~password:db_password) ())
+                   (fun e -> error (`pg_exn e)))        
         
-  let db_disconnect t dbh = Result_IO.catch_io Layout.PGOCaml.close dbh 
+  let db_disconnect t dbh = 
+    Result_IO.(bind_on_error
+                 (catch_io Layout.PGOCaml.close dbh )
+                 (fun e -> error (`pg_exn e)))
 
 
 end
