@@ -48,6 +48,12 @@ val ignore : ('a, 'b) monad -> (unit, 'b) monad
     (** Apply [f] to all the [Ok]'s or propagate an error. *)
     val map_sequential: ('a, 'b) monad list -> f:('a -> ('c, 'b) monad) ->
       ('c list, 'b) monad
+
+    (** [of_list_sequential l f] is equivalent to
+        [map_sequential (List.map l return) f]. *)
+    val of_list_sequential: 'a list -> f:('a -> ('c, 'b) monad) ->
+      ('c list, 'b) monad
+
   end
 
   (** The Layout is the thing defined by the layout DSL.  *)

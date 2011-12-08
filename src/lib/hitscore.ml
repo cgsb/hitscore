@@ -65,6 +65,8 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
       end in
       Map_sequential.ms l f
 
+    let of_list_sequential l ~f = map_sequential (List.map l return) f
+
   end
 
   module Layout = Hitscore_db_access.Make(struct
