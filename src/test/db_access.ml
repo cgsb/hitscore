@@ -94,8 +94,7 @@ let count_all dbh =
 
 let ls_minus_r dbh =
   Hitscore_db.File_system.get_all ~dbh >>=
-  fun vols ->
-    map_sequential (List.map vols return) (fun vol -> 
+  of_list_sequential ~f:(fun vol -> 
     Hitscore_db.File_system.cache_volume ~dbh vol >>|
       (fun volume ->
         print result "Volume: %S\n" 
@@ -109,7 +108,7 @@ let ls_minus_r dbh =
           print notif "inconsistency_inode_not_found %ld" i
         | Ok trees ->
           let paths = Hitscore_db.File_system.trees_to_unix_paths trees in
-          map_sequential ~f:(print result "  |-> %s\n") (List.map paths return) >>=
+          of_list_sequential ~f:(print result "  |-> %s\n") paths >>=
           fun _ -> return ()))
 
 let add_assemble_sample_sheet dbh =
@@ -133,7 +132,7 @@ let start_all_inserted_assemblies dbh =
   Hitscore_db.Function_assemble_sample_sheet.get_all_inserted ~dbh >>= fun l ->
   print result "Got %d inserted assemble_sample_sheet's\n" 
     (List.length l) >>= fun () ->
-  map_sequential (List.map l return)
+  of_list_sequential l
     ~f:(Hitscore_db.Function_assemble_sample_sheet.set_started ~dbh)
 
 let randomly_cancel_or_fail dbh =
@@ -141,7 +140,7 @@ let randomly_cancel_or_fail dbh =
   fun l ->
   print result "Got %d started assemble_sample_sheet's\n" (List.length l) >>=
   fun () ->
-  map_sequential (List.map l return)
+  of_list_sequential l
     (fun f ->
       if Random.bool () then
         Hitscore_db.Function_assemble_sample_sheet.set_failed ~dbh f >>= fun _ ->
@@ -163,37 +162,35 @@ let randomly_cancel_or_fail dbh =
 let show_success dbh =
   let open Hitscore_db.Function_assemble_sample_sheet in
   get_all_succeeded ~dbh >>=
-  fun successes ->
-  map_sequential (List.map successes return)
-    ~f:(fun success ->
-      cache_evaluation ~dbh success >>=
-      fun cache ->
-      begin match get_arguments cache with
-      | Error e ->
-        print notif "get_arguments returned %s" (Exn.to_string e)
-      | Ok {kind; flowcell} ->
-        Hitscore_db.Record_flowcell.(
-          (cache_value ~dbh flowcell) >>| get_fields >>=
-              fun fields -> return fields.serial_name 
-        ) >>=
-        fun flowcell_name ->
-        let kind_str =
-          Hitscore_db.Enumeration_sample_sheet_kind.to_string kind in
-        begin match get_result cache with
-        | Ok assembled ->
-          Hitscore_db.Record_sample_sheet.(
-            cache_value ~dbh assembled >>| get_fields >>=
-              fun f -> return f.note) >>=
-          fun sample_sheet_note -> (* TODO: get also the file *)
-          print result "Success found for:\n\
-                    \    Flowcell: %s,\n    Kind: %s,\n    Note: %s\n" 
-            flowcell_name kind_str  
-            (Option.value ~default:"NONE" sample_sheet_note)
-        | Error (`layout_inconsistency (`result_not_available)) ->
-          print notif "get_result detected a DB inconsistency: \
-                      result_not_available!\n"
-        end
-      end)
+  of_list_sequential ~f:(fun success ->
+    cache_evaluation ~dbh success >>=
+    fun cache ->
+    begin match get_arguments cache with
+    | Error e ->
+      print notif "get_arguments returned %s" (Exn.to_string e)
+    | Ok {kind; flowcell} ->
+      Hitscore_db.Record_flowcell.(
+        (cache_value ~dbh flowcell) >>| get_fields >>=
+            fun fields -> return fields.serial_name 
+      ) >>=
+      fun flowcell_name ->
+      let kind_str =
+        Hitscore_db.Enumeration_sample_sheet_kind.to_string kind in
+      begin match get_result cache with
+      | Ok assembled ->
+        Hitscore_db.Record_sample_sheet.(
+          cache_value ~dbh assembled >>| get_fields >>=
+            fun f -> return f.note) >>=
+        fun sample_sheet_note -> (* TODO: get also the file *)
+        print result "Success found for:\n\
+                  \    Flowcell: %s,\n    Kind: %s,\n    Note: %s\n" 
+          flowcell_name kind_str  
+          (Option.value ~default:"NONE" sample_sheet_note)
+      | Error (`layout_inconsistency (`result_not_available)) ->
+        print notif "get_result detected a DB inconsistency: \
+                    result_not_available!\n"
+      end
+    end)
 
 let test_lwt () =
   let hitscore_configuration = Hitscore_lwt.configure () in
@@ -233,8 +230,7 @@ let test_lwt () =
         (Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum
             |> (extract 200)) >>= fun _ ->
       let should_be_error = 
-        map_sequential
-          (List.map dump.Hitscore_db.function_assemble_sample_sheet return)
+        of_list_sequential dump.Hitscore_db.function_assemble_sample_sheet 
           (Hitscore_db.Function_assemble_sample_sheet.insert_cached ~dbh)
       in
       double_bind should_be_error
