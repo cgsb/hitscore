@@ -370,8 +370,9 @@ let () =
         let { serial_name ; lanes } = get_fields (cache_value ~dbh f |>
             Result.ok_exn ~fail:(fail "get_fields cache_value")) in
         fprintf o "{section|Flowcell %s}\n" serial_name;
-        fprintf o "{begin table 4}\n";
-        fprintf o "{c h|Lane} {c h|Lib} {c h|Sample} {c h|Contacts}\n";
+        fprintf o "{begin table 5}\n";
+        fprintf o "{c h|Lane} {c h|Lib} {c h|Sample} {c h|Contacts} \
+                  {c h|Protocol doc}\n";
         Array.iteri lanes ~f:(fun i l ->
           let open Hitscore_db.Record_lane in
           let { libraries; _ } = get_fields (cache_value ~dbh l |>
@@ -383,8 +384,9 @@ let () =
               get_fields (cache_value ~dbh il |>
                   Result.ok_exn ~fail:(fail "Record_input_library")) in
             let open Hitscore_db.Record_stock_library in
-            let { name; sample } = get_fields (cache_value ~dbh library |>
-                Result.ok_exn ~fail:(fail "stock_library")) in
+            let { name; sample; protocol } =
+              get_fields (cache_value ~dbh library |>
+                  Result.ok_exn ~fail:(fail "stock_library")) in
             fprintf o "  {c|%s}" name;
             begin match sample with
             | None -> fprintf o "{c|{i|NO SAMPLE}}"
@@ -397,13 +399,25 @@ let () =
             let people =
               let open Hitscore_db.Record_person in
               Array.map contacts ~f:(fun p ->
-                let { print_name; email; _ } = get_fields (cache_value ~dbh p |>
+                let { family_name; _ } = get_fields (cache_value ~dbh p |>
                     Result.ok_exn ~fail:(fail "Record_person")) in
-                sprintf "%s <%s>"
-                  (Option.value ~default:"{i|NO NAME}" print_name)
-                  (Option.value ~default:"{i|NO-EMAIL}" email)) |> Array.to_list in
+                sprintf "%s"
+                  (Option.value ~default:"{i|NO NAME}" family_name))
+                                      |> Array.to_list in
             fprintf o "{c|%s}\n"
-              (String.concat ~sep:", " people)
+              (String.concat ~sep:", " people);
+            let open Hitscore_db.Record_protocol in
+            begin match protocol with
+            | Some protocol ->
+              let {doc; _} = get_fields (cache_value ~dbh protocol |>
+                  Result.ok_exn ~fail:(fail "Record_protocol")) in
+              let open Hitscore_db.File_system in
+              let path = cache_volume_entry ~dbh doc |>
+                  Result.ok_exn ~fail:(fail "File_system") |>
+                      volume_entry |> entry_unix_path in
+              fprintf o "{c|{t|%s}}" path
+            | None -> fprintf o "{c|{i|NO PROTOCOL}}"
+            end
           );
         );
         fprintf o "{end}\n";
