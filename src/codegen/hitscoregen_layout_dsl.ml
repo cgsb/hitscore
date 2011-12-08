@@ -521,8 +521,8 @@ module OCaml_hiden_exception = struct
     in
     sprintf 
       "`pg_exn (Local_exn_%s (%s)) -> \
-        `layout_inconsistency (`%s (%s))"
-      t.name vals t.name vals
+        `layout_inconsistency (`%s, `%s (%s))"
+      t.name vals (String.lowercase t.module_name) t.name vals
 
   let transform_global t =
     let vals = 
@@ -533,17 +533,13 @@ module OCaml_hiden_exception = struct
       t.module_name t.name vals (String.lowercase t.module_name) t.name vals
       
   let poly_type_local tl = 
-    sprintf "`layout_inconsistency of [%s]"
+    sprintf "`layout_inconsistency of [> `%s] * [> %s]"
+      (String.concat ~sep:"\n | `"
+         (List.dedup (List.map tl (fun t -> String.lowercase t.module_name))))      
       (String.concat ~sep:"\n  | " (List.dedup (List.map tl (fun t ->
         sprintf "`%s of (%s)" t.name (String.concat ~sep:" * " t.types)))))
       
-  let poly_type_global tl =
-    sprintf "`layout_inconsistency of [`%s] * [%s]"
-      (String.concat ~sep:"\n | `"
-         (List.dedup (List.map tl (fun t -> String.lowercase t.module_name))))
-      (String.concat ~sep:"\n  | " (List.dedup (List.map tl (fun t ->
-        sprintf "`%s of (%s)" t.name
-          (String.concat ~sep:" * " t.types)))))
+  let poly_type_global tl = poly_type_local tl
 
   let all_dumps () = 
     List.filter !_all_exceptions ~f:(fun t -> t.in_dumps)
@@ -554,7 +550,9 @@ module OCaml_hiden_exception = struct
 
 end
 
-
+let ocaml_poly_result_io out left right =
+  raw out "(%s, [> %s ]) Outside.Result_IO.monad" 
+    left (String.concat ~sep:" | " right) 
 
 let pgocaml_do_get_all_ids ~out ?(id="id") name = 
   raw out "  let um = PGSQL(dbh)\n";
@@ -681,8 +679,11 @@ let ocaml_record_module ~out name fields =
     line out "    %s(%s:%s)" kind_of_arg n (ocaml_type t);
   );
   line out "    %s :" pgocaml_db_handle_arg;
-  line out " (t, [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+  ocaml_poly_result_io out "t" [
     (OCaml_hiden_exception.poly_type_local [wrong_add_value]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_add_value;
   ] (fun out ->
@@ -702,7 +703,8 @@ let ocaml_record_module ~out name fields =
   );
   doc out "Get all the values of type [%s]." name;
   line  out "let get_all %s:" pgocaml_db_handle_arg;
-  line out " (t list, [ `pg_exn of exn ]) Outside.Result_IO.monad =";
+  ocaml_poly_result_io out "t list" ["`pg_exn of exn";];
+  line out " =";
   pgocaml_to_result_io out (fun out ->
     line out "get_all_exn ~dbh";
   );
@@ -731,10 +733,12 @@ let ocaml_record_module ~out name fields =
   OCaml_hiden_exception.define wrong_cache_select out;
 
   doc out "Cache the contents of the record [t].";
-  line out "let cache_value (t: t) %s: \n\
-           (cache, [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg
+  line out "let cache_value (t: t) %s:" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "cache" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_select;
   ] (fun out ->
@@ -806,10 +810,13 @@ let ocaml_record_module ~out name fields =
   );
 
   doc out "Load a cached value in the database ({b Unsafe!}).";
-  line out "let insert_cached %s (cache: cache): (t, 
-              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg
+  line out "let insert_cached %s (cache: cache):" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "t" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
+
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_insert;
   ] (fun out ->
@@ -842,10 +849,12 @@ let ocaml_function_module ~out name args result =
   List.iter args (fun (n, t) -> raw out "    ~%s\n" n);
   raw out "    ?(recomputable=false)\n";
   raw out "    ?(recompute_penalty=0.)\n";
-  raw out "    %s : \n" pgocaml_db_handle_arg;
-  raw out "    ([ `can_start | `can_complete ] t,
-                [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+  line out "    %s :" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "[ `can_start | `can_complete ] t" [
     (OCaml_hiden_exception.poly_type_local [wrong_add]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_add;
   ] (fun out ->
@@ -861,8 +870,9 @@ let ocaml_function_module ~out name args result =
   );
 
   (* Function to set the state of a function evaluation to 'STARTED': *)
-  raw out "let set_started (t : [> `can_start] t) %s:\n" pgocaml_db_handle_arg;
-  line out "([`can_complete] t, [`pg_exn of exn]) Outside.Result_IO.monad =";
+  line out "let set_started (t : [> `can_start] t) %s:" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "[`can_complete] t" ["`pg_exn of exn";];
+  line out " =";
   pgocaml_to_result_io out (fun out ->
     raw out "  let id = t.id in\n";
     let_now out;
@@ -876,7 +886,8 @@ let ocaml_function_module ~out name args result =
 
   raw out "let set_succeeded (t : [> `can_complete] t) \n\
                    \     ~result %s:\n" pgocaml_db_handle_arg;
-  line out "([`can_get_result] t, [`pg_exn of exn]) Outside.Result_IO.monad =";
+  ocaml_poly_result_io out "[ `can_get_result] t" ["`pg_exn of exn";];
+  line out " =";
   pgocaml_to_result_io out (fun out ->
     let_in_typed_value ("result", Record_name result) |> raw out "%s";
     raw out "  let id = t.id in\n";
@@ -891,7 +902,8 @@ let ocaml_function_module ~out name args result =
   );
   line out "let set_failed \
            (t : [> `can_complete ] t) %s:" pgocaml_db_handle_arg;
-  line out "([`can_nothing] t, [`pg_exn of exn]) Outside.Result_IO.monad =";
+  ocaml_poly_result_io out "[ `can_nothing ] t" ["`pg_exn of exn";];
+  line out " =";
   pgocaml_to_result_io out (fun out ->
     raw out "  let id = t.id in\n";
     let_now out;
@@ -935,8 +947,11 @@ let ocaml_function_module ~out name args result =
 
   doc out "Cache the contents of the evaluation [t].";
   line out "let cache_evaluation (t: 'a t) %s : " pgocaml_db_handle_arg;
-  line out "('a cache , [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+  ocaml_poly_result_io out "'a cache" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache;
   ] (fun out ->
@@ -964,7 +979,7 @@ let ocaml_function_module ~out name args result =
           time the status was updated (if available).";
   raw out "let get_status (cache: 'a cache) :\n";
   line out "(Enumeration_process_status.t * Timestamp.t option,
-             [ `status_parsing_error of string]) \
+             [> `status_parsing_error of string]) \
             Core.Std.Result.t =";
   raw out "  let (%s) = cache in\n"
     (List.map (db_function_standard_fields result @ args_in_db)
@@ -1008,7 +1023,7 @@ let ocaml_function_module ~out name args result =
               if the cast is not allowed." phamtom;
       line out "let is_%s (cache: 'a cache): " suffix;
       line out " (%s cache,\n\
-              [ `status_parsing_error of string\n\
+              [> `status_parsing_error of string\n\
                | `wrong_status of Enumeration_process_status.t ] )
               Core.Std.Result.t =\n" phamtom; 
       line out "  let open Core.Std in";
@@ -1030,24 +1045,24 @@ let ocaml_function_module ~out name args result =
       );
       
       doc out "Get all the Functions whose status is [%s]." polyvar;
-      raw out "let get_all_%s %s: (%s t list,
-                  [ `pg_exn of exn ]) Outside.Result_IO.monad ="
-        suffix pgocaml_db_handle_arg phamtom;
+      line out "let get_all_%s %s:" suffix pgocaml_db_handle_arg;
+      ocaml_poly_result_io out (sprintf "%s t list" phamtom) ["`pg_exn of exn"];
+      line out " =";
       pgocaml_to_result_io out (fun out ->
         line out "get_all_%s_exn ~dbh" suffix
       );
-
+      
     );
-
+  
   hide out (fun out ->
-    raw out "let get_all_exn %s: \
-          [ `can_nothing ] t list PGOCaml.monad = \n" pgocaml_db_handle_arg;
+    line out "let get_all_exn %s: \
+          [ `can_nothing ] t list PGOCaml.monad = " pgocaml_db_handle_arg;
     pgocaml_do_get_all_ids ~out name;
   );
   doc out "Get all the [%s] functions." name;
-  line out "let get_all %s: ([`can_nothing] t list,
-                  [ `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg;
+  line out "let get_all %s:" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "[`can_nothing] t list" [ "`pg_exn of exn"];
+  line out " =";
   pgocaml_to_result_io out (fun out ->
     line out "get_all_exn ~dbh" 
   );
@@ -1082,9 +1097,11 @@ let ocaml_function_module ~out name args result =
   doc out "Load a cached evaluation in the database ({b Unsafe!}).";
   line out "let insert_cached %s (cache: 'a cache):"
     pgocaml_db_handle_arg;
-  line out "([`can_nothing] t, \
-              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
+  ocaml_poly_result_io out "[`can_nothing] t" [
     (OCaml_hiden_exception.poly_type_local [wrong_insert_cached]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert_cached;
   ] (fun out ->
@@ -1153,7 +1170,8 @@ let ocaml_toplevel_values_and_types ~out dsl =
 
   doc out "Get all the values in the database.";
   line out "let get_all_values %s:" pgocaml_db_handle_arg;
-  line out "(value list, [ `pg_exn of exn ]) Outside.Result_IO.monad =";
+  ocaml_poly_result_io out "value list" ["`pg_exn of exn";];
+  line out " =";
   (* FUTURE: (OCaml_hiden_exception.(poly_type_global (all_gets ()))) *)
   pgocaml_to_result_io out 
     ~transform_exceptions:
@@ -1164,8 +1182,8 @@ let ocaml_toplevel_values_and_types ~out dsl =
 
   doc out "Get all the evaluations in the database.";
   line out "let get_all_evaluations %s:" pgocaml_db_handle_arg;
-  line out "([ `can_nothing ] evaluation list, \
-           [ `pg_exn of exn ]) Outside.Result_IO.monad =";
+  ocaml_poly_result_io out "[`can_nothing] evaluation list" ["`pg_exn of exn";];
+  line out " =";
   (* FUTURE: (OCaml_hiden_exception.(poly_type_global (all_gets ()))) *)
   pgocaml_to_result_io out 
     ~transform_exceptions:
@@ -1215,12 +1233,13 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "let add_volume %s \
                 ~(kind:Enumeration_volume_kind.t) \
                 ?(hr_tag: string option) \
-                ~(files:tree list) : \
-                (volume, \
-                  [ %s | `pg_exn of exn ]) \
-                 Outside.Result_IO.monad = " 
-    pgocaml_db_handle_arg
+                ~(files:tree list) : " 
+    pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "volume" [
     (OCaml_hiden_exception.poly_type_local [wrong_insert]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert;
   ] (fun out ->
@@ -1274,9 +1293,9 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   );
   
   doc out "Get all the volumes.";
-  line out "let get_all %s: \
-            (volume list, [`pg_exn of exn]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg;
+  line out "let get_all %s: " pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "volume list" ["`pg_exn of exn";];
+  line out " =";
   pgocaml_to_result_io out (fun out ->
     pgocaml_do_get_all_ids ~out ~id:"id" "g_volume";
   );
@@ -1330,11 +1349,12 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   );
 
   doc out "Retrieve the \"entry\" part of a volume from the DB.";
-  line  out "let cache_volume_entry (volume: volume) %s: \n\
-            (volume_entry_cache,
-              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg
+  line  out "let cache_volume_entry (volume: volume) %s:" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "volume_entry_cache" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_select;
   ] (fun out ->
@@ -1373,11 +1393,12 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   );
 
   doc out "Retrieve a \"whole\" volume.";
-  line out "let cache_volume %s (volume: volume) : \
-            (volume_cache,
-              [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg
+  line out "let cache_volume %s (volume: volume) :" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "volume_cache" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_select;
   ] (fun out ->
@@ -1407,7 +1428,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
   doc out "Get a list of trees `known' for a given volume.";
   line out "let volume_trees (vc : volume_cache) : \
-            (tree list, [ `inconsistency_inode_not_found of int32 \
+            (tree list, [> `inconsistency_inode_not_found of int32 \
                          | `cannot_recognize_file_type of string ]) \
              Core.Std.Result.t =";
   line out "  let files = snd vc in";
@@ -1489,10 +1510,12 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
       ~out ~on_not_one_id ~id:"id";
     line out ")";
   in
-  line out "let insert_cached %s (cache: volume_cache): \
-      (volume, [ %s | `pg_exn of exn ]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg
+  line out "let insert_cached %s (cache: volume_cache):" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "volume" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
+    "`pg_exn of exn";
+  ];
+  line out " =";
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_insert;
   ] insert_cache_exn;
@@ -1594,10 +1617,13 @@ let ocaml_dump_and_reload ~out dsl =
   print_tmp_type out;
 
   doc  out "Retrieve the whole data-base.";
-  line out "let get_dump %s : \
-            (dump, [ %s | `pg_exn of exn ]) \
-       Outside.Result_IO.monad = " pgocaml_db_handle_arg
+  line out "let get_dump %s :" pgocaml_db_handle_arg;
+  ocaml_poly_result_io out "dump" [
     (OCaml_hiden_exception.(poly_type_global (all_dumps ())));
+    "`pg_exn of exn";
+  ];
+  line out " =";
+  
   pgocaml_to_result_io out
     ~transform_exceptions:
     (OCaml_hiden_exception.(List.map ~f:transform_global (all_dumps ())))
@@ -1610,11 +1636,14 @@ let ocaml_dump_and_reload ~out dsl =
 
   doc out "Insert the contents of a [dump] in the data-base
                   ({b Unsafe!}).";
-  line out "let insert_dump %s dump : \n  \
-      (unit, [`wrong_version \n\
-          | %s | `pg_exn of exn]) Outside.Result_IO.monad ="
-    pgocaml_db_handle_arg
+  line out "let insert_dump %s dump :" pgocaml_db_handle_arg;
+    ocaml_poly_result_io out "unit" [
+    "`wrong_version";
     (OCaml_hiden_exception.(poly_type_global (all_loads ())));
+    "`pg_exn of exn";
+  ];
+  line out " =";
+
   line out "  if dump.version <> %S then (" dump_version_string;
   line out "    Outside.Result_IO.error `wrong_version";
   line out "  ) else";
