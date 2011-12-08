@@ -615,17 +615,27 @@ let pgocaml_to_result_io out ?transform_exceptions f =
   end;
   ()
 
-let pgocaml_insert_cache_exn ~out ~on_not_one_id ~all_fields name =
+let pgocaml_insert_cache_exn
+    ?(cache="cache") ?id ~out ~on_not_one_id ~all_fields name =
+  line out "let t =";
   let all_db_fields = List.map all_fields (fun (n, _, _) -> n) in
-  line out "  let (%s) = cache in" (all_db_fields |> String.concat ~sep:", ");
+  line out "  let (%s) = %s in" (all_db_fields |> String.concat ~sep:", ") cache;
   let values =
     let prefix (n, _, p) =
       match p with
       | [Psql.Not_null] | [_; Psql.Not_null] -> sprintf "$%s" n
       | _ -> "$?" ^ n in
     List.map all_fields prefix  in
-  pgocaml_add_to_database_exn name all_db_fields values
+  pgocaml_add_to_database_exn ?id name all_db_fields values
     ~out ~on_not_one_id;
+  line out "  in pg_bind t (fun t ->";
+  line out "    pg_bind (PGSQL(dbh) \"SELECT max(g_id) from %s\")" name;
+  line out "      (function [Some max] -> (pg_bind ";
+  line out "          (let m64 = Int64.(add (of_int32 max) 1L) in";
+  line out "           PGSQL(dbh) \"select setval('%s_g_id_seq', $m64)\")" name;
+  line out "          (fun _ -> pg_return t))";
+  line out "       | l -> Outside.fail (Failure \
+                           \"Postgres is itself inconsistent\")))";
   ()
 
 
@@ -820,7 +830,7 @@ let ocaml_record_module ~out name fields =
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_insert;
   ] (fun out ->
-    line out "insert_cache_exn ~dbh cache";
+    line out "(insert_cache_exn ~dbh cache)";
   );
 
   raw out "end (* %s *)\n\n" name;
@@ -1493,21 +1503,20 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
           successful won't be cleaned-up).";
   let insert_cache_exn out =
     line out "  let inserted_files_monad = map_s ~f:(fun f ->";
-    line out "      let (%s) = f in" 
-      (List.map (id_field :: file_fields) fst |> String.concat ~sep:", ");
-    pgocaml_add_to_database_exn "g_file" 
-      (List.map (id_field :: file_fields) fst)
-      (List.map (id_field :: file_fields) (fun (n, _) -> sprintf "$%s" n))
-      ~out ~on_not_one_id ~id:"inode";
+    pgocaml_insert_cache_exn
+      ~cache:"f" ~out ~on_not_one_id ~id:"inode"
+      ~all_fields:(List.map (id_field :: file_fields)
+                     (fun (n,t) -> 
+                       let (tt,pp) = dsl_type_to_db t in
+                       (n,tt,pp))) "g_file";
     line out "      )  (snd cache) in";
     line out "  pg_bind inserted_files_monad (fun _ ->";
-    line out "    let (%s) = fst cache in" 
-      (List.map (id_field :: volume_fields) fst |> String.concat ~sep:", ");
-    pgocaml_add_to_database_exn "g_volume" 
-      (List.map (id_field :: volume_fields) fst)
-      (List.map (id_field :: volume_fields) 
-         (function ("g_hr_tag", _) -> "$?g_hr_tag" | (n, _) -> sprintf "$%s" n))
-      ~out ~on_not_one_id ~id:"id";
+    pgocaml_insert_cache_exn
+      ~cache:"fst cache" ~out ~on_not_one_id
+      ~all_fields:(List.map (id_field :: volume_fields)
+                     (fun (n,t) -> 
+                       let (tt,pp) = dsl_type_to_db t in
+                       (n,tt,pp))) "g_volume";
     line out ")";
   in
   line out "let insert_cache %s (cache: volume_cache):" pgocaml_db_handle_arg;
