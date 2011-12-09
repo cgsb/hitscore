@@ -75,18 +75,21 @@
         (serial_name string)
         (lanes lane array))
 
+;; Common fields of bioanalyzer and agarose_gel:
+(subrecord bioanalyzer_like
+        (library stock_library)
+        (well_number int option)
+        (mean_fragment_size real option)
+        notable)
+
 (volume bioanalyzer_directory bioanalyzer)
 (record bioanalyzer
-        (library stock_library)
-        (well_number int)
-        (files bioanalyzer_directory)
-        (mean_fragment_size real))
+        bioanalyzer_like
+        (files bioanalyzer_directory option))
 (volume agarose_gel_directory agarose_gel)
 (record agarose_gel
-        (library stock_library)
-        (well_number int)
-        (files agarose_gel_directory)
-        (mean_fragment_size real))
+        bioanalyzer_like
+        (files agarose_gel_directory option))
 
 (record hiseq_raw
         (flowcell_name string)
