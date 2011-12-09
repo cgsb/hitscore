@@ -14,64 +14,15 @@ end
 
 module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
-  module Result_IO = struct
-
-    include  Monad.Make2(struct 
-      type ('a, 'b) t = ('a, 'b) Result.t IO_configuration.t
-
-      let return x = IO_configuration.return (Ok x) 
-      let bind x f = 
-        IO_configuration.(>>=) x (function
-          | Error e -> IO_configuration.return (Error e)
-          | Ok o -> f o)
-    end)
-
-    let error e = IO_configuration.return (Error e)
-    
-    let bind_on_error m ~f = IO_configuration.(>>=) m (function
-      | Ok o -> IO_configuration.return (Ok o)
-      | Error e -> (f e))
-
-    let double_bind m ~ok ~error = 
-      IO_configuration.(>>=) m (function
-        | Ok o -> ok o
-        | Error e -> error e)
-
-    let catch_io ~f x =
-      IO_configuration.catch 
-        (fun () -> 
-          let a_exn_m : 'a IO_configuration.t = f x in
-          IO_configuration.(>>=) a_exn_m
-            (fun x -> IO_configuration.return (Ok x)))
-        (fun e -> IO_configuration.return (Error e))
-
-    let map_sequential (type b) (l: ('a, b) monad list) ~f =
-      let module Map_sequential = struct
-        exception Local_exception of b
-        let ms l f =
-          bind_on_error 
-            (catch_io
-               (IO_configuration.map_sequential ~f:(fun m ->
-                 IO_configuration.(>>=) m (function
-                   | Ok o -> 
-                     IO_configuration.(>>=) (f o) (function
-                       | Ok oo -> IO_configuration.return oo
-                       | Error ee -> IO_configuration.fail (Local_exception ee))
-                   | Error e -> IO_configuration.fail (Local_exception e))))
-               l)
-            (function Local_exception e -> error e 
-              | e -> failwithf "Expecting only Local_exception, but got: %s"
-                (Exn.to_string e) ())
-      end in
-      Map_sequential.ms l f
-
-    let of_list_sequential l ~f = map_sequential (List.map l return) f
-
-  end
+  module Result_IO :
+    Hitscore_result_IO.RESULT_IO with type 'a io = 'a IO_configuration.t = 
+    Hitscore_result_IO.Make(IO_configuration)
 
   module Layout = Hitscore_db_access.Make(struct
     include IO_configuration
-    module Result_IO = Result_IO 
+    module Result_IO :
+      Hitscore_result_IO.RESULT_IO with type 'a io = 'a IO_configuration.t = 
+      Result_IO 
   end)
 
   type db_configuration = {

@@ -1675,13 +1675,9 @@ let ocaml_code ?(functorize=true) dsl output_string =
     raw out "\
 module type OUTSIDE_WORLD = sig
   include Hitscore_config.IO_CONFIGURATION
-  module Result_IO : sig 
-    include Core.Std.Monad.S2
-    val catch_io : f:('b -> 'a t) -> 'b -> ('a, exn) monad
-    val error: 'a -> ('any, 'a) monad
-    val bind_on_error: ('a, 'err) monad -> f:('err -> ('a, 'b) monad) -> ('a, 'b) monad
+  module Result_IO : 
+    Hitscore_result_IO.RESULT_IO with type 'a io = 'a t
 
-  end
 end
 
 module Make \
