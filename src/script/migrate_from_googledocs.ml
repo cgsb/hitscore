@@ -351,14 +351,14 @@ let main metadata_prefix dbh =
           bioanalyzer_like  fragment_size_qc_method_2
             well_number_2 avg_library_fragment_size_2
             pdf_file_path_2 xad_file_path_2 in
-
+(*
         eprintf "[%s] %s %s %s %s %s\n"  library_id
           fragment_size_qc_method pdf_file_path xad_file_path
           well_number avg_library_fragment_size;
         eprintf "[%s] %s %s %s %s %s\n"  library_id
           fragment_size_qc_method_2 pdf_file_path_2 xad_file_path_2
           well_number_2 avg_library_fragment_size_2;
-
+*)
         (library_id, sample_id1, input_library)
       | _ -> failwith "libraries don't fit") in
   let flowcells_stage_1 =
@@ -438,9 +438,8 @@ let () =
         let { serial_name ; lanes } = get_fields (cache_value ~dbh f |>
             Result.ok_exn ~fail:(fail "get_fields cache_value")) in
         fprintf o "{section|Flowcell %s}\n" serial_name;
-        fprintf o "{begin table 5}\n";
-        fprintf o "{c h|Lane} {c h|Lib} {c h|Sample} {c h|Contacts} \
-                  {c h|Protocol doc}\n";
+        fprintf o "{begin table 4}\n";
+        fprintf o "{c h|Lane} {c h|Lib} {c h|Sample} {c h|Contacts}\n";
         Array.iteri lanes ~f:(fun i l ->
           let open Hitscore_db.Record_lane in
           let { libraries; _ } = get_fields (cache_value ~dbh l |>
@@ -474,22 +473,43 @@ let () =
                                       |> Array.to_list in
             fprintf o "{c|%s}\n"
               (String.concat ~sep:", " people);
-            let open Hitscore_db.Record_protocol in
-            begin match protocol with
-            | Some protocol ->
-              let {doc; _} = get_fields (cache_value ~dbh protocol |>
-                  Result.ok_exn ~fail:(fail "Record_protocol")) in
-              let open Hitscore_db.File_system in
-              let path = cache_volume_entry ~dbh doc |>
-                  Result.ok_exn ~fail:(fail "File_system") |>
-                      volume_entry |> entry_unix_path in
-              fprintf o "{c|{t|%s}}" path
-            | None -> fprintf o "{c|{i|NO PROTOCOL}}"
-            end
           );
         );
         fprintf o "{end}\n";
       );
+    );
+    Out_channel.with_file "check_files.sh" ~f:(fun o ->
+      fprintf o "#! /bin/sh\nexport ROOT=$1/\n";
+      let _ = (* virtual: ls -R *)
+        let open Result in
+        let fail = Failure "making script" in
+        let vols = ok_exn ~fail (Hitscore_db.File_system.get_all ~dbh) in
+        List.iter vols ~f:(fun vol -> 
+          Hitscore_db.File_system.cache_volume ~dbh vol |> ok_exn ~fail |>
+              (fun volume ->
+                let path = Hitscore_db.File_system.(
+                  volume |> volume_entry_cache |> 
+                      volume_entry |> entry_unix_path) in
+                fprintf o "# Volume: %S\n" path;
+                fprintf o "if ! [ -d \"$ROOT/%s\" ]; then\n" path;
+                fprintf o "  echo $ROOT/%s is missing\nfi\n" path;
+                begin match Hitscore_db.File_system.volume_trees volume with
+                | Error (`cannot_recognize_file_type s) ->
+                  eprintf "cannot_recognize_file_type %S??\n" s
+                | Error (`inconsistency_inode_not_found i) ->
+                  eprintf "inconsistency_inode_not_found %ld" i
+                | Ok trees ->
+                  let paths =
+                    Hitscore_db.File_system.trees_to_unix_paths trees in
+                  List.iter paths ~f:(fun s -> 
+                    fprintf o "# |-> %s\n" s;
+                    fprintf o "if ! [ -f \"$ROOT/%s/%s\" ] ; then\n" path s;
+                    fprintf o "  echo \"$ROOT/%s/%s\" is missing too\n" path s;
+                    fprintf o "fi\n";
+                  );
+                end));
+      in
+      ()
     );
     let fail = Failure "disconnection error !" in
     Hitscore_threaded.db_disconnect hsconf dbh |> Result.ok_exn ~fail;
