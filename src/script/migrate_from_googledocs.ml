@@ -146,6 +146,7 @@ let main metadata_prefix dbh =
   let samples = ref [] in
   let protocols = ref [] in
   let stock_libraries = ref [] in
+  let bioanalyzer_like_files = ref [] in
   let try_previous assoc_list str ~new_one =
     if str = "" then None
     else
@@ -284,6 +285,73 @@ let main metadata_prefix dbh =
             ~contacts ?volume_uL ?concentration_nM ~user_db:[| |] |> 
                 Result.ok_exn  ~fail:(fail "Record_input_library.add_value")
         in
+        let bioanalyzer_like fragment_size_qc_method
+            well_number avg_library_fragment_size
+            pdf_file_path xad_file_path =
+            let note = ref migration_note in
+            let well_number = 
+              try Some (Int32.of_string well_number)
+              with 
+              | (Failure s) ->
+                note := sprintf "%s (Wrong_well_number %S)" !note s;
+                None
+            in
+            let mean_fragment_size =
+              try Some (Float.of_string avg_library_fragment_size)
+              with
+              | Failure s | Invalid_argument s ->
+                note := sprintf "%s (Wrong_mean_fragment_size %S)" !note s;
+                None
+            in
+            let files =
+              let try_file f =
+                if f = "" then None
+                else
+                  Some (Hitscore_db.File_system.Tree.file 
+                          (Filename.basename f)) in
+              let trees =
+                (List.filter_map [pdf_file_path; xad_file_path] ~f:try_file)
+              in
+              match trees with
+              | [] -> None
+              | files -> 
+                try_previous bioanalyzer_like_files
+                  (pdf_file_path ^ xad_file_path) (fun str ->
+                    Hitscore_db.File_system.add_volume
+                      ~dbh ~kind:`bioanalyzer_directory 
+                      ~hr_tag:(sanitize_for_filename str)
+                      ~files)
+            in
+            Option.bind stock_library (fun stock_library ->
+              if fragment_size_qc_method = "Bioanalyzer" then
+                Some (Hitscore_db.Record_bioanalyzer.add_value ~dbh
+                        ~library:stock_library ~note:!note
+                        ?well_number ?mean_fragment_size  ?files
+                         |> Result.ok_exn ~fail:(fail "add_bioanalyzer") |> ignore)
+              else if fragment_size_qc_method = "Agarose Gel" then
+                Some (Hitscore_db.Record_agarose_gel.add_value ~dbh
+                        ~library:stock_library ~note:!note
+                        ?well_number ?mean_fragment_size  ?files
+                         |> Result.ok_exn ~fail:(fail "add_agarose_gel") |> ignore)
+              else if fragment_size_qc_method = "" && (
+                well_number <> None || mean_fragment_size <> None ||
+                  files <> None) then (
+                note := sprintf "%s (Bioanalyzer_type_inferred)" !note;
+                Some (Hitscore_db.Record_bioanalyzer.add_value ~dbh
+                        ~library:stock_library ~note:!note
+                        ?well_number ?mean_fragment_size  ?files
+                         |> Result.ok_exn ~fail:(fail "add_bioanalyzer") |> ignore))
+              else None) in
+
+        let (_ : unit option) =
+          bioanalyzer_like  fragment_size_qc_method
+            well_number avg_library_fragment_size
+            pdf_file_path xad_file_path in
+        let (_ : unit option) =
+          bioanalyzer_like  fragment_size_qc_method_2
+            well_number_2 avg_library_fragment_size_2
+            pdf_file_path_2 xad_file_path_2 in
+
         eprintf "[%s] %s %s %s %s %s\n"  library_id
           fragment_size_qc_method pdf_file_path xad_file_path
           well_number avg_library_fragment_size;
