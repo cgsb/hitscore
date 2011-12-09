@@ -34,7 +34,9 @@ module type IO_CONFIGURATION = sig
     Core-like} API. *)
   val map_sequential : 'a list -> f:('a -> 'b t) -> 'b list t
 
+  (** This is like {i {{:http://ocsigen.org/lwt/api/Lwt}Lwt}.catch}. *)
   val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
+
 
 end
 
