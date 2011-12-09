@@ -446,7 +446,7 @@ let convert_pgocaml_type = function
   | (n, Volume_name v) ->
     sprintf "{ File_system.id = %s } " n
   | (n, Option (Volume_name r)) ->
-    sprintf "(option_map %s (fun id -> { File_system..id }))" n
+    sprintf "(option_map %s (fun id -> { File_system.id }))" n
   | (n, Array (Volume_name r)) ->
     sprintf "(array_map %s (fun id ->  { File_system.id }))" n
   | (n, Timestamp) ->
