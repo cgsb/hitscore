@@ -370,8 +370,9 @@ let digraph dsl ?(name="dsl") output_string =
           name name 
           (String.concat ~sep:"\\l  | " items) |> output_string
       | Volume (name, toplevel) ->
-        sprintf "%s [shape=folder, fontname=Courier, label=\".../%s/\"];\n\n"
-          name toplevel |> output_string
+        sprintf "%s [shape=folder, \
+              label=<<i>%s</i><br/><font face=\"Courier\" >.../%s/</font>>];\n\n"
+          name name toplevel |> output_string
   );
   output_string "}\n"
 
