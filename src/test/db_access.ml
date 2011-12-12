@@ -192,6 +192,24 @@ let show_success dbh =
       end
     end)
 
+
+let test_sample_sheet_preparation ~dbh kind flowcell =
+  let file = sprintf "/tmp/Sample_sheet_%s_%s.csv" flowcell
+    (Hitscore_lwt.Layout.Enumeration_sample_sheet_kind.to_string kind) in
+  print result "== Samplesheet:\n" >>= fun () ->
+  Hitscore_lwt.Sample_sheet.preparation
+    ~kind ~dbh flowcell >>= fun sample_sheet ->
+  Lwt_io.(with_file ~mode:output file (fun chan ->
+    Hitscore_lwt.Sample_sheet.output sample_sheet (wrap_io (fprint chan))))
+  >>= fun () ->
+  Hitscore_lwt.Sample_sheet.register_success ~dbh
+    ~note:"Test the sample-sheet assembly" sample_sheet
+  >>= fun (the_function, volpath, filespath) ->
+  print result "Added the successful assembly of the sample-sheet" >>= fun () ->
+  print result "Should add %s in %s/%s" file volpath (List.hd_exn filespath)
+
+
+
 let test_lwt () =
   let hitscore_configuration = Hitscore_lwt.configure () in
   Hitscore_lwt.db_connect hitscore_configuration >>= 
@@ -251,18 +269,81 @@ let test_lwt () =
             error lle)
     ) >>= fun _ ->
 
+  test_sample_sheet_preparation ~dbh `specific_barcodes "D0560ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh `all_barcodes "D0560ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh `specific_barcodes "D03M4ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh `specific_barcodes "C01L9ACXX" >>= fun () ->
+
   print notif "Nice ending" >>= fun () ->
   notif "Closing the DB." >>= fun () ->
   Hitscore_lwt.db_disconnect hitscore_configuration dbh
-
 
 let () =
   begin match Lwt_main.run (test_lwt ()) with
   | Error (`layout_inconsistency (m, e)) ->
     eprintf "\n=== BAD!! ====\nThe test ended with a layout_inconsistency!\n\n"
-  | Error (`lwt_log_exn e) | Error (`pg_exn e) ->
+  | Error (`lwt_log_exn e) | Error (`pg_exn e) | Error (`io_exn e) ->
     eprintf "\n=== BAD!! ====\nThe test ended with an exn:\n%s\n"
       (Exn.to_string e)
+  | Error (`barcode_not_found (b, p)) ->
+    eprintf "\n=== BAD!! ====\nThe test ended with a barcoding error:\n\
+      Barcode %ld of type %s was not found\n"
+      b (Hitscore_lwt.Layout.Enumeration_barcode_provider.to_string p)
   | Ok () ->
     eprintf "Still good after Lwt_main.run\n"
   end
+
+
+module P 
+(*  : sig
+    include Hitscore_config.IO_CONFIGURATION with type 'a t = 'a Lwt.t
+  (* module type of Lwt_config *)
+      
+    val input_string : in_channel -> int -> string option Lwt.t
+      
+    module Process : sig
+      type process
+      val std
+    end
+    val with_process : ?env:(string list) -> string -> string list -> 
+      f:(stdin:out_channel -> stdout:in_channel -> stderr:in_channel -> 'a t) ->
+      'a t
+  end *)
+ = struct
+  include Lwt_config
+
+  let input_string i s =
+    let b = String.make s 'A' in 
+    input i b 0 s  >>= fun res ->
+    if res > 0 then return (Some (String.sub b 0 res)) else return None  
+
+  module Process = struct
+    type t = Lwt_process.process_full
+    let stdin t = t#stdin
+    let stdout t = t#stdout
+    let stderr t = t#stderr
+
+  end
+
+  let with_process ?env n al ~f =
+    Lwt_process.with_process_full 
+      ?env:(Option.map env Array.of_list)
+      (n, Array.of_list al) (fun full -> f full)
+end
+
+let _ =
+  let open P in
+  Lwt_main.run 
+    (Lwt.catch
+       (fun () ->
+         (with_process ~env:["TESTENV=sdfdsg"] "./ddd" ["echo" ; "bah"; "bouh"]
+            ~f:(fun p ->
+              let stdout = Process.stdout p in
+              log_error "ddd ??\n" >>= fun () ->
+              input_string stdout 400 >>= (function
+                | Some s -> log_error "SOME: " >>= fun () -> log_error s 
+                | None -> log_error "NONE") >>= fun () ->
+              return ())))
+       (fun e ->
+         print log_error "error: %s\n" (Exn.to_string e)))
+         
