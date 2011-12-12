@@ -344,6 +344,129 @@ module Dumps = struct
 end
 
 
+module Hiseq_raw = struct
+
+  module XML = struct
+    include Xmlm
+    type tree = E of tag * tree list | D of string
+    let in_tree i = 
+      let el tag childs = E (tag, childs)  in
+      let data d = D d in
+      input_doc_tree ~el ~data i
+  end
+  let register ?host directory =
+    if not (Filename.is_absolute directory) then (
+      eprintf "%s is not an absolute path...\n" directory;
+      failwith "Hiseq_raw.register"
+    );
+    begin try 
+    let dir_stat = Unix.stat directory in
+    match dir_stat.Unix.st_kind with
+    | Unix.S_DIR -> ()
+    | _ ->
+      eprintf "%s is not a directory\n" directory;
+      failwith "Hiseq_raw.register"
+    with
+    | Unix.Unix_error _ ->
+      eprintf "Cannot stat %s\n" directory;
+      failwith "Hiseq_raw.register"
+    end;
+    let xml_file = Filename.concat directory "runParameters.xml" in
+    begin try Unix.stat xml_file |> ignore
+      with 
+      | Unix.Unix_error _ ->
+        eprintf "Cannot stat %s\n" xml_file;
+        failwith "Hiseq_raw.register"
+    end;
+    let read1 = ref None in
+    let read2 = ref None in
+    let idx_read = ref None in
+    let intensities_kept = ref None in
+    let flowcell = ref None in
+    let start_date = ref None in
+    In_channel.with_file xml_file ~f:(fun ic ->
+      let xml = XML.(make_input (`Channel ic) |> in_tree) in
+      let rec go_through = function
+        | XML.E (((_,"Read1"), _), [ XML.D i ]) ->
+          read1 := Some (Int32.of_string i) 
+        | XML.E (((_,"Read2"), _), [ XML.D i ]) ->
+          read2 := Some (Int32.of_string i) 
+        | XML.E (((_,"KeepIntensityFiles"), _), [ XML.D b ]) ->
+          intensities_kept := Some (Bool.of_string b)
+        | XML.E (((_,"IndexRead"), _), [ XML.D i ]) ->
+          idx_read := Some (Int32.of_string i)
+        | XML.E (((_,"Barcode"), _), [ XML.D s ]) ->
+          flowcell := Some s
+        | XML.E (((_,"RunStartDate"), _), [ XML.D s ]) ->
+          let scanned =
+            Scanf.sscanf "110630" "%2d%2d%2d"
+              (sprintf "20%d-%02d-%02d 09:00:00.000000-05:00") in
+          start_date := Some (Time.of_string scanned)
+        | XML.E (t, tl) -> List.iter tl go_through
+        | XML.D s -> ()
+      in
+      go_through (snd xml)
+    );
+    let flowcell_name = 
+      match !flowcell with
+      | None ->
+        eprintf "Could not read the flowcell id from the XML file\n";
+        failwith "Hiseq_raw.register"
+      | Some s -> s in
+    let read_length_1 =
+      match !read1 with
+      | None ->
+        eprintf "Could not read the read_length_1 from the XML file\n";
+        failwith "Hiseq_raw.register"
+      | Some s -> s in
+    if Option.is_none !read2 then
+      eprintf "Warning: This looks like a single-end run\n";
+    if Option.is_none !idx_read then
+      eprintf "Warning: This looks like a non-indexed run\n";
+    let with_intensities =
+      match !intensities_kept with
+      | None ->
+        eprintf "Could not find if the intensities were kept or not\n";
+        failwith "Hiseq_raw.register"
+      | Some s-> s in
+    let run_date =
+      match !start_date with
+      | None ->
+        eprintf "Could not find if the start date\n";
+        failwith "Hiseq_raw.register"
+      | Some s-> s in
+    let host = Option.value ~default:"bowery.es.its.nyu.edu" host in 
+    let hsc = Hitscore_threaded.configure () in
+    match Hitscore_threaded.db_connect hsc with
+    | Ok dbh ->
+      let hs_raw =
+        Hitscore_threaded.Layout.Record_hiseq_raw.add_value ~dbh
+          ~flowcell_name
+          ~read_length_1 ?read_length_2:!read2 ?read_length_index:!idx_read
+          ~with_intensities ~run_date ~host
+          ~hiseq_dir_name:directory
+      in
+      begin match hs_raw with
+      | Ok in_db ->
+        Hitscore_threaded.db_disconnect hsc dbh  |> ignore;
+        eprintf "The HiSeq raw directory was successfully added as %ld\n"
+        in_db.Hitscore_threaded.Layout.Record_hiseq_raw.id
+      | Error (`layout_inconsistency (`record_hiseq_raw,
+                                      `insert_did_not_return_one_id (s, i32l))) ->
+        eprintf "ERROR: Layout Inconsistency Detected: \n\
+                  insert in %s did not return one id but %d\n"
+          s (List.length i32l);
+        failwith "Hiseq_raw.register"
+      | Error (`pg_exn e) ->
+        eprintf "ERROR: from PGOCaml:\n%s\n" (Exn.to_string e);
+        failwith "Hiseq_raw.register"
+      end
+    | Error (`pg_exn e) ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+
+
+end
+
 let commands = ref []
 
 let define_command ~names ~description ~usage ~run =
@@ -411,6 +534,17 @@ let () =
       | [file] -> Some (Dumps.load_file file)
       | _ -> None);
 
+  define_command 
+    ~names:["register-hiseq-raw"; "rhr"]
+    ~description:"Register a HiSeq raw directory"
+    ~usage:(fun o exec cmd ->
+      fprintf o "usage: %s %s [-host <host-addr>] <absolute-path>\n" exec cmd;
+      fprintf o "   (default host being bowery.es.its.nyu.edu)\n")
+    ~run:(fun exec cmd -> function
+      | [path] -> Some (Hiseq_raw.register path)
+      | ["-host"; host; path] -> Some (Hiseq_raw.register ~host path)
+      | _ -> None);
+ 
   let global_usage = function
     | `error -> 
       eprintf "ERROR: usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0);
