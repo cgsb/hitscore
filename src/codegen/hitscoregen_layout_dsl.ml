@@ -471,7 +471,7 @@ let doc out fmt = (* Doc to put before values/types *)
 let deprecate out fmt =
   doc out (" @deprecated This is left there for emergency purposes only." ^^ fmt)
 let debug out metafmt fmt =
-  line out ("Printf.ksprintf Outside.log_error \"%s\" " ^^ fmt ^^ ";") metafmt
+  line out ("Printf.ksprintf Result_IO.IO.log_error \"%s\" " ^^ fmt ^^ ";") metafmt
 
 let hide out (f: (string -> unit) -> unit) =
   let actually_hide = true in
@@ -513,7 +513,7 @@ module OCaml_hiden_exception = struct
     )
       
   let throw t out what =
-    line out "(Outside.fail (Local_exn_%s %s))" t.name what
+    line out "(Result_IO.IO.fail (Local_exn_%s %s))" t.name what
   
   let transform_local t =
     let vals = 
@@ -551,7 +551,7 @@ module OCaml_hiden_exception = struct
 end
 
 let ocaml_poly_result_io out left right =
-  raw out "(%s, [> %s ]) Outside.Result_IO.monad" 
+  raw out "(%s, [> %s ]) Result_IO.monad" 
     left (String.concat ~sep:" | " right) 
 
 let pgocaml_do_get_all_ids ~out ?(id="id") name = 
@@ -608,8 +608,8 @@ let pgocaml_to_result_io out ?transform_exceptions f =
   | None ->
     line out "catch_pg_exn _exn_version ()";
   | Some l ->
-    line out "Outside.Result_IO.bind_on_error (catch_pg_exn _exn_version ())";
-    line out "  (fun e -> Outside.Result_IO.error \
+    line out "Result_IO.bind_on_error (catch_pg_exn _exn_version ())";
+    line out "  (fun e -> Result_IO.error \
                   (match e with %s | `pg_exn e -> `pg_exn e))"
       (String.concat ~sep:"\n   | " l);
   end;
@@ -634,7 +634,7 @@ let pgocaml_insert_cache_exn
   line out "          (let m64 = Int64.(add (of_int32 max) 1L) in";
   line out "           PGSQL(dbh) \"select setval('%s_g_id_seq', $m64)\")" name;
   line out "          (fun _ -> pg_return t))";
-  line out "       | l -> Outside.fail (Failure \
+  line out "       | l -> Result_IO.IO.fail (Failure \
                            \"Postgres is itself inconsistent\")))";
   ()
 
@@ -1378,7 +1378,7 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   hide out (fun out ->
     doc out "[cache_volume_exn] is for internal use only.";
     line out "let cache_volume_exn %s (volume: volume) : \
-              volume_cache Outside.t ="
+              volume_cache Result_IO.IO.t ="
       pgocaml_db_handle_arg;
     line out "  let entry_m = cache_volume_entry_exn ~dbh volume in";
     line out "  pg_bind entry_m (fun entry ->";
@@ -1654,7 +1654,7 @@ let ocaml_dump_and_reload ~out dsl =
   line out " =";
 
   line out "  if dump.version <> %S then (" dump_version_string;
-  line out "    Outside.Result_IO.error `wrong_version";
+  line out "    Result_IO.error `wrong_version";
   line out "  ) else";
   pgocaml_to_result_io out 
     ~transform_exceptions:
@@ -1673,16 +1673,10 @@ let ocaml_code ?(functorize=true) dsl output_string =
     doc out "To make the DB-accesses thread-agnostic we need an \
         \"Outside word model\".";
     raw out "\
-module type OUTSIDE_WORLD = sig
-  include Hitscore_config.IO_CONFIGURATION
-  module Result_IO : 
-    Hitscore_result_IO.RESULT_IO with type 'a io = 'a t
-
-end
 
 module Make \
-(Outside : OUTSIDE_WORLD) = struct\n\
-  module PGOCaml = PGOCaml_generic.Make(Outside)
+(Result_IO : Hitscore_result_IO.RESULT_IO) = struct\n\
+  module PGOCaml = PGOCaml_generic.Make(Result_IO.IO)
 
 module Timestamp = struct 
   include Core.Std.Time
@@ -1700,10 +1694,10 @@ module Timestamp = struct
     raw out "\
 open Sexplib.Conv\n\
 (* Legacy stuff: *)\n\
-let err = Outside.log_error\n\n\
-let map_s = Outside.map_sequential\n\
+let err = Result_IO.IO.log_error\n\n\
+let map_s = Result_IO.IO.map_sequential\n\
 let catch_pg_exn f x =\n\
- Outside.Result_IO.(bind_on_error (catch_io f x)\n\
+ Result_IO.(bind_on_error (catch_io f x)\n\
   (fun e -> error (`pg_exn e)))\n\n\
 let option_map o f =\n\
     match o with None -> None | Some s -> Some (f s)\n\n\

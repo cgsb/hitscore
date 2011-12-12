@@ -1,11 +1,10 @@
 open Hitscore_config
 open Core.Std
 
-
 module type RESULT_IO = sig
-  type 'a io
-  include Monad.S2 with type ('a, 'b) monad = ('a, 'b) Result.t io
-  val catch_io : f:('b -> 'a io) -> 'b -> ('a, exn) monad
+  module IO : Hitscore_config.IO_CONFIGURATION
+  include Monad.S2 with type ('a, 'b) monad = ('a, 'b) Result.t IO.t
+  val catch_io : f:('b -> 'a IO.t) -> 'b -> ('a, exn) monad
   val error: 'a -> ('any, 'a) monad
   val bind_on_error: ('a, 'err) monad -> f:('err -> ('a, 'b) monad) -> 
     ('a, 'b) monad
@@ -16,13 +15,20 @@ module type RESULT_IO = sig
     ('c list, 'b) monad
   val of_list_sequential: 'a list -> f:('a -> ('c, 'b) monad) ->
     ('c list, 'b) monad
-  end
+  val debug: string -> (unit, [> `io_exn of exn ]) monad
+  val wrap_pgocaml: 
+    query:(unit -> 'a IO.t) ->
+    on_result:('a -> ('b, [> `pg_exn of exn ] as 'c) monad) ->
+    ('b, 'c) monad
+  val wrap_io: ('a -> 'b IO.t) -> 'a -> ('b, [> `io_exn of exn ]) monad
+
+end
 
 
 
 module Make (IO_configuration : IO_CONFIGURATION) = struct
 
-    type 'a io = 'a IO_configuration.t
+  module IO = IO_configuration
  
     include  Monad.Make2(struct 
       type ('a, 'b) t = ('a, 'b) Result.t IO_configuration.t
@@ -74,5 +80,22 @@ module Make (IO_configuration : IO_CONFIGURATION) = struct
       Map_sequential.ms l f
 
     let of_list_sequential l ~f = map_sequential (List.map l return) f
+
+    let debug s = 
+      double_bind (catch_io IO_configuration.log_error s)
+        ~ok:(return)
+        ~error:(fun exn -> error (`io_exn exn))
+
+    let wrap_pgocaml ~query ~on_result =        
+      let caught = catch_io query () in
+      double_bind caught
+        ~ok:on_result
+        ~error:(fun exn -> error (`pg_exn exn)) 
+
+    let wrap_io f x =        
+      let caught = catch_io f x in
+      double_bind caught
+        ~ok:return
+        ~error:(fun exn -> error (`io_exn exn)) 
 
   end

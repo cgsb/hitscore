@@ -4,7 +4,7 @@ open Hitscore_config
 (** A double monad: [Result.t] and [IO_configuration.t]. *)
 module type RESULT_IO = sig
 
-  type 'a io
+  module IO : Hitscore_config.IO_CONFIGURATION
 
   (** It a {{:http://www.janestreet.com/ocaml/doc/core/Monad.S2.html}Monad.S2}
       from {i Core}. {[
@@ -19,11 +19,11 @@ module type RESULT_IO = sig
       val ignore : ('a, 'b) monad -> (unit, 'b) monad
       ]}
   *)
-  include Monad.S2 with type ('a, 'b) monad = ('a, 'b) Result.t io
+  include Monad.S2 with type ('a, 'b) monad = ('a, 'b) Result.t IO.t
     
   (** [catch_io f x] uses [IO_configuration.catch] to catch all the
       exceptions in the result. *)
-  val catch_io : f:('b -> 'a io) -> 'b -> ('a, exn) monad
+  val catch_io : f:('b -> 'a IO.t) -> 'b -> ('a, exn) monad
     
   (** Use anything as an Error thread.  *)
   val error: 'a -> ('any, 'a) monad
@@ -46,7 +46,21 @@ module type RESULT_IO = sig
   val of_list_sequential: 'a list -> f:('a -> ('c, 'b) monad) ->
     ('c list, 'b) monad
 
-  end
+  (** Print debug information in some "channel" provided by 
+      [IO_configuration.log_error]. *)
+  val debug: string -> (unit, [> `io_exn of exn ]) monad
+    
+  (** Put a PGOCaml query into the monad in an extensibility-compliant way. *)
+  val wrap_pgocaml: 
+    query:(unit -> 'a IO.t) ->
+    on_result:('a -> ('b, [> `pg_exn of exn ] as 'c) monad) ->
+    ('b, 'c) monad
 
-module Make (IO : IO_CONFIGURATION) : RESULT_IO with type 'a io = 'a IO.t
+  (** Put any IO.t in a monad like [catch_io] but put the exception
+      in a polymorphic variant.  *)
+  val wrap_io: ('a -> 'b IO.t) -> 'a -> ('b, [> `io_exn of exn ]) monad
+
+end
+
+module Make (IOC : IO_CONFIGURATION) : RESULT_IO with type 'a IO.t = 'a IOC.t
 
