@@ -94,8 +94,10 @@
 (record hiseq_raw
         (flowcell_name string)
         (read_length_1 int)
+        (read_length_index int option)
         (read_length_2 int option)
         (with_intensities bool)
+        (run_date timestamp)
         (host string)
         (hiseq_dir_name string)) 
 (record inaccessible_hiseq_raw
