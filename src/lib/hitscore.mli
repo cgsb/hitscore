@@ -12,14 +12,14 @@ module Preemptive_threading_config :
 module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) : sig
 
   (** A double monad: [Result.t] and [IO_configuration.t]. *)
-  module Result_IO : 
-    Hitscore_result_IO.RESULT_IO with type 'a io = 'a IO_configuration.t
+  module Result_IO : Hitscore_result_IO.RESULT_IO
+    with type 'a IO.t = 'a IO_configuration.t
 
   (** The Layout is the thing defined by the layout DSL.  *)
-  module Layout: module type of Hitscore_db_access.Make(struct
-    include IO_configuration
-    module Result_IO = Result_IO
-  end)
+  module Layout: module type of Hitscore_db_access.Make(Result_IO)
+
+  module Sample_sheet: 
+  module type of Hitscore_sample_sheet.Make (Result_IO) (Layout)
 
   (** [db_configuration] keeps track of the db-connection parameters. *)
   type db_configuration
@@ -50,5 +50,6 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) : sig
   (** Close a data-base handle. *)
   val db_disconnect : local_configuration -> Layout.db_handle -> 
     (unit, [> `pg_exn of exn]) Result_IO.monad
+
     
 end 

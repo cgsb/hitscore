@@ -55,3 +55,4 @@
 # OASIS_STOP
 
 <src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o
+<src/lib/hitscore_sample_sheet.ml{,i}>: syntax_camlp4o

@@ -14,16 +14,13 @@ end
 
 module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
-  module Result_IO :
-    Hitscore_result_IO.RESULT_IO with type 'a io = 'a IO_configuration.t = 
-    Hitscore_result_IO.Make(IO_configuration)
+  module Result_IO = Hitscore_result_IO.Make(IO_configuration)
 
-  module Layout = Hitscore_db_access.Make(struct
-    include IO_configuration
-    module Result_IO :
-      Hitscore_result_IO.RESULT_IO with type 'a io = 'a IO_configuration.t = 
-      Result_IO 
-  end)
+  module Layout = Hitscore_db_access.Make(Result_IO)
+
+  module Sample_sheet = 
+    Hitscore_sample_sheet.Make (Result_IO) (Layout)
+
 
   type db_configuration = {
     db_host     : string;
@@ -67,7 +64,6 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
     Result_IO.(bind_on_error
                  (catch_io Layout.PGOCaml.close dbh )
                  (fun e -> error (`pg_exn e)))
-
 
 end
 
