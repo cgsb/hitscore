@@ -72,6 +72,7 @@ let main metadata_prefix dbh =
         let id  : Hitscore_db.Record_person.t = 
           Hitscore_db.Record_person.add_value
             ~print_name:(sprintf "%s %s" first surname)
+            ~given_name:first ?middle_name:None
             ~family_name:surname ~note ?login
             ~email ?nickname ~dbh |> Result.ok_exn ~fail:(fail "person") in
         (surname, id)
@@ -222,20 +223,24 @@ let main metadata_prefix dbh =
         let bioanalyzer_like fragment_size_qc_method
             well_number avg_library_fragment_size
             pdf_file_path xad_file_path =
-            let note = ref migration_note in
             let well_number = 
               try Some (Int32.of_string well_number)
               with 
               | (Failure s) ->
-                note := sprintf "%s (Wrong_well_number %S)" !note s;
                 None
             in
-            let mean_fragment_size =
-              try Some (Float.of_string avg_library_fragment_size)
+            let mean_fragment_size, min_fragment_size, max_fragment_size =
+              try 
+                (Some (Float.of_string avg_library_fragment_size), None, None)
               with
               | Failure s | Invalid_argument s ->
-                note := sprintf "%s (Wrong_mean_fragment_size %S)" !note s;
-                None
+                begin
+                  try
+                    sscanf avg_library_fragment_size "%f-%f" (fun min max ->
+                      (None, Some min, Some max))
+                  with
+                  | e -> (None, None, None)
+                end
             in
             let files =
               let try_file f =
@@ -259,22 +264,16 @@ let main metadata_prefix dbh =
             Option.bind stock_library (fun stock_library ->
               if fragment_size_qc_method = "Bioanalyzer" then
                 Some (Hitscore_db.Record_bioanalyzer.add_value ~dbh
-                        ~library:stock_library ~note:!note
+                        ~library:stock_library ?note:None
+                        ?min_fragment_size ?max_fragment_size
                         ?well_number ?mean_fragment_size  ?files
                          |> Result.ok_exn ~fail:(fail "add_bioanalyzer") |> ignore)
-              else if fragment_size_qc_method = "Agarose Gel" then
+              else if fragment_size_qc_method = "Agarose" then
                 Some (Hitscore_db.Record_agarose_gel.add_value ~dbh
-                        ~library:stock_library ~note:!note
+                        ~library:stock_library ?note:None
+                        ?min_fragment_size ?max_fragment_size
                         ?well_number ?mean_fragment_size  ?files
                          |> Result.ok_exn ~fail:(fail "add_agarose_gel") |> ignore)
-              else if fragment_size_qc_method = "" && (
-                well_number <> None || mean_fragment_size <> None ||
-                  files <> None) then (
-                note := sprintf "%s (Bioanalyzer_type_inferred)" !note;
-                Some (Hitscore_db.Record_bioanalyzer.add_value ~dbh
-                        ~library:stock_library ~note:!note
-                        ?well_number ?mean_fragment_size  ?files
-                         |> Result.ok_exn ~fail:(fail "add_bioanalyzer") |> ignore))
               else None) in
 
         let (_ : unit option) =
@@ -402,9 +401,7 @@ let () =
               Array.map contacts ~f:(fun p ->
                 let { family_name; _ } = get_fields (cache_value ~dbh p |>
                     Result.ok_exn ~fail:(fail "Record_person")) in
-                sprintf "%s"
-                  (Option.value ~default:"{i|NO NAME}" family_name))
-                                      |> Array.to_list in
+                family_name) |> Array.to_list in
             fprintf o "{c|%s}\n"
               (String.concat ~sep:", " people);
           );
