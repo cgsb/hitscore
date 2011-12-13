@@ -166,5 +166,15 @@ module Make
         ~result assembly
 
 
+    let run ~dbh ~kind ?note ~write_to_tmp ~mv_from_tmp flowcell =
+      preparation ~kind ~dbh flowcell
+      >>= fun sample_sheet ->
+      output sample_sheet write_to_tmp >>= fun () ->
+      get_target_file ~dbh sample_sheet
+      >>= fun (the_volume, pathd, pathf) ->
+      mv_from_tmp pathd pathf
+      >>= fun () ->
+      register_with_success ~dbh ?note ~file:the_volume sample_sheet
+
 
 end

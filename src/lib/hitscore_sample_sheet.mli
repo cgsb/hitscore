@@ -7,7 +7,7 @@ module Make :
 sig
   
   type sample_sheet
-      
+    
   (** Prepare a sample-sheet.  *)
   val preparation: 
     ?kind:Layout.Enumeration_sample_sheet_kind.t ->
@@ -53,6 +53,40 @@ sig
      | `pg_exn of exn ])
       Result_IO.monad
       
+  val run :
+    dbh:(string, bool) Batteries.Hashtbl.t Layout.PGOCaml.t ->
+    kind:Layout.Enumeration_sample_sheet_kind.t ->
+    ?note:string ->
+    write_to_tmp:(string ->
+                  (unit,
+                   [> `barcode_not_found of
+                       int32 * Layout.Enumeration_barcode_provider.t
+                   | `fatal_error of
+                       [> `trees_to_unix_paths_should_return_one ]
+                   | `layout_inconsistency of
+                       [> `file_system
+                       | `function_assemble_sample_sheet
+                       | `record_flowcell
+                       | `record_input_library
+                       | `record_lane
+                       | `record_sample_sheet
+                       | `record_stock_library ] *
+                         [> `add_did_not_return_one of
+                             string * int32 list
+                         | `insert_did_not_return_one_id of
+                             string * int32 list
+                         | `search_by_name_not_unique of
+                             (int32 * Layout.PGOCaml.int32_array) list
+                         | `select_did_not_return_one_cache of
+                             string * int ]
+                   | `pg_exn of exn ]
+                     as 'a)
+                    Result_IO.monad) ->
+    mv_from_tmp:(string -> string -> (unit, 'a) Result_IO.monad) ->
+    string ->
+    ([ `can_get_result ] Layout.Function_assemble_sample_sheet.t, 'a)
+      Result_IO.monad
+
 
 
 end
