@@ -1,75 +1,26 @@
 ID,Vial ID,Library ID,Sample ID1,Sample ID2,Protocol,organism,Contact1,Contact2,Contact3,Contact4,Contact 5,application,stranded,control_type,truseq_control_used,RNA-seq Control,TruSeq Barcode,BIOO Barcode,library_submitted,Library Quantification Method,Library Conc (nM) - LAB,Library Volume (uL),Fragment Size QC Method,PDF File Path,XAD File Path,Well Number,Avg Library Fragment Size,Fragment Size QC Method,PDF File Path,XAD File Path,Well Number,Avg Library Fragment Size,Read Type,Read Length,Note
-31,,83,,1,,,Miller,,,,,rna-seq,FALSE,,TRUE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-32,,137,,2,,,Miller,,,,,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-33,,168,,3,,,Miller,,,,,rna-seq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-22,,6330,,,,,Rockman,,,,,dna-reseq,FALSE,internal,FALSE,,"AD004,AD006",,6/24/2011,,,,,,,,,,,,,,PE,50x50
-21,,12_300,,,,,Christiaen,,,,,ChIP-seq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-20,,7_300,,,,,Christiaen,,,,,ChIP-seq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-26,,Alison_Root,Root1,4,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-,,Audrey10,Audrey10,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,7,230,,,,,,PE,50x50
-,,Audrey11,Audrey11,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,8,230,,,,,,PE,50x50
-,,Audrey4,Audrey4,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,1,230,,,,,,PE,50x50
-,,Audrey5,Audrey5,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,2,230,,,,,,PE,50x50
-,,Audrey6,Audrey6,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,3,230,,,,,,PE,50x50
-,,Audrey7,Audrey7,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,4,230,,,,,,PE,50x50
-,,Audrey8,Audrey8,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,5,230,,,,,,PE,50x50
-,,Audrey9,Audrey9,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,6,230,,,,,,PE,50x50
-,,CJ1,N2 emb H4K16 Ac,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,1,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer3,,1,200-600,,,,,,PE,50x50
-,,CJ1-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,1,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ10,N2 IgG,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,5,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,6,200-600,,,,,,PE,50x50
-,,CJ10-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,RNA-seq,FALSE,,FALSE,,1,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ11,N2 FA IgG,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,6,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,7,200-600,,,,,,PE,50x50
-,,CJ11-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,2,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ12,KLE-2 Q3942 L3-1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,7,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,8,200-600,,,,,,PE,50x50
-,,CJ12-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,3,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ13,MIX-1 Q4107 L3-1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,8,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,9,200-600,,,,,,PE,50x50
-,,CJ13-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,RNA-seq,FALSE,,FALSE,,4,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ14,DPY26 JL0003 L3-1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,9,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,10,200-600,,,,,,PE,50x50
-,,CJ14-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,5,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ15,N2 input L3-1 ,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,11,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,11,200-600,,,,,,PE,50x50
-,,CJ15-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,6,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ16-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,7,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ17-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,8,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ2,N2 emb input,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,2,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer4,,2,200-600,,,,,,PE,50x50
-,,CJ2-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,2,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ3,N2 FA input,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,3,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer4,,3,200-600,,,,,,PE,50x50
-,,CJ3-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,3,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ4,N2 FA H4K16 Ac,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,4,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer3,,4,200-600,,,,,,PE,50x50
-,,CJ4-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,4,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ5,N2 FA KLE-2 Q3942,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,5,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer4,,5,200-600,,,,,,PE,50x50
-,,CJ5-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,5,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ6,N2 EPS KLE-2 Q3942,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,6,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer4,,6,200-600,,,,,,PE,50x50
-,,CJ6-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,6,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ7,N2 FA DPY-26,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,7,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer3,,7,200-600,,,,,,PE,50x50
-,,CJ7-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,7,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ8,N2 EPS DPY-26,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,8,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer3,,8,200-600,,,,,,PE,50x50
-,,CJ8-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,8,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CJ9,N2 EPS input,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,12,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer4,,8,200-600,,,,,,PE,50x50
-,,CJ9-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,12,,10/3/2011,qPCR ,2,14,Bioanalyzer ,,,,350,,,,,,PE,50x50
-,,CR1010-1,CR1010,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,4,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,3,517,,,,,,PE,50x50
-,,CR2342-1,CR2342,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,7,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,4,502,,,,,,PE,50x50
-,,CR4414-1,CR4414,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,6,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,5,508,,,,,,PE,50x50
-,,CR503-1,CR503,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,2,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,2,567,,,,,,PE,50x50
-28,,D,Dorsal1,8,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-,,DG1,Junguei1,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG10,Junguei10,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG11,Junguei11,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG12,Junguei12,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG13,Junguei13,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG14,Junguei14,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG15,Junguei15,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG16,Junguei16,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG17,Junguei17,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG18,Junguei18,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG2,Junguei2,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG3,Junguei3,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG4,Junguei4,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG5,Junguei5,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG6,Junguei6,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG7,Junguei7,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG8,Junguei8,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-,,DG9,Junguei9,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose Gel,,,,500,,,,,,PE,100x100
-23,,EZ,ERhiz1,1,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+,,Tara1,OS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose,,,,250,,,,,,PE,50x50,The barcodes are #1 and #2 from Bioo Scientific ( CGATGT and TGACCA respectively)
+,,Tara2,RS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose,,,,250,,,,,,PE,50x50
+,,Tara3,RS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose,,,,250,,,,,,PE,50x50
+,,Tara4,OS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose,,,,250,,,,,,PE,50x50
+,,DG1,Junguei1,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG10,Junguei10,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG11,Junguei11,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG12,Junguei12,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG13,Junguei13,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG14,Junguei14,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG15,Junguei15,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG16,Junguei16,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG17,Junguei17,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG18,Junguei18,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG2,Junguei2,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG3,Junguei3,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG4,Junguei4,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,4,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG5,Junguei5,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,5,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG6,Junguei6,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,6,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG7,Junguei7,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,1,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG8,Junguei8,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,2,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
+,,DG9,Junguei9,,,S. cerevisiae,Gresham,Hong,,,,DNA-seq,FALSE,,FALSE,,,3,10/3/2011,qPCR,2,10,Agarose,,,,500,,,,,,PE,100x100
 35,,Niki1,P6-,,Directional_RNA-seq_with_modifications_v1,S. cerevisiae,Gresham,Athanasiadou,,,,directional RNA-Seq,TRUE,,FALSE,,,3,,qPCR,2,11.2,Agarose,,,,300,,,,,,PE,50x50
 ,,Niki10,C9+,,,S. cerevisiae,Gresham,Athanasiadou,,,,directional RNA-Seq,TRUE,,FALSE,,,1,,qPCR,2,14.4,Agarose,,,,300,,,,,,PE,50x50
 ,,Niki11,C34-,,,S. cerevisiae,Gresham,Athanasiadou,,,,directional RNA-Seq,TRUE,,FALSE,,,2,,qPCR,2,10.2,Agarose,,,,300,,,,,,PE,50x50
@@ -82,52 +33,101 @@ ID,Vial ID,Library ID,Sample ID1,Sample ID2,Protocol,organism,Contact1,Contact2,
 ,,Niki7,N34-,,,S. cerevisiae,Gresham,Athanasiadou,,,,directional RNA-Seq,TRUE,,FALSE,Ambion spike-in 1,,5,,qPCR,2,15,Agarose,,,,300,,,,,,PE,50x50
 ,,Niki8,N34+,,,S. cerevisiae,Gresham,Athanasiadou,,,,directional RNA-Seq,TRUE,,FALSE,Ambion spike-in 2,,6,,qPCR,2,12,Agarose,,,,300,,,,,,PE,50x50
 ,,Niki9,C9-,,,S. cerevisiae,Gresham,Athanasiadou,,,,directional RNA-Seq,TRUE,,FALSE,,,4,,qPCR,2,16,Agarose,,,,300,,,,,,PE,50x50
-,,Paul1,P.Coatneyi_140_ng_per_ul,,,P. coatneyi,Carlton,Scheid,Kim,,,de-novo,FALSE,,FALSE,,AD002,,,qPCR,2,25,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-02_00-12-08_PCoatneyi-PGonderi_2ndandFinalAmp.pdf,,2,512,,,,,,PE,100x100,P.Coatneyi (140 ng/ul) 76.8 ng/ul
-,,Paul2,P.Gonderi_234_ng_per_ul,,,P. gonderi,Carlton,Scheid,Kim,,,de-novo,FALSE,,FALSE,,AD004,,,qPCR,2,25,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-02_00-12-08_PCoatneyi-PGonderi_2ndandFinalAmp.pdf,,3,601,,,,,,PE,100x100,P.Gonderi (234 ng/ul) 70.2 ng/ul
-1,,PhiX_v2,,,,,,,,,,dna-reseq,FALSE,hiseq_color_balance,FALSE,,AD003,,,,,,,,,,,,,,,,PE,50x50
-,,PhiX_v3,,,,,,,,,,dna-reseq,FALSE,hiseq_color_balance,FALSE
-2,,QG323,QG323,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+,,wox5cell-gc1-1,wox5cell-gc1,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD001,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,1,266,,,,,,PE,50x50
+,,wox5cell-gc2-1,wox5cell-gc2,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD002,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,2,266,,,,,,PE,50x50
+,,wox5cell-gc3-1,wox5cell-gc3,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD003,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,3,264,,,,,,PE,50x50
+,,wox5cell-gc4-1,wox5cell-gc4,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD004,,11/4/2011,qPCR,2,12,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,4,262,,,,,,PE,50x50
+,,wox5cell-sc1-1,wox5cell-sc1,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD005,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,5,268,,,,,,PE,50x50
+,,wox5cell-sc4-1,wox5cell-sc4,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD006,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,6,273,,,,,,PE,50x50
+,,wox5cell-sc5-1,wox5cell-sc5,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD007,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,7,264,,,,,,PE,50x50
+,,SE94,AF16 input ,,True_Seq_Illumina_Prep_SEA_v1,C. briggsae,Ercan,Jiao,Albritton,,,IN-seq,,,,,10,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer3,,10,200-600,,,,,,PE,50x50
+,,SE98,AF16 H4K16ac Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. briggsae,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,2,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,4,200-600,,,,,,PE,50x50
+,,SE99,AF16 H4K20me1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. briggsae,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,3,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,5,200-600,,,,,,PE,50x50
+,,CJ1,N2 emb H4K16 Ac,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,1,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer3,,1,200-600,,,,,,PE,50x50
+,,CJ1-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,1,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ10,N2 IgG,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,5,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,6,200-600,,,,,,PE,50x50
+,,CJ10-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,RNA-seq,FALSE,,FALSE,,1,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ11,N2 FA IgG,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,6,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,7,200-600,,,,,,PE,50x50
+,,CJ11-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,2,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ12,KLE-2 Q3942 L3-1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,7,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,8,200-600,,,,,,PE,50x50
+,,CJ12-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,3,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ13,MIX-1 Q4107 L3-1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,8,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,9,200-600,,,,,,PE,50x50
+,,CJ13-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,RNA-seq,FALSE,,FALSE,,4,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ14,DPY26 JL0003 L3-1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,9,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,10,200-600,,,,,,PE,50x50
+,,CJ14-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,5,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ15,N2 input L3-1 ,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,11,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,11,200-600,,,,,,PE,50x50
+,,CJ15-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,6,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ16-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,7,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ17-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,8,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ2,N2 emb input,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,2,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer4,,2,200-600,,,,,,PE,50x50
+,,CJ2-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,2,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ3,N2 FA input,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,3,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer4,,3,200-600,,,,,,PE,50x50
+,,CJ3-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,3,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ4,N2 FA H4K16 Ac,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,4,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer3,,4,200-600,,,,,,PE,50x50
+,,CJ4-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,4,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ5,N2 FA KLE-2 Q3942,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,5,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer4,,5,200-600,,,,,,PE,50x50
+,,CJ5-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,5,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ6,N2 EPS KLE-2 Q3942,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,6,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer4,,6,200-600,,,,,,PE,50x50
+,,CJ6-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,6,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ7,N2 FA DPY-26,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,7,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer3,,7,200-600,,,,,,PE,50x50
+,,CJ7-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,7,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ8,N2 EPS DPY-26,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,8,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer3,,8,200-600,,,,,,PE,50x50
+,,CJ8-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,8,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,CJ9,N2 EPS input,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,IN-seq,,,,,12,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer4,,8,200-600,,,,,,PE,50x50
+,,CJ9-0,,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,,,,,ChIP-seq,FALSE,,FALSE,,12,,10/3/2011,qPCR ,2,14,Bioanalyzer,,,,350,,,,,,PE,50x50
+,,SE95,Pol II 4E12 Ser 7 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,1,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,1,200-600,,,,,,PE,50x50
+,,SE96,Pol II 4F8 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,2,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,2,200-600,,,,,,PE,50x50
+,,SE97,Pol II 3E10 Ser 2 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,4,,11/4/2011,qPCR,2,12,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer1,,3,200-600,,,,,,PE,50x50
+,,SEA13,L2-L3 RNA-seq Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,RNA-seq,,,,,1,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer4,,9,200-600,,,,,,PE,50x50
+,,SEA14,L2-L3 RNA-seq Rep2,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,RNA-seq,,,,,4,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer4,,10,200-600,,,,,,PE,50x50
+,,Audrey10,Audrey10,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,7,230,,,,,,PE,50x50
+,,Audrey11,Audrey11,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,8,230,,,,,,PE,50x50
+,,Audrey4,Audrey4,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,1,230,,,,,,PE,50x50
+,,Audrey5,Audrey5,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,2,230,,,,,,PE,50x50
+,,Audrey6,Audrey6,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,3,230,,,,,,PE,50x50
+,,Audrey7,Audrey7,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,4,230,,,,,,PE,50x50
+,,Audrey8,Audrey8,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,5,230,,,,,,PE,50x50
+,,Audrey9,Audrey9,,,C. elegans,Rockman,Chang,,,,RNA-seq,FALSE,,FALSE,,,,9/30/2011,qPCR ,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-09-27_11-49-46.pdf,,6,230,,,,,,PE,50x50
 ,,QG324-1,QG324,,IlluminaTruSeq,C. elegans,Rockman,Nicodemus,Riccardi,,,DNA-seq,,,,,2,,11/4/2011,qPCR,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-18_14-17-04 integrated (2),,2,628,,,,,,PE,50x50
-3,,QG325,QG325,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,TRUE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-6,,QG327,QG327,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-34,,QG327-7cyc,QG327,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 ,,QG328-1,QG328,,IlluminaTruSeq,C. elegans,Rockman,Nicodemus,Riccardi,,,DNA-seq,,,,,5,,11/4/2011,qPCR,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-18_14-17-04 integrated (2),,3,629,,,,,,PE,50x50
-4,,QG329,QG329,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-5,,QG333,QG333,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,TRUE,,AD007,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-7,,QG335,QG335,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 ,,QG335-2,QG335,,IlluminaTruSeq,C. elegans,Rockman,Nicodemus,Riccardi,,,DNA-seq,,,,,12,,11/4/2011,qPCR,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-25_15-29-33,,2,788,,,,,,PE,50x50
 ,,QG336-2,QG336,,IlluminaTruSeq,C. elegans,Rockman,Nicodemus,Riccardi,,,DNA-seq,,,,,7,,11/4/2011,qPCR,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-18_14-17-04 integrated (2),,8,636,,,,,,PE,50x50
 ,,QG338-1,QG338,,IlluminaTruSeq,C. elegans,Rockman,Nicodemus,Riccardi,,,DNA-seq,,,,,6,,11/4/2011,qPCR,2,20,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-18_14-17-04 integrated (2),,9,634,,,,,,PE,50x50
-27,,R2,Root2,7,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-,,rina-1,RS0144 PolyA,,Einstein directional whole transcript seq with modifications,Pristionchus entomophagus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,1,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
-,,rina-10,RS5228 Ribozero,,Einstein directional whole transcript seq with modifications,P. sp11,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,7,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
-,,rina-12,RS5244 Ribozero,,Einstein directional whole transcript seq with modifications,P. uniformus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,8,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,SEA18,PB4641-Male replicate 2,,True_Seq_Illumina_Prep_SEA_v1,C. remanei,Ercan,Jiao,Albritton,,,DNA-seq,,,,,6,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer2,,1,200-600,,,,,,PE,50x50
+,,CR1010-1,CR1010,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,4,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,3,517,,,,,,PE,50x50
+,,CR2342-1,CR2342,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,7,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,4,502,,,,,,PE,50x50
+,,CR4414-1,CR4414,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,6,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,5,508,,,,,,PE,50x50
+,,CR503-1,CR503,,Gina1,Chlamydomonas reinhardtii,Salehi-Ashtiani,Purugganan,Pham,Flowers,,DNA-seq,FALSE,,TRUE,,2,,11/4/2011,qPCR,2,20,Bioanalyzer,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Bioanalyzer Results (10.19).pdf,bioanalyzer/1_CR503-1_CR1010-1_CR2342-1/Gina Bioanalyzer 10.19.11.xad,2,567,,,,,,PE,50x50
+,,Paul1,P.Coatneyi_140_ng_per_ul,,,P. coatneyi,Carlton,Scheid,Kim,,,de-novo,FALSE,,FALSE,,AD002,,,qPCR,2,25,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-02_00-12-08_PCoatneyi-PGonderi_2ndandFinalAmp.pdf,,2,512,,,,,,PE,100x100,P.Coatneyi (140 ng/ul) 76.8 ng/ul
+,,Paul2,P.Gonderi_234_ng_per_ul,,,P. gonderi,Carlton,Scheid,Kim,,,de-novo,FALSE,,FALSE,,AD004,,,qPCR,2,25,Bioanalyzer,2100 expert_DNA 1000_DE54700454_2011-10-02_00-12-08_PCoatneyi-PGonderi_2ndandFinalAmp.pdf,,3,601,,,,,,PE,100x100,P.Gonderi (234 ng/ul) 70.2 ng/ul
+,,SEA15,F1 Male PS312 X PS1843 Cross Rep1,,True_Seq_Illumina_Prep_SEA_v1,P. pacificus,Ercan,Jiao,Albritton,,,DNA-seq,,,,,9,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer2,,4,200-600,,,,,,PE,50x50
+,,SEA16,F1 Male PS312 X PS1843 Cross Rep2,,True_Seq_Illumina_Prep_SEA_v1,P. pacificus,Ercan,Jiao,Albritton,,,DNA-seq,,,,,10,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer2,,5,200-600,,,,,,PE,50x50
+,,SEA17,PS1843 p. pacificus washington Rep1,,True_Seq_Illumina_Prep_SEA_v1,P. pacificus,Ercan,Jiao,Albritton,,,DNA-seq,,,,,11,,11/4/2011,qPCR,2,,Bioanalyzer,Ercan_11-4-11_submission_bioanalyzer2,,6,200-600,,,,,,PE,50x50
 ,,rina-2,RS5106 PolyA,,Einstein directional whole transcript seq with modifications,P. aerivorous,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,3,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
-,,rina-3,RS5139 PolyA,,Einstein directional whole transcript seq with modifications,P. psuedoaerivorous,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,2,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
-,,rina-4,RS5228 PolyA,,Einstein directional whole transcript seq with modifications,P. sp11,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,9,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
-,,rina-5,RS5229 PolyA,,Einstein directional whole transcript seq with modifications,P.sp15,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,11,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
-,,rina-6,RS5244 PolyA,,Einstein directional whole transcript seq with modifications,P. uniformus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,10,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
-,,rina-7,RS0144 Ribozero,,Einstein directional whole transcript seq with modifications,Pristionchus entomophagus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,4,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
 ,,rina-8,RS5106 Ribozero,,Einstein directional whole transcript seq with modifications,P. aerivorous,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,5,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-3,RS5139 PolyA,,Einstein directional whole transcript seq with modifications,P. psuedoaerivorous,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,2,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
 ,,rina-9,RS5139 Ribozero,,Einstein directional whole transcript seq with modifications,P. psuedoaerivorous,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,6,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-10,RS5228 Ribozero,,Einstein directional whole transcript seq with modifications,P. sp11,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,7,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-4,RS5228 PolyA,,Einstein directional whole transcript seq with modifications,P. sp11,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,9,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-12,RS5244 Ribozero,,Einstein directional whole transcript seq with modifications,P. uniformus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,8,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-6,RS5244 PolyA,,Einstein directional whole transcript seq with modifications,P. uniformus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,10,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-5,RS5229 PolyA,,Einstein directional whole transcript seq with modifications,P. sp15,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,11,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-1,RS0144 PolyA,,Einstein directional whole transcript seq with modifications,Pristionchus entomophagus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,1,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+,,rina-7,RS0144 Ribozero,,Einstein directional whole transcript seq with modifications,Pristionchus entomophagus,Gunsalus,Gutwein,Scheid,Dieterich,Ahmed,RNA-seq,,,,,,4,11/7/2011,qPCR,2,12,,,,,,,,,,,PE,50x50,no sonication
+26,,Alison_Root,Root1,4,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+28,,D,Dorsal1,8,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+23,,EZ,ERhiz1,1,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+27,,R2,Root2,7,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 25,,S2-1-Apr-2010,Shoot1,3,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 29,,S2-8-Aug-2010,Shoot2,9,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-,,SE94,AF16 input ,,True_Seq_Illumina_Prep_SEA_v1,C. briggsae,Ercan,Jiao,Albritton,,,IN-seq,,,,,10,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer3,,10,200-600,,,,,,PE,50x50
-,,SE95,Pol II 4E12 Ser 7 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,1,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,1,200-600,,,,,,PE,50x50
-,,SE96,Pol II 4F8 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,2,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,2,200-600,,,,,,PE,50x50
-,,SE97,Pol II 3E10 Ser 2 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,3,,11/4/2011,qPCR,2,12,,Ercan_11-4-11_submission_bioanalyzer1,,3,200-600,,,,,,PE,50x50
-,,SE98,AF16 H4K16ac Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. briggsae,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,2,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer1,,4,200-600,,,,,,PE,50x50
-,,SE99,AF16 H4K20me1 Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. briggsae,Ercan,Jiao,Albritton,,,ChIP-seq,,,,,3,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer1,,5,200-600,,,,,,PE,50x50
+24,,Z,LRhize1,2,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+30,,Z2,LRhize2,10,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+21,,12_300,,,,,Christiaen,,,,,ChIP-seq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+20,,7_300,,,,,Christiaen,,,,,ChIP-seq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 8,,SEA1,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 17,,SEA10,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 18,,SEA11,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD007,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 19,,SEA12,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-,,SEA13,L2-L3 RNA-seq Rep1,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,RNA-seq,,,,,1,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer4,,9,200-600,,,,,,PE,50x50
-,,SEA14,L2-L3 RNA-seq Rep2,,True_Seq_Illumina_Prep_SEA_v1,C. elegans,Ercan,Jiao,Albritton,,,RNA-seq,,,,,4,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer4,,10,200-600,,,,,,PE,50x50
-,,SEA15,F1 Male PS312 X PS1843 Cross Rep1,,True_Seq_Illumina_Prep_SEA_v1,P. Pacificus,Ercan,Jiao,Albritton,,,DNA-seq,,,,,9,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer2,,4,200-600,,,,,,PE,50x50
-,,SEA16,F1 Male PS312 X PS1843 Cross Rep2,,True_Seq_Illumina_Prep_SEA_v1,P. pacificus,Ercan,Jiao,Albritton,,,DNA-seq,,,,,10,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer2,,5,200-600,,,,,,PE,50x50
-,,SEA17,PS1843 p. pacificus washington Rep1,,True_Seq_Illumina_Prep_SEA_v1,P. pacificus,Ercan,Jiao,Albritton,,,DNA-seq,,,,,11,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer2,,6,200-600,,,,,,PE,50x50
-,,SEA18,PB4641-Male replicate 2,,True_Seq_Illumina_Prep_SEA_v1,C. remanei,Ercan,Jiao,Albritton,,,DNA-seq,,,,,6,,11/4/2011,qPCR,2,,,Ercan_11-4-11_submission_bioanalyzer2,,1,200-600,,,,,,PE,50x50
 9,,SEA2,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 10,,SEA3,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 11,,SEA4,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,,,PE,50x50
@@ -136,16 +136,16 @@ ID,Vial ID,Library ID,Sample ID1,Sample ID2,Protocol,organism,Contact1,Contact2,
 14,,SEA7,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 15,,SEA8,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
 16,,SEA9,,,True_Seq_Illumina_Prep_SEA_v1,,Ercan,,,,,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-,,Tara1,OS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50,The barcodes are #1 and #2 from Bioo Scientific ( CGATGT and TGACCA respectively)
-,,Tara2,RS3 t=0,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
-,,Tara3,RS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,2,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
-,,Tara4,OS3 t=2,,,H. sapiens,Vogel,,,,,RNA-seq,TRUE,,FALSE,,,1,9/30/2011,qPCR ,2,10,Agarose gel,,,,250,,,,,,PE,50x50
-,,wox5cell-gc1-1,wox5cell-gc1,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD001,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,1,266,,,,,,PE,50x50
-,,wox5cell-gc2-1,wox5cell-gc2,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD002,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,2,266,,,,,,PE,50x50
-,,wox5cell-gc3-1,wox5cell-gc3,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD003,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,3,264,,,,,,PE,50x50
-,,wox5cell-gc4-1,wox5cell-gc4,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD004,,11/4/2011,qPCR,2,12,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,4,262,,,,,,PE,50x50
-,,wox5cell-sc1-1,wox5cell-sc1,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD005,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,5,268,,,,,,PE,50x50
-,,wox5cell-sc4-1,wox5cell-sc4,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD006,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,6,273,,,,,,PE,50x50
-,,wox5cell-sc5-1,wox5cell-sc5,,TruSeq_DNA_Sample_Preparation_1_PuiLeng,Arabidopsis Thaliana,Birnbaum,Ip,,,,RNA-seq,,,,,AD007,,11/4/2011,qPCR,2,24,Bioanalyzer,,WOX5_Libraries_PuiLeng_2011-11-01.xad,7,264,,,,,,PE,50x50
-24,,Z,LRhize1,2,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
-30,,Z2,LRhize2,10,,Selaginella Moellendorffii,Birnbaum,Mello,,,,rna-seq,FALSE,,FALSE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+31,,83,,1,,,Miller,,,,,rna-seq,FALSE,,TRUE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+32,,137,,2,,,Miller,,,,,rna-seq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+33,,168,,3,,,Miller,,,,,rna-seq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+22,,6330,,,,,Rockman,,,,,dna-reseq,FALSE,internal,FALSE,,"AD004,AD006",,6/24/2011,,,,,,,,,,,,,,PE,50x50
+2,,QG323,QG323,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD002,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+3,,QG325,QG325,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,TRUE,,AD004,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+6,,QG327,QG327,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+34,,QG327-7cyc,QG327,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD005,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+4,,QG329,QG329,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD006,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+5,,QG333,QG333,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,TRUE,,AD007,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+7,,QG335,QG335,,,,Rockman,Riccardi,Nicodemus,,,dna-reseq,FALSE,,FALSE,,AD012,,6/24/2011,,,,,,,,,,,,,,PE,50x50
+1,,PhiX_v2,,,,,,,,,,dna-reseq,FALSE,hiseq_color_balance,FALSE,,AD003,,,,,,,,,,,,,,,,PE,50x50
+,,PhiX_v3,,,,,,,,,,dna-reseq,FALSE,hiseq_color_balance,FALSE
