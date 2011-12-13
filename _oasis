@@ -33,7 +33,7 @@ Library hitscore
           , Hitscore_std
           , Hitscore_config
           , Hitscore_db_access
-          , Hitscore_sample_sheet
+          , Hitscore_assemble_sample_sheet
           , Hitscore_result_IO
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)

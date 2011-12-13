@@ -18,8 +18,8 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) : sig
   (** The Layout is the thing defined by the layout DSL.  *)
   module Layout: module type of Hitscore_db_access.Make(Result_IO)
 
-  module Sample_sheet: 
-  module type of Hitscore_sample_sheet.Make (Result_IO) (Layout)
+  module Assemble_sample_sheet: 
+  module type of Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
 
   (** [db_configuration] keeps track of the db-connection parameters. *)
   type db_configuration

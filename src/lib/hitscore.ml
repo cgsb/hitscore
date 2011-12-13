@@ -18,8 +18,8 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
   module Layout = Hitscore_db_access.Make(Result_IO)
 
-  module Sample_sheet = 
-    Hitscore_sample_sheet.Make (Result_IO) (Layout)
+  module Assemble_sample_sheet = 
+    Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
 
 
   type db_configuration = {

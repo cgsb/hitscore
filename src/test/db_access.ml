@@ -197,8 +197,8 @@ let test_sample_sheet_preparation ~dbh kind flowcell =
   let tmp_file = sprintf "/tmp/Sample_sheet_%s_%s.csv" flowcell
     (Hitscore_lwt.Layout.Enumeration_sample_sheet_kind.to_string kind) in
   print result "== Samplesheet:\n" >>= fun () ->
-  Hitscore_lwt.Sample_sheet.run
-    ~kind ~dbh ~note:"Sample-sheet creation" flowcell
+  Hitscore_lwt.Assemble_sample_sheet.run
+    ~kind ~dbh ~note:"Sample-sheet assembly test" flowcell
     ~write_to_tmp:(fun s ->
       Lwt_io.(wrap_io 
                 (with_file ~mode:output tmp_file)
