@@ -6,8 +6,10 @@
 ;; Almost static input data:
 (record person
        (print_name      string option)
-       (family_name     string option)
-       (email           string option)
+       (given_name      string)
+       (middle_name     string option)
+       (family_name     string)
+       (email           string)
        (login           string option)
        (nickname        string option)
        notable
@@ -80,6 +82,8 @@
         (library stock_library)
         (well_number int option)
         (mean_fragment_size real option)
+        (min_fragment_size real option)
+        (max_fragment_size real option)
         notable)
 
 (volume bioanalyzer_directory bioanalyzer)
@@ -99,7 +103,7 @@
         (with_intensities bool)
         (run_date timestamp)
         (host string)
-        (hiseq_dir_name string)) 
+        (hiseq_dir_name string))
 (record inaccessible_hiseq_raw
         (deleted hiseq_raw array))
 
