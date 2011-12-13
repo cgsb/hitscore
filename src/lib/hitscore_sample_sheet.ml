@@ -137,29 +137,34 @@ module Make
     let output samplesheet output_string =
       output_string (Buffer.contents samplesheet.content)
 
-    let register_success  ~dbh ?note sample_sheet =
+    let get_target_file ~dbh sample_sheet =
       let files = Layout.File_system.Tree.([file "SampleSheet.csv"]) in
-      Layout.Function_assemble_sample_sheet.add_evaluation
-        ~recomputable:true ~recompute_penalty:1.
-        ~kind:sample_sheet.kind ~dbh ~flowcell:sample_sheet.flowcell
-      >>= fun assembly ->
       Layout.File_system.add_volume ~dbh
         ~hr_tag:(sprintf "%s_%s" sample_sheet.flowcell_name 
                    (Layout.Enumeration_sample_sheet_kind.to_string
                       sample_sheet.kind))
         ~kind:`sample_sheet_csv ~files
       >>= fun file ->
+      Layout.File_system.cache_volume_entry ~dbh file 
+      >>= fun vol_entry_cache ->
+      Layout.File_system.(
+        match trees_to_unix_paths files with
+        | [ one_path ] ->
+          return (file, entry_unix_path (volume_entry vol_entry_cache), one_path)
+        | _ ->
+          error (`fatal_error `trees_to_unix_paths_should_return_one))
+
+
+    let register_with_success  ~dbh ?note ~file sample_sheet =
+      Layout.Function_assemble_sample_sheet.add_evaluation
+        ~recomputable:true ~recompute_penalty:1.
+        ~kind:sample_sheet.kind ~dbh ~flowcell:sample_sheet.flowcell
+      >>= fun assembly ->
       Layout.Record_sample_sheet.add_value ~file ?note ~dbh
       >>= fun result ->
       Layout.Function_assemble_sample_sheet.set_succeeded ~dbh
         ~result assembly
-      >>= fun resultable_assembly ->
-      Layout.File_system.cache_volume_entry ~dbh file 
-      >>= fun vol_entry_cache ->
-      Layout.File_system.(
-        return (resultable_assembly, 
-                entry_unix_path (volume_entry vol_entry_cache),
-                trees_to_unix_paths files))
+
 
 
 end

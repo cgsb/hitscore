@@ -202,11 +202,14 @@ let test_sample_sheet_preparation ~dbh kind flowcell =
   Lwt_io.(with_file ~mode:output file (fun chan ->
     Hitscore_lwt.Sample_sheet.output sample_sheet (wrap_io (fprint chan))))
   >>= fun () ->
-  Hitscore_lwt.Sample_sheet.register_success ~dbh
-    ~note:"Test the sample-sheet assembly" sample_sheet
-  >>= fun (the_function, volpath, filespath) ->
-  print result "Added the successful assembly of the sample-sheet" >>= fun () ->
-  print result "Should add %s in %s/%s" file volpath (List.hd_exn filespath)
+  Hitscore_lwt.Sample_sheet.get_target_file ~dbh sample_sheet
+  >>= fun (the_volume, pathd, pathf) ->
+  print result "Should mv %s %s/%s" file pathd pathf
+  >>= fun () ->
+  Hitscore_lwt.Sample_sheet.register_with_success ~dbh
+    ~note:"Test the sample-sheet assembly" ~file:the_volume sample_sheet
+  >>= fun (the_function) ->
+  print result "Added the successful assembly of the sample-sheet"
 
 
 
@@ -289,6 +292,9 @@ let () =
     eprintf "\n=== BAD!! ====\nThe test ended with a barcoding error:\n\
       Barcode %ld of type %s was not found\n"
       b (Hitscore_lwt.Layout.Enumeration_barcode_provider.to_string p)
+  | Error (`fatal_error `trees_to_unix_paths_should_return_one) ->
+    eprintf "\n=== VERY BAD!! ====\nThe test ended with a logic error:\n\
+      `trees_to_unix_paths_should_return_one\n"
   | Ok () ->
     eprintf "Still good after Lwt_main.run\n"
   end
