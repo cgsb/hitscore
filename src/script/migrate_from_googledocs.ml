@@ -51,9 +51,8 @@ let main metadata_prefix dbh =
   let load = Csv.load ~separator:',' in
   let load_table t =
     load (sprintf "%s%s.csv" metadata_prefix t) |> Csv.square |> List.tl_exn in
-  let migration_note = sprintf "(From_migration %S)" Time.(to_string (now ())) in
+  (* let migration_note = sprintf "(From_migration %S)" Time.(to_string (now ())) in *)
   let persons =
-    let note = migration_note in
     let nyu_login_email = Pcre.regexp "[a-z]+[0-9]+@nyu.edu" in
     let tbl = load_table "Person" in
     List.map tbl ~f:(function
@@ -73,7 +72,7 @@ let main metadata_prefix dbh =
           Hitscore_db.Record_person.add_value
             ~print_name:(sprintf "%s %s" first surname)
             ~given_name:first ?middle_name:None
-            ~family_name:surname ~note ?login
+            ~family_name:surname ?note:None ?login
             ~email ?nickname ~dbh |> Result.ok_exn ~fail:(fail "person") in
         (surname, id)
       | _ -> failwith "persons") in
@@ -112,24 +111,24 @@ let main metadata_prefix dbh =
           try_previous organisms organism ~new_one:(fun str ->
             Hitscore_db.Record_organism.add_value
               ~name:organism ~dbh ?informal:None
-              ~note:(migration_note ^ "(TODO Fix_names)")
+              ?note:None
           ) in
         let sample = 
           try_previous samples sample_id1 ~new_one:(fun str ->
             Hitscore_db.Record_sample.add_value ~dbh
-              ~name:str ?organism ~note:migration_note) in
+              ~name:str ?organism ?note:None) in
         let protocol =
           try_previous protocols protocol ~new_one:(fun str ->
             Hitscore_db.Record_protocol.add_value ~dbh
-              ~name:str ~note:migration_note
+              ~name:str ?note:None
               ~doc:(Hitscore_db.File_system.add_volume ~dbh
                       ~kind:`protocol_directory
                       ~hr_tag:(sanitize_for_filename str)
                       ~files:[] |> Result.ok_exn ~fail:(fail "add_volume"))) in
         let stock_library =
           let note =
-            migration_note ^ 
-              (if note = "" then "" else sprintf "(spread_sheet_note %S)" note) in
+            if note = "" then None else 
+              Some (sprintf "(spread_sheet_note %S)" note) in
           let application = optify_string application in
           let truseq_control = 
             match truseq_control_used with
@@ -180,7 +179,7 @@ let main metadata_prefix dbh =
           try_previous stock_libraries library_id ~new_one:(fun str ->
             Hitscore_db.Record_stock_library.add_value ~dbh
               ~name:str ?sample ?protocol ?application
-              ~stranded ~note ?rnaseq_control
+              ~stranded ?note ?rnaseq_control
               ~truseq_control ~read_length_1 ?read_length_2
               ~barcode_type ~barcodes
           ) in
@@ -216,7 +215,7 @@ let main metadata_prefix dbh =
             Option.map (optify_string library_conc__nm____lab) ~f:Float.of_string in
           Hitscore_db.Record_input_library.add_value ~dbh
             ~library:(Option.value_exn stock_library) 
-            ~submission_date ~note
+            ~submission_date ?note:None
             ~contacts ?volume_uL ?concentration_nM ~user_db:[| |] |> 
                 Result.ok_exn  ~fail:(fail "Record_input_library.add_value")
         in
