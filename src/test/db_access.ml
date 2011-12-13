@@ -194,24 +194,18 @@ let show_success dbh =
 
 
 let test_sample_sheet_preparation ~dbh kind flowcell =
-  let file = sprintf "/tmp/Sample_sheet_%s_%s.csv" flowcell
+  let tmp_file = sprintf "/tmp/Sample_sheet_%s_%s.csv" flowcell
     (Hitscore_lwt.Layout.Enumeration_sample_sheet_kind.to_string kind) in
   print result "== Samplesheet:\n" >>= fun () ->
-  Hitscore_lwt.Sample_sheet.preparation
-    ~kind ~dbh flowcell >>= fun sample_sheet ->
-  Lwt_io.(with_file ~mode:output file (fun chan ->
-    Hitscore_lwt.Sample_sheet.output sample_sheet (wrap_io (fprint chan))))
-  >>= fun () ->
-  Hitscore_lwt.Sample_sheet.get_target_file ~dbh sample_sheet
-  >>= fun (the_volume, pathd, pathf) ->
-  print result "Should mv %s %s/%s" file pathd pathf
-  >>= fun () ->
-  Hitscore_lwt.Sample_sheet.register_with_success ~dbh
-    ~note:"Test the sample-sheet assembly" ~file:the_volume sample_sheet
-  >>= fun (the_function) ->
-  print result "Added the successful assembly of the sample-sheet"
-
-
+  Hitscore_lwt.Sample_sheet.run
+    ~kind ~dbh ~note:"Sample-sheet creation" flowcell
+    ~write_to_tmp:(fun s ->
+      Lwt_io.(wrap_io 
+                (with_file ~mode:output tmp_file)
+                (fun chan -> fprintf chan "%s" s)))
+    ~mv_from_tmp:(fun volpath filepath ->
+      print result "Should mv %s %s/%s" tmp_file volpath filepath)
+  >>= fun _ -> return ()
 
 let test_lwt () =
   let hitscore_configuration = Hitscore_lwt.configure () in
