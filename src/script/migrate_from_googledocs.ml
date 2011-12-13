@@ -126,9 +126,7 @@ let main metadata_prefix dbh =
                       ~hr_tag:(sanitize_for_filename str)
                       ~files:[] |> Result.ok_exn ~fail:(fail "add_volume"))) in
         let stock_library =
-          let note =
-            if note = "" then None else 
-              Some (sprintf "(spread_sheet_note %S)" note) in
+          let note = if note = "" then None else Some note in
           let application = optify_string application in
           let truseq_control = 
             match truseq_control_used with
