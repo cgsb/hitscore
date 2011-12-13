@@ -76,6 +76,8 @@ module Make
                       Array.mapi array_of_ids 
                         ~f:(fun i id -> i, { Layout.Record_lane.id })
                          |> Array.to_list)
+            | [] -> error (`wrong_request (`record_flowcell, 
+                                           `value_not_found flowcell_name))
             | l -> error (`layout_inconsistency (`record_flowcell,
                                                  `search_by_name_not_unique l)))
       in

@@ -289,6 +289,9 @@ let () =
   | Error (`fatal_error `trees_to_unix_paths_should_return_one) ->
     eprintf "\n=== VERY BAD!! ====\nThe test ended with a logic error:\n\
       `trees_to_unix_paths_should_return_one\n"
+  | Error (`wrong_request (_, `value_not_found s)) ->
+    eprintf "\n=== BAD!! ====\nThe test ended because of a wrong-request:\n\
+            `value_not_found %s\n" s
   | Ok () ->
     eprintf "Still good after Lwt_main.run\n"
   end

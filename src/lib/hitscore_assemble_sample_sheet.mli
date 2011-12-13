@@ -23,6 +23,8 @@ sig
            [> `search_by_name_not_unique of (int32 * int32 array) list
            | `select_did_not_return_one_cache of string * int ]
      | `barcode_not_found of int32 * Layout.Enumeration_barcode_provider.t
+     | `wrong_request of
+         [> `record_flowcell ] * [> `value_not_found of string ]
      | `pg_exn of exn ]) Result_IO.monad
       
   val output: sample_sheet ->
@@ -61,6 +63,8 @@ sig
                   (unit,
                    [> `barcode_not_found of
                        int32 * Layout.Enumeration_barcode_provider.t
+                   | `wrong_request of
+                       [> `record_flowcell ] * [> `value_not_found of string ]     
                    | `fatal_error of
                        [> `trees_to_unix_paths_should_return_one ]
                    | `layout_inconsistency of
@@ -79,9 +83,7 @@ sig
                              (int32 * Layout.PGOCaml.int32_array) list
                          | `select_did_not_return_one_cache of
                              string * int ]
-                   | `pg_exn of exn ]
-                     as 'a)
-                    Result_IO.monad) ->
+                   | `pg_exn of exn ] as 'a) Result_IO.monad) ->
     mv_from_tmp:(string -> string -> (unit, 'a) Result_IO.monad) ->
     string ->
     ([ `can_get_result ] Layout.Function_assemble_sample_sheet.t, 'a)
