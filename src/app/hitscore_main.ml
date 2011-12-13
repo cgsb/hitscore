@@ -467,6 +467,68 @@ module Hiseq_raw = struct
 
 end
 
+module Verify = struct
+
+
+  let check_file_system ?(verbose=true) root =
+    let hsc = Hitscore_threaded.configure () in
+    match Hitscore_threaded.db_connect hsc with
+    | Ok dbh ->
+      let (>>>) x f = Result.ok_exn ~fail:(Failure f) x in
+      let vols = Hitscore_db.File_system.get_all ~dbh >>> "File_system.get_all" in
+      List.iter vols ~f:(fun vol -> 
+        Hitscore_db.File_system.cache_volume ~dbh vol >>> "Caching volume" |>
+            (fun volume ->
+              let path =
+                Filename.concat root 
+                  Hitscore_db.File_system.(volume |> volume_entry_cache |> 
+                      volume_entry |> entry_unix_path) in
+              if verbose then
+                eprintf "* Checking volume %S\n" path;
+              Unix.(try
+                      let vol_stat = stat path in
+                      if vol_stat.st_kind <> S_DIR then
+                        eprintf "ERROR(volume): %S:\n  Not a directory\n" path
+                      else
+                        if verbose then
+                          eprintf "-> OK\n"
+                        else
+                          ()
+                with
+                | Unix_error (e, _, s) ->
+                  eprintf "ERROR(volume): %S:\n %S (%S)\n" path (error_message e) s);
+              begin match Hitscore_db.File_system.volume_trees volume with
+              | Error (`cannot_recognize_file_type s) ->
+                eprintf "ERROR(get-files): %S:\n  cannot_recognize_file_type %S??\n"
+                  path s
+              | Error (`inconsistency_inode_not_found i) ->
+                eprintf "ERROR(get-files): %S:\n  inconsistency_inode_not_found %ld"
+                  path i
+              | Ok trees ->
+                let paths =
+                  Hitscore_db.File_system.trees_to_unix_paths trees in
+                List.iter paths ~f:(fun s -> 
+                  let filename = Filename.concat path s in
+                  if verbose then eprintf "  \\-> %S\n" filename;
+                  Unix.(try
+                      let file_stat = stat filename in
+                      ignore file_stat
+                    with
+                    | Unix_error (e, _, s) ->
+                      eprintf "ERROR(file): %S:\n %S (%S)\n"
+                        filename (error_message e) s);
+                );
+              end))
+    | Error (`pg_exn e) ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+
+
+end
+
+
+
+
+
 let commands = ref []
 
 let define_command ~names ~description ~usage ~run =
@@ -545,6 +607,19 @@ let () =
       | ["-host"; host; path] -> Some (Hiseq_raw.register ~host path)
       | _ -> None);
  
+
+  define_command
+    ~names:["check-file-system"; "check-fs"]
+    ~description:"Check the files registered in the database"
+    ~usage:(fun o exec cmd ->
+      fprintf o "usage: %s %s [-quiet] <root-dir>\n" exec cmd;
+      fprintf o "  -quiet : Non-verbose output\n"
+    )
+    ~run:(fun exec cmd -> function
+      | [ path ] -> Some (Verify.check_file_system path)
+      | [ "-quiet"; path ] -> Some (Verify.check_file_system ~verbose:false path)
+      | _ -> None);
+
   let global_usage = function
     | `error -> 
       eprintf "ERROR: usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0);
