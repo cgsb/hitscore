@@ -240,13 +240,18 @@ let main metadata_prefix dbh =
                 end
             in
             let files =
-              let try_file f =
+              let try_file ext f =
                 if f = "" then None
                 else
-                  Some (Hitscore_db.File_system.Tree.file 
-                          (Filename.basename f)) in
+                  let file = 
+                    Filename.(
+                      if check_suffix f ext then basename f else basename f ^ ext)
+                  in 
+                  Some (Hitscore_db.File_system.Tree.file file) in
               let trees =
-                (List.filter_map [pdf_file_path; xad_file_path] ~f:try_file)
+                (List.filter_map ~f:(Option.map ~f:(fun x -> x))
+                   [ try_file ".pdf" pdf_file_path;
+                     try_file ".xad" xad_file_path])
               in
               match trees with
               | [] -> None
