@@ -216,11 +216,37 @@ module Make
           double_bind movem
             ~ok:(fun () ->
               register_with_success ~dbh ?note ~file:the_volume sample_sheet
-              >>= fun succeeded -> return (`new_success succeeded))
+              >>= fun succeeded ->
+              Layout.Record_log.add_value ~dbh
+                ~log:(sprintf "(assemble_sample_sheet_success %ld %s %s)"
+                        succeeded.Layout.Function_assemble_sample_sheet.id
+                        flowcell
+                        (Layout.Enumeration_sample_sheet_kind.to_string kind))
+              >>= fun _ ->
+              return (`new_success succeeded))
             ~error:(fun e ->
               register_with_failure ~dbh ?note sample_sheet 
-              >>= fun failed -> return (`new_failure (failed, e)))
+              >>= fun failed ->
+              Layout.Record_log.add_value ~dbh
+                ~log:(sprintf "(assemble_sample_sheet_failure %ld %s %s)"
+                        failed.Layout.Function_assemble_sample_sheet.id
+                        flowcell
+                        (Layout.Enumeration_sample_sheet_kind.to_string kind))
+              >>= fun _ ->
+              Layout.Record_log.add_value ~dbh
+                ~log:(sprintf "(orphan_volume %ld %s (%s))"
+                        the_volume.Layout.File_system.id
+                        pathd pathf)
+              >>= fun _ ->
+              return (`new_failure (failed, e)))
+
         | `old_one (assembly, sample_sheet) -> 
+          Layout.Record_log.add_value ~dbh
+            ~log:(sprintf "(assemble_sample_sheet_reuse %ld %s %s)"
+                    assembly.Layout.Function_assemble_sample_sheet.id
+                    flowcell
+                    (Layout.Enumeration_sample_sheet_kind.to_string kind))
+          >>= fun _ ->
           return (`previous_success (assembly, sample_sheet))
 
 

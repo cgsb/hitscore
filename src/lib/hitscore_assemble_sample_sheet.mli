@@ -42,6 +42,7 @@ If any step fails (e.g. the shell command)
                        | `record_flowcell
                        | `record_input_library
                        | `record_lane
+                       | `record_log
                        | `record_sample_sheet
                        | `record_stock_library ] *
                          [> `add_did_not_return_one of
