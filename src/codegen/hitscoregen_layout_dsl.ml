@@ -1537,6 +1537,25 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
     insert_cache_exn out;
   );
 
+  hide out (fun out ->
+    line out "let delete_cache_exn %s (cache: volume_cache) =" pgocaml_db_handle_arg;
+    line out "  let deleted_files = map_s (snd cache) ~f:(fun (inode, %s) ->"
+      (List.map file_fields (fun _ -> "_") |> String.concat ~sep:", ");
+    line out "    PGSQL(dbh)";
+    line out "      %S) in" "DELETE FROM g_file WHERE g_id = $inode";
+    line out "   pg_bind deleted_files (fun _ ->";
+    line out "     let (id, %s) = fst cache in"
+      (List.map volume_fields (fun _ -> "_") |> String.concat ~sep:", ");
+    line out "    PGSQL(dbh)";
+    line out "      %S)" "DELETE FROM g_volume WHERE g_id = $id";
+  );
+  doc out "Delete a cached volume with its contents ({b UNSAFE:} does \
+            not verify if there is a link to it).";
+  line out "let delete_cache %s (cache: volume_cache) =" pgocaml_db_handle_arg;
+  pgocaml_to_result_io out ~transform_exceptions:[] (fun out ->
+    line out "  delete_cache_exn ~dbh cache";
+  );
+
 
   let unix_sep = "/" in
   doc out "{3 Unix paths }";
