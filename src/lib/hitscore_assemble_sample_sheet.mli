@@ -84,10 +84,9 @@ sig
                          | `select_did_not_return_one_cache of
                              string * int ]
                    | `pg_exn of exn ] as 'a) Result_IO.monad) ->
-    mv_from_tmp:(string -> string -> (unit, 'a) Result_IO.monad) ->
+    mv_from_tmp:(string -> string -> (unit, 'a) Result_IO.monad) -> 
     string ->
-    ([ `can_get_result ] Layout.Function_assemble_sample_sheet.t, 'a)
-      Result_IO.monad
+    (unit, 'a) Result_IO.monad
 
 
 

@@ -157,7 +157,7 @@ module Make
           error (`fatal_error `trees_to_unix_paths_should_return_one))
 
 
-    let register_with_success  ~dbh ?note ~file sample_sheet =
+    let register_with_success ~dbh ?note ~file sample_sheet =
       Layout.Function_assemble_sample_sheet.add_evaluation
         ~recomputable:true ~recompute_penalty:1.
         ~kind:sample_sheet.kind ~dbh ~flowcell:sample_sheet.flowcell
@@ -167,6 +167,12 @@ module Make
       Layout.Function_assemble_sample_sheet.set_succeeded ~dbh
         ~result assembly
 
+    let register_with_failure ~dbh ?note sample_sheet =
+      Layout.Function_assemble_sample_sheet.add_evaluation
+        ~recomputable:true ~recompute_penalty:1.
+        ~kind:sample_sheet.kind ~dbh ~flowcell:sample_sheet.flowcell
+      >>= fun assembly ->
+      Layout.Function_assemble_sample_sheet.set_failed ~dbh assembly
 
     let run ~dbh ~kind ?note ~write_to_tmp ~mv_from_tmp flowcell =
       preparation ~kind ~dbh flowcell
@@ -174,9 +180,15 @@ module Make
       output sample_sheet write_to_tmp >>= fun () ->
       get_target_file ~dbh sample_sheet
       >>= fun (the_volume, pathd, pathf) ->
-      mv_from_tmp pathd pathf
-      >>= fun () ->
-      register_with_success ~dbh ?note ~file:the_volume sample_sheet
+      let movem = mv_from_tmp pathd pathf in
+      double_bind movem
+        ~ok:(fun () ->
+          register_with_success ~dbh ?note ~file:the_volume sample_sheet
+          >>= fun _ -> return ())
+        ~error:(fun e ->
+          register_with_failure ~dbh ?note sample_sheet 
+          >>= fun _ -> error e)
+
 
 
 end
