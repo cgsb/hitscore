@@ -537,7 +537,8 @@ module FS = struct
         begin match vol_cache >>| volume_entry_cache
                      >>| volume_entry >>| entry_unix_path with
         | Ok path ->
-          let file_args = String.concat ~sep:" " files in
+          let file_args = 
+            String.concat ~sep:" " (List.map files (sprintf "%S")) in
           eprintf "Copying %s to %s/%s\n" file_args root path;
           ksprintf System.command_exn "cp %s %s/%s/" file_args root path
         | Error (`layout_inconsistency (`file_system,
