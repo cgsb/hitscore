@@ -35,6 +35,7 @@ type dsl_runtime_description = {
 let built_in_complex_types = [
   Enumeration ("process_status",
                [ "Started"; "Inserted"; "Failed"; "Succeeded" ]);
+  Record ("log", ["log", String]);
 ]
 
 let type_name = function
