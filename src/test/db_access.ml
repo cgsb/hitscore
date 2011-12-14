@@ -193,7 +193,7 @@ let show_success dbh =
     end)
 
 
-let test_sample_sheet_preparation ~dbh kind flowcell =
+let test_sample_sheet_preparation ~dbh kind ~fail flowcell =
   let tmp_file = sprintf "/tmp/Sample_sheet_%s_%s.csv" flowcell
     (Hitscore_lwt.Layout.Enumeration_sample_sheet_kind.to_string kind) in
   print result "== Samplesheet:\n" >>= fun () ->
@@ -204,8 +204,24 @@ let test_sample_sheet_preparation ~dbh kind flowcell =
                 (with_file ~mode:output tmp_file)
                 (fun chan -> fprintf chan "%s" s)))
     ~mv_from_tmp:(fun volpath filepath ->
-      print result "Should mv %s %s/%s" tmp_file volpath filepath)
-  >>= fun _ -> return ()
+      print result "Should mv %s %s/%s" tmp_file volpath filepath
+      >>= fun () ->
+      if fail then error (`test (volpath, filepath)) else return ())
+  |> double_bind
+      ~ok:(fun () -> return ())
+      ~error:(function
+        | `test (v,f) -> 
+          print result "Got the expected error\n=> %s/%s was \
+          registered but will not `exist'\n" v f 
+        (* TODO: We need away to re-restrict matched polyvariants;
+           here with | e -> error e, types propagate the `test case. *)
+        | `barcode_not_found _
+        | `fatal_error _
+        | `io_exn _
+        | `layout_inconsistency _
+        | `lwt_log_exn _
+        | `pg_exn _
+        | `wrong_request _ as e -> error e) 
 
 let test_lwt () =
   let hitscore_configuration = Hitscore_lwt.configure () in
@@ -266,10 +282,16 @@ let test_lwt () =
             error lle)
     ) >>= fun _ ->
 
-  test_sample_sheet_preparation ~dbh `specific_barcodes "D0560ACXX" >>= fun () ->
-  test_sample_sheet_preparation ~dbh `all_barcodes "D0560ACXX" >>= fun () ->
-  test_sample_sheet_preparation ~dbh `specific_barcodes "D03M4ACXX" >>= fun () ->
-  test_sample_sheet_preparation ~dbh `specific_barcodes "C01L9ACXX" >>= fun () ->
+  let fail = false in
+  test_sample_sheet_preparation ~dbh ~fail `specific_barcodes "D0560ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh ~fail `all_barcodes "D0560ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh ~fail `specific_barcodes "D03M4ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh ~fail `specific_barcodes "C01L9ACXX" >>= fun () ->
+  let fail = true in
+  test_sample_sheet_preparation ~dbh ~fail `specific_barcodes "D0560ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh ~fail `all_barcodes "D0560ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh ~fail `specific_barcodes "D03M4ACXX" >>= fun () ->
+  test_sample_sheet_preparation ~dbh ~fail `specific_barcodes "C01L9ACXX" >>= fun () ->
 
   print notif "Nice ending" >>= fun () ->
   notif "Closing the DB." >>= fun () ->
