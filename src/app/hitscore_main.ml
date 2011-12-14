@@ -533,8 +533,9 @@ module FS = struct
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       Hitscore_threaded.Layout.File_system.(
-        match cache_volume ~dbh { id = vol }  >>| volume_entry_cache
-        >>| volume_entry >>| entry_unix_path with
+        let vol_cache = cache_volume ~dbh { id = vol } in
+        begin match vol_cache >>| volume_entry_cache
+                     >>| volume_entry >>| entry_unix_path with
         | Ok path ->
           let file_args = String.concat ~sep:" " files in
           eprintf "Copying %s to %s/%s\n" file_args root path;
@@ -550,24 +551,34 @@ module FS = struct
           Layout.File_system.cache_volume had a PGOCaml error:\n%s"
             (Exn.to_string e);
           failwith "STOP"
-      );
-      eprintf "Copy: DONE (won't go back).\n";
-      begin match Hitscore_threaded.Layout.File_system.(
-        add_tree_to_volume ~dbh { id = vol } 
-          (List.map files (fun f -> Tree.file (Filename.basename f)))) with
-      | Ok () ->
-        eprintf "add_tree_to_volume: OK\n"
-      | Error (`layout_inconsistency (`file_system,
-                                      `add_did_not_return_one (s, l))) ->
-        eprintf "ERROR(FS.add_tree_to_volume): \n\
+        end;
+        eprintf "Copy: DONE (won't go back).\n";
+        begin match
+            add_tree_to_volume ~dbh { id = vol } 
+              (List.map files (fun f -> Tree.file (Filename.basename f))) with
+        | Ok () ->
+          begin match
+            Hitscore_threaded.Layout.Record_log.add_value ~dbh
+              ~log:(sprintf "(add_files_to_volume %ld (%s))" vol
+                      (String.concat ~sep:" " 
+                         (List.map files (sprintf "%S")))) with
+              | Ok _ -> 
+                eprintf "add_tree_to_volume: OK\n"
+              | Error _ ->
+                eprintf "add_tree_to_volume: OK (but logging problem?)\n"
+          end
+        | Error (`layout_inconsistency (`file_system,
+                                        `add_did_not_return_one (s, l))) ->
+          eprintf "ERROR(FS.add_tree_to_volume): \n\
           Layout.File_system.add_tree_to_volume detected an inconsistency\n\
           FILE_SYSTEM: add_did_not_return_one (%s, [%s])"
-          s (String.concat ~sep:"; " (List.map l Int32.to_string))
+            s (String.concat ~sep:"; " (List.map l Int32.to_string))
       | Error (`pg_exn e) ->
         eprintf "ERROR(FS.add_tree_to_volume): \n\
           Layout.File_system.add_tree_to_volume had a PGOCaml error:\n%s"
           (Exn.to_string e)
-      end
+        end
+      )
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
