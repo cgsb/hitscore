@@ -21,6 +21,61 @@ module System = struct
 end
 
 
+module Configuration_file = struct
+
+
+  let parse_sexp sexp =
+    let fail msg =
+      raise (Failure (sprintf "Configuration Syntax Error: %s" msg)) in
+    let fail_atom s = fail (sprintf "Unexpected atom: %s" s) in
+    let open Sexplib.Sexp in
+    let find_field l f =
+      List.find_map l (function
+        | List [ Atom n; Atom v ] when n = f -> Some v
+        | _ -> None) in
+    let parse_profile = function
+      | Atom o -> fail_atom o
+      | List ( Atom "profile" :: Atom name :: l ) ->
+        let root_directory = find_field l "root" in
+        let db_config = 
+          List.find_map l (function
+            | List (Atom "db" :: l) -> Some l
+            | _ -> None) in
+        let db_configuration =
+          Option.map db_config ~f:(fun l ->
+            match find_field l "host", find_field l "port", 
+              find_field l "database", find_field l "username", 
+              find_field l "password" with
+              | Some host, Some port, Some database, Some username, Some password ->
+                Hitscore_threaded.db_configuration
+                  ~host ~port:(Int.of_string port) ~database ~username ~password
+              | _ ->
+                ksprintf fail "Incomplete DB configuration (profile: %s)" name)
+        in
+        (name, 
+         Hitscore_threaded.configure ?root_directory ?db_configuration)
+      | _ -> fail "expecting a (profile ...)"
+    in
+    match sexp with Atom a -> fail a | List l -> List.map l parse_profile
+      
+  let parse_str str =
+    let sexp = 
+      try Sexplib.Sexp.of_string (sprintf "(%s)" str) 
+      with Failure msg ->
+        failwith (sprintf "Syntax Error (sexplib): %s" msg)
+    in
+    (parse_sexp sexp)
+
+  let configuration assoc profile =
+    match List.Assoc.find assoc profile with
+    | Some c -> c ()
+    | None -> failwithf "Can't find profile: %s" profile ()
+
+end
+
+
+
+
 module All_barcodes_sample_sheet = struct
 
 
@@ -284,8 +339,7 @@ end
 
 module Dumps = struct
 
-  let to_file file =
-    let hsc = Hitscore_threaded.configure () in
+  let to_file hsc file =
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       let dump =
@@ -311,8 +365,7 @@ module Dumps = struct
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
       
-  let load_file file =
-    let hsc = Hitscore_threaded.configure () in
+  let load_file hsc file =
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       let insert_result = 
@@ -354,7 +407,7 @@ module Hiseq_raw = struct
       let data d = D d in
       input_doc_tree ~el ~data i
   end
-  let register ?host directory =
+  let register ?host config directory =
     if not (Filename.is_absolute directory) then (
       eprintf "%s is not an absolute path...\n" directory;
       failwith "Hiseq_raw.register"
@@ -436,8 +489,7 @@ module Hiseq_raw = struct
         failwith "Hiseq_raw.register"
       | Some s-> s in
     let host = Option.value ~default:"bowery.es.its.nyu.edu" host in 
-    let hsc = Hitscore_threaded.configure () in
-    match Hitscore_threaded.db_connect hsc with
+    match Hitscore_threaded.db_connect config with
     | Ok dbh ->
       let hs_raw =
         Hitscore_threaded.Layout.Record_hiseq_raw.add_value ~dbh
@@ -448,7 +500,7 @@ module Hiseq_raw = struct
       in
       begin match hs_raw with
       | Ok in_db ->
-        Hitscore_threaded.db_disconnect hsc dbh  |> ignore;
+        Hitscore_threaded.db_disconnect config dbh  |> ignore;
         eprintf "The HiSeq raw directory was successfully added as %ld\n"
         in_db.Hitscore_threaded.Layout.Record_hiseq_raw.id
       | Error (`layout_inconsistency (`record_hiseq_raw,
@@ -470,8 +522,9 @@ end
 module Verify = struct
 
 
-  let check_file_system ?(verbose=true) root =
-    let hsc = Hitscore_threaded.configure () in
+  let check_file_system ?(verbose=true) hsc =
+    let root = Hitscore_threaded.root_directory hsc |>
+        Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       let (>>>) x f = Result.ok_exn ~fail:(Failure f) x in
@@ -527,9 +580,10 @@ end
 
 module FS = struct
 
-  let add_files_to_volume root vol files =
+  let add_files_to_volume hsc vol files =
     let open Hitscore_threaded.Result_IO in
-    let hsc = Hitscore_threaded.configure ~root_directory:root () in
+    let root = Hitscore_threaded.root_directory hsc |>
+        Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       Hitscore_threaded.Layout.File_system.(
@@ -607,13 +661,13 @@ let () =
     ~names:["all-barcodes-sample-sheet"; "abc"]
     ~description:"Make a sample sheet with all barcodes"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s %s <flowcell id>  <list lanes/barcode vendors>\n" 
+      fprintf o "usage: %s <profile> %s <flowcell id>  <list lanes/barcode vendors>\n" 
         exec cmd;
       fprintf o "  example: %s %s D03NAKCXX N1 I2 I3 B4 B5 I6 I7 N8\n" exec cmd;
       fprintf o "  where N1 means no barcode on lane 1, I2 means all \
         Illumina barcodes on lane 2,\n  B4 means all BIOO barcodes on lane \
         4, etc.\n";)
-    ~run:(fun exec cmd -> function
+    ~run:(fun config exec cmd -> function
       | flowcell :: specification ->
         Some (All_barcodes_sample_sheet.make ~flowcell ~specification print_string) 
       | _ -> None);
@@ -622,17 +676,18 @@ let () =
     ~names:[ "pbs"; "make-pbs" ]
     ~description:"Generate PBS scripts"
     ~usage:(fun o exec cmd -> 
-      fprintf o "usage: %s %s [OPTIONS] <script-names>\nsee: %s %s -help\n"
+      fprintf o "usage: %s <profile> %s [OPTIONS] <script-names>\nsee: %s %s -help\n"
         exec cmd exec cmd)
-    ~run:(fun exec cmd _ ->
+    ~run:(fun config exec cmd _ ->
       Some (PBS_script_generator.parse_cmdline (sprintf "%s %s" exec cmd) 1));
 
   define_command
     ~names:["gb2f"; "gen-bcl-to-fastq"]
     ~usage:(fun o exec bcl2fastq ->
-      fprintf o  "usage: %s %s name basecalls-dir sample-sheet\n" exec bcl2fastq)
+      fprintf o  "usage: %s profile %s name basecalls-dir sample-sheet\n" 
+        exec bcl2fastq)
     ~description:"Prepare a BclToFastq run"
-    ~run:(fun exec cmd -> function
+    ~run:(fun config exec cmd -> function
       | [ name; basecalls; sample_sheet ] ->
         Some (Gen_BclToFastq.prepare name basecalls sample_sheet)
       | _ -> None);
@@ -641,29 +696,30 @@ let () =
     ~names:["dump-to-file"]
     ~description:"Dump the database to a S-Exp file"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s %s <filename>\n" exec cmd)
-    ~run:(fun exec cmd -> function
-      | [file] -> Some (Dumps.to_file file)
+      fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+      | [file] -> Some (Dumps.to_file config file)
       | _ -> None);
 
   define_command
     ~names:["load-file"]
     ~description:"Load a dump the database (S-Exp file)"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s %s <filename>\n" exec cmd)
-    ~run:(fun exec cmd -> function
-      | [file] -> Some (Dumps.load_file file)
+      fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+      | [file] -> Some (Dumps.load_file config file)
       | _ -> None);
 
   define_command 
     ~names:["register-hiseq-raw"; "rhr"]
     ~description:"Register a HiSeq raw directory"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s %s [-host <host-addr>] <absolute-path>\n" exec cmd;
+      fprintf o "usage: %s <profile> %s [-host <host-addr>] <absolute-path>\n" 
+        exec cmd;
       fprintf o "   (default host being bowery.es.its.nyu.edu)\n")
-    ~run:(fun exec cmd -> function
-      | [path] -> Some (Hiseq_raw.register path)
-      | ["-host"; host; path] -> Some (Hiseq_raw.register ~host path)
+    ~run:(fun config exec cmd -> function
+      | [path] -> Some (Hiseq_raw.register config path)
+      | ["-host"; host; path] -> Some (Hiseq_raw.register config ~host path)
       | _ -> None);
  
 
@@ -671,41 +727,66 @@ let () =
     ~names:["check-file-system"; "check-fs"]
     ~description:"Check the files registered in the database"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s %s [-quiet] <root-dir>\n" exec cmd;
+      fprintf o "usage: %s <profile> %s [-quiet]\n" exec cmd;
       fprintf o "  -quiet : Non-verbose output\n"
     )
-    ~run:(fun exec cmd -> function
-      | [ path ] -> Some (Verify.check_file_system path)
-      | [ "-quiet"; path ] -> Some (Verify.check_file_system ~verbose:false path)
+    ~run:(fun config exec cmd -> function
+      | [] -> Some (Verify.check_file_system config)
+      | [ "-quiet" ] -> Some (Verify.check_file_system ~verbose:false config)
       | _ -> None);
 
   define_command
     ~names:["add-files-to-volume"; "afv"]
     ~description:"Move files to a volume (at its root)"
     ~usage:(fun o exec cmd ->
-      fprintf o "%s %s <root> <volume_id : int> <file1> <file2> ...\n" exec cmd)
-    ~run:(fun exec cmd -> function
-      | root :: vol :: files ->
+      fprintf o "usage: %s <profile> %s <volume_id:int> <file1> <file2> ...\n" 
+        exec cmd)
+    ~run:(fun config exec cmd -> function
+      | vol :: files ->
         begin 
           try 
             let v = Int32.of_string vol in
-            Some (FS.add_files_to_volume root v files)
-          with e -> None
+            Some (FS.add_files_to_volume config v files)
+          with e -> 
+            eprintf "Exception: %s\n" (Exn.to_string e); None
         end
+      | _ -> None);
+
+  define_command 
+    ~names:["print-config"]
+    ~description:"Display the current profile"
+    ~usage:(fun o exec cmd -> fprintf o "usage: %s <profile> %s\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+      | [] -> 
+        let open Option in
+        let open Hitscore_threaded in
+        iter (root_directory config) (printf "Root directory: %S\n");
+        iter (db_host     config) (printf "DB host     : %S\n"); 
+        iter (db_port     config) (printf "DB port     : %d\n"); 
+        iter (db_database config) (printf "DB database : %S\n"); 
+        iter (db_username config) (printf "DB username : %S\n"); 
+        iter (db_password config) (printf "DB password : %S\n"); 
+        Some ()
       | _ -> None);
 
   let global_usage = function
     | `error -> 
-      eprintf "ERROR: usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0);
+      eprintf "ERROR: usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n" 
+        Sys.argv.(0);
       eprintf "       try `%s help'\n" Sys.argv.(0);
     | `ok ->
-      printf  "usage: %s <cmd> [OPTIONS | ARGS]\n" Sys.argv.(0)
+      printf  "usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n"
+        Sys.argv.(0)
   in
   match Array.to_list Sys.argv with
   | exec :: "-h" :: args
   | exec :: "-help" :: args
   | exec :: "--help" :: args
-  | exec :: "help" :: args ->
+  | exec :: "help" :: args
+  | exec :: _ :: "-h" :: args
+  | exec :: _ :: "-help" :: args
+  | exec :: _ :: "--help" :: args
+  | exec :: _ :: "help" :: args ->
     if args = [] then (
       global_usage `ok;
       printf "  where <cmd> is among:\n";
@@ -720,10 +801,23 @@ let () =
           printf "Unknown Command: %S !\n" cmd)
     )
 
-  | exec :: cmd :: args ->
+  | exec :: profile :: cmd :: args ->
+    let config_file, profile_name =
+      match String.split profile ~on:':' with
+      | [ one ] ->
+        (sprintf "%s/.config/hitscore/config.sexp"
+           (Option.value_exn_message "This environment has no $HOME !"
+              (Sys.getenv "HOME")), one)
+      | [ one; two ] ->
+        (one, two)
+      | _ -> failwithf "Can't understand: %s" profile ()
+    in
+    let config = In_channel.(with_file config_file ~f:input_all) in
+    let hitscore_config = 
+      Configuration_file.(configuration (parse_str config) profile_name) in
     begin match find_command cmd with
     | Some (names, description, usage, run) ->
-      begin match run exec cmd args with
+      begin match run hitscore_config exec cmd args with
       | Some _ -> ()
       | None -> 
         eprintf "Wrong arguments!\n";
