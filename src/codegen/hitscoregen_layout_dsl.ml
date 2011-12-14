@@ -1240,6 +1240,29 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
 
   OCaml_hiden_exception.define wrong_insert out;
 
+  hide out (fun out ->
+    line out "let rec _add_tree_exn %s = function" pgocaml_db_handle_arg;
+    line out "  | File (name, t) | Opaque (name, t) -> begin";
+    line out "    let type_str = Enumeration_file_type.to_string t in";
+    line out "    let empty_array = [| |] in";
+    pgocaml_add_to_database_exn "g_file"
+      (List.map file_fields fst)
+      [ "$name"; "$type_str" ; "$empty_array" ]
+      ~out ~on_not_one_id ~id:"inode";
+    line out "    end";
+    line out "  | Directory (name, t, pl) -> begin";
+    line out "    let type_str = Enumeration_file_type.to_string t in";
+    line out "    let added_file_list_monad = map_s ~f:(_add_tree_exn ~dbh) pl in";
+    line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
+    line out "       let pg_inodes = array_map (list_to_array file_list) \
+                       (fun { inode } ->  inode) in";
+    pgocaml_add_to_database_exn "g_file" 
+      (List.map file_fields fst)
+      [ "$name"; "$type_str" ; "$pg_inodes" ]
+      ~out ~on_not_one_id ~id:"inode";
+    line out "  )  end";
+  );
+
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
   line out "let add_volume %s \
@@ -1255,28 +1278,8 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   pgocaml_to_result_io out ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert;
   ] (fun out ->
-    line out "let rec add_tree = function";
-    line out "  | File (name, t) | Opaque (name, t) -> begin";
-    line out "    let type_str = Enumeration_file_type.to_string t in";
-    line out "    let empty_array = [| |] in";
-    pgocaml_add_to_database_exn "g_file"
-      (List.map file_fields fst)
-      [ "$name"; "$type_str" ; "$empty_array" ]
-      ~out ~on_not_one_id ~id:"inode";
-    line out "    end";
-    line out "  | Directory (name, t, pl) -> begin";
-    line out "    let type_str = Enumeration_file_type.to_string t in";
-    line out "    let added_file_list_monad = map_s ~f:add_tree pl in";
-    line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
-    line out "       let pg_inodes = array_map (list_to_array file_list) \
-                       (fun { inode } ->  inode) in";
-    pgocaml_add_to_database_exn "g_file" 
-      (List.map file_fields fst)
-      [ "$name"; "$type_str" ; "$pg_inodes" ]
-      ~out ~on_not_one_id ~id:"inode";
-    line out "  )  end in";
-    line out " let added_file_list_monad = map_s ~f:add_tree files in";
-    line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
+    line out "let added_file_list_monad = map_s ~f:(_add_tree_exn ~dbh) files in";
+    line out "pg_bind (added_file_list_monad) (fun file_list -> \n";
     line out "     let pg_inodes = array_map (list_to_array file_list) \n\
                        (fun { inode } ->  inode) in";
     line out " let toplevel = match kind with";
@@ -1289,6 +1292,24 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
       [ "$toplevel" ; "$?hr_tag"; "$pg_inodes" ]
       ~out ~on_not_one_id ~id:"id";
     line out ")";
+  );
+
+  doc out "Add a tree to an existing volume.";
+  line out "let add_tree_to_volume %s (volume: volume) tree =" 
+    pgocaml_db_handle_arg;
+  pgocaml_to_result_io out ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_insert;
+  ] (fun out ->
+    line out "let added_file_list_monad = map_s ~f:(_add_tree_exn ~dbh) tree in";
+    line out "pg_bind (added_file_list_monad) (fun file_list -> \n";
+    line out "     let pg_inodes = array_map (list_to_array file_list) \n\
+                       (fun { inode } ->  inode) in";
+    line out "     let vol_id = volume.id in";
+    line out "     PGSQL (dbh)";
+    line out "       %S)"
+      "UPDATE g_volume \
+      SET g_content = ARRAY_CAT(g_content, $pg_inodes) \
+      WHERE g_id = $vol_id";
   );
 
   doc out "Module for constructing file trees less painfully.";
