@@ -63,7 +63,7 @@ module Make
         ?(kind: Layout.Enumeration_sample_sheet_kind.t=`specific_barcodes)
         ~dbh
         flowcell_name =
-      let lanes =
+      let flowcell_lanes =
         wrap_pgocaml
           ~query:(fun () ->
             let open Layout in
@@ -81,60 +81,90 @@ module Make
             | l -> error (`layout_inconsistency (`record_flowcell,
                                                  `search_by_name_not_unique l)))
       in
-      let out_buf = Buffer.create 42 in
-      let out = Buffer.add_string out_buf in
-      let print = ksprintf in
-      print out "FCID,Lane,SampleID,SampleRef,Index,Description,Control,Recipe,\
-         Operator,SampleProject\n";
-      lanes
+      let previous_assembly flowcell =
+        wrap_pgocaml
+          ~query:(fun () ->
+            let open Layout in
+            let open Batteries in
+            let flowcell_id = flowcell.Layout.Record_flowcell.id in
+            let kind_str =
+              Layout.Enumeration_sample_sheet_kind.to_string kind in
+            PGSQL (dbh) 
+              "select g_id, g_result from assemble_sample_sheet \
+               where flowcell = $flowcell_id and g_status = 'Succeeded' \
+                and kind = $kind_str")
+          ~on_result:(function
+            | (idf, Some idr) :: _ ->
+              return (Some (
+                Layout.Function_assemble_sample_sheet.(
+                  ({ id = idf } : [ `can_get_result ] t)),
+                Layout.Record_sample_sheet.({ id = idr })))
+            | (idf, None) :: _ ->
+              error (`layout_inconsistency (`function_assemble_sample_sheet,
+                                            `successful_status_with_no_result idf))
+            | _ -> return None)
+      in
+      flowcell_lanes
       >>= (fun (flowcell, lane_list) ->
-        of_list_sequential lane_list ~f:(fun (lane_idx, l) ->
-          let open Layout.Record_lane in
-          cache_value ~dbh l
-          >>| get_fields
-          >>= fun { libraries; _ } -> 
-          begin match kind with
-          | `specific_barcodes ->
-            of_list_sequential (Array.to_list libraries) ~f:(fun input ->
-              let open Layout.Record_input_library in
-              cache_value ~dbh input >>| get_fields 
-              >>= fun { library; _ } ->
-              let open Layout.Record_stock_library in
-              cache_value ~dbh library >>| get_fields
-              >>= fun { name; barcode_type; barcodes; _ } ->
-              let barcode_type =
-              (* if only one lib, then no barcoding *)
-                if Array.length libraries <= 1 then `none else barcode_type in
-              begin match (barcode_sequences barcode_type barcodes) with
-              | Ok bars ->
-                Array.iter bars ~f:(fun b ->
-                  print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
-                    flowcell_name (lane_idx + 1) name b (lane_idx + 1));
-                return ()
-              | Error e -> error e
-              end)
-          | `all_barcodes ->
-            begin match libraries with
-            | [| |] -> 
-              print out "%s,%d,SingleSample%d,,,,N,,,Lane%d\n"
-                flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
-              return []
-            | some ->
-              let open Layout.Record_input_library in
-              cache_value ~dbh some.(0) >>| get_fields 
-              >>= fun { library; _ } ->
-              let open Layout.Record_stock_library in
-              cache_value ~dbh library >>| get_fields
-              >>= fun { barcode_type; _ } ->
-              Array.iter (all_barcode_sequences barcode_type) ~f:(fun (i, b) ->
-                print out "%s,%d,Lane%d_%s_%02ld_%s,,%s,,N,,,Lane%d\n"
-                  flowcell_name (lane_idx + 1) (lane_idx + 1) 
-                  (Layout.Enumeration_barcode_provider.to_string barcode_type)
-                  i b b (lane_idx + 1));
-              return []
-            end
-          end) 
-        >>= fun _ -> return { content = out_buf; kind; flowcell; flowcell_name })
+        previous_assembly flowcell 
+        >>= function
+        | None ->
+          let out_buf = Buffer.create 42 in
+          let out = Buffer.add_string out_buf in
+          let print = ksprintf in
+          print out "FCID,Lane,SampleID,SampleRef,Index,Description,Control\
+                    ,Recipe,Operator,SampleProject\n";
+          of_list_sequential lane_list ~f:(fun (lane_idx, l) ->
+            let open Layout.Record_lane in
+            cache_value ~dbh l
+            >>| get_fields
+            >>= fun { libraries; _ } -> 
+            begin match kind with
+            | `specific_barcodes ->
+              of_list_sequential (Array.to_list libraries) ~f:(fun input ->
+                let open Layout.Record_input_library in
+                cache_value ~dbh input >>| get_fields 
+                >>= fun { library; _ } ->
+                let open Layout.Record_stock_library in
+                cache_value ~dbh library >>| get_fields
+                >>= fun { name; barcode_type; barcodes; _ } ->
+                let barcode_type =
+                (* if only one lib, then no barcoding *)
+                  if Array.length libraries <= 1 then `none else barcode_type in
+                begin match (barcode_sequences barcode_type barcodes) with
+                | Ok bars ->
+                  Array.iter bars ~f:(fun b ->
+                    print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
+                      flowcell_name (lane_idx + 1) name b (lane_idx + 1));
+                  return ()
+                | Error e -> error e
+                end)
+            | `all_barcodes ->
+              begin match libraries with
+              | [| |] -> 
+                print out "%s,%d,SingleSample%d,,,,N,,,Lane%d\n"
+                  flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
+                return []
+              | some ->
+                let open Layout.Record_input_library in
+                cache_value ~dbh some.(0) >>| get_fields 
+                >>= fun { library; _ } ->
+                let open Layout.Record_stock_library in
+                cache_value ~dbh library >>| get_fields
+                >>= fun { barcode_type; _ } ->
+                Array.iter (all_barcode_sequences barcode_type) ~f:(fun (i, b) ->
+                  print out "%s,%d,Lane%d_%s_%02ld_%s,,%s,,N,,,Lane%d\n"
+                    flowcell_name (lane_idx + 1) (lane_idx + 1) 
+                    (Layout.Enumeration_barcode_provider.to_string barcode_type)
+                    i b b (lane_idx + 1));
+                return []
+              end
+            end) 
+          >>= fun _ -> return (`new_one 
+                                  { content = out_buf; kind; flowcell; 
+                                    flowcell_name })
+        | Some (assembly, sample_sheet) -> return (`old_one (assembly, sample_sheet))
+      )
 
     let output samplesheet output_string =
       output_string (Buffer.contents samplesheet.content)
@@ -176,18 +206,22 @@ module Make
 
     let run ~dbh ~kind ?note ~write_to_tmp ~mv_from_tmp flowcell =
       preparation ~kind ~dbh flowcell
-      >>= fun sample_sheet ->
-      output sample_sheet write_to_tmp >>= fun () ->
-      get_target_file ~dbh sample_sheet
-      >>= fun (the_volume, pathd, pathf) ->
-      let movem = mv_from_tmp pathd pathf in
-      double_bind movem
-        ~ok:(fun () ->
-          register_with_success ~dbh ?note ~file:the_volume sample_sheet
-          >>= fun _ -> return ())
-        ~error:(fun e ->
-          register_with_failure ~dbh ?note sample_sheet 
-          >>= fun _ -> error e)
+      >>= function
+        | `new_one sample_sheet ->
+          output sample_sheet write_to_tmp
+          >>= fun () ->
+          get_target_file ~dbh sample_sheet
+          >>= fun (the_volume, pathd, pathf) ->
+          let movem = mv_from_tmp pathd pathf in
+          double_bind movem
+            ~ok:(fun () ->
+              register_with_success ~dbh ?note ~file:the_volume sample_sheet
+              >>= fun succeeded -> return (`new_success succeeded))
+            ~error:(fun e ->
+              register_with_failure ~dbh ?note sample_sheet 
+              >>= fun failed -> return (`new_failure (failed, e)))
+        | `old_one (assembly, sample_sheet) -> 
+          return (`previous_success (assembly, sample_sheet))
 
 
 

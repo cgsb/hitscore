@@ -27,15 +27,13 @@ If any step fails (e.g. the shell command)
 
   *)
   val run :
-    dbh:(string, bool) Batteries.Hashtbl.t Layout.PGOCaml.t ->
+    dbh:Layout.db_handle ->
     kind:Layout.Enumeration_sample_sheet_kind.t ->
     ?note:string ->
     write_to_tmp:(string ->
                   (unit,
                    [> `barcode_not_found of
                        int32 * Layout.Enumeration_barcode_provider.t
-                   | `wrong_request of
-                       [> `record_flowcell ] * [> `value_not_found of string ]     
                    | `fatal_error of
                        [> `trees_to_unix_paths_should_return_one ]
                    | `layout_inconsistency of
@@ -53,12 +51,23 @@ If any step fails (e.g. the shell command)
                          | `search_by_name_not_unique of
                              (int32 * Layout.PGOCaml.int32_array) list
                          | `select_did_not_return_one_cache of
-                             string * int ]
-                   | `pg_exn of exn ] as 'a) Result_IO.monad) ->
-    mv_from_tmp:(string -> string -> (unit, 'a) Result_IO.monad) -> 
+                             string * int
+                         | `successful_status_with_no_result of int32 ]
+                   | `pg_exn of exn
+                   | `wrong_request of
+                       [> `record_flowcell ] *
+                         [> `value_not_found of string ] ]
+                     as 'a) Result_IO.monad) ->
+    mv_from_tmp:(string -> string -> (unit, 'b) Result_IO.monad) ->
     string ->
-    (unit, 'a) Result_IO.monad
-
+    ([ `new_failure of
+        [ `can_nothing ] Layout.Function_assemble_sample_sheet.t * 'b
+     | `new_success of
+         [ `can_get_result ] Layout.Function_assemble_sample_sheet.t
+     | `previous_success of
+         [ `can_get_result ] Layout.Function_assemble_sample_sheet.t *
+           Layout.Record_sample_sheet.t ], 'a) Result_IO.monad
+  
 
 
 end
