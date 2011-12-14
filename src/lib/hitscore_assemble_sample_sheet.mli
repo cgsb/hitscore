@@ -6,55 +6,26 @@ module Make :
       functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
 sig
   
-  type sample_sheet
-    
-  (** Prepare a sample-sheet.  *)
-  val preparation: 
-    ?kind:Layout.Enumeration_sample_sheet_kind.t ->
-    dbh:Layout.db_handle ->
-    string ->
-    (sample_sheet,
-     [> `io_exn of exn
-     | `layout_inconsistency of
-         [> `record_flowcell
-         | `record_input_library
-         | `record_lane
-         | `record_stock_library ] *
-           [> `search_by_name_not_unique of (int32 * int32 array) list
-           | `select_did_not_return_one_cache of string * int ]
-     | `barcode_not_found of int32 * Layout.Enumeration_barcode_provider.t
-     | `wrong_request of
-         [> `record_flowcell ] * [> `value_not_found of string ]
-     | `pg_exn of exn ]) Result_IO.monad
-      
-  val output: sample_sheet ->
-    (string -> ('a, 'b) Result_IO.monad) ->
-    ('a, 'b) Result_IO.monad
+  (** Assemble a sample-sheet:
+{[
+  Hitscore_lwt.Assemble_sample_sheet.run
+    ~kind:`all_barcodes ~dbh
+    ~note:"Documentation of Sample-sheet assembly"
+    "D03M4ACXX"
 
-  val get_target_file :
-    dbh:Layout.db_handle ->
-    sample_sheet ->
-    (Layout.File_system.volume * string * string,
-     [> `fatal_error of [> `trees_to_unix_paths_should_return_one ]
-     | `layout_inconsistency of
-         [> `file_system ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `select_did_not_return_one_cache of string * int ]
-     | `pg_exn of exn ])
-      Result_IO.monad
-      
-  val register_with_success :
-    dbh:Layout.db_handle ->
-    ?note:string ->
-    file:Layout.File_system.volume ->
-    sample_sheet ->
-    ([ `can_get_result ] Layout.Function_assemble_sample_sheet.t,
-     [> `layout_inconsistency of
-         [> `function_assemble_sample_sheet | `record_sample_sheet ] *
-           [> `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ])
-      Result_IO.monad
-      
+    ~write_to_tmp:(fun s ->
+      Lwt_io.(wrap_io 
+                (with_file ~mode:output tmp_file)
+                (fun chan -> fprintf chan "%s" s)))
+
+    ~mv_from_tmp:(fun volpath filepath ->
+      ksprintf shell_command "mv %s %s/%s/%s" tmp_file root volpath filepath)
+]}
+If any step fails (e.g. the shell command)
+ but the assemble_sample_sheet evaluation has been created, it will be
+ set as failed, but (for now) the file-system won't be "corrected".
+
+  *)
   val run :
     dbh:(string, bool) Batteries.Hashtbl.t Layout.PGOCaml.t ->
     kind:Layout.Enumeration_sample_sheet_kind.t ->
