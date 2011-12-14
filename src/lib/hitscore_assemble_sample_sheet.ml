@@ -233,10 +233,16 @@ module Make
                         flowcell
                         (Layout.Enumeration_sample_sheet_kind.to_string kind))
               >>= fun _ ->
+              Layout.File_system.(
+                cache_volume ~dbh the_volume
+                >>= fun cache ->
+                delete_cache ~dbh cache
+                >>= fun () ->
+                return (sexp_of_volume_cache cache))
+              >>= fun sexp ->
               Layout.Record_log.add_value ~dbh
-                ~log:(sprintf "(orphan_volume %ld %s (%s))"
-                        the_volume.Layout.File_system.id
-                        pathd pathf)
+                ~log:(sprintf "(delete_orphan_volume %s)"
+                        (Sexplib.Sexp.to_string_hum sexp))
               >>= fun _ ->
               return (`new_failure (failed, e)))
 
