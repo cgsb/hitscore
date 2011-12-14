@@ -753,8 +753,8 @@ let () =
       | _ -> None);
 
   define_command 
-    ~names:["print-config"]
-    ~description:"Display the current profile"
+    ~names:["print-configuration"; "pc"]
+    ~description:"Display the current profile (and environment)."
     ~usage:(fun o exec cmd -> fprintf o "usage: %s <profile> %s\n" exec cmd)
     ~run:(fun config exec cmd -> function
       | [] -> 
@@ -765,7 +765,13 @@ let () =
         iter (db_port     config) (printf "DB port     : %d\n"); 
         iter (db_database config) (printf "DB database : %S\n"); 
         iter (db_username config) (printf "DB username : %S\n"); 
-        iter (db_password config) (printf "DB password : %S\n"); 
+        iter (db_password config) (printf "DB password : %S\n");
+
+        iter (Sys.getenv "PGHOST") (printf "Env: PGHOST : %S\n");
+        iter (Sys.getenv "PGUSER") (printf "Env: PGUSER : %S\n");
+        iter (Sys.getenv "PGDATABASE") (printf "Env: PGDATABASE : %S\n");
+        iter (Sys.getenv "PGPASSWORD") (printf "Env: PGPASSWORD : %S\n");
+
         Some ()
       | _ -> None);
 
