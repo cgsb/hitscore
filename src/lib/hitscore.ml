@@ -44,6 +44,13 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
 
   let root_directory t = t.root_directory
 
+
+  let db_host     t = Option.map t.db_configuration (fun dbc -> dbc.db_host    ) 
+  let db_port     t = Option.map t.db_configuration (fun dbc -> dbc.db_port    ) 
+  let db_database t = Option.map t.db_configuration (fun dbc -> dbc.db_database) 
+  let db_username t = Option.map t.db_configuration (fun dbc -> dbc.db_username) 
+  let db_password t = Option.map t.db_configuration (fun dbc -> dbc.db_password) 
+    
   let db_connect t =
     match t.db_configuration with
     | None -> 

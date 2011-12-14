@@ -43,6 +43,12 @@ module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) : sig
   (** Get the current root directory (if set).  *)
   val root_directory : local_configuration -> string option
     
+  val db_host     : local_configuration -> string   option 
+  val db_port     : local_configuration -> int      option 
+  val db_database : local_configuration -> string   option 
+  val db_username : local_configuration -> string   option 
+  val db_password : local_configuration -> string   option 
+
   (** Attempt to connect to the database. *)
   val db_connect : local_configuration -> 
     (Layout.db_handle, [> `pg_exn of exn]) Result_IO.monad
