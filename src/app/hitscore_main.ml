@@ -525,7 +525,54 @@ module Verify = struct
 
 end
 
+module FS = struct
 
+  let add_files_to_volume root vol files =
+    let open Hitscore_threaded.Result_IO in
+    let hsc = Hitscore_threaded.configure ~root_directory:root () in
+    match Hitscore_threaded.db_connect hsc with
+    | Ok dbh ->
+      Hitscore_threaded.Layout.File_system.(
+        match cache_volume ~dbh { id = vol }  >>| volume_entry_cache
+        >>| volume_entry >>| entry_unix_path with
+        | Ok path ->
+          let file_args = String.concat ~sep:" " files in
+          eprintf "Copying %s to %s/%s\n" file_args root path;
+          ksprintf System.command_exn "cp %s %s/%s/" file_args root path
+        | Error (`layout_inconsistency (`file_system,
+                                        `select_did_not_return_one_cache (s, i))) ->
+          eprintf "ERROR(FS.add_tree_to_volume): \n\
+          Layout.File_system.cache_volume detected an inconsistency\n\
+          FILE_SYSTEM: select_did_not_return_one_cache (%s, %d)" s i;
+          failwith "STOP"
+        | Error (`pg_exn e) ->
+          eprintf "ERROR(FS.add_tree_to_volume): \n\
+          Layout.File_system.cache_volume had a PGOCaml error:\n%s"
+            (Exn.to_string e);
+          failwith "STOP"
+      );
+      eprintf "Copy: DONE (won't go back).\n";
+      begin match Hitscore_threaded.Layout.File_system.(
+        add_tree_to_volume ~dbh { id = vol } 
+          (List.map files (fun f -> Tree.file (Filename.basename f)))) with
+      | Ok () ->
+        eprintf "add_tree_to_volume: OK\n"
+      | Error (`layout_inconsistency (`file_system,
+                                      `add_did_not_return_one (s, l))) ->
+        eprintf "ERROR(FS.add_tree_to_volume): \n\
+          Layout.File_system.add_tree_to_volume detected an inconsistency\n\
+          FILE_SYSTEM: add_did_not_return_one (%s, [%s])"
+          s (String.concat ~sep:"; " (List.map l Int32.to_string))
+      | Error (`pg_exn e) ->
+        eprintf "ERROR(FS.add_tree_to_volume): \n\
+          Layout.File_system.add_tree_to_volume had a PGOCaml error:\n%s"
+          (Exn.to_string e)
+      end
+    | Error (`pg_exn e) ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+
+
+end
 
 
 
@@ -618,6 +665,21 @@ let () =
     ~run:(fun exec cmd -> function
       | [ path ] -> Some (Verify.check_file_system path)
       | [ "-quiet"; path ] -> Some (Verify.check_file_system ~verbose:false path)
+      | _ -> None);
+
+  define_command
+    ~names:["add-files-to-volume"; "afv"]
+    ~description:"Move files to a volume (at its root)"
+    ~usage:(fun o exec cmd ->
+      fprintf o "%s %s <root> <volume_id : int> <file1> <file2> ...\n" exec cmd)
+    ~run:(fun exec cmd -> function
+      | root :: vol :: files ->
+        begin 
+          try 
+            let v = Int32.of_string vol in
+            Some (FS.add_files_to_volume root v files)
+          with e -> None
+        end
       | _ -> None);
 
   let global_usage = function
