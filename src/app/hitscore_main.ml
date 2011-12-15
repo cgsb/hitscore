@@ -23,6 +23,10 @@ end
 
 module Configuration_file = struct
 
+  let default () =
+    sprintf "%s/.config/hitscore/config.sexp"
+      (Option.value_exn_message "This environment has no $HOME !"
+         (Sys.getenv "HOME"))
 
   let parse_sexp sexp =
     let fail msg =
@@ -70,6 +74,36 @@ module Configuration_file = struct
     match List.Assoc.find assoc profile with
     | Some c -> c ()
     | None -> failwithf "Can't find profile: %s" profile ()
+
+  let iter = List.iter
+
+  let print_config config =
+    let open Option in
+    let open Hitscore_threaded in
+    iter (root_directory config) (printf "Root directory: %S\n");
+    iter (db_host     config) (printf "DB host     : %S\n"); 
+    iter (db_port     config) (printf "DB port     : %d\n"); 
+    iter (db_database config) (printf "DB database : %S\n"); 
+    iter (db_username config) (printf "DB username : %S\n"); 
+    iter (db_password config) (printf "DB password : %S\n");
+    ()
+
+  let print_env () =
+    let open Option in
+    let open Hitscore_threaded in
+    iter (Sys.getenv "PGHOST") (printf "Env: PGHOST : %S\n");
+    iter (Sys.getenv "PGUSER") (printf "Env: PGUSER : %S\n");
+    iter (Sys.getenv "PGDATABASE") (printf "Env: PGDATABASE : %S\n");
+    iter (Sys.getenv "PGPASSWORD") (printf "Env: PGPASSWORD : %S\n");
+    ()
+    
+  let print_all assoc =
+    List.iter assoc (fun (n, f) ->
+      printf "** Configuration %S:\n" n;
+      print_config (f ()));
+    printf "** Environment:\n";
+    print_env ();
+    ()
 
 end
 
@@ -758,31 +792,21 @@ let () =
     ~usage:(fun o exec cmd -> fprintf o "usage: %s <profile> %s\n" exec cmd)
     ~run:(fun config exec cmd -> function
       | [] -> 
-        let open Option in
-        let open Hitscore_threaded in
-        iter (root_directory config) (printf "Root directory: %S\n");
-        iter (db_host     config) (printf "DB host     : %S\n"); 
-        iter (db_port     config) (printf "DB port     : %d\n"); 
-        iter (db_database config) (printf "DB database : %S\n"); 
-        iter (db_username config) (printf "DB username : %S\n"); 
-        iter (db_password config) (printf "DB password : %S\n");
-
-        iter (Sys.getenv "PGHOST") (printf "Env: PGHOST : %S\n");
-        iter (Sys.getenv "PGUSER") (printf "Env: PGUSER : %S\n");
-        iter (Sys.getenv "PGDATABASE") (printf "Env: PGDATABASE : %S\n");
-        iter (Sys.getenv "PGPASSWORD") (printf "Env: PGPASSWORD : %S\n");
-
+        printf "** Current configuration:\n";
+        Configuration_file.print_config config;
+        printf "** Environment:\n";
+        Configuration_file.print_env ();
         Some ()
       | _ -> None);
 
   let global_usage = function
     | `error -> 
-      eprintf "ERROR: usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n" 
+      eprintf "ERROR: Main usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n" 
         Sys.argv.(0);
       eprintf "       try `%s help'\n" Sys.argv.(0);
     | `ok ->
-      printf  "usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n"
-        Sys.argv.(0)
+      printf  "Main usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n"
+        Sys.argv.(0);
   in
   match Array.to_list Sys.argv with
   | exec :: "-h" :: args
@@ -797,7 +821,8 @@ let () =
       global_usage `ok;
       printf "  where <cmd> is among:\n";
       printf "%s\n" (short_help "    ");
-      printf "  please try `%s -help <cmd>\n" exec;
+      printf "More Help: `%s -help <cmd>'\n" exec;
+      printf "Also:  %s {-l,-list-config} [config-file]\n" exec
     ) else (
       List.iter args (fun cmd ->
         match find_command cmd with
@@ -806,14 +831,25 @@ let () =
         | None ->
           printf "Unknown Command: %S !\n" cmd)
     )
-
+  | exec :: "-l" :: args
+  | exec :: "-list-config" :: args ->
+    let config_file =
+      match args with
+      | [] -> Configuration_file.default () 
+      | one :: [] -> one
+      | _ -> eprintf "Too MANY arguments.\n"; global_usage `error; 
+        failwith ""
+    in
+    let config = In_channel.(with_file config_file ~f:input_all) in
+    let hitscore_config = Configuration_file.(parse_str config) in
+    Configuration_file.print_all hitscore_config
+   
+    
   | exec :: profile :: cmd :: args ->
     let config_file, profile_name =
       match String.split profile ~on:':' with
       | [ one ] ->
-        (sprintf "%s/.config/hitscore/config.sexp"
-           (Option.value_exn_message "This environment has no $HOME !"
-              (Sys.getenv "HOME")), one)
+        (Configuration_file.default (), one)
       | [ one; two ] ->
         (one, two)
       | _ -> failwithf "Can't understand: %s" profile ()
