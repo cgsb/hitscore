@@ -92,6 +92,7 @@ module Configuration_file = struct
     let open Option in
     let open Hitscore_threaded in
     iter (Sys.getenv "PGHOST") (printf "Env: PGHOST : %S\n");
+    iter (Sys.getenv "PGPORT") (printf "Env: PGPORT : %S\n");
     iter (Sys.getenv "PGUSER") (printf "Env: PGUSER : %S\n");
     iter (Sys.getenv "PGDATABASE") (printf "Env: PGDATABASE : %S\n");
     iter (Sys.getenv "PGPASSWORD") (printf "Env: PGPASSWORD : %S\n");
@@ -103,6 +104,29 @@ module Configuration_file = struct
       print_config (f ()));
     printf "** Environment:\n";
     print_env ();
+    ()
+
+  let export_env config command =
+    let open Option in
+    let open Hitscore_threaded in
+    let cmd = ref "" in
+    let f s = cmd := !cmd ^ s in
+    let print = ksprintf in
+    print f "unset PGHOST ";
+    print f "PGPORT ";
+    print f "PGDATABASE ";
+    print f "PGUSER  ";
+    print f "PGPASSWORD\n";
+
+    iter (db_port config)       (print f "export PGPORT=%d ; \n"    ); 
+    iter (db_host     config)   (print f "export PGHOST=%s ; \n"    ); 
+    iter (db_database config)   (print f "export PGDATABASE=%s ; \n"); 
+    iter (db_username config)   (print f "export PGUSER=%s ; \n"    ); 
+    iter (db_password config)   (print f "export PGPASSWORD=%s ; \n");
+    printf "Running %S with:\n%s\n\
+            ========================================\
+            ========================================\n%!" command !cmd;
+    System.command_exn (!cmd ^ " " ^ command);
     ()
 
 end
@@ -685,7 +709,8 @@ let short_help indent =
   String.concat ~sep:"\n"
     (List.map !commands
        (fun (names, desc, _, _) ->
-         sprintf "%s * %s : %s" indent (String.concat ~sep:"|" names) desc))
+         sprintf "%s * %s:\n%s%s%s" indent (String.concat ~sep:"|" names) 
+           indent indent desc))
 
 let find_command cmd = 
   List.find !commands (fun (names, _, _, _) -> List.mem cmd ~set:names)
@@ -798,6 +823,15 @@ let () =
         Configuration_file.print_env ();
         Some ()
       | _ -> None);
+  define_command 
+    ~names:["with-env"; "wenv"]
+    ~description:"Run a command (default \"bash\") with the current \
+                  profile's environment."
+    ~usage:(fun o exec cmd -> fprintf o "usage: `%s <profile> %s [<cmd>]`\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+      | [] -> Configuration_file.export_env config "bash"; Some ()
+      | [cmd] -> Configuration_file.export_env config cmd; Some ()
+      | _ -> None);
 
   let global_usage = function
     | `error -> 
@@ -821,7 +855,7 @@ let () =
       global_usage `ok;
       printf "  where <cmd> is among:\n";
       printf "%s\n" (short_help "    ");
-      printf "More Help: `%s -help <cmd>'\n" exec;
+      printf "More Help: %s [<profile>] {-h,-help,--help,help} <cmd>\n" exec;
       printf "Also:  %s {-l,-list-config} [config-file]\n" exec
     ) else (
       List.iter args (fun cmd ->
