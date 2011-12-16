@@ -22,12 +22,13 @@
         (name string option)
         (informal string option)
         notable)
+(search organism by name)
 
 (record sample
         (name        string)
         (organism    organism option)
         notable)
-
+(search sample by name)
 
 
 (volume protocol_directory protocols)
@@ -35,7 +36,7 @@
         (name string)
         (doc protocol_directory)
         notable)
-
+(search protocol by name)
 
 (enumeration barcode_provider 
              none bioo bioo_8_beginning illumina nugen)
@@ -54,6 +55,7 @@
           (barcodes int array)
           notable
 )
+(search stock_library by name)
 
 (record key_value
         (key string)
