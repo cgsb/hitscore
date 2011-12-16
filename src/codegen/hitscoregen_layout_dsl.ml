@@ -27,9 +27,13 @@ type dsl_runtime_type =
   | Function of string * typed_value list * string
   | Volume of string * string (* Volume (dsl-name, toplevel-dir) *)
       
+type custom_action = 
+  | Search_by_and of string * string list
+
 type dsl_runtime_description = {
   nodes: dsl_runtime_type list;
   types: dsl_type list; (* TODO clarify what's in there! *)
+  actions: custom_action list;
 }
 
 let built_in_complex_types = [
@@ -182,6 +186,7 @@ let parse_sexp sexp =
       fail (sprintf "I'm lost parsing fields with: %s\n" (Sx.to_string l))
 
   in
+  let actions = ref [] in
   let parse_entry entry =
     match entry with
     | (Sx.Atom "subrecord") :: (Sx.Atom name) :: l ->
@@ -216,9 +221,47 @@ let parse_sexp sexp =
     | (Sx.Atom "volume") :: (Sx.Atom name) :: (Sx.Atom toplevel) :: [] ->
       existing_types := Volume_name name :: !existing_types;
       Some (Volume (name, toplevel))
+    | (Sx.Atom "search") :: (Sx.Atom record) :: (Sx.Atom "by") :: search_by ->
+      begin match check_type record with
+      | Record_name r -> ()
+      | Function_name r -> ()
+      | t -> 
+        fail (sprintf "A search-by can only operate on records or functions, \
+                 not %S like (search %s by ...) does."
+                (string_of_dsl_type t) record)
+      end;
+      begin match search_by with
+      | [ Sx.List (Sx.Atom "and" :: fields) ] ->
+        let fields = List.map fields (function
+          | Sx.Atom f -> f
+          | _ -> ksprintf fail "In (search %s by ...): 'and' operation only
+                      accepts lists of fields" record)
+        in
+        actions := (Search_by_and (record, fields)) :: !actions
+      | [ Sx.Atom field ] ->
+        actions := (Search_by_and (record, [field])) :: !actions
+      | _ ->
+        ksprintf fail "Can't parse this (search %s by ...)" record
+      end;
+      None
     | s ->
       fail (sprintf "I'm lost while parsing entry with: %s\n"
               (Sx.to_string (Sx.List s)))
+  in
+  let check_actions actions nodes =
+    List.iter actions (function
+      | Search_by_and (record, fields) ->
+        begin match List.find nodes (function
+          | Record (n, _) -> n = record
+          | _ -> false)  with
+        | Some (Record (n, r_f)) ->
+          List.iter fields (fun s ->
+            if List.exists r_f (fun (n, _) -> s = n) then () 
+            else
+              ksprintf fail "In (search %s by ...): field %s does not exist" 
+                record s)
+        | _ -> ()
+        end)
   in
   match sexp with
   | Sx.Atom s -> fail_atom s
@@ -228,8 +271,12 @@ let parse_sexp sexp =
         ~f:(function
           | Sx.Atom s -> fail_atom s
           | Sx.List l -> parse_entry l) in
-    { nodes = built_in_complex_types @ user_nodes; 
-      types = List.rev !existing_types }
+    let nodes = built_in_complex_types @ user_nodes in
+    let actions = !actions in
+    check_actions actions nodes;
+    { nodes; 
+      types = List.rev !existing_types;
+      actions }
     
 
 let parse_str str =
@@ -1708,6 +1755,58 @@ let ocaml_dump_and_reload ~out dsl =
     );
   ()
 
+let ocaml_search_module ~out dsl =
+  line out "module Search = struct";
+  List.iter dsl.actions (function
+    | Search_by_and (record, fields) ->
+      let record_type, kindstr, all_typed_fields  =
+        List.find_map dsl.nodes (function
+          | Record (n, fs) when n = record -> 
+            Some (Record_name n, "record", fs)
+          | Function (n, tv, r) when n = record -> 
+            Some (Function_name n, "function", tv)
+          | _ -> None) |> Option.value_exn
+      in
+      let typed_fields =
+        List.map fields (fun s ->
+          List.find_exn all_typed_fields ~f:(fun (n, _) -> n = s))
+      in
+      let fun_name = 
+        sprintf "%s_%s_by_%s" kindstr record (String.concat ~sep:"_" fields) in
+      hide out (fun out ->
+        line out "let %s_exn %s %s ="
+          fun_name pgocaml_db_handle_arg
+          (String.concat ~sep:" " (List.map fields (sprintf "%s")));
+        List.iter typed_fields (fun tv -> let_in_typed_value tv |> raw out "%s");
+        line out " let search = ";
+        line out "PGSQL(dbh)";
+        line out "\"SELECT g_id FROM %s WHERE %s\"" record
+          (String.concat ~sep:" AND "
+             (List.map fields (fun s -> sprintf "%s = $%s" s s)));
+        line out "  in";
+        line out "  pg_bind search (fun l -> \
+                pg_return (list_map l (fun %s -> %s)))" record
+          (convert_pgocaml_type (record, record_type));
+      );
+      let plural_s, sing_es = 
+        if List.length fields > 1 then "s", "" else "", "es" in
+      doc out "Search all the %ss [%s] for which the field%s %s match%s \
+              the argument%s."
+        kindstr record plural_s 
+        (String.concat ~sep:", " fields) sing_es plural_s;
+      line out "let %s %s %s ="
+        fun_name pgocaml_db_handle_arg
+        (String.concat ~sep:" " (List.map fields (sprintf "%s")));
+      pgocaml_to_result_io out ~transform_exceptions:[] (fun out ->
+        line out "  %s_exn ~dbh %s"
+          fun_name (String.concat ~sep:" " (List.map fields (sprintf "%s")));
+      );
+
+  );
+  line out "end (* module Search *)";
+  ()
+
+
 let ocaml_code ?(functorize=true) dsl output_string =
   let out = output_string in
   doc out "Autogenerated module.";
@@ -1780,6 +1879,8 @@ let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
       ocaml_function_module ~out name args result
     | Volume (_, _) -> ()
   );
+  doc out "{3 Custom Queries On the Layout}";
+  ocaml_search_module ~out dsl;
   doc out "{3 Top-level Queries On The Data-base }";
   doc out "";
   ocaml_toplevel_values_and_types ~out dsl;
