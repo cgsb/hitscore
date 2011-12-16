@@ -15,6 +15,7 @@
        notable
        )
 (search person by email)
+(search person by (and nickname family_name))
 (search person by (and given_name family_name))
 
 (record organism

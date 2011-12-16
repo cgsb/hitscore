@@ -730,9 +730,43 @@ module Submission_sheet = struct
   let protocol_s__used = 37 (* "Protocol(s) used" *)
   let notes = 38 (* "Notes" *)
 
+  open Hitscore_threaded 
+  
+  let find_contact ~dbh first last email =
+    printf "Person: %s %s %s\n" first last email;
+    let by_email = Layout.Search.record_person_by_email ~dbh email in
+    begin match by_email with
+    | Ok [ one ] ->
+      printf "  Found one person with that email: %ld.\n"
+        one.Layout.Record_person.id;
+    | Ok [] ->
+      printf "  Found no person with that email … ";
+      begin match Layout.Search.record_person_by_given_name_family_name
+          ~dbh first last with
+      | Ok [ one ] ->
+        printf "BUT found one person with that name: %ld.\n"
+          one.Layout.Record_person.id;
+      | Ok [] ->
+        printf "neither with that full name … ";
+        begin match Layout.Search.record_person_by_nickname_family_name
+            ~dbh first last with
+        | Ok [ one ] ->
+          printf "BUT found one person with that nick name: %ld.\n"
+            one.Layout.Record_person.id;
+        | Ok [] ->
+          printf "neither with that nick-fullname … \n";
+        | _ ->
+          failwith "search by nick-full-name returned wrong"
+        end
+      | _ ->
+        failwith "search by full-name returned wrong"
+      end
+    | _ ->
+      failwith "search by email returned wrong"
+    end
 
   let parse hsc file =
-    match Hitscore_threaded.db_connect hsc with
+    match db_connect hsc with
     | Ok dbh ->
       let print = ksprintf in
       let errbuf = Buffer.create 42 in
@@ -747,19 +781,7 @@ module Submission_sheet = struct
       let () =
         let rec check_contact = function
           | first :: last :: email :: rest ->
-            printf "Person: %s %s %s\n" first last email;
-            let by_email =
-              Hitscore_threaded.Layout.Search.record_person_by_email ~dbh email
-            in
-            begin match by_email with
-            | Ok [ one ] ->
-              printf "Found one person with that email: %ld.\n"
-                one.Hitscore_threaded.Layout.Record_person.id
-            | Ok [ ] ->
-              printf "Found no person with that email.\n" 
-            | _ ->
-              failwith "search by email returned wrong"
-            end;
+            find_contact ~dbh first last email;
             check_contact rest
           | [] -> ()
           | l ->
@@ -774,7 +796,8 @@ module Submission_sheet = struct
       let () = 
         match loaded.(charge_to_ + 1) with
         | "" :: first :: last :: email :: rest ->
-          printf "CPI: %s %s %s\n" first last email; 
+          printf "PI: ";
+          find_contact ~dbh first last email;
           printf "Don't know what to do with: [%s]\n" (strlist rest)
         | l -> error "Wrong investigator line: %s" (strlist l)
       in
