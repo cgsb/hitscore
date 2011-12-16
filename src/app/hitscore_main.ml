@@ -731,41 +731,57 @@ module Submission_sheet = struct
   let notes = 38 (* "Notes" *)
 
 
-  let parse config file =
-    let print = ksprintf in
-    let errbuf = Buffer.create 42 in
-    let error fmt =
-      let  f = Buffer.add_string errbuf in
-      print f ("ERROR:" ^^ fmt ^^ "\n") in
-    let warning fmt =
-      let  f = Buffer.add_string errbuf in
-      print f ("WARNING:" ^^ fmt ^^ "\n") in
-    let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S")) in
-    let loaded = Csv.load ~separator:',' file |> Array.of_list in
-    let () =
-      let rec check_contact = function
-        | first :: last :: email :: rest ->
-          printf "Person: %s %s %s\n" first last email; 
-          check_contact rest
-        | [] -> ()
-        | l ->
-          error "Wrong contacts format: not going by 3 (?):\n[%s]"
-            (strlist l);
+  let parse hsc file =
+    match Hitscore_threaded.db_connect hsc with
+    | Ok dbh ->
+      let print = ksprintf in
+      let errbuf = Buffer.create 42 in
+      let error fmt =
+        let  f = Buffer.add_string errbuf in
+        print f ("ERROR:" ^^ fmt ^^ "\n") in
+      let warning fmt =
+        let  f = Buffer.add_string errbuf in
+        print f ("WARNING:" ^^ fmt ^^ "\n") in
+      let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S")) in
+      let loaded = Csv.load ~separator:',' file |> Array.of_list in
+      let () =
+        let rec check_contact = function
+          | first :: last :: email :: rest ->
+            printf "Person: %s %s %s\n" first last email;
+            let by_email =
+              Hitscore_threaded.Layout.Search.record_person_by_email ~dbh email
+            in
+            begin match by_email with
+            | Ok [ one ] ->
+              printf "Found one person with that email: %ld.\n"
+                one.Hitscore_threaded.Layout.Record_person.id
+            | Ok [ ] ->
+              printf "Found no person with that email.\n" 
+            | _ ->
+              failwith "search by email returned wrong"
+            end;
+            check_contact rest
+          | [] -> ()
+          | l ->
+            error "Wrong contacts format: not going by 3 (?):\n[%s]"
+              (strlist l);
+        in
+        match loaded.(contacts + 1) with
+        | "" :: [] | [] -> warning "No contacts."
+        | "" :: by3 -> check_contact by3
+        | l -> error "Wrong contact line: %s" (strlist l)
       in
-      match loaded.(contacts + 1) with
-      | "" :: [] | [] -> warning "No contacts."
-      | "" :: by3 -> check_contact by3
-      | l -> error "Wrong contact line: %s" (strlist l)
-    in
-    let () = 
-      match loaded.(charge_to_ + 1) with
-      | "" :: first :: last :: email :: rest ->
-        printf "CPI: %s %s %s\n" first last email; 
-        printf "Don't know what to do with: [%s]\n" (strlist rest)
-      | l -> error "Wrong investigator line: %s" (strlist l)
-    in
-    printf "ERRORS and WARNINGS:\n%s\n" (Buffer.contents errbuf);
-    ()
+      let () = 
+        match loaded.(charge_to_ + 1) with
+        | "" :: first :: last :: email :: rest ->
+          printf "CPI: %s %s %s\n" first last email; 
+          printf "Don't know what to do with: [%s]\n" (strlist rest)
+        | l -> error "Wrong investigator line: %s" (strlist l)
+      in
+      printf "ERRORS and WARNINGS:\n%s\n" (Buffer.contents errbuf);
+      ()
+    | Error (`pg_exn e) ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
 end
 
