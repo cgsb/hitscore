@@ -42,18 +42,20 @@
              none bioo bioo_8_beginning illumina nugen)
 
 (record stock_library
-          (name           string)
-          (sample      sample option)
-          (protocol  protocol option)
-          (application    string option)
-          (stranded       bool)
-          (truseq_control bool)
-          (rnaseq_control string option)
-          (read_length_1 int)
-          (read_length_2 int option)
-          (barcode_type barcode_provider)
-          (barcodes int array)
-          notable
+        (name           string)
+        (project        string option)
+        (sample      sample option)
+        (protocol  protocol option)
+        (application    string option)
+        (stranded       bool)
+        (truseq_control bool)
+        (rnaseq_control string option)
+        (barcode_type barcode_provider)
+        (barcodes int array)
+        (p5_adapter_length int option )
+        (p7_adapter_length int option)
+        (preparator person option)
+        notable
 )
 (search stock_library by name)
 
@@ -64,7 +66,6 @@
 (record input_library
         (library stock_library)
         (submission_date timestamp)
-        (contacts     person array)
         (volume_uL real option)
         (concentration_nM real option)
         (user_db key_value array)
@@ -76,11 +77,20 @@
         (total_volume real option)
         (libraries input_library array)
         (pooled_percentages int array)
+        (requested_read_length_1 int)
+        (requested_read_length_2 int option)
+        (contacts     person array)
         )
 
 (record flowcell
         (serial_name string)
         (lanes lane array))
+
+(record inviocing
+        (pi person)
+        (chartfield string)
+        (lanes lane array))
+
 
 ;; Common fields of bioanalyzer and agarose_gel:
 (subrecord bioanalyzer_like
