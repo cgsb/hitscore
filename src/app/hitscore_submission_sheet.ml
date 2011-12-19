@@ -3,35 +3,64 @@ let (|>) x f = f x
 
 module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
 
-let library_submission_date = 0 (* "Library Submission Date" *)
-let number_of_lanes_required_ = 1 (* "Number of Lanes Required " *)
-let contacts = 2 (* "Contacts" *)
-let charge_to_ = 5 (* "Charge To:" *)
-let library_identifier = 9 (* "Library Identifier" *)
-let sample_identifier__library_protocol_input_ = 10 (* "Sample Identifier (Library Protocol Input)" *)
-let application__dna_seq__rna_seq__chip_seq__etc__ = 11 (* "Application (DNA-seq, RNA-seq, ChIP-seq, etc.)" *)
-let read_type_and_length__sr_50__sr_100__pe_50x50__or_pe_100x100__ = 12 (* "Read Type and Length (SR 50, SR 100, PE 50x50, or PE 100x100) " *)
-let library_concentration__nm_ = 13 (* "Library Concentration (nM)" *)
-let library_volume__ul_ = 14 (* "Library Volume (uL)" *)
-let library_quantification_qpcr__required_ = 16 (* "Library Quantification qPCR (Required)" *)
-let concentration__nm_ = 17 (* "Concentration (nM)" *)
-let volume__ul_ = 18 (* "Volume (uL)" *)
-let bioanalyzer_trace__required_ = 20 (* "Bioanalyzer Trace (Required)" *)
-let bioanalyzer_pdf_file_name = 21 (* "Bioanalyzer PDF File Name" *)
-let bioanalyzer_xad_file_name = 22 (* "Bioanalyzer XAD File Name" *)
-let well_number = 23 (* "Well Number" *)
-let average_library_fragment_size = 24 (* "Average Library Fragment Size" *)
-let agarose_gel__optional_ = 26 (* "Agarose Gel (Optional)" *)
-let agarose_gel_image_file = 27 (* "Agarose Gel Image File" *)
-let well_number_ = 28 (* "Well Number " *)
-let average_library_fragment_size = 29 (* "Average Library Fragment Size" *)
-let illumina_barcode__if_used_ = 31 (* "Illumina Barcode (If Used)" *)
-let bioo_barcode__if_used_ = 32 (* "BIOO Barcode (If Used)" *)
-let species = 34 (* "Species" *)
-let lane_group__libraries_to_be_run_on_the_same_lane_ = 35 (* "Lane Group (libraries to be run on the same lane)" *)
-let truseq_controls__if_used_ = 36 (* "TruSeq Controls (If Used)" *)
-let protocol_s__used = 37 (* "Protocol(s) used" *)
-let notes = 38 (* "Notes" *)
+let library_submission_date = 0 
+(* "Library Submission Date" *)
+let number_of_lanes_required_ = 1 
+(* "Number of Lanes Required " *)
+let contacts = 2 
+(* "Contacts" *)
+let charge_to_ = 5 
+(* "Charge To:" *)
+let library_identifier = 9 
+(* "Library Identifier" *)
+let sample_identifier__library_protocol_input_ = 10 
+(* "Sample Identifier (Library Protocol Input)" *)
+let application__dna_seq__rna_seq__chip_seq__etc__ = 11 
+(* "Application (DNA-seq, RNA-seq, ChIP-seq, etc.)" *)
+let read_type_and_length__sr_50__sr_100__pe_50x50__or_pe_100x100__ = 12 
+(* "Read Type and Length (SR 50, SR 100, PE 50x50, or PE 100x100) " *)
+let library_concentration__nm_ = 13 
+(* "Library Concentration (nM)" *)
+let library_volume__ul_ = 14 
+(* "Library Volume (uL)" *)
+let library_quantification_qpcr__required_ = 16 
+(* "Library Quantification qPCR (Required)" *)
+let concentration__nm_ = 17 
+(* "Concentration (nM)" *)
+let volume__ul_ = 18 
+(* "Volume (uL)" *)
+let bioanalyzer_trace__required_ = 20 
+(* "Bioanalyzer Trace (Required)" *)
+let bioanalyzer_pdf_file_name = 21 
+(* "Bioanalyzer PDF File Name" *)
+let bioanalyzer_xad_file_name = 22 
+(* "Bioanalyzer XAD File Name" *)
+let well_number = 23 
+(* "Well Number" *)
+let average_library_fragment_size = 24 
+(* "Average Library Fragment Size" *)
+let agarose_gel__optional_ = 26 
+(* "Agarose Gel (Optional)" *)
+let agarose_gel_image_file = 27 
+(* "Agarose Gel Image File" *)
+let well_number_ = 28 
+(* "Well Number " *)
+let average_library_fragment_size = 29 
+(* "Average Library Fragment Size" *)
+let illumina_barcode__if_used_ = 31 
+(* "Illumina Barcode (If Used)" *)
+let bioo_barcode__if_used_ = 32 
+(* "BIOO Barcode (If Used)" *)
+let species = 34 
+(* "Species" *)
+let lane_group__libraries_to_be_run_on_the_same_lane_ = 35 
+(* "Lane Group (libraries to be run on the same lane)" *)
+let truseq_controls__if_used_ = 36 
+(* "TruSeq Controls (If Used)" *)
+let protocol_s__used = 37 
+(* "Protocol(s) used" *)
+let notes = 38 
+(* "Notes" *)
 
 open Hitscore_threaded 
 
@@ -42,6 +71,7 @@ let find_contact ~dbh first last email =
   | Ok [ one ] ->
     printf "  Found one person with that email: %ld.\n"
       one.Layout.Record_person.id;
+    (`one one)
   | Ok [] ->
     printf "  Found no person with that email … ";
     begin match Layout.Search.record_person_by_given_name_family_name
@@ -49,6 +79,9 @@ let find_contact ~dbh first last email =
     | Ok [ one ] ->
       printf "BUT found one person with that name: %ld.\n"
         one.Layout.Record_person.id;
+      (`to_fix (one,
+                sprintf "%S: wrong email for contact %ld" email
+                  one.Layout.Record_person.id))
     | Ok [] ->
       printf "neither with that full name … ";
       begin match Layout.Search.record_person_by_nickname_family_name
@@ -56,8 +89,12 @@ let find_contact ~dbh first last email =
       | Ok [ one ] ->
         printf "BUT found one person with that nick name: %ld.\n"
           one.Layout.Record_person.id;
+        (`to_fix (one,
+                  sprintf "%S: wrong email for contact %ld" email
+                    one.Layout.Record_person.id))
       | Ok [] ->
         printf "neither with that nick-fullname … \n";
+        (`none (first, last, email))
       | _ ->
         failwith "search by nick-full-name returned wrong"
       end
@@ -86,10 +123,15 @@ let warning fmt =
 let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S"))
 
 
-let check_stuff ~row ~libnb ~libname ?search_and_get_id name =
+let check_stuff ~row ~libnb ~libname ?(optional=false) ?search_and_get_id name =
   let option =
     match virtual_cell libnb row with
-    | `none -> error "No %S provided: (%d, %s)" name libnb libname; None
+    | `none ->
+      printf "  No %s" name;
+      if not optional then
+        (error "No %S provided: (%d, %s)" name libnb libname; None)
+      else 
+        None
     | `one_specific s ->
       printf "  Specific %s: %s" name s; Some s
     | `one_for_all s ->
@@ -121,6 +163,7 @@ let parse hsc file =
   printf "========= Loading %S =========\n" file;
   match db_connect hsc with
   | Ok dbh ->
+    let todo_list = ref [] in
     let loaded = Csv.load ~separator:',' file |> Array.of_list in
     let sanitized =
       let sanitize s =
@@ -130,30 +173,37 @@ let parse hsc file =
       in
       Array.map loaded ~f:(List.map ~f:sanitize)
     in
-    let () =
+    let contacts =
       let rec check_contact = function
         | first :: last :: email :: rest ->
-          find_contact ~dbh first last email;
-          check_contact rest
-        | [] -> ()
+          (find_contact ~dbh first last email) :: check_contact rest
+        | [] -> []
         | l ->
           error "Wrong contacts format: not going by 3 (?):\n[%s]"
-            (strlist l);
+            (strlist l); []
       in
       match sanitized.(contacts + 1) with
-      | "" :: [] | [] -> warning "No contacts."
+      | "" :: [] | [] -> warning "No contacts."; []
       | "" :: by3 -> check_contact by3
-      | l -> error "Wrong contact line: %s" (strlist l)
+      | l -> error "Wrong contact line: %s" (strlist l); []
     in
-    let () = 
+    let pi = 
       match sanitized.(charge_to_ + 1) with
       | "" :: first :: last :: email :: rest ->
         printf "PI: ";
-        find_contact ~dbh first last email;
         if rest <> [] then
-          printf "Don't know what to do with: [%s]\n" (strlist rest)
-      | l -> error "Wrong investigator line: %s" (strlist l)
+          printf "Don't know what to do with: [%s]\n" (strlist rest);
+        printf "PI: ";
+        [find_contact ~dbh first last email]
+      | l -> error "Wrong investigator line: %s" (strlist l); []
     in
+    todo_list :=
+      (let f = (function
+        | `one o -> None
+        | `to_fix (o, msg) ->
+          warning "Contact to fix: %s" msg; None
+        | `none (f, l, e) -> Some (`add_person (f, l, e))) in
+       (List.filter_map (pi @ contacts) ~f) @ !todo_list);
     List.iteri (List.tl_exn sanitized.(library_identifier)) (fun i libname ->
       let libnb = i + 1 in
       printf "Library %d : %s\n" libnb libname;
@@ -226,12 +276,36 @@ let parse hsc file =
           ~libnb ~libname "library volume" 
         >>= fun checked ->
         (int32 (fst checked)) in
+      let bioanalyzer =
+        let pdf = check_stuff ~libnb ~libname
+          ~row:sanitized.(bioanalyzer_pdf_file_name) "Bioanalyzer PDF" in
+        let xad = check_stuff ~libnb ~libname
+          ~row:sanitized.(bioanalyzer_xad_file_name) "Bioanalyzer XAD" in
+        let welln = check_stuff ~libnb ~libname
+          ~row:sanitized.(bioanalyzer_xad_file_name + 1) "Bioanalyzer Well NB" in
+        let avglfs = check_stuff ~libnb ~libname
+          ~row:sanitized.(bioanalyzer_xad_file_name + 2) "Bioanalyzer AveLFG" in
+        (pdf, xad, welln, avglfs)
+      in
+      let agarose_gel =
+        let optional = true in
+        let image = check_stuff ~libnb ~libname ~optional
+          ~row:sanitized.(agarose_gel_image_file) "Agarose Image" in
+        let welln = check_stuff ~libnb ~libname ~optional
+          ~row:sanitized.(agarose_gel_image_file + 1) "Agarose Well NB" in
+        let avglfs = check_stuff ~libnb ~libname ~optional
+          ~row:sanitized.(agarose_gel_image_file + 2) "Agarose AveLFG" in
+        (image, welln, avglfs)
+      in
 
       ignore (species, sample, application, read_type, 
               lib_concentration, lib_volume,
-              stock_library, protocol);
+              stock_library, protocol, bioanalyzer, agarose_gel);
     );
-    printf "ERRORS and WARNINGS:\n%s\n" (Buffer.contents errbuf);
+    begin match (Buffer.contents errbuf) with
+    | "" -> printf "No errors or warnings detected.\n"
+    | s -> printf "=== ERRORS and WARNINGS: ===\n%s\n" s;
+    end;
     ()
   | Error (`pg_exn e) ->
     eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
