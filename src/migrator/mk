@@ -1,0 +1,48 @@
+#! /bin/sh
+
+OCAMLFINDOPT='ocamlfind ocamlopt -syntax camlp4o -thread -package hitscore,sexplib.syntax'
+
+make_module () {
+
+    local name=_migrator/$1.ml
+    local tag=$2
+    local tmp=/tmp/mmm.ml
+    git checkout $tag
+
+    ocamlbuild src/codegen/hitscoregen.native
+
+    _build/src/codegen/hitscoregen codegen data/hitscore_layout $tmp
+    echo 'let ($) f x = f x' > $name
+    cat $tmp >> $name
+
+    sed -i 's/PGSQL *(dbh)/failwith $/g' $name
+    sed -i 's/\$?\?\([a-z_A-Z0-9]\+\)/" ^ (let _ = \1  in "") ^  "/g' $name
+
+    $OCAMLFINDOPT -c $name
+}
+
+
+if [ "$1" = "update" ]; then
+    mkdir -p _migrator
+    current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
+                      -e 's/* \(.*\)/\1/'`
+    make_module v02 new_layout
+    make_module v011 v0.1.1
+    git checkout $current_branch
+    cd _migrator
+    ln -sf ../src/migrator/migrator.ml
+    cd ..
+fi
+
+if [ "$1" = "-h" ]; then
+    printf  "usage: $0        \n   Build the current migrator in _migrator/.\n"
+    printf  "usage: $0 update \n   Update the generated code in _migrator/ and build.\n"
+    printf  "   (will fail if there are uncommitted/unstashed changes)\n"
+    exit 0
+fi
+
+
+cd _migrator
+$OCAMLFINDOPT -linkpkg v02.cmx v011.cmx migrator.ml -o migrator
+cd ..
+
