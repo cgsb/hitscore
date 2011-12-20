@@ -39,10 +39,12 @@
 (search protocol by name)
 
 (enumeration barcode_provider 
-             none bioo illumina nugen custom)
+             none bioo bioo_96 illumina nugen custom)
 
 (record custom_barcode
-        (start int)
+        (position_in_r1 int option)
+        (position_in_r2 int option)
+        (position_in_index int option)
         (sequence string))
 
 (record stock_library
@@ -78,7 +80,7 @@
 )
 
 (record lane
-        (seeding_concentration real option)
+        (seeding_concentration_pM real option)
         (total_volume real option)
         (libraries input_library array)
         (pooled_percentages int array)
@@ -91,7 +93,7 @@
         (serial_name string)
         (lanes lane array))
 
-(record inviocing
+(record invoicing
         (pi person)
         (account   string)
         (number    string)
