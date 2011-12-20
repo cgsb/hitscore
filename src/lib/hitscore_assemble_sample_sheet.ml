@@ -26,7 +26,7 @@ module Make
     let barcode_sequences barcode_type barcodes =
       let barcode_assoc = 
         match barcode_type with
-        | `none | `bioo_8_beginning | `nugen -> []
+        | `none | `custom | `nugen -> []
         | `illumina -> illumina_barcodes
         | `bioo -> bioo_barcodes in          
       let module M = struct
@@ -48,7 +48,7 @@ module Make
 
     let all_barcode_sequences barcode_type =
       match barcode_type with
-      | `none | `bioo_8_beginning | `nugen -> [| |]
+      | `none | `custom | `nugen -> [| |]
       | `illumina -> Array.of_list illumina_barcodes
       | `bioo -> Array.of_list bioo_barcodes 
 
