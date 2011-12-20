@@ -1,9 +1,9 @@
 _build/
+_migrator/
 src/script/*.exe
 hitscoredoc.docdir
 setup.data
 setup.log
-/src/lib/hitscore_db_access.ml
 /hitscore_db_digraph.pdf
 /hitscore_layout_digraph.pdf
 /db_access.native
