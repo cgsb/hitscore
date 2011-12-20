@@ -39,7 +39,11 @@
 (search protocol by name)
 
 (enumeration barcode_provider 
-             none bioo bioo_8_beginning illumina nugen)
+             none bioo illumina nugen custom)
+
+(record custom_barcode
+        (start int)
+        (sequence string))
 
 (record stock_library
         (name           string)
@@ -52,6 +56,7 @@
         (rnaseq_control string option)
         (barcode_type barcode_provider)
         (barcodes int array)
+        (custom_barcodes custom_barcode array)
         (p5_adapter_length int option )
         (p7_adapter_length int option)
         (preparator person option)
@@ -88,8 +93,15 @@
 
 (record inviocing
         (pi person)
-        (chartfield string)
-        (lanes lane array))
+        (account   string)
+        (number    string)
+        (fund      string)
+        (org       string)
+        (program   string)
+        (project   string)
+        (lane lane)
+        (percentage real)
+        notable)
 
 
 ;; Common fields of bioanalyzer and agarose_gel:
