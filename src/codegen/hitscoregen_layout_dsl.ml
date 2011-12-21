@@ -1647,8 +1647,6 @@ let ocaml_file_system_module ~out dsl = (* For now does not depend on the
   line out "end (* File_system *)";
   ()
 
-(* This goes to the dump files through sexplib. *)
-let dump_version_string = "0.1-dev"
 
 let ocaml_dump_and_reload ~out dsl =
   let tmp_type, print_tmp_type = new_tmp_output () in
@@ -1663,7 +1661,7 @@ let ocaml_dump_and_reload ~out dsl =
   line tmp_type "  file_system: File_system.volume_cache list;";
  
   let close_get_fun = ref [] in
-  line tmp_get_fun2 "pg_return { version = %S;" dump_version_string;
+  line tmp_get_fun2 "pg_return { version = Hitscore_configuration.version;";
 
   line tmp_get_fun "pg_bind (File_system.get_all_exn ~dbh) (fun t_list ->";
   line tmp_get_fun "pg_bind (map_s ~f:(File_system.cache_volume_exn ~dbh) \
@@ -1736,14 +1734,15 @@ let ocaml_dump_and_reload ~out dsl =
                   ({b Unsafe!}).";
   line out "let insert_dump %s dump :" pgocaml_db_handle_arg;
     ocaml_poly_result_io out "unit" [
-    "`wrong_version";
+    "`wrong_version of string * string";
     (OCaml_hiden_exception.(poly_type_global (all_loads ())));
     "`pg_exn of exn";
   ];
   line out " =";
 
-  line out "  if dump.version <> %S then (" dump_version_string;
-  line out "    Result_IO.error `wrong_version";
+  line out "  if dump.version <> Hitscore_configuration.version then (";
+  line out "    Result_IO.error (`wrong_version (dump.version, \
+                          Hitscore_configuration.version))";
   line out "  ) else";
   pgocaml_to_result_io out 
     ~transform_exceptions:

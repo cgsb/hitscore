@@ -158,7 +158,7 @@ let v011_to_v02 file_in file_out =
     lanes, inputs, stocks in
 
   let d02 = {
-    V02.version = "0.1-dev";
+    V02.version = "0.2-dev";
     file_system = s011.V011.file_system;
     record_log = s011.V011.record_log;
     record_person = s011.V011.record_person;

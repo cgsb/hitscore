@@ -432,8 +432,8 @@ module Dumps = struct
               Hitscore_db.insert_dump ~dbh) in
       begin match insert_result with 
       | Ok () -> eprintf "Load: Ok\n%!"
-      | Error `wrong_version ->
-        eprintf "Load: Wrong Version Error\n%!"
+      | Error (`wrong_version (one, two)) ->
+        eprintf "Load: Wrong Version Error: %S Vs %S\n%!" one two
       | Error (`layout_inconsistency
                   (`file_system, `insert_cache_did_not_return_one_id (table, ids))) ->
         eprintf "Load: insert_dump detected an inconsistency: inserting in %S \
@@ -852,6 +852,15 @@ let () =
         Sys.argv.(0);
   in
   match Array.to_list Sys.argv with
+  | exec :: "-v" :: args
+  | exec :: "-version" :: args
+  | exec :: "--version" :: args
+  | exec :: "version" :: args
+  | exec :: _ :: "-v" :: args
+  | exec :: _ :: "-version" :: args
+  | exec :: _ :: "--version" :: args
+  | exec :: _ :: "version" :: args ->
+    printf "Hitscore v. %s\n" Hitscore_configuration.version
   | exec :: "-h" :: args
   | exec :: "-help" :: args
   | exec :: "--help" :: args

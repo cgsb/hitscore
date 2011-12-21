@@ -1,12 +1,13 @@
 
 OASISFormat: 0.2
 Name:        hitscore
-Version:     0.1
+Version:     0.2-dev
 Synopsis:    CGSB Core Library
 Authors:     Ashish Agarwal
 License:     PROP
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
+FilesAB: src/lib/hitscore_configuration.ml.ab
 
 
 Flag lwt
@@ -34,6 +35,7 @@ Library hitscore
           , Hitscore_interfaces
           , Hitscore_db_access
           , Hitscore_assemble_sample_sheet
+          , Hitscore_configuration
           , Hitscore_result_IO
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)
