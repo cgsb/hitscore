@@ -72,9 +72,10 @@ let v011_to_v02 file_in file_out =
           in
           let check_uniformity x =
             List.reduce x ~f:(fun (il1, sl1, ca1) (il2, sl2, ca2) ->
+              let cmp = compare in
               if il1 = 149l (* PhiX_v2 *) ||
                 il1 = 150l (* PhiX_v3 *) ||
-                ca1 = ca2 then (il1, sl1, ca1)
+                Array.sort ~cmp ca1 = Array.sort ~cmp ca2 then (il2, sl2, ca2)
               else (
                 List.iter redundant_contacts (fun (il, sl, ca) -> 
                   printf "[%ld] " il;
