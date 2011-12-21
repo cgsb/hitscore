@@ -6,10 +6,10 @@ open Hitscore_std
 (** The "default" configuration (with OCaml's preemptive threads, and
     weaker typing). *)
 module Preemptive_threading_config : 
-  Hitscore_config.IO_CONFIGURATION with type 'a t = 'a
+  Hitscore_interfaces.IO_CONFIGURATION with type 'a t = 'a
 
 (** Make the Hitscore library for a given I/O model. *)
-module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) : sig
+module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
 
   (** A double monad: [Result.t] and [IO_configuration.t]. *)
   module Result_IO : Hitscore_result_IO.RESULT_IO

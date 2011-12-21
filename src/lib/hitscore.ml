@@ -2,7 +2,7 @@ open Hitscore_std
 
 
 module Preemptive_threading_config : 
-  Hitscore_config.IO_CONFIGURATION with type 'a t = 'a = struct
+  Hitscore_interfaces.IO_CONFIGURATION with type 'a t = 'a = struct
     include PGOCaml.Simple_thread
     let map_sequential l ~f = List.map ~f l
     let log_error = eprintf "%s"
@@ -12,7 +12,7 @@ end
 
 
 
-module Make (IO_configuration : Hitscore_config.IO_CONFIGURATION) = struct
+module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
 
   module Result_IO = Hitscore_result_IO.Make(IO_configuration)
 

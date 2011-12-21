@@ -1,8 +1,8 @@
-open Hitscore_config
+open Hitscore_interfaces
 open Core.Std
 
 module type RESULT_IO = sig
-  module IO : Hitscore_config.IO_CONFIGURATION
+  module IO : Hitscore_interfaces.IO_CONFIGURATION
   include Monad.S2 with type ('a, 'b) monad = ('a, 'b) Result.t IO.t
   val catch_io : f:('b -> 'a IO.t) -> 'b -> ('a, exn) monad
   val error: 'a -> ('any, 'a) monad

@@ -1,10 +1,10 @@
 open Core.Std
-open Hitscore_config
+open Hitscore_interfaces
 
 (** A double monad: [Result.t] and [IO_configuration.t]. *)
 module type RESULT_IO = sig
 
-  module IO : Hitscore_config.IO_CONFIGURATION
+  module IO : IO_CONFIGURATION
 
   (** It a {{:http://www.janestreet.com/ocaml/doc/core/Monad.S2.html}Monad.S2}
       from {i Core}. {[
