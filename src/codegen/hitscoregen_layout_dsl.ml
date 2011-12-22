@@ -1779,9 +1779,12 @@ let ocaml_search_module ~out dsl =
         List.iter typed_fields (fun tv -> let_in_typed_value tv |> raw out "%s");
         line out " let search = ";
         line out "PGSQL(dbh)";
+        let prefix (n, t) =
+          (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
         line out "\"SELECT g_id FROM %s WHERE %s\"" record
           (String.concat ~sep:" AND "
-             (List.map fields (fun s -> sprintf "%s = $%s" s s)));
+             (List.map typed_fields
+                (fun (n, t) -> sprintf "%s = %s" n (prefix (n,t)))));
         line out "  in";
         line out "  pg_bind search (fun l -> \
                 pg_return (list_map l (fun %s -> %s)))" record
