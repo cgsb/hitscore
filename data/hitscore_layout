@@ -65,6 +65,7 @@
         notable
 )
 (search stock_library by name)
+(search stock_library by (and name project))
 
 (record key_value
         (key string)
