@@ -837,10 +837,13 @@ let () =
     ~names:["parse-submission-sheet"; "pss"]
     ~description:"Parse a (bunch of) submission sheet(s) (CSV)"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <lss1> <lss2> ...\n" exec cmd)
+      fprintf o "usage: %s <profile> %s [-wet-run] <pss1> <pss2> ...\n" exec cmd)
     ~run:(fun config exec cmd -> function
       | [] -> None
-      | l -> Some (List.iter l (Hitscore_submission_sheet.parse config)));
+      | "-wet-run" :: l ->
+        Some (List.iter l (Hitscore_submission_sheet.parse ~dry_run:false config))
+      | l -> 
+        Some (List.iter l (Hitscore_submission_sheet.parse ~dry_run:true  config)));
 
   let global_usage = function
     | `error -> 
