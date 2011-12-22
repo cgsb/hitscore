@@ -158,13 +158,19 @@ let v011_to_v02 file_in file_out =
 
     lanes, inputs, stocks in
 
+  let record_sample = 
+    List.map s011.V011.record_sample (fun cache ->
+      let (g_id, g_created, g_last_modified, name, organism, note) = cache in
+      (g_id, g_created, g_last_modified, name, 
+       (None : string option), organism, note))
+  in
   let d02 = {
     V02.version = "0.2-dev";
     file_system = s011.V011.file_system;
     record_log = s011.V011.record_log;
     record_person = s011.V011.record_person;
     record_organism = s011.V011.record_organism;
-    record_sample = s011.V011.record_sample;
+    record_sample;
     record_protocol = s011.V011.record_protocol;
     record_custom_barcode = [];
     record_stock_library;
