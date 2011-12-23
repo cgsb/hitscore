@@ -85,7 +85,7 @@ let find_contact ~dbh first last email =
     | Ok [] ->
       printf "neither with that full name … ";
       begin match Layout.Search.record_person_by_nickname_family_name
-              ~dbh first last with
+              ~dbh (Some first) last with
       | Ok [ one ] ->
         printf "BUT found one person with that nick name: %ld.\n"
           one.Layout.Record_person.id;
@@ -216,7 +216,7 @@ let parse hsc file =
       let species =
         check_stuff ~row:sanitized.(species) ~libnb ~libname
           ~search_and_get_id:
-          ((fun s -> Layout.Search.record_organism_by_name ~dbh s),
+          ((fun s -> Layout.Search.record_organism_by_name ~dbh (Some s)),
            (fun one -> one.Layout.Record_organism.id))
           "species" in
       let sample =

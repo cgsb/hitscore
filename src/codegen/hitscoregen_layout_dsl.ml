@@ -1784,7 +1784,7 @@ let ocaml_search_module ~out dsl =
         line out "\"SELECT g_id FROM %s WHERE %s\"" record
           (String.concat ~sep:" AND "
              (List.map typed_fields
-                (fun (n, t) -> sprintf "%s = %s" n (prefix (n,t)))));
+                (fun (n, t) -> sprintf "%s is not distinct from %s" n (prefix (n,t)))));
         line out "  in";
         line out "  pg_bind search (fun l -> \
                 pg_return (list_map l (fun %s -> %s)))" record
