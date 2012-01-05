@@ -5,36 +5,39 @@ module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
 
 open Hitscore_threaded 
 
-let find_contact ~dbh first last email =
-  printf "Person: %S %S %S\n" first last email;
+let find_contact ~dbh ~verbose first last email =
+  let if_verbose fmt = 
+    ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
+  if_verbose "Person: %S %S %S\n" first last email;
   let by_email = Layout.Search.record_person_by_email ~dbh email in
   begin match by_email with
   | Ok [ one ] ->
-    printf "  Found one person with that email: %ld.\n"
+    if_verbose
+      "  Found one person with that email: %ld.\n"
       one.Layout.Record_person.id;
     (`one one)
   | Ok [] ->
-    printf "  Found no person with that email … ";
+    if_verbose "  Found no person with that email … ";
     begin match Layout.Search.record_person_by_given_name_family_name
         ~dbh first last with
     | Ok [ one ] ->
-      printf "BUT found one person with that name: %ld.\n"
+      if_verbose "BUT found one person with that name: %ld.\n"
         one.Layout.Record_person.id;
       (`to_fix (one,
                 sprintf "%S: wrong email for contact %ld" email
                   one.Layout.Record_person.id))
     | Ok [] ->
-      printf "neither with that full name … ";
+      if_verbose "neither with that full name … ";
       begin match Layout.Search.record_person_by_nickname_family_name
           ~dbh (Some first) last with
       | Ok [ one ] ->
-        printf "BUT found one person with that nick name: %ld.\n"
+        if_verbose "BUT found one person with that nick name: %ld.\n"
           one.Layout.Record_person.id;
         (`to_fix (one,
                   sprintf "%S: wrong email for contact %ld" email
                     one.Layout.Record_person.id))
       | Ok [] ->
-        printf "neither with that nick-fullname … \n";
+        if_verbose "neither with that nick-fullname … \n";
         (`none (first, last, email))
       | _ ->
         failwith "search by nick-full-name returned wrong"
@@ -147,7 +150,10 @@ let col_Notes = "Notes"
 
 
 
-let parse ?(dry_run=true) hsc file =
+let parse ?(dry_run=true) ?(verbose=false) hsc file =
+  let if_verbose fmt = 
+    ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
+
   Buffer.clear errbuf;
   printf "========= Loading %S =========\n" file;
   match db_connect hsc with
@@ -170,7 +176,7 @@ let parse ?(dry_run=true) hsc file =
           begin match row with
           | "" :: [] | [] -> failwith "should not be trying this... (contacts)"
           | "" :: email :: first :: middle :: last :: _ as l ->
-            begin match (find_contact ~dbh first last email) with
+            begin match (find_contact ~dbh ~verbose first last email) with
             | `one o ->
               Some (email, Some o, [])
             | `to_fix (o, msg) ->
@@ -184,10 +190,10 @@ let parse ?(dry_run=true) hsc file =
           end
         else None)
     in
-    printf "Contacts:\n";
+    if_verbose "Contacts:\n";
     List.iter contacts (function
-    | email, None, _ -> printf "  %s (TO CREATE)\n" email
-    | email, Some o, _ -> printf "  %s -- %ld\n" email o.Layout.Record_person.id);
+    | email, None, _ -> if_verbose "  %s (TO CREATE)\n" email
+    | email, Some o, _ -> if_verbose "  %s -- %ld\n" email o.Layout.Record_person.id);
     let submission_date, run_type_parsed, invoicing =
       let section = find_section sanitized "Invoicing" in
       let submission_date, run_type_parsed =
@@ -202,7 +208,7 @@ let parse ?(dry_run=true) hsc file =
       (submission_date, run_type_parsed,
        list_of_filteri (fun i ->
          let row = sanitized.(section + i + 2) in
-         printf "Row: %s\n" (strlist row);
+         if_verbose "Row: %s\n" (strlist row);
          match row with
          | [] -> None
          | p :: _ when String.is_prefix p ~prefix:"Pool" -> None
@@ -219,9 +225,9 @@ let parse ?(dry_run=true) hsc file =
       ()
     else
       error "Invoicing sums up to %f" sum;
-    printf "Invoicing:\n";
+    if_verbose "Invoicing:\n";
     List.iter invoicing (fun (email, p, chartstuff) -> 
-      printf "  %s, %f, [%s]\n" email p (strlist chartstuff)
+      if_verbose "  %s, %f, [%s]\n" email p (strlist chartstuff)
     );
     let pools =
       let sections =
@@ -264,11 +270,11 @@ let parse ?(dry_run=true) hsc file =
         error "Pooled percentages for %s do not sum up to 100" pool
     | None -> ());
 
-    printf "Pools:\n";
+    if_verbose "Pools:\n";
     List.iter pools (function
     | Some (pool, spm, tv, nm, l) -> 
       let f = Option.value_map ~default:"WRONG" ~f:(sprintf "%ld") in
-      printf "  %s %s %s %s [%s]\n" pool (f spm) (f tv) (f nm)
+      if_verbose "  %s %s %s %s [%s]\n" pool (f spm) (f tv) (f nm)
         (String.concat ~sep:", " 
            (List.map l ~f:(fun (x,y) -> sprintf "%s:%ld%%" x y)))
     | None -> ()
@@ -292,7 +298,7 @@ let parse ?(dry_run=true) hsc file =
         in
         begin match search with
             | Ok [one] ->
-              printf "Ok found that library: %ld\n"
+              if_verbose "Ok found that library: %ld\n"
                 one.Layout.Record_stock_library.id;
               Some one
             | Ok [] ->
@@ -331,7 +337,7 @@ let parse ?(dry_run=true) hsc file =
           let row = sanitized.(section + i + 2)  in
           match row with
           | libname :: rest when libname <> "" && List.length rest < 4 ->
-            printf "%s should be already known\n" libname;
+            if_verbose "%s should be already known\n" libname;
             let exisiting = check_existing_library libname rest in
             let int32 = int32 ~msg:(sprintf "Lib %s: " libname) in
             begin match exisiting with
@@ -347,7 +353,7 @@ let parse ?(dry_run=true) hsc file =
             | None -> Some (`wrong libname)
             end
           | libname :: rest when libname <> ""->
-            printf "%s should be a new one\n" libname;
+            if_verbose "%s should be a new one\n" libname;
             let open Option in
             let mandatory row col =
               match column row col with
@@ -456,11 +462,11 @@ let parse ?(dry_run=true) hsc file =
         | Invalid_argument "index out of bounds" -> None
         | e -> warning "Saw exception: %s" (Exn.to_string e); None)
     in
-    printf "Libraries:\n";
+    if_verbose "Libraries:\n";
     List.iter libraries (function
-    | `wrong libname -> printf "  wrong lib: %s\n" libname
+    | `wrong libname -> if_verbose "  wrong lib: %s\n" libname
     | `existing (s, _, c, n) -> 
-      printf "  existing lib: %s%s%s\n" s
+      if_verbose "  existing lib: %s%s%s\n" s
         (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%ld nM)"))
         (Option.value_map n ~default:" (no note)" ~f:(sprintf " (note: %S)"))
     | `new_lib (s, project, conc, note,
@@ -483,7 +489,7 @@ let parse ?(dry_run=true) hsc file =
           vm bio_min ~default:"[NO MIN]" ~f:(sprintf "[min: %ld]");  
           vm bio_max ~default:"[NO MAX]" ~f:(sprintf "[max: %ld]"); 
         ]) in
-      printf "  new lib: %s\n    %s\n" s
+      if_verbose "  new lib: %s\n    %s\n" s
         (String.concat ~sep:"    " ([
           vm project ~default:"[no project]" ~f:(sprintf "[Proj: %s]");
           vm sample_name ~default:"[no sample]" ~f:(sprintf "[Sample: %s]");

@@ -840,10 +840,12 @@ let () =
       fprintf o "usage: %s <profile> %s [-wet-run] <pss1> <pss2> ...\n" exec cmd)
     ~run:(fun config exec cmd -> function
       | [] -> None
-      | "-wet-run" :: l ->
-        Some (List.iter l (Hitscore_submission_sheet.parse ~dry_run:false config))
-      | l -> 
-        Some (List.iter l (Hitscore_submission_sheet.parse ~dry_run:true  config)));
+      | l ->
+        let dry_run = not (List.exists l ~f:((=) "-wet-run")) in
+        let verbose = List.exists l ~f:((=) "-verbose") in
+        let files = List.filter l ~f:(fun x -> x <> "-wet-run" && x <> "-verbose") in
+        Some (List.iter files
+                (Hitscore_submission_sheet.parse ~dry_run ~verbose config)));
 
   let global_usage = function
     | `error -> 
