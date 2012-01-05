@@ -599,6 +599,33 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
               (String.concat ~sep:", " 
                  (List.map ~f:snd
                     (List.Assoc.map more (Option.value ~default:"NONE")))));
+
+      let lib_names =
+        List.filter_map libraries (function       
+        | `wrong libname -> None
+        | `existing (libname, lib_t, conc, note, kv) ->  Some libname
+        | `new_lib (ln, project, conc, note,
+                    sample_name, species, app, strd, tsc, rsc,
+                    bt, bcs, cbs, cbp,
+                    p5, p7,
+                    bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
+                    arg_wnb, arg_avg, arg_min, arg_max, arg_img,
+                    protocol_name, protocol_file, preparator, notes, 
+                    key_value_list) -> Some ln)
+      in
+      let check_lib libname =
+        if List.find pools 
+          ~f:(function
+          | Some (pool, spm, tv, nm, input_libs) ->
+            (List.find input_libs ~f:(fun (n, _) -> libname = n)) <> None
+          | None -> false) = None then
+          error "Lib %S is not used in any pool." libname
+      in
+      List.iter lib_names check_lib;
+      if List.dedup lib_names |! List.length <> List.length lib_names then
+        error "There are duplicates in library names! E.g.: %s"
+          (Option.value_exn (List.find_a_dup lib_names));
+
     in
 
     (* Dry or Wet additions to the database *)
@@ -666,7 +693,7 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
     let stock = ref [] in
     List.iter libraries (function
     | `wrong libname -> ()
-    | `existing _ ->  (* TODO *) ()    
+    | `existing _ -> ()    
     | `new_lib (libname, project, conc, note,
                 sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
