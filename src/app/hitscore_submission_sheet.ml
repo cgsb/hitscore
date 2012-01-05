@@ -348,21 +348,39 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
       list_of_filteri (fun i ->
         try 
           let row = sanitized.(section + i + 2)  in
+          let is_declared_known l =
+            List.length l <= 4
+            || (let r = ref true in
+                List.iteri l ~f:(fun i x -> 
+                  if 4 <= i && i < 31 then
+                    match List.nth l i with
+                    | None | Some "" -> ()
+                    | Some s -> r := false
+                  else
+                    ());
+                !r) in
           match row with
-          | libname :: rest when libname <> "" && List.length rest < 4 ->
+          | libname :: rest as l when libname <> "" && is_declared_known l ->
             if_verbose "%s should be already known\n" libname;
             let exisiting = check_existing_library libname rest in
             let int32 = int32 ~msg:(sprintf "Lib %s: " libname) in
             begin match exisiting with
             | Some lib_t ->
+              let key_value_list =
+                List.map custom_keys 
+                  (fun c -> (c, column loaded.(section + i + 2) c)) in
               Some (match rest with
               | [] | [ _ ]
-              | [ _ ; "" ]
-              | [ _ ; "" ; ""]      -> `existing (libname, lib_t, None, None)
-              | [ _ ; conc ]        -> `existing (libname, lib_t, int32 conc, None)
-              | [ _ ; "" ; note ]   -> `existing (libname, lib_t, None, Some note)
-              | [ _ ; conc ; note ] -> `existing (libname, lib_t, int32 conc, Some note)
-              | _ -> failwith "should not be here (after check_existing_library)")
+              |  _ :: "" :: []
+              |  _ :: "" :: "" :: _ -> 
+                `existing (libname, lib_t, None, None, key_value_list)
+              |  _ :: conc :: []
+              |  _ :: conc :: "" :: _ ->
+                `existing (libname, lib_t, int32 conc, None, key_value_list)
+              | _ :: "" :: note :: _ ->
+                `existing (libname, lib_t, None, Some note, key_value_list)
+              | _ :: conc :: note :: _ ->
+                `existing (libname, lib_t, int32 conc, Some note, key_value_list))
             | None -> Some (`wrong libname)
             end
           | libname :: rest when libname <> ""->
@@ -478,10 +496,15 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
     if_verbose "Libraries:\n";
     List.iter libraries (function
     | `wrong libname -> if_verbose "  wrong lib: %s\n" libname
-    | `existing (s, _, c, n) -> 
-      if_verbose "  existing lib: %s%s%s\n" s
+    | `existing (s, _, c, n, kv) -> 
+      if_verbose "  existing lib: %s%s%s {%s}\n" s
         (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%ld nM)"))
         (Option.value_map n ~default:" (no note)" ~f:(sprintf " (note: %S)"))
+        (String.concat ~sep:", " 
+           (List.map kv ~f:(function
+           | (k, Some v) -> sprintf "[%S -- %S]" k v
+           | (k, None)   -> sprintf "[NO %S]" k)))
+
     | `new_lib (s, project, conc, note,
                 sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
@@ -914,17 +937,17 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
         let open Option in
         let libraries =
           List.map input_libs (fun (libname, percent) ->
-            let the_lib, concentration, note =
+            let the_lib, concentration, note, key_values =
               if libname = "PhiX" then
                 Layout.Search.record_stock_library_by_name ~dbh "PhiX_v3" 
                 |! Result.ok_exn ~fail:(Failure "Can't find PhiX_v3 !!!")
                 |! fun lib ->
-                  (List.hd_exn lib, None, None)
+                  (List.hd_exn lib, None, None, [])
               else
                 match List.find_map libraries (function
                 | `wrong libname -> None
-                | `existing (ln, lib_t, conc, note) ->
-                  if libname = ln then Some (lib_t, conc, note) else None
+                | `existing (ln, lib_t, conc, note, kv) ->
+                  if libname = ln then Some (lib_t, conc, note, kv) else None
                 | `new_lib (ln, project, conc, note,
                             sample_name, species, app, strd, tsc, rsc,
                             bt, bcs, cbs, cbp,
@@ -938,7 +961,8 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
                             key_value_list) ->
                   if ln = libname then
                     List.find_map !stock (fun (n, _, s) -> 
-                      if n = libname then Some (s, conc, note) else None)
+                      if n = libname then Some (s, conc, note, key_value_list) 
+                      else None)
                   else
                     None
                 ) with
@@ -946,9 +970,19 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
                   error "Pool: %s, can't find library %S" pool libname;
                   ({Layout.Record_stock_library. id = 99l}, None,
                    Some (sprintf "Completely fake stock library: %s for pool %s"
-                           libname pool))
-                | Some (s, conc, note) -> (s, conc, note)
+                           libname pool), [])
+                | Some (s, conc, note, kv) -> (s, conc, note, kv)
             in
+            let user_db =
+              List.filter_map key_values (function
+              | k, None -> None
+              | key, Some value ->
+                Layout.Record_key_value.(
+                  run ~dbh  ~fake:(fun x -> { id = x })
+                    ~real:(fun dbh ->
+                      add_value ~dbh ~key ~value)
+                    ~log:(sprintf "(add_key_value %S %S)" key value)) |! Result.ok)
+              |! Array.of_list in
             let input_lib =
               let concentration_nM =
                 concentration >>| Int64.of_int32 >>| Float.of_int64 in
@@ -957,13 +991,17 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
                   ~real:(fun dbh ->
                     add_value ~dbh ~library:the_lib
                       ~submission_date:(value submission_date ~default:(Time.now ()))
-                      ?volume_uL:None ?concentration_nM ?user_db:[| |] ?note)
-                ~log:(sprintf "(add_input_library %ld (submission_date %S)%s%s)" 
+                      ?volume_uL:None ?concentration_nM ~user_db ?note)
+                ~log:(sprintf "(add_input_library %ld (submission_date %S)%s \
+                                (user_db (%s))%s)" 
                         (the_lib.Layout.Record_stock_library.id)
                         (value_map ~f:Time.to_string ~default:"NONE" submission_date)
                         (value_map concentration_nM
                            ~default:"" ~f:(sprintf " (concentration_nM %f)"))
-                        (value_map note ~default:"" ~f:(sprintf " (note %sS)"))
+                        (String.concat ~sep:" " 
+                           (List.map (Array.to_list user_db) ~f:(fun l ->
+                             sprintf "%ld" l.Layout.Record_key_value.id)))
+                        (value_map note ~default:"" ~f:(sprintf " (note %S)"))
                 )) |! Result.ok
             in
             input_lib)  |! List.filter_map ~f:(fun x -> x) |! Array.of_list in
