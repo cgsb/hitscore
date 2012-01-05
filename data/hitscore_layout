@@ -99,13 +99,12 @@
 
 (record invoicing
         (pi person)
-        (account   string)
-        (number    string)
-        (fund      string)
-        (org       string)
-        (program   string)
-        (project   string)
-        (lane lane)
+        (account_number   string option)
+        (fund      string option)
+        (org       string option)
+        (program   string option)
+        (project   string option)
+        (lanes lane array)
         (percentage real)
         notable)
 
