@@ -96,6 +96,7 @@
 (record flowcell
         (serial_name string)
         (lanes lane array))
+(search flowcell by serial_name)
 
 (record invoicing
         (pi person)
