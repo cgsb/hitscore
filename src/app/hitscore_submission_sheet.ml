@@ -175,6 +175,19 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
         if List.hd_exn row = "" && List.length row > 1 then
           begin match row with
           | "" :: [] | [] -> failwith "should not be trying this... (contacts)"
+          | ["" ; email ] ->
+            begin match Layout.Search.record_person_by_email ~dbh email with
+            | Ok [ one ] ->
+              if_verbose
+                "  Found one person with %S as email: %ld.\n"
+                email one.Layout.Record_person.id;
+              Some (email, Some one, [])
+            | Ok [] ->
+              error "  Found no one with %S as email." email;
+              None
+            | _ ->
+              failwithf "Database problem while looking for %S" email ()
+            end
           | "" :: email :: first :: middle :: last :: _ as l ->
             begin match (find_contact ~dbh ~verbose first last email) with
             | `one o ->
