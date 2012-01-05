@@ -204,13 +204,15 @@ let parse ?(dry_run=true) hsc file =
          let row = sanitized.(section + i + 2) in
          printf "Row: %s\n" (strlist row);
          match row with
+         | [] -> None
+         | p :: _ when String.is_prefix p ~prefix:"Pool" -> None
          | piemail :: percent :: chartstuff when 
              List.length (String.split ~on:'@' piemail) = 2 ->
            begin match try Some (Float.of_string percent) with _ -> None with
            | Some p -> Some (piemail, p, chartstuff)
            | None -> error "Wrong chartfield row: %s" (strlist row); None
            end
-         | l -> None))
+         | l -> error "Wrong chartfield row: %s" (strlist row); None))
     in
     let sum = List.fold_left invoicing ~f:(fun x (_, p, _) -> x +. p) ~init:0. in
     if 99. < sum && sum < 101. then
@@ -266,10 +268,12 @@ let parse ?(dry_run=true) hsc file =
     List.iter pools (function
     | Some (pool, spm, tv, nm, l) -> 
       let f = Option.value_map ~default:"WRONG" ~f:(sprintf "%ld") in
-      printf "  %s %s %s %s\n" pool (f spm) (f tv) (f nm)
+      printf "  %s %s %s %s [%s]\n" pool (f spm) (f tv) (f nm)
+        (String.concat ~sep:", " 
+           (List.map l ~f:(fun (x,y) -> sprintf "%s:%ld%%" x y)))
     | None -> ()
     );
-    
+
 
     let libraries =
       let check_existing_library libname rest =
@@ -356,6 +360,8 @@ let parse ?(dry_run=true) hsc file =
               column r c >>= int32 ~msg:(sprintf "Lib: %s (%s)" libname c) in
             let int32 = int32 ~msg:(sprintf "Lib %s: " libname) in
             let project = column row col_Project_Name in
+            let conc = column32 row col_Concentration__nM_ in
+            let note = column row col_Note in
             let sample_name = column row col_Sample_Name in
             let species = column row col_Species___Source in
             let application = mandatory row col_Application in
@@ -429,8 +435,10 @@ let parse ?(dry_run=true) hsc file =
             let protocol_file  = mandatory rawrow col_Protocol_File in
             let preparator     = mandatory row col_Library_Preparator_Email in
             let notes          = column rawrow col_Notes in
-            let key_value_list = List.map custom_keys (fun c -> (c, column rawrow c)) in
-            Some (`new_lib (libname, project, sample_name, species,
+            let key_value_list =
+              List.map custom_keys (fun c -> (c, column rawrow c)) in
+            Some (`new_lib (libname, project, conc, note,
+                            sample_name, species,
                             application, stranded,
                             truseq_control, rnaseq_control,
                             barcode_type, barcodes, 
@@ -455,7 +463,8 @@ let parse ?(dry_run=true) hsc file =
       printf "  existing lib: %s%s%s\n" s
         (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%ld nM)"))
         (Option.value_map n ~default:" (no note)" ~f:(sprintf " (note: %S)"))
-    | `new_lib (s, project, sample_name, species, app, strd, tsc, rsc,
+    | `new_lib (s, project, conc, note,
+                sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
                 p5, p7,
                 bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
@@ -521,7 +530,8 @@ let parse ?(dry_run=true) hsc file =
     let () =
       let assoc_sample_org =
         List.filter_map libraries ~f:(function
-        | `new_lib (s, project, sample_name, species, app, strd, tsc, rsc,
+        | `new_lib (s, project, conc, note,
+                    sample_name, species, app, strd, tsc, rsc,
                     bt, bcs, cbs, cbp,
                     p5, p7,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
@@ -550,7 +560,7 @@ let parse ?(dry_run=true) hsc file =
     in
 
     (* Dry or Wet additions to the database *)
-    let fake_pointer = ref 0 in
+    let fake_pointer = ref 10000 in
     let dry_buffer = ref [] in
     let print_dry_buffer () =
       if dry_run then
@@ -559,7 +569,7 @@ let parse ?(dry_run=true) hsc file =
         printf "=== WET-RUN !!! ===\n";
       List.iter (List.rev !dry_buffer) (fun (p, l) ->
         if p > 0l then
-          printf " * [% 3ld] %s\n" p l
+          printf " * [%ld] %s\n" p l
         else
           printf " * %s\n" l
       ) in
@@ -615,7 +625,8 @@ let parse ?(dry_run=true) hsc file =
     List.iter libraries (function
     | `wrong libname -> ()
     | `existing _ ->  (* TODO *) ()    
-    | `new_lib (libname, project, sample_name, species, app, strd, tsc, rsc,
+    | `new_lib (libname, project, conc, note,
+                sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
                 p5, p7,
                 bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
@@ -875,8 +886,155 @@ let parse ?(dry_run=true) hsc file =
         agarose_gel () |! Pervasives.ignore
       end;
       Pervasives.ignore (bioanalyzer, agarose_gel);
-      stock := (libname, project, stock_lib) :: !stock;
+      stock := (libname, project, 
+                stock_lib |! Result.ok_exn ~fail:(Failure "no stock lib!")) :: !stock;
       ());
+
+    let lanes = List.map pools (function
+      | Some (pool, spm, tv, nm, input_libs) ->
+        let open Option in
+        let libraries =
+          List.map input_libs (fun (libname, percent) ->
+            let the_lib, concentration, note =
+              if libname = "PhiX" then
+                Layout.Search.record_stock_library_by_name ~dbh "PhiX_v3" 
+                |! Result.ok_exn ~fail:(Failure "Can't find PhiX_v3 !!!")
+                |! fun lib ->
+                  (List.hd_exn lib, None, None)
+              else
+                match List.find_map libraries (function
+                | `wrong libname -> None
+                | `existing (ln, lib_t, conc, note) ->
+                  if libname = ln then Some (lib_t, conc, note) else None
+                | `new_lib (ln, project, conc, note,
+                            sample_name, species, app, strd, tsc, rsc,
+                            bt, bcs, cbs, cbp,
+                            p5, p7,
+                          bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
+                            arg_wnb, arg_avg, arg_min, arg_max, arg_img,
+                            protocol_name , 
+                            protocol_file , 
+                            preparator    , 
+                            notes         , 
+                            key_value_list) ->
+                  if ln = libname then
+                    List.find_map !stock (fun (n, _, s) -> 
+                      if n = libname then Some (s, conc, note) else None)
+                  else
+                    None
+                ) with
+                | None ->
+                  error "Pool: %s, can't find library %S" pool libname;
+                  ({Layout.Record_stock_library. id = 99l}, None,
+                   Some (sprintf "Completely fake stock library: %s for pool %s"
+                           libname pool))
+                | Some (s, conc, note) -> (s, conc, note)
+            in
+            let input_lib =
+              let concentration_nM =
+                concentration >>| Int64.of_int32 >>| Float.of_int64 in
+              Layout.Record_input_library.(
+                run ~dbh ~fake:(fun x -> { id = x })
+                  ~real:(fun dbh ->
+                    add_value ~dbh ~library:the_lib
+                      ~submission_date:(value submission_date ~default:(Time.now ()))
+                      ?volume_uL:None ?concentration_nM ?user_db:[| |] ?note)
+                ~log:(sprintf "(add_input_library %ld (submission_date %S)%s%s)" 
+                        (the_lib.Layout.Record_stock_library.id)
+                        (value_map ~f:Time.to_string ~default:"NONE" submission_date)
+                        (value_map concentration_nM
+                           ~default:"" ~f:(sprintf " (concentration_nM %f)"))
+                        (value_map note ~default:"" ~f:(sprintf " (note %sS)"))
+                )) |! Result.ok
+            in
+            input_lib)  |! List.filter_map ~f:(fun x -> x) |! Array.of_list in
+        let pooled_percentages = List.map input_libs ~f:snd |! Array.of_list in
+        let requested_read_length_1, requested_read_length_2 =
+          match run_type_parsed with Some (_, l, r) -> (l, r) | None -> (42l, None) in
+        let contacts = List.filter_map contacts snd |! Array.of_list in
+        Layout.Record_lane.(
+          run ~dbh ~fake:(fun x -> { id = x })
+            ~real:(fun dbh ->
+              add_value ~dbh ~libraries ~pooled_percentages
+                ?seeding_concentration_pM:(spm >>| Int64.of_int32 >>| Float.of_int64)
+                ?total_volume:(tv >>| Int64.of_int32 >>| Float.of_int64)
+                ~requested_read_length_1 ?requested_read_length_2
+                ~contacts)
+            ~log:(sprintf "(add_lane (libraries (%s)) (percentages (%s)) \
+                          (contacts (%s)))"
+                    (String.concat ~sep:" " 
+                       (List.map (Array.to_list libraries) ~f:(fun l ->
+                         sprintf "%ld" l.Layout.Record_input_library.id)))
+                    (String.concat ~sep:" "
+                       (List.map (Array.to_list pooled_percentages) 
+                          ~f:(sprintf "%ld")))
+                    (String.concat ~sep:" " 
+                       (List.map (Array.to_list contacts) ~f:(fun l ->
+                         sprintf "%ld" l.Layout.Record_person.id)))
+            )) |! Result.ok
+      | None -> None
+    ) |! List.filter_map ~f:(fun x -> x) |! Array.of_list in
+    let invoices =
+      let open Option in
+      List.map invoicing (fun (piemail, p, chartstuff) ->
+        let pi =
+          begin match List.Assoc.find contacts piemail with
+          | Some (Some id) -> Some id
+          | Some None -> 
+            warning "Invoice for %s: found 'None' contact for that email, \
+                        this should be already reported..." piemail;
+            None
+          | None ->
+            begin match Layout.Search.record_person_by_email ~dbh piemail with
+            | Ok [] ->
+              error "Invoice for %s: Unknown PI." piemail;
+              None
+            | Ok [one] -> Some one
+            | _ -> failwith "DB error searching preparator"
+            end
+          end
+          |! value ~default:{ Layout.Record_person.id = 42004200l } in
+        let account_number, fund, org, program, project =
+          let mandatory msg s = 
+            if s = "" then (
+              error "Invoicing for %s: wrong %s: %s (mandatory field)" piemail msg s;
+              None) else Some s in
+          let optional s = if s = "" then None else Some s in
+          match chartstuff with
+          | an :: f :: o :: prog :: proj :: [] ->
+            (mandatory "Account number" an,
+             mandatory "Fund" f,
+             mandatory "Org" o,
+             optional prog,
+             mandatory "Project" proj)
+          | _ -> 
+            error "Wrong chartfield for invoice for %s: %s" piemail
+              (strlist chartstuff);
+            None, None, None, None, None 
+        in
+        Layout.Record_invoicing.(
+          run ~dbh ~fake:(fun x -> { id = x })
+            ~real:(fun dbh ->
+              add_value ~dbh ~pi 
+                ~percentage:p
+                ~lanes
+                ?account_number ?fund ?org ?program ?project
+                ?note:None)
+            ~log:(sprintf "(add_invoicing (pi %ld) (percentage %g) \
+                            (lanes (%s))%s%s%s%s%s)"
+                    pi.Layout.Record_person.id p
+                    (String.concat ~sep:" " 
+                       (List.map (Array.to_list lanes) ~f:(fun l ->
+                         sprintf "%ld" l.Layout.Record_lane.id)))
+                    (value_map account_number ~default:""
+                       ~f:(sprintf " (account_number %s)"))
+                    (value_map fund ~default:"" ~f:(sprintf " (fund %s)"))
+                    (value_map org ~default:"" ~f:(sprintf " (org %s)"))
+                    (value_map program ~default:"" ~f:(sprintf " (program %s)"))
+                    (value_map project ~default:"" ~f:(sprintf " (project %s)"))
+            )) |! Result.ok)
+    in
+    Pervasives.ignore invoices;
 
     begin match (Buffer.contents errbuf) with
     | "" -> printf "=== No errors or warnings detected. ===\n"
