@@ -116,7 +116,7 @@ let parse_date s =
     None
 
  
-let col_Library_Name = "Library Name"
+let col_LibraryID = "LibraryID"
 let col_Project_Name = "Project Name"
 let col_Concentration__nM_  = "Concentration (nM)"
 let col_Note = "Note"
