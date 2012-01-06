@@ -56,3 +56,4 @@
 
 <src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o
 <src/lib/hitscore_assemble_sample_sheet.ml{,i}>: syntax_camlp4o
+<src/app/hitscore_main.ml>: syntax_camlp4o

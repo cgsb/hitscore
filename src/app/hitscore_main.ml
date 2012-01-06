@@ -807,6 +807,58 @@ module Flowcell = struct
 
 end
 
+module Query = struct
+
+  module PGOCaml = Hitscore_threaded.Layout.PGOCaml
+
+  let predefined_queries = [
+    ("orphan-lanes", 
+     (["List of lanes which are not referenced by any flowcell."],
+      fun dbh args ->
+        let lanes =
+          let open Batteries in
+          PGSQL (dbh)
+            "
+select lane.g_id, lane.requested_read_length_1, lane.requested_read_length_2
+from lane left outer join flowcell on flowcell.lanes @> array_append ('{}', lane.g_id)
+where flowcell.serial_name is NULL;"
+        in
+        begin match List.length lanes with
+        | 0 -> printf "No orphan lanes found.\n"
+        | n ->
+          printf "Found %d orphan lanes:\n" n;
+          List.iter lanes (function
+          | (i32, r1, None) ->
+            printf " * Lane %ld (SE %ld)\n" i32 r1
+          | (i32, r1, Some r2) ->
+            printf " * Lane %ld (PE %ldx%ld)\n" i32 r1 r2
+          )
+        end));
+
+
+  ]
+
+  let describe out =
+    List.iter predefined_queries ~f:(fun (name, (desc, _)) ->
+      fprintf out " * %S:\n        %s\n" name
+        (String.concat ~sep:"\n        " desc))
+
+  let predefined hsc name args =
+    let open Hitscore_threaded in
+    match db_connect hsc with
+    | Ok dbh ->
+      begin match List.Assoc.find predefined_queries name with
+      | Some (_, run) -> run dbh args
+      | None ->
+        printf "Unknown custom query: %S\n" name;
+      end;
+      db_disconnect hsc |! Pervasives.ignore
+    | Error (`pg_exn e) ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+
+
+end
+
 
 
 let commands = ref []
@@ -987,6 +1039,16 @@ let () =
         with e -> None
       end);
 
+  define_command
+    ~names:["query"; "Q"]
+    ~description:"Query the database with (predefined) queries"
+    ~usage:(fun o exec cmd ->
+      fprintf o "usage: %s <profile> %s <query> [<query arguments>]\n" exec cmd;
+      fprintf o "where the queries are:\n";
+      Query.describe o;)
+    ~run:(fun config exec cmd -> function
+    | [] -> None
+    | name :: args -> Query.predefined config name args; Some ());
 
   let global_usage = function
     | `error -> 
