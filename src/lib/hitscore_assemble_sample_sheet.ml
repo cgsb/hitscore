@@ -133,18 +133,35 @@ module Make
                   if Array.length libraries <= 1 then `none else barcode_type in
                 begin match (barcode_sequences barcode_type barcodes) with
                 | Ok bars ->
-                  Array.iter bars ~f:(fun b ->
-                    print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
-                      flowcell_name (lane_idx + 1) name b (lane_idx + 1));
-                  return ()
+                  return (name, bars)
                 | Error e -> error e
                 end)
+              >>= fun name_bars ->
+              List.filter name_bars ~f:(fun (name, bars) -> bars <> [| "" |])
+              |! (function
+                | [] ->
+                  let name = 
+                    match name_bars with
+                    | [ (one_name, _) ] -> one_name
+                    | _ -> sprintf "PoolLane%d" (lane_idx + 1)
+                  in
+                  print out "%s,%d,%s,,,,N,,,Lane%d\n"
+                    flowcell_name (lane_idx + 1) name (lane_idx + 1);
+                  return ()
+                | l ->
+                  of_list_sequential l ~f:(fun (name, bars) -> 
+                    Array.iter bars ~f:(fun b ->
+                      print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
+                        flowcell_name (lane_idx + 1) name b (lane_idx + 1));
+                    return ())
+                  >>= fun _ -> return ())
+
             | `all_barcodes ->
               begin match libraries with
               | [| |] -> 
                 print out "%s,%d,SingleSample%d,,,,N,,,Lane%d\n"
                   flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
-                return []
+                return ()
               | some ->
                 let open Layout.Record_input_library in
                 cache_value ~dbh some.(0) >>| get_fields 
@@ -157,7 +174,7 @@ module Make
                     flowcell_name (lane_idx + 1) (lane_idx + 1) 
                     (Layout.Enumeration_barcode_provider.to_string barcode_type)
                     i b b (lane_idx + 1));
-                return []
+                return ()
               end
             end) 
           >>= fun _ -> return (`new_one 
