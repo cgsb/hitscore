@@ -818,10 +818,11 @@ module Query = struct
         let lanes =
           let open Batteries in
           PGSQL (dbh)
-            "
-select lane.g_id, lane.requested_read_length_1, lane.requested_read_length_2
-from lane left outer join flowcell on flowcell.lanes @> array_append ('{}', lane.g_id)
-where flowcell.serial_name is NULL;"
+            "select lane.g_id, 
+                    lane.requested_read_length_1, lane.requested_read_length_2
+             from lane left outer join flowcell 
+                  on flowcell.lanes @> array_append ('{}', lane.g_id)
+             where flowcell.serial_name is NULL;"
         in
         begin match List.length lanes with
         | 0 -> printf "No orphan lanes found.\n"
@@ -835,6 +836,37 @@ where flowcell.serial_name is NULL;"
           )
         end));
 
+    ("log",
+     (["Display the log table.";
+       "usage: log [<number of items>]"],
+      fun dbh args ->
+        let logs =
+          let open Batteries in
+          PGSQL (dbh)
+            " select log.g_last_modified, log.log from log 
+              order by g_last_modified"
+        in
+        begin match List.length logs with
+        | 0 -> printf "No logs found.\n"
+        | n ->
+          let filtered = 
+            match args with
+            | [] -> logs
+            | [ n ] -> 
+              begin try 
+                      let n = List.length logs - Int.of_string n  in
+                      List.split_n logs n |! snd
+                with e -> failwithf "Can't understand argument: %s" n ()
+              end
+            | _ -> failwithf "Wrong arguments!" ()
+          in
+          List.iter filtered (function
+          | (Some t, l) ->
+            printf "[%s] %s\n" t l
+          | None, l ->
+            printf "[???NO DATE???] %s\n" l
+          );
+        end));
 
   ]
 
