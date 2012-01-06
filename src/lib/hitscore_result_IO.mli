@@ -60,6 +60,10 @@ module type RESULT_IO = sig
       in a polymorphic variant.  *)
   val wrap_io: ('a -> 'b IO.t) -> 'a -> ('b, [> `io_exn of exn ]) monad
 
+
+  (** [of_option] allows to put options {i inside} the monad. *)
+  val of_option: 'a option -> f:('a -> ('c, 'b) monad) -> ('c option, 'b) monad 
+
 end
 
 module Make (IOC : IO_CONFIGURATION) : RESULT_IO with type 'a IO.t = 'a IOC.t

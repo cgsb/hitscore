@@ -21,6 +21,7 @@ module type RESULT_IO = sig
     on_result:('a -> ('b, [> `pg_exn of exn ] as 'c) monad) ->
     ('b, 'c) monad
   val wrap_io: ('a -> 'b IO.t) -> 'a -> ('b, [> `io_exn of exn ]) monad
+  val of_option: 'a option -> f:('a -> ('c, 'b) monad) -> ('c option, 'b) monad 
 
 end
 
@@ -97,5 +98,12 @@ module Make (IO_configuration : IO_CONFIGURATION) = struct
       double_bind caught
         ~ok:return
         ~error:(fun exn -> error (`io_exn exn)) 
+
+    let of_option o ~f =
+      of_list_sequential (List.filter_opt [o]) ~f
+      >>= function
+      | [one] -> return (Some one)
+      | _ -> return None
+
 
   end
