@@ -837,15 +837,31 @@ let () =
     ~names:["parse-submission-sheet"; "pss"]
     ~description:"Parse a (bunch of) submission sheet(s) (CSV)"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s [-wet-run] <pss1> <pss2> ...\n" exec cmd)
+      fprintf o "usage: %s <profile> %s [-wet-run|-verbose] \
+                [<PhiX-config>] <pss>\n" exec cmd;
+      fprintf o "where PhiX-config is <pool-name>:<phix-percent>\n";
+      fprintf o "example: %s dev %s -verbose A:1 C:4 pss_with_some_pools.csv\n"
+        exec cmd)
     ~run:(fun config exec cmd -> function
       | [] -> None
       | l ->
         let dry_run = not (List.exists l ~f:((=) "-wet-run")) in
         let verbose = List.exists l ~f:((=) "-verbose") in
-        let files = List.filter l ~f:(fun x -> x <> "-wet-run" && x <> "-verbose") in
-        Some (List.iter files
-                (Hitscore_submission_sheet.parse ~dry_run ~verbose config)));
+        let args = List.filter l ~f:(fun x -> x <> "-wet-run" && x <> "-verbose") in
+        match List.split_n args (List.length args - 1) with
+        | phix_raw, [ pss ] ->
+          begin 
+            try
+              let phix =
+                List.map phix_raw ~f:(fun s ->
+                  match String.split s ~on:':' with
+                  | [ name; percent ] -> ("Pool " ^ name, Int.of_string percent)
+                  | _ -> eprintf "Can't understand %s\n" s; failwith "phix parsing") in
+              Some (Hitscore_submission_sheet.parse ~dry_run ~verbose ~phix config pss)
+            with
+            | e -> eprintf "Exception: %s\n" (Exn.to_string e); None
+          end
+        | _, _ -> None);
 
   let global_usage = function
     | `error -> 

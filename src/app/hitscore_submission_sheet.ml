@@ -150,7 +150,7 @@ let col_Notes = "Notes"
 
 
 
-let parse ?(dry_run=true) ?(verbose=false) hsc file =
+let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
   let if_verbose fmt = 
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
 
@@ -242,6 +242,7 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
     List.iter invoicing (fun (email, p, chartstuff) -> 
       if_verbose "  %s, %f, [%s]\n" email p (strlist chartstuff)
     );
+
     let pools =
       let sections =
         Array.mapi sanitized ~f:(fun i a -> (i, a)) |> Array.to_list |>
@@ -272,7 +273,18 @@ let parse ?(dry_run=true) ?(verbose=false) hsc file =
               | _ ->
                 error "Wrong pool percentage row: [%s]" (strlist row);
                 None) in
-          Some (pool, seeding_pM, tot_vol, nm, pool_libs)
+          let pool_libs_redistributed =
+            match List.Assoc.find phix pool with
+            | None -> pool_libs
+            | Some p ->
+              let libnb = List.length pool_libs |! float in
+              let phixp = float p in
+              ("PhiX", (Int32.of_int_exn p)) 
+              :: (List.map pool_libs
+                    ~f:(fun (lib, plib) -> 
+                      (lib, Int32.(of_float (to_float plib -. (phixp /. libnb))))))
+          in
+          Some (pool, seeding_pM, tot_vol, nm, pool_libs_redistributed)
         | l ->
           error "Wrong Pool row: %s" (strlist l); None)
     in
