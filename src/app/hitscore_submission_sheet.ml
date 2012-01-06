@@ -1067,7 +1067,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     (String.concat ~sep:" " 
                        (List.map (Array.to_list contacts) ~f:(fun l ->
                          sprintf "%ld" l.Layout.Record_person.id)))
-            )) |! Result.ok
+            )) |! Result.ok >>= fun id -> return (pool, id)
       | None -> None
     ) |! List.filter_map ~f:(fun x -> x) |! Array.of_list in
     let invoices =
@@ -1113,14 +1113,14 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             ~real:(fun dbh ->
               add_value ~dbh ~pi 
                 ~percentage:p
-                ~lanes
+                ~lanes:(Array.map lanes ~f:snd)
                 ?account_number ?fund ?org ?program ?project
                 ?note:None)
             ~log:(sprintf "(add_invoicing (pi %ld) (percentage %g) \
                             (lanes (%s))%s%s%s%s%s)"
                     pi.Layout.Record_person.id p
                     (String.concat ~sep:" " 
-                       (List.map (Array.to_list lanes) ~f:(fun l ->
+                       (List.map (Array.to_list lanes) ~f:(fun (_, l) ->
                          sprintf "%ld" l.Layout.Record_lane.id)))
                     (value_map account_number ~default:""
                        ~f:(sprintf " (account_number %s)"))
@@ -1137,6 +1137,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     | s -> printf "=== ERRORS and WARNINGS: ===\n%s\n" s;
     end;
     print_dry_buffer ();
+
+    printf "=== Lanes ready to use: ===\n";
+    Array.iter lanes ~f:(fun (name, id) ->
+      printf "%s --> %ld\n" name id.Layout.Record_lane.id
+    );
+    printf "Charged to %s.\n" (String.concat ~sep:", " 
+                                 (List.map invoicing (fun (e, _, _) -> e)));
     ()
   | Error (`pg_exn e) ->
     eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
