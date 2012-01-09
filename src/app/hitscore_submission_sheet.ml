@@ -103,8 +103,8 @@ let parse_run_type s =
     None
     
 let parse_date s =
-  match String.split ~on:'-' s |> List.map ~f:(String.strip) with
-  | [ year; month; day ] ->
+  match String.split ~on:'/' s |> List.map ~f:(String.strip) with
+  | [ month; day; year ] ->
     begin try
             Some (ksprintf Layout.Timestamp.of_string
                     "%04s-%02s-%02s 08:00:00-05:00" year month day)
