@@ -150,9 +150,13 @@ let v011_to_v02 file_in file_out =
 
         in
 
+        let pooled_percentages_floats_sexp =
+          Array.map pooled_percentages ~f:(fun i32 ->
+            i32 |! Int64.of_int32 |! Float.of_int64)
+          |! Array.sexp_of_t Float.sexp_of_t |! Sexp.to_string in
 
         (g_id, g_created, g_last_modified, seeding_concentration_pM,
-        total_volume, libraries, pooled_percentages,
+        total_volume, libraries, pooled_percentages_floats_sexp,
         requested_read_length_1, requested_read_length_2, contacts))
     in
 
