@@ -263,7 +263,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               let row = sanitized.(section + i + 2) in
               match row with
               | [ lib ; percent ] ->
-                begin match (int32 percent) with
+                begin match try Some (Float.of_string percent) with e -> None with
                 | Some p -> Some (lib, p)
                 | None -> 
                   error "Wrong pool percentage %s in row [%s]" percent (strlist row);
@@ -278,11 +278,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | None -> pool_libs
             | Some p ->
               let libnb = List.length pool_libs |! float in
-              let phixp = float p in
-              ("PhiX", (Int32.of_int_exn p)) 
+              ("PhiX", float_of_int p)
               :: (List.map pool_libs
                     ~f:(fun (lib, plib) -> 
-                      (lib, Int32.(of_float (to_float plib -. (phixp /. libnb))))))
+                      (lib, plib -. (float p /. libnb))))
           in
           Some (pool, seeding_pM, tot_vol, nm, pool_libs_redistributed)
         | l ->
@@ -290,8 +289,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     in
     List.iter pools (function
     | Some (pool, _,_,_, l) ->
-      let sum = List.fold_left l ~f:(fun x (_, p) -> Int32.(x + p)) ~init:0l in
-      if sum < 99l || sum > 100l then
+      let sum = List.fold_left l ~f:(fun x (_, p) -> (x +. p)) ~init:0. in
+      if sum < 99. || sum > 101. then
         error "Pooled percentages for %s do not sum up to 100" pool
     | None -> ());
 
@@ -301,7 +300,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let f = Option.value_map ~default:"WRONG" ~f:(sprintf "%ld") in
       if_verbose "  %s %s %s %s [%s]\n" pool (f spm) (f tv) (f nm)
         (String.concat ~sep:", " 
-           (List.map l ~f:(fun (x,y) -> sprintf "%s:%ld%%" x y)))
+           (List.map l ~f:(fun (x,y) -> sprintf "%s:%.2f%%" x y)))
     | None -> ()
     );
 
@@ -1056,14 +1055,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 ?total_volume:(tv >>| Int64.of_int32 >>| Float.of_int64)
                 ~requested_read_length_1 ?requested_read_length_2
                 ~contacts)
-            ~log:(sprintf "(add_lane (libraries (%s)) (percentages (%s)) \
+            ~log:(sprintf "(add_lane (libraries (%s)) (percentages %s) \
                           (contacts (%s)))"
                     (String.concat ~sep:" " 
                        (List.map (Array.to_list libraries) ~f:(fun l ->
                          sprintf "%ld" l.Layout.Record_input_library.id)))
-                    (String.concat ~sep:" "
-                       (List.map (Array.to_list pooled_percentages) 
-                          ~f:(sprintf "%ld")))
+                    (Array.sexp_of_t Float.sexp_of_t pooled_percentages 
+                     |! Sexp.to_string) 
                     (String.concat ~sep:" " 
                        (List.map (Array.to_list contacts) ~f:(fun l ->
                          sprintf "%ld" l.Layout.Record_person.id)))

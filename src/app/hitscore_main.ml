@@ -755,7 +755,7 @@ module Flowcell = struct
             let libraries = [| i_phix |] in
             let phix_lane = Layout.Record_lane.add_value ~dbh
               ~libraries  ?total_volume:None ?seeding_concentration_pM:None
-              ~pooled_percentages:[| 100l |]
+              ~pooled_percentages:[| 100. |]
               ~requested_read_length_1:r1 ?requested_read_length_2:r2
               ~contacts:[| |] in
             begin match phix_lane with
