@@ -34,8 +34,8 @@ let v011_to_v02 file_in file_out =
 
           let project = None in
           let custom_barcodes = [| |] in
-          let p5_adapter_length = Some 58l in
-          let p7_adapter_length = Some 59l in
+          let p5_adapter_length = None in
+          let p7_adapter_length = None in
           let preparator = None in
           (g_id, g_created, g_last_modified, 
            name, project, sample,
