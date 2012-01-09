@@ -172,7 +172,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let contacts_section = find_section sanitized "Contacts" in
       list_of_filteri (fun i ->
         let row = sanitized.(contacts_section + i + 1) in
-        if List.hd_exn row = "" && List.length row > 1 then
+        if List.hd_exn row = "" && not (List.for_all row ((=) "")) then
           begin match row with
           | "" :: [] | [] -> failwith "should not be trying this... (contacts)"
           | ["" ; email ] ->
@@ -254,7 +254,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       List.map sections (fun section ->
         match sanitized.(section) with
         | pool :: "Seeding Concentration (10 - 20 pM):" :: scs
-          :: "Total Volume (uL):" :: tvs :: "Concentration (nM):" :: cs :: [] ->
+          :: "Total Volume (uL):" :: tvs :: "Concentration (nM):" :: cs :: 
+            emptyness when List.for_all emptyness ((=) "") ->
           let seeding_pM, tot_vol, nm =
             let i32 = int32 ~msg:(sprintf "%s row: " pool) in
             (i32 scs, i32 tvs, i32 cs) in
@@ -262,7 +263,9 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             list_of_filteri (fun i ->
               let row = sanitized.(section + i + 2) in
               match row with
-              | [ lib ; percent ] ->
+              | "Libraries" :: emptyness when List.for_all emptyness ((=) "") -> 
+                None
+              | lib :: percent :: emptyness when List.for_all emptyness ((=) "") ->
                 begin match try Some (Float.of_string percent) with e -> None with
                 | Some p -> Some (lib, p)
                 | None -> 
