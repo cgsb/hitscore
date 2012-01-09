@@ -160,7 +160,7 @@ let parse_sexp sexp =
     | Sx.Atom "option" :: l -> parse_2nd_type (Option fst) l
     | Sx.Atom "array" :: l ->
       begin match fst with 
-      | Int | Record_name _ ->
+      | Real | Int | Record_name _ ->
         parse_2nd_type (Array fst) l
       | _ ->
         sprintf "PGOCaml will only accept arrays of ints or records, \
@@ -300,6 +300,7 @@ let dsl_type_to_db t =
     | Option t2 -> 
       props := List.filter !props ~f:((<>) Psql.Not_null);
       convert t2
+    | Array Real -> Psql.Text
     | Array t2 ->
       props := Psql.Array :: !props;
       convert t2
@@ -477,6 +478,9 @@ let let_in_typed_value  = function
     sprintf "let %s = option_map %s Timestamp.to_string in"  n n
   | (n, Array Timestamp) ->
     sprintf "let %s = array_map %s Timestamp.to_string in"  n n
+  | (n, Array Real) ->
+    sprintf "let %s = Sexplib.Sexp.to_string \
+            (Core.Std.Array.sexp_of_t Core.Std.Float.sexp_of_t %s) in" n n
   | _ -> ""
 
 let convert_pgocaml_type = function
@@ -504,6 +508,8 @@ let convert_pgocaml_type = function
     sprintf "(option_map %s Timestamp.of_string)" n
   | (n, Array Timestamp) ->
     sprintf "(array_map %s Timestamp.of_string)" n
+  | (n, Array Real) ->
+    sprintf "Core.Std.(Array.t_of_sexp Float.t_of_sexp (Sexplib.Sexp.of_string %s))" n
   | (n, _) -> n
 
 
