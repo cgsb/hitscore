@@ -727,7 +727,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | Ok [] ->
             begin match protocol_file with
             | Some s ->
-              let hr_tag = "HRTAG_TO_IMPROVE" in
+              let hr_tag = 
+                let buf = Buffer.create 42 in
+                let yes s = Buffer.add_char buf s in
+                String.iter name (function
+                | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '-' | '_' as c -> yes c 
+                | _ -> ());
+                Buffer.contents buf  in
               run ~dbh
                 ~fake:(fun x -> { Layout.File_system.id = x })
                   ~real:(fun dbh ->
