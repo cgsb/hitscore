@@ -163,24 +163,43 @@ module Make
                   flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
                 return ()
               | some ->
-                let open Layout.Record_input_library in
-                cache_value ~dbh some.(0) >>| get_fields 
-                >>= fun { library; _ } ->
-                let open Layout.Record_stock_library in
-                cache_value ~dbh library >>| get_fields
-                >>= fun { barcode_type; _ } ->
-                Array.iter (all_barcode_sequences barcode_type) ~f:(fun (i, b) ->
-                  print out "%s,%d,Lane%d_%s_%02ld_%s,,%s,,N,,,Lane%d\n"
-                    flowcell_name (lane_idx + 1) (lane_idx + 1) 
-                    (Layout.Enumeration_barcode_provider.to_string barcode_type)
-                    i b b (lane_idx + 1));
-                return ()
+                let elected_barcode_type =
+                  of_list_sequential (Array.to_list some) (fun il ->
+                    let open Layout.Record_input_library in
+                    cache_value ~dbh il >>| get_fields 
+                    >>= fun { library; _ } ->
+                    let open Layout.Record_stock_library in
+                    cache_value ~dbh library >>| get_fields
+                    >>= fun { barcode_type; _ } ->
+                    return barcode_type)
+                  >>= fun bt_list ->
+                  List.fold_left bt_list ~init:`none ~f:(fun prev current -> 
+                    match prev with
+                    | `illumina -> `illumina
+                    | `bioo -> `bioo
+                    | `none | `custom | `nugen | `bioo_96 ->
+                      current) 
+                  |! return in
+                elected_barcode_type >>= fun bt ->
+                begin match (all_barcode_sequences bt) with
+                | [| |] ->
+                  print out "%s,%d,SingleSample%d,,,,N,,,Lane%d\n"
+                    flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
+                  return ()
+                | some ->
+                  Array.iter some  ~f:(fun (i, b) ->
+                    print out "%s,%d,Lane%d_%s_%02ld_%s,,%s,,N,,,Lane%d\n"
+                      flowcell_name (lane_idx + 1) (lane_idx + 1) 
+                      (Layout.Enumeration_barcode_provider.to_string bt)
+                      i b b (lane_idx + 1));
+                  return ()
+                end
               end
             end) 
-          >>= fun _ -> return (`new_one 
-                                  { content = out_buf; kind; flowcell; 
-                                    flowcell_name })
-        | Some (assembly, sample_sheet) -> return (`old_one (assembly, sample_sheet))
+          >>= fun (_: unit list) -> 
+          return (`new_one { content = out_buf; kind; flowcell; flowcell_name })
+        | Some (assembly, sample_sheet) -> 
+          return (`old_one (assembly, sample_sheet))
       )
 
     let output samplesheet output_string =
