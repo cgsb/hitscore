@@ -21,6 +21,8 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
   module Assemble_sample_sheet = 
     Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
 
+  module Bcl_to_fastq =
+    Hitscore_bcl_to_fastq.Make (Result_IO) (Layout)
 
   type db_configuration = {
     db_host     : string;

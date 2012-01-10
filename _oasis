@@ -35,6 +35,7 @@ Library hitscore
           , Hitscore_interfaces
           , Hitscore_db_access
           , Hitscore_assemble_sample_sheet
+          , Hitscore_bcl_to_fastq
           , Hitscore_configuration
           , Hitscore_result_IO
   DataFiles: ../script/check_fastqs.ml  ($bindir)

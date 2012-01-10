@@ -891,6 +891,197 @@ module Query = struct
 
 end
 
+module Run_bcl_to_fastq = struct
+
+  open Hitscore_threaded
+  open Result_IO
+
+  let get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell =
+    let tmp_file = Filename.temp_file "Sample_sheet" ".csv" in
+    Assemble_sample_sheet.run
+      ~kind ~dbh flowcell
+      ~write_to_tmp:(fun s ->
+        Out_channel.(with_file tmp_file ~f:(fun o ->
+          printf "writing to %s\n" tmp_file;
+          try (return (output_string o s))
+          with e -> error (`io_exn e))))
+      ~mv_from_tmp:(fun volpath filepath ->
+        match (root_directory hsc) with
+        | None -> error `root_directory_not_configured
+        | Some root ->
+          begin 
+            try 
+              ksprintf System.command_exn "mkdir -p %s/%s/" root volpath;
+              ksprintf System.command_exn "mv %s %s/%s/%s\n"
+                tmp_file root volpath filepath;
+              return ()
+            with 
+              e -> error (`sys_error (`moving_sample_sheet e))
+          end)
+    >>= function
+    | `new_failure (_, e) ->
+      printf "NEW FAILURE\n";
+      error e
+    | `new_success f ->
+      printf "Assemble_sample_sheet.run succeeded\n";
+      Layout.Function_assemble_sample_sheet.(
+        cache_evaluation ~dbh f
+        >>= fun cache ->
+        get_result cache) 
+    | `previous_success (f, r) ->
+      printf "Assemble_sample_sheet.run hit a previously ran assembly\n";
+      return r
+
+
+  let display_errors = function
+    | Ok _ -> ()
+    | Error e ->
+      begin match e with
+      | `barcode_not_found (i, p) ->
+        printf "ERROR: Barcode not found: %ld (%s)\n" i
+          (Layout.Enumeration_barcode_provider.to_string p)
+      | `fatal_error  `trees_to_unix_paths_should_return_one ->
+        printf "FATAL_ERROR: trees_to_unix_paths_should_return_one\n"
+      | `io_exn e ->
+        printf "IO-ERROR: %s\n" (Exn.to_string e)
+      | `layout_inconsistency (_, _) ->
+        printf "LAYOUT-INCONSISTENCY-ERROR!\n"
+      | `new_failure (_, _) ->
+        printf "NEW FAILURE\n"
+      | `pg_exn e ->
+        printf "PGOCaml-ERROR: %s\n" (Exn.to_string e)
+      | `wrong_request (`record_flowcell, `value_not_found s) ->
+        printf "WRONG-REQUEST: Record 'flowcell': value not found: %s\n" s
+      | `cant_find_hiseq_raw_for_flowcell flowcell ->
+        printf "Cannot find a HiSeq directory for that flowcell: %S\n" flowcell
+      | `found_more_than_one_hiseq_raw_for_flowcell (nb, flowcell) ->
+        printf "There are %d HiSeq directories for that flowcell: %S\n" nb flowcell
+      | `hiseq_dir_deleted (_, _) ->
+        printf "INVALID-REQUEST: The HiSeq directory is reported 'deleted'\n"
+      | `cannot_recognize_file_type t ->
+        printf "LAYOUT-INCONSISTENCY-ERROR: Unknown file-type: %S\n" t
+      | `empty_sample_sheet_volume (v, s) ->
+        printf "LAYOUT-INCONSISTENCY-ERROR: Empty sample-sheet volume\n"
+      | `inconsistency_inode_not_found i32 ->
+        printf "LAYOUT-INCONSISTENCY-ERROR: Inode not found: %ld\n" i32
+      | `more_than_one_file_in_sample_sheet_volume (v,s,m) ->
+        printf "LAYOUT-INCONSISTENCY-ERROR: More than one file in \
+                sample-sheet volume:\n%s\n" (String.concat ~sep:"\n" m)
+      | `root_directory_not_configured ->
+        printf "INVALID-CONFIGURATION: Root directory not set.\n"
+      | `sys_error (`moving_sample_sheet e) ->
+        printf "SYS-ERROR: While moving the sample-sheet: %s\n" (Exn.to_string e)
+      end
+
+  let get_hiseq_raw ~dbh s =
+    begin match String.split ~on:'_' (Filename.basename s) with
+    | [_ ; _ ; _; almost_fc] ->
+      Layout.Search.record_hiseq_raw_by_hiseq_dir_name ~dbh s
+      >>= fun search_result ->
+      return (search_result, String.drop_prefix almost_fc 1)
+    | _ ->
+      begin 
+        try
+          Layout.Record_hiseq_raw.(
+            let hst = { id = Int32.of_string s } in
+            cache_value ~dbh hst >>| get_fields
+            >>= fun {flowcell_name; _} ->
+            return ([hst], flowcell_name))
+        with
+          e ->
+            (Layout.Search.record_hiseq_raw_by_flowcell_name ~dbh s
+             >>= fun search_result ->
+             return (search_result, s))
+      end
+    end
+    >>= fun (search_result, flowcell) ->
+    begin match search_result with
+    | [one] ->
+      printf "Found one hiseq-raw directory\n"; return (one, flowcell)
+    | [] ->
+      error (`cant_find_hiseq_raw_for_flowcell flowcell)
+    | more ->
+      error (`found_more_than_one_hiseq_raw_for_flowcell 
+                (List.length more, flowcell))
+    end
+
+
+  let start hsc args =
+    let open Hitscore_threaded in
+    let work =
+      db_connect hsc
+      >>= fun dbh ->
+      printf "start (Bcl-to-fastq %s)\n" (String.concat ~sep:" " args);
+      let kind, args = 
+        match List.partition args ((=) "-all-barcodes") with
+        | [], l -> `specific_barcodes, l
+        | _, l-> `all_barcodes, l in
+      let wet_run, args =
+        match List.partition args ((=) "-wet-run") with
+        | [], l -> false, l
+        | _, l-> true, l in
+      begin match args with
+      | [flowcell_or_dir_or_id] ->
+        get_hiseq_raw ~dbh flowcell_or_dir_or_id
+        >>= fun (hiseq_dir, flowcell) ->
+        get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell
+        >>= fun sample_sheet ->
+        Layout.Record_inaccessible_hiseq_raw.(
+          get_all ~dbh
+          >>= fun all ->
+          of_list_sequential all ~f:(fun ihr_t ->
+            cache_value ~dbh ihr_t
+            >>= fun cache ->
+            begin match last_modified cache with
+            | Some t -> return (ihr_t, t)
+            | None -> error (`layout_inconsistency 
+                                (`record_inaccessible_hiseq_raw,
+                                 `no_last_modified_timestamp ihr_t))
+            end)
+          >>| List.sort ~cmp:(fun a b -> compare (snd b) (snd a))
+          >>= function
+          | [] ->
+            printf "There were no inaccessible_hiseq_raw => \
+                       creating the empty one.\n";
+            Layout.Record_inaccessible_hiseq_raw.add_value ~dbh ~deleted:[| |]
+          | (h, ts) :: t -> 
+            printf "Last inaccessible_hiseq_raw: %ld on %s\n"
+              h.Layout.Record_inaccessible_hiseq_raw.id
+              (Time.to_string ts);
+            return h)
+        >>= fun availability ->
+        begin match root_directory hsc with
+        | None -> error (`root_directory_not_configured)
+        | Some root ->
+          Bcl_to_fastq.start ~dbh ~root
+            ~sample_sheet ~hiseq_dir ~availability 
+            Time.(now() |! to_filename_string)
+          >>= fun todo_list ->
+          List.iter todo_list (function
+          | `Run s ->
+            if wet_run then
+              (printf "RUN: %s\n" s; System.command_exn s)
+            else
+              printf "SHOULD-RUN:\n  %s\n" s
+          | `Save (c, f) ->
+            if wet_run then
+              (printf "WRITE IN %S\n" f; 
+               Out_channel.(with_file f ~f:(fun o -> output_string o c)))
+            else
+              printf "WRITE-IN %S:\n%s\n" f c
+          );
+          return ()
+        end
+      | _ ->
+        printf "Don't know what to do\n"; return ()
+      end
+    in
+    display_errors work;
+    db_disconnect hsc |! Pervasives.ignore
+
+end
+
+
 
 
 let commands = ref []
@@ -1081,6 +1272,20 @@ let () =
     ~run:(fun config exec cmd -> function
     | [] -> None
     | name :: args -> Query.predefined config name args; Some ());
+
+  define_command
+    ~names:["bcl-to-fastq"; "b2f"]
+    ~description:"Run, monitor, … the bcl_to_fastq function"
+    ~usage:(fun o exec cmd ->
+      fprintf o "usage: %s <profile> %s <command> <args>\n" exec cmd;
+      fprintf o "where the commands are:\n\
+          \  * start [-all-barcodes|-wet-run] <flowcell-search>\n\
+          \    flowcell-search can be either a flowcell name, a HiSeq \n\
+          \    directory path or a DB-identifier in the 'hiseq_raw' table\n")
+    ~run:(fun config exec cmd -> function
+    | "start" :: args -> Some (Run_bcl_to_fastq.start config args)
+    | _ -> None);
+  
 
   let global_usage = function
     | `error -> 

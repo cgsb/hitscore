@@ -137,6 +137,9 @@
         (run_date timestamp)
         (host string)
         (hiseq_dir_name string))
+(search hiseq_raw by flowcell_name)
+(search hiseq_raw by hiseq_dir_name)
+
 (record inaccessible_hiseq_raw
         (deleted hiseq_raw array))
 
