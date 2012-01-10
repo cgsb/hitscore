@@ -1075,8 +1075,9 @@ let ocaml_function_module ~out name args result =
   raw out " match res_pointer with\n\
             | Some i -> Core.Std.Ok { Record_%s.id = i } \n\
             | None -> \
-              Core.Std.Error (`layout_inconsistency `result_not_available)\n\n"
-    result;
+              Core.Std.Error (`layout_inconsistency (`function_%s,
+                                                     `result_not_available))\n\n"
+    result name;
 
   List.iter 
     [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");

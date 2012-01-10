@@ -186,7 +186,7 @@ let show_success dbh =
                   \    Flowcell: %s,\n    Kind: %s,\n    Note: %s\n" 
           flowcell_name kind_str  
           (Option.value ~default:"NONE" sample_sheet_note)
-      | Error (`layout_inconsistency (`result_not_available)) ->
+      | Error (`layout_inconsistency (_, `result_not_available)) ->
         print notif "get_result detected a DB inconsistency: \
                     result_not_available!\n"
       end
