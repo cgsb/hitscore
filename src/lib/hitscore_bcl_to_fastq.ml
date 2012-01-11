@@ -6,7 +6,12 @@ module Make
     open Hitscore_std
     open Result_IO
 
-    type todo_list = [`Run of string | `Save of string * string] list 
+    type 'call_error todo_list = [
+    | `Run of string
+    | `Save of string * string
+    | `Call of string * 
+        (dbh:Layout.db_handle -> (unit, 'call_error) Result_IO.monad)
+    ] list 
 
     let start ~dbh ~root
         ~(sample_sheet: Layout.Record_sample_sheet.t)
@@ -89,6 +94,28 @@ module Make
                          make_stdout_path make_stderr_path]
                     |! script_to_string)
       in
+      let create_and_set_started ~dbh =
+        Layout.Function_bcl_to_fastq.(
+          add_evaluation ~dbh
+            ~raw_data:hiseq_dir
+            ~availability ~mismatch:mismatch32 ~version:casava_version
+            ~sample_sheet ~recomputable:true ~recompute_penalty:100.
+          >>= set_started ~dbh
+          >>= fun can_finish ->
+          let log =
+            sprintf "(add_and_start_bcl_to_fastq %ld (raw_data %ld) \
+                        (availability %ld) (mismatch %ld) (version %s) \
+                        (sample_sheet %ld))"
+              can_finish.id
+              hiseq_dir.Layout.Record_hiseq_raw.id
+              availability.Layout.Record_inaccessible_hiseq_raw.id
+              mismatch32 casava_version
+              sample_sheet.Layout.Record_sample_sheet.id in
+          Layout.Record_log.add_value ~dbh ~log
+          >>= fun _ -> return ()
+        )
+      in
+
       let todo = 
         let cmd fmt = ksprintf (fun s -> `Run s) fmt in 
         [
@@ -102,6 +129,7 @@ module Make
             casava_version basecalls unaligned sample_sheet_path mismatch32;
           `Save (pbs_script, pbs_script_file);
           cmd "qsub %s" pbs_script_file;
+          `Call ("create_and_set_started", create_and_set_started);
         ]
       in
       return todo

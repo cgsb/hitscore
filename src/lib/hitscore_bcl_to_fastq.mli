@@ -6,7 +6,12 @@ module Make :
       functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
 sig
 
-  type todo_list = [`Run of string | `Save of string * string] list 
+  type 'call_error todo_list = [
+  | `Run of string
+  | `Save of string * string
+  | `Call of string * 
+      (dbh:Layout.db_handle -> (unit, 'call_error) Result_IO.monad)
+  ] list 
 
   val start :
     dbh:Layout.db_handle -> root:string ->
@@ -21,7 +26,10 @@ sig
     ?ppn:int ->
     ?work_dir:(user:string -> unique_id:string -> string) ->
     ?queue:string -> string ->
-    (todo_list,
+    ([> `layout_inconsistency of [> `function_bcl_to_fastq | `record_log ] *
+        [> `insert_did_not_return_one_id of string * int32 list ]
+     | `pg_exn of exn ] 
+        todo_list,
      [> `cannot_recognize_file_type of string
      | `empty_sample_sheet_volume of
          Layout.File_system.volume * Layout.Record_sample_sheet.t

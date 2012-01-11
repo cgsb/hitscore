@@ -15,6 +15,13 @@ module System = struct
     else
       ()
 
+  let command s =
+    let status = Unix.system s in
+    if (Unix.Process_status.is_ok status) then
+      Ok ()
+    else
+      Error (`sys_error (`command (s, status)))
+
   let command_to_string s =
     Unix.open_process_in s |> In_channel.input_all
         
@@ -971,6 +978,9 @@ module Run_bcl_to_fastq = struct
         printf "INVALID-CONFIGURATION: Root directory not set.\n"
       | `sys_error (`moving_sample_sheet e) ->
         printf "SYS-ERROR: While moving the sample-sheet: %s\n" (Exn.to_string e)
+      | `sys_error (`command (cmd, status)) ->
+        printf "SYS-ERROR: Command: %S --> %s\n" cmd 
+          (Unix.Process_status.to_string_hum status)
       end
 
   let get_hiseq_raw ~dbh s =
@@ -1042,7 +1052,7 @@ module Run_bcl_to_fastq = struct
         "\n\tUse/create an all-barcodes sample-sheet.");
       ( "-wet-run",
         Arg.Set wet_run,
-        "\n\tReally run the stuff.");
+        "\n\tReally try to run the stuff.");
       ( "-wall-hours",
         Arg.Set_int wall_hours,
         sprintf "<hours>\n\tWalltime in hours (default: %d)." !wall_hours);
@@ -1123,23 +1133,33 @@ module Run_bcl_to_fastq = struct
             ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
             (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
           >>= fun todo_list ->
-          List.iter todo_list (function
+          of_list_sequential todo_list (function
           | `Run s ->
             if wet_run then
-              (printf "RUN: %s\n" s; System.command_exn s)
+              (printf "RUN: %s\n" s; System.command s)
             else
-              printf "SHOULD-RUN:\n  %s\n" s
+              (printf "SHOULD-RUN:\n  %s\n" s; Ok ())
           | `Save (c, f) ->
             if wet_run then
               (printf "WRITE IN %S\n" f; 
-               Out_channel.(with_file f ~f:(fun o -> output_string o c)))
+               wrap_io Out_channel.(with_file ~f:(fun o -> output_string o c)) f)
             else
-              printf "WRITE-IN %S:\n%s\n" f c
-          );
+              (printf "WRITE-IN %S:\n%s\n" f c; Ok ())
+          | `Call (name, f) ->
+            if wet_run then
+              (printf "CALL %S\n" name;
+               f ~dbh)
+            else
+              (printf "WOULD-CALL %S\n" name; Ok ())
+          )
+          >>= fun (_ : unit list) ->
           return ()
         end
-      | _ ->
-        printf "Don't know what to do\n"; return ()
+      | [] -> printf "Don't know what to do without arguments.\n"; return ()
+      | l ->
+        printf "Don't know what to do with %d arguments%s.\n"
+          (List.length l)
+          (sprintf ": [%s]" (String.concat ~sep:", " l)); return ()
       end
       |! display_errors;
       db_disconnect hsc dbh
