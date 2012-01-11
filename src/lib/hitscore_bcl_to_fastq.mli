@@ -20,6 +20,7 @@ sig
     ?ppn:int ->
     ?work_dir:(user:string -> unique_id:string -> string) ->
     ?queue:string ->
+    ?hitscore_register_success:string ->
     run_command:(string ->
                  (unit,
                   [> `cannot_recognize_file_type of string

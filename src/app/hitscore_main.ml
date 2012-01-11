@@ -1032,6 +1032,9 @@ module Run_bcl_to_fastq = struct
       ref 12, ref (fun ~user ~unique_id -> 
         sprintf "/scratch/%s/HS_B2F/%s/" user unique_id),
       ref `casava_182, ref `one in
+    let hitscore_register_success =
+      ref (sprintf "%s %s %s register-success" 
+              Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
     let options = [
       ( "-user", 
         Arg.String (fun s -> user := Some s),
@@ -1069,6 +1072,10 @@ module Run_bcl_to_fastq = struct
         Arg.Unit (fun s -> mismatch := `zero), "\n\tRun with mismatch 0.");
       ( "-mismatch-two",
         Arg.Unit (fun s -> mismatch := `two), "\n\tRun with mismatch 2.");
+      ( "-register-success",
+        Arg.Set_string hitscore_register_success,
+        sprintf "<command>\n\tCommand to call to register the success of \
+            the run (default %S)." !hitscore_register_success);
     ] in
     let anon_args = ref [] in
     let anon s = anon_args := s :: !anon_args in
@@ -1082,7 +1089,8 @@ module Run_bcl_to_fastq = struct
       try Arg.parse_argv cmdline options anon usage;
           `go (List.rev !anon_args, !sys_dry_run, !sample_sheet_kind,
                !user, !queue, !nodes, !ppn,
-               !wall_hours, !work_dir, !version, !mismatch)
+               !wall_hours, !work_dir, !version, !mismatch,
+               !hitscore_register_success)
       with
       | Arg.Bad b -> `bad b
       | Arg.Help h -> `help h
@@ -1092,7 +1100,8 @@ module Run_bcl_to_fastq = struct
     let open Hitscore_threaded in
     begin match (start_parse_cmdline prefix cl_args) with
     | `go (args, sys_dry_run, kind, user, queue, nodes, ppn,
-           wall_hours, work_dir, version, mismatch) ->
+           wall_hours, work_dir, version, mismatch, 
+           hitscore_register_success) ->
       db_connect hsc
       >>= fun dbh ->
       begin match args with
@@ -1129,7 +1138,7 @@ module Run_bcl_to_fastq = struct
         | None -> error (`root_directory_not_configured)
         | Some root ->
           Bcl_to_fastq.start ~dbh ~root
-            ~sample_sheet ~hiseq_dir ~availability
+            ~sample_sheet ~hiseq_dir ~availability ~hitscore_register_success
             ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
             (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
             ~run_command:(fun s ->

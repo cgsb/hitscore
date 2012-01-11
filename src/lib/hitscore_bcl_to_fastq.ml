@@ -17,6 +17,7 @@ module Make
         ?(work_dir=fun ~user ~unique_id -> 
           sprintf "/scratch/%s/_HS_B2F/%s" user unique_id)
         ?(queue="cgsb-s")
+        ?(hitscore_register_success="echo should register success: ")
         ~run_command
         ~write_file
         name =
@@ -87,7 +88,7 @@ module Make
                        sprintf "cd %s" unaligned;
                        sprintf "make -j8 1> %s 2> %s" 
                          make_stdout_path make_stderr_path;
-                       sprintf "echo \"hitscore dev b2f register-success %ld %s\""
+                       sprintf "%s %ld %s" hitscore_register_success
                          b2f.Layout.Function_bcl_to_fastq.id work_root]
                     |! script_to_string)
       in
