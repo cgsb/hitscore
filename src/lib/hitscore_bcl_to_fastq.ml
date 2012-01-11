@@ -6,13 +6,6 @@ module Make
     open Hitscore_std
     open Result_IO
 
-    type 'call_error todo_list = [
-    | `Run of string
-    | `Save of string * string
-    | `Call of string * 
-        (dbh:Layout.db_handle -> (unit, 'call_error) Result_IO.monad)
-    ] list 
-
     let start ~dbh ~root
         ~(sample_sheet: Layout.Record_sample_sheet.t)
         ~(hiseq_dir: Layout.Record_hiseq_raw.t)
@@ -24,6 +17,8 @@ module Make
         ?(work_dir=fun ~user ~unique_id -> 
           sprintf "/scratch/%s/_HS_B2F/%s" user unique_id)
         ?(queue="cgsb-s")
+        ~run_command
+        ~write_file
         name =
 
       Layout.Record_inaccessible_hiseq_raw.(
@@ -69,7 +64,7 @@ module Make
       let out_dir = sprintf "%s/Output/" work_root in
       let unaligned = sprintf "%s/Unaligned" work_root in
       let pbs_script_file = sprintf "%s/script.pbs" work_root in
-      let pbs_script = 
+      let pbs_script b2f = 
         let stdout_path = sprintf "%s/pbs.stdout" out_dir in
         let stderr_path = sprintf "%s/pbs.stderr" out_dir in
         let make_stdout_path = sprintf "%s/make.stdout" out_dir in
@@ -91,48 +86,57 @@ module Make
                           ". /share/apps/casava/%s/intel/env.sh" casava_version;
                        sprintf "cd %s" unaligned;
                        sprintf "make -j8 1> %s 2> %s" 
-                         make_stdout_path make_stderr_path]
+                         make_stdout_path make_stderr_path;
+                       sprintf "echo \"hitscore dev b2f register-success %ld %s\""
+                         b2f.Layout.Function_bcl_to_fastq.id work_root]
                     |! script_to_string)
       in
-      let create_and_set_started ~dbh =
+      let create ~dbh =
         Layout.Function_bcl_to_fastq.(
           add_evaluation ~dbh
             ~raw_data:hiseq_dir
             ~availability ~mismatch:mismatch32 ~version:casava_version
             ~sample_sheet ~recomputable:true ~recompute_penalty:100.
-          >>= set_started ~dbh
-          >>= fun can_finish ->
+          >>= fun b2f ->
           let log =
-            sprintf "(add_and_start_bcl_to_fastq %ld (raw_data %ld) \
+            sprintf "(create_bcl_to_fastq %ld (raw_data %ld) \
                         (availability %ld) (mismatch %ld) (version %s) \
                         (sample_sheet %ld))"
-              can_finish.id
+              b2f.id
               hiseq_dir.Layout.Record_hiseq_raw.id
               availability.Layout.Record_inaccessible_hiseq_raw.id
               mismatch32 casava_version
               sample_sheet.Layout.Record_sample_sheet.id in
           Layout.Record_log.add_value ~dbh ~log
-          >>= fun _ -> return ()
+          >>= fun _ -> return b2f
         )
       in
+      let start ~dbh b2f =
+        Layout.Function_bcl_to_fastq.(
+          set_started ~dbh b2f
+          >>= fun b2f ->
+          Layout.Record_log.add_value ~dbh 
+            ~log:(sprintf "(set_bcl_to_fastq_started %ld)" b2f.id)
+          >>= fun _ -> return b2f) in            
 
-      let todo = 
-        let cmd fmt = ksprintf (fun s -> `Run s) fmt in 
-        [
-          cmd "mkdir -p %s" out_dir;
-          cmd ". /share/apps/casava/%s/intel/env.sh && \
+      let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
+      cmd "mkdir -p %s" out_dir
+      >>= fun () ->
+      cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
                     --mismatches %ld"
-            casava_version basecalls unaligned sample_sheet_path mismatch32;
-          `Save (pbs_script, pbs_script_file);
-          cmd "qsub %s" pbs_script_file;
-          `Call ("create_and_set_started", create_and_set_started);
-        ]
-      in
-      return todo
+        casava_version basecalls unaligned sample_sheet_path mismatch32
+      >>= fun () ->
+      create ~dbh
+      >>= fun created ->
+      write_file (pbs_script created) pbs_script_file
+      >>= fun () ->
+      cmd "qsub %s" pbs_script_file
+      >>= fun () ->
+      start ~dbh created
 
 
     let finish ~dbh = ()

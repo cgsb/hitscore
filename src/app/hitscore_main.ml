@@ -1026,7 +1026,7 @@ module Run_bcl_to_fastq = struct
       | None -> ref None in
     let nodes = ref 1 in
     let ppn = ref 8 in
-    let wet_run = ref false in
+    let sys_dry_run = ref false in
     let sample_sheet_kind = ref `specific_barcodes in
     let wall_hours, work_dir, version, mismatch =
       ref 12, ref (fun ~user ~unique_id -> 
@@ -1050,9 +1050,9 @@ module Run_bcl_to_fastq = struct
       ( "-all-barcodes",
         Arg.Unit (fun () -> sample_sheet_kind := `all_barcodes),
         "\n\tUse/create an all-barcodes sample-sheet.");
-      ( "-wet-run",
-        Arg.Set wet_run,
-        "\n\tReally try to run the stuff.");
+      ( "-sys-dry-run",
+        Arg.Set sys_dry_run,
+        "\n\tDo not run the system commands (it still populated the DB).");
       ( "-wall-hours",
         Arg.Set_int wall_hours,
         sprintf "<hours>\n\tWalltime in hours (default: %d)." !wall_hours);
@@ -1080,7 +1080,7 @@ module Run_bcl_to_fastq = struct
     let cmdline = Array.of_list (usage_prefix :: args) in
     begin 
       try Arg.parse_argv cmdline options anon usage;
-          `go (List.rev !anon_args, !wet_run, !sample_sheet_kind,
+          `go (List.rev !anon_args, !sys_dry_run, !sample_sheet_kind,
                !user, !queue, !nodes, !ppn,
                !wall_hours, !work_dir, !version, !mismatch)
       with
@@ -1091,7 +1091,7 @@ module Run_bcl_to_fastq = struct
   let start hsc prefix cl_args =
     let open Hitscore_threaded in
     begin match (start_parse_cmdline prefix cl_args) with
-    | `go (args, wet_run, kind, user, queue, nodes, ppn,
+    | `go (args, sys_dry_run, kind, user, queue, nodes, ppn,
            wall_hours, work_dir, version, mismatch) ->
       db_connect hsc
       >>= fun dbh ->
@@ -1132,27 +1132,19 @@ module Run_bcl_to_fastq = struct
             ~sample_sheet ~hiseq_dir ~availability
             ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
             (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
-          >>= fun todo_list ->
-          of_list_sequential todo_list (function
-          | `Run s ->
-            if wet_run then
-              (printf "RUN: %s\n" s; System.command s)
-            else
-              (printf "SHOULD-RUN:\n  %s\n" s; Ok ())
-          | `Save (c, f) ->
-            if wet_run then
-              (printf "WRITE IN %S\n" f; 
-               wrap_io Out_channel.(with_file ~f:(fun o -> output_string o c)) f)
-            else
-              (printf "WRITE-IN %S:\n%s\n" f c; Ok ())
-          | `Call (name, f) ->
-            if wet_run then
-              (printf "CALL %S\n" name;
-               f ~dbh)
-            else
-              (printf "WOULD-CALL %S\n" name; Ok ())
-          )
-          >>= fun (_ : unit list) ->
+            ~run_command:(fun s ->
+              if not sys_dry_run then
+                (printf "RUN-COMMAND: %S\n" s; System.command s)
+              else
+                (printf "Would-RUN-COMMAND: %S\n" s; Ok ()))
+            ~write_file:(fun s file ->
+              if not sys_dry_run then
+                (printf "WRITE-FILE: %S\n" file;
+                 wrap_io Out_channel.(with_file 
+                                        ~f:(fun o -> output_string o s)) file)
+              else
+                (printf "Would-WRITE-FILE: %S:\n%s\n" file s; Ok ()))
+          >>= fun started ->
           return ()
         end
       | [] -> printf "Don't know what to do without arguments.\n"; return ()
