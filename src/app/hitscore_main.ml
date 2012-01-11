@@ -1005,21 +1005,86 @@ module Run_bcl_to_fastq = struct
                 (List.length more, flowcell))
     end
 
+  let start_parse_cmdline usage_prefix args =
+    let user = ref (Sys.getenv "LOGNAME") in
+    let queue = 
+      let groups =
+        System.command_to_string "groups" |> 
+            String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
+      match List.find groups ((=) "cgsb") with
+      | Some _ -> ref (Some "cgsb-s")
+      | None -> ref None in
+    let nodes = ref 1 in
+    let ppn = ref 8 in
+    let wet_run = ref false in
+    let sample_sheet_kind = ref `specific_barcodes in
+    let wall_hours, work_dir, version, mismatch =
+      ref 12, ref (fun ~user ~unique_id -> 
+        sprintf "/scratch/%s/HS_B2F/%s/" user unique_id),
+      ref `casava_182, ref `one in
+    let options = [
+      ( "-user", 
+        Arg.String (fun s -> user := Some s),
+        sprintf "<login>\n\tSet the user-name (%s)."
+          (Option.value_map ~default:"kind-of mandatory" !user
+             ~f:(sprintf "default value inferred: %s")));
+      ( "-queue", 
+        Arg.String (fun s -> queue := Some s),
+        sprintf "<name>\n\tSet the PBS-queue%s." 
+          (Option.value_map ~default:"" !queue 
+             ~f:(sprintf " (default value inferred: %s)")));
+      ( "-nodes-ppn", 
+        Arg.Tuple [ Arg.Set_int nodes; Arg.Set_int ppn],
+        sprintf "<n> <m>\n\tSet the number of nodes and processes per node \
+                  (default %d, %d)." !nodes !ppn);
+      ( "-all-barcodes",
+        Arg.Unit (fun () -> sample_sheet_kind := `all_barcodes),
+        "\n\tUse/create an all-barcodes sample-sheet.");
+      ( "-wet-run",
+        Arg.Set wet_run,
+        "\n\tReally run the stuff.");
+      ( "-wall-hours",
+        Arg.Set_int wall_hours,
+        sprintf "<hours>\n\tWalltime in hours (default: %d)." !wall_hours);
+      ( "-work-dir",
+        Arg.String (fun s ->
+          work_dir := fun ~user ~unique_id -> s
+        ),
+        sprintf "<dir>\n\tSet a working directory (the default is a function: %s)."
+          (!work_dir ~user:"<user>" ~unique_id:"<run-big-id>"));
+      ( "-casava-181",
+        Arg.Unit (fun () -> version := `casava_181),
+        "\n\tRun with old version of CASAVA: 1.8.1.");
+      ( "-mismatch-zero",
+        Arg.Unit (fun s -> mismatch := `zero), "\n\tRun with mismatch 0.");
+      ( "-mismatch-two",
+        Arg.Unit (fun s -> mismatch := `two), "\n\tRun with mismatch 2.");
+    ] in
+    let anon_args = ref [] in
+    let anon s = anon_args := s :: !anon_args in
+    let usage = 
+      sprintf "Usage: %s [OPTIONS] <search-flowcell-run>\n\
+        \  Where <search-flowcell-run> can be either a flowcell name, a HiSeq \n\
+        \    directory path or a DB-identifier in the 'hiseq_raw' table\n\
+        \  Options:" usage_prefix in
+    let cmdline = Array.of_list (usage_prefix :: args) in
+    begin 
+      try Arg.parse_argv cmdline options anon usage;
+          `go (List.rev !anon_args, !wet_run, !sample_sheet_kind,
+               !user, !queue, !nodes, !ppn,
+               !wall_hours, !work_dir, !version, !mismatch)
+      with
+      | Arg.Bad b -> `bad b
+      | Arg.Help h -> `help h
+    end
 
-  let start hsc args =
+  let start hsc prefix cl_args =
     let open Hitscore_threaded in
-    let work =
+    begin match (start_parse_cmdline prefix cl_args) with
+    | `go (args, wet_run, kind, user, queue, nodes, ppn,
+           wall_hours, work_dir, version, mismatch) ->
       db_connect hsc
       >>= fun dbh ->
-      printf "start (Bcl-to-fastq %s)\n" (String.concat ~sep:" " args);
-      let kind, args = 
-        match List.partition args ((=) "-all-barcodes") with
-        | [], l -> `specific_barcodes, l
-        | _, l-> `all_barcodes, l in
-      let wet_run, args =
-        match List.partition args ((=) "-wet-run") with
-        | [], l -> false, l
-        | _, l-> true, l in
       begin match args with
       | [flowcell_or_dir_or_id] ->
         get_hiseq_raw ~dbh flowcell_or_dir_or_id
@@ -1054,8 +1119,9 @@ module Run_bcl_to_fastq = struct
         | None -> error (`root_directory_not_configured)
         | Some root ->
           Bcl_to_fastq.start ~dbh ~root
-            ~sample_sheet ~hiseq_dir ~availability 
-            Time.(now() |! to_filename_string)
+            ~sample_sheet ~hiseq_dir ~availability
+            ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
+            (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
           >>= fun todo_list ->
           List.iter todo_list (function
           | `Run s ->
@@ -1075,10 +1141,14 @@ module Run_bcl_to_fastq = struct
       | _ ->
         printf "Don't know what to do\n"; return ()
       end
-    in
-    display_errors work;
-    db_disconnect hsc |! Pervasives.ignore
-
+      |! display_errors;
+      db_disconnect hsc dbh
+    | `help h ->
+      printf "%s" h; Ok ()
+    | `bad b ->
+      eprintf "%s" b; Ok ()
+    end
+    |! Result.ok
 end
 
 
@@ -1277,13 +1347,12 @@ let () =
     ~names:["bcl-to-fastq"; "b2f"]
     ~description:"Run, monitor, … the bcl_to_fastq function"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <command> <args>\n" exec cmd;
-      fprintf o "where the commands are:\n\
-          \  * start [-all-barcodes|-wet-run] <flowcell-search>\n\
-          \    flowcell-search can be either a flowcell name, a HiSeq \n\
-          \    directory path or a DB-identifier in the 'hiseq_raw' table\n")
+      fprintf o "Usage: %s <profile> %s <command> <args>\n" exec cmd;
+      fprintf o "Where the commands are:\n\
+          \  * start: start a bcl-to-fastq function (try \"-help\")\n")
     ~run:(fun config exec cmd -> function
-    | "start" :: args -> Some (Run_bcl_to_fastq.start config args)
+    | "start" :: args -> 
+      Run_bcl_to_fastq.start config (sprintf "%s <config> %s start" exec cmd) args
     | _ -> None);
   
 
