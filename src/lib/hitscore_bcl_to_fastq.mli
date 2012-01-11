@@ -52,5 +52,24 @@ sig
     ([ `can_complete ] Layout.Function_bcl_to_fastq.t, 'a)
       Result_IO.monad
 
+  val succeed:
+    dbh:Layout.db_handle ->
+    bcl_to_fastq:[`can_complete] Layout.Function_bcl_to_fastq.t ->
+    result_root:string ->
+    mv_dir:(string -> string -> 
+            (unit,
+             [> `layout_inconsistency of
+                 [> `file_system
+                        | `record_bcl_to_fastq_unaligned
+                        | `record_log ] *
+                   [> `add_did_not_return_one of string * int32 list
+                   | `insert_did_not_return_one_id of string * int32 list
+                   | `select_did_not_return_one_cache of string * int ]
+             | `pg_exn of exn ] as 'a) Result_IO.monad) ->
+    ([ `failure of
+        [ `can_nothing ] Layout.Function_bcl_to_fastq.t * 'a
+     | `success of
+         [ `can_get_result ] Layout.Function_bcl_to_fastq.t], 'a) Result_IO.monad
+
 
 end

@@ -138,6 +138,50 @@ module Make
       >>= fun () ->
       start ~dbh created
 
+    let succeed ~dbh ~bcl_to_fastq ~result_root ~mv_dir =
+      Layout.File_system.(
+        let files = Tree.([opaque "Unaligned"]) in
+        add_volume ~dbh ~hr_tag:(Filename.basename result_root)
+          ~kind:`bcl_to_fastq_unaligned_opaque ~files
+        >>= fun vol ->
+        cache_volume_entry ~dbh vol
+        >>= fun vol_ec ->
+        return (vol, entry_unix_path (volume_entry vol_ec)))
+      >>= fun (directory, path_vol) ->
+      let move_m = mv_dir result_root path_vol in
+      double_bind move_m
+        ~ok:(fun () ->
+          Layout.Record_bcl_to_fastq_unaligned.add_value ~dbh ~directory
+          >>= fun result ->
+          Layout.Function_bcl_to_fastq.set_succeeded ~dbh ~result bcl_to_fastq
+          >>= fun success ->
+          Layout.Record_log.add_value ~dbh
+            ~log:(sprintf "(set_bcl_to_fastq_succeeded %ld (result %ld))" 
+                    success.Layout.Function_bcl_to_fastq.id
+                    result.Layout.Record_bcl_to_fastq_unaligned.id)
+          >>= fun  _ ->
+          return (`success success))
+        ~error:(fun e ->
+          Layout.File_system.(
+            cache_volume ~dbh directory
+            >>= fun cache ->
+            delete_cache ~dbh cache
+            >>= fun () ->
+            return (sexp_of_volume_cache cache))
+          >>= fun sexp ->
+          Layout.Function_bcl_to_fastq.set_failed ~dbh bcl_to_fastq
+          >>= fun failed ->
+          Layout.Record_log.add_value ~dbh
+            ~log:(sprintf "(delete_orphan_volume %s)"
+                    (Sexplib.Sexp.to_string_hum sexp))
+          >>= fun _ ->
+          Layout.Record_log.add_value ~dbh
+            ~log:(sprintf "(set_bcl_to_fastq_failed %ld)" 
+                    failed.Layout.Function_bcl_to_fastq.id)
+          >>= fun _ ->
+          return (`failure (failed, e)))
+
+
 
     let finish ~dbh = ()
 

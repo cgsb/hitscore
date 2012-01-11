@@ -1161,6 +1161,41 @@ module Run_bcl_to_fastq = struct
       eprintf "%s" b; Ok ()
     end
     |! Result.ok
+
+
+  let register_success hsc id result_root = 
+    let open Hitscore_threaded in
+    let bcl_to_fastq =
+      try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
+      with e -> None in
+    begin match bcl_to_fastq, root_directory hsc with
+    | Some bcl_to_fastq, Some root ->
+      let work =
+        db_connect hsc
+        >>= fun dbh ->
+        Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root
+          ~mv_dir:(fun dir trgt ->
+            ksprintf System.command 
+              "mkdir -p %s/%s/ && mv %s/* %s/%s/" root trgt dir root trgt)
+      in
+      begin match work with
+      | Ok (`success s) ->
+        printf "\nThis is a success: %ld\n\n" s.Layout.Function_bcl_to_fastq.id
+      | Ok (`failure (_, e)) ->
+        printf "\nThis is actually a failure:\n";
+        display_errors (Error e)
+      | Error  e ->
+        printf "\nThere have been errors:\n";
+        display_errors (Error e)          
+      end;
+      Some ()
+    | None, _ ->
+      eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
+    | _, None ->
+      eprintf "ERROR: root directory not configured\n"; None
+    end
+
+
 end
 
 
@@ -1361,10 +1396,13 @@ let () =
     ~usage:(fun o exec cmd ->
       fprintf o "Usage: %s <profile> %s <command> <args>\n" exec cmd;
       fprintf o "Where the commands are:\n\
-          \  * start: start a bcl-to-fastq function (try \"-help\")\n")
+          \  * start: start a bcl-to-fastq function (try \"-help\")\n\
+          \  * register-success <id> <result-dir>.\n")
     ~run:(fun config exec cmd -> function
     | "start" :: args -> 
       Run_bcl_to_fastq.start config (sprintf "%s <config> %s start" exec cmd) args
+    | "register-success" :: id :: dir :: [] ->
+      Run_bcl_to_fastq.register_success config id dir
     | _ -> None);
   
 
