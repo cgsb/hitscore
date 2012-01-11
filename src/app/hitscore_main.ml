@@ -1033,6 +1033,7 @@ module Run_bcl_to_fastq = struct
     let ppn = ref 8 in
     let sys_dry_run = ref false in
     let sample_sheet_kind = ref `specific_barcodes in
+    let make_command = ref "make -j8" in
     let wall_hours, work_dir, version, mismatch =
       ref 12, ref (fun ~user ~unique_id -> 
         sprintf "/scratch/%s/HS_B2F/%s/" user unique_id),
@@ -1080,7 +1081,11 @@ module Run_bcl_to_fastq = struct
       ( "-register-success",
         Arg.Set_string hitscore_register_success,
         sprintf "<command>\n\tCommand to call to register the success of \
-            the run (default %S)." !hitscore_register_success);
+            the run (default: %S)." !hitscore_register_success);
+      ( "-make",
+        Arg.Set_string make_command,
+        sprintf "<command>\n\tSet the 'make' command used by the PBS-script \
+            (default: %S)." !make_command)
     ] in
     let anon_args = ref [] in
     let anon s = anon_args := s :: !anon_args in
@@ -1095,7 +1100,7 @@ module Run_bcl_to_fastq = struct
           `go (List.rev !anon_args, !sys_dry_run, !sample_sheet_kind,
                !user, !queue, !nodes, !ppn,
                !wall_hours, !work_dir, !version, !mismatch,
-               !hitscore_register_success)
+               !hitscore_register_success, !make_command)
       with
       | Arg.Bad b -> `bad b
       | Arg.Help h -> `help h
@@ -1106,7 +1111,7 @@ module Run_bcl_to_fastq = struct
     begin match (start_parse_cmdline prefix cl_args) with
     | `go (args, sys_dry_run, kind, user, queue, nodes, ppn,
            wall_hours, work_dir, version, mismatch, 
-           hitscore_register_success) ->
+           hitscore_register_success, make_command) ->
       db_connect hsc
       >>= fun dbh ->
       begin match args with
@@ -1142,7 +1147,7 @@ module Run_bcl_to_fastq = struct
         begin match root_directory hsc with
         | None -> error (`root_directory_not_configured)
         | Some root ->
-          Bcl_to_fastq.start ~dbh ~root
+          Bcl_to_fastq.start ~dbh ~root ~make_command
             ~sample_sheet ~hiseq_dir ~availability ~hitscore_register_success
             ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
             (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
