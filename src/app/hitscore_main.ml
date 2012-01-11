@@ -981,6 +981,11 @@ module Run_bcl_to_fastq = struct
       | `sys_error (`command (cmd, status)) ->
         printf "SYS-ERROR: Command: %S --> %s\n" cmd 
           (Unix.Process_status.to_string_hum status)
+      | `status_parsing_error s ->
+        printf "LAYOUT-INCONSISTENCY-ERROR: Cannot parse function status: %s\n" s
+      | `wrong_status s ->
+        printf "INVALID-REQUEST: Function has wrong status: %s\n"
+          (Layout.Enumeration_process_status.to_string s)
       end
 
   let get_hiseq_raw ~dbh s =
@@ -1182,6 +1187,11 @@ module Run_bcl_to_fastq = struct
       let work =
         db_connect hsc
         >>= fun dbh ->
+        Layout.Function_bcl_to_fastq.(
+          cache_evaluation ~dbh bcl_to_fastq 
+          >>= fun cache ->
+          IO.return (is_started cache))
+        >>= fun _ ->
         Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root
           ~mv_dir:(fun dir trgt ->
             ksprintf System.command 
@@ -1212,7 +1222,13 @@ module Run_bcl_to_fastq = struct
     begin match bcl_to_fastq with
     | Some bcl_to_fastq ->
       let work =
-        db_connect hsc >>= fun dbh -> Bcl_to_fastq.fail ~dbh bcl_to_fastq in
+        db_connect hsc >>= fun dbh -> 
+        Layout.Function_bcl_to_fastq.(
+          cache_evaluation ~dbh bcl_to_fastq 
+          >>= fun cache ->
+          IO.return (is_started cache))
+        >>= fun _ ->
+        Bcl_to_fastq.fail ~dbh bcl_to_fastq in
       display_errors work;
       Some ()
     | None ->
