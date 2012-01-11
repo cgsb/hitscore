@@ -72,5 +72,13 @@ sig
      | `success of
          [ `can_get_result ] Layout.Function_bcl_to_fastq.t], 'a) Result_IO.monad
 
+  val fail:
+    dbh:Layout.db_handle ->
+    [> `can_complete] Layout.Function_bcl_to_fastq.t ->
+    ([ `can_nothing ] Layout.Function_bcl_to_fastq.t,
+     [> `layout_inconsistency of
+         [> `record_log ] * [> `insert_did_not_return_one_id of string * int32 list ]
+     | `pg_exn of exn ]) Result_IO.monad
+
 
 end

@@ -182,9 +182,15 @@ module Make
           >>= fun _ ->
           return (`failure (failed, e)))
 
+    let fail ~dbh bcl_to_fastq =
+      Layout.Function_bcl_to_fastq.set_failed ~dbh bcl_to_fastq
+      >>= fun failed ->
+      Layout.Record_log.add_value ~dbh
+        ~log:(sprintf "(set_bcl_to_fastq_failed %ld)" 
+                failed.Layout.Function_bcl_to_fastq.id)
+      >>= fun _ ->
+      return failed
 
-
-    let finish ~dbh = ()
 
     let status ~dbh = ()
 
