@@ -6,7 +6,7 @@ module Make
     open Hitscore_std
     open Result_IO
 
-    let start ~dbh ~root
+    let start ~dbh ~volume_path
         ~(sample_sheet: Layout.Record_sample_sheet.t)
         ~(hiseq_dir: Layout.Record_hiseq_raw.t)
         ~(availability: Layout.Record_inaccessible_hiseq_raw.t)
@@ -41,7 +41,7 @@ module Make
           | [one] ->
             let vol =
               volume_entry_cache vc |! volume_entry |! entry_unix_path in
-            return (sprintf "%s/%s/%s" root vol one)
+            return (sprintf "%s/%s" (volume_path vol) one)
           | [] -> error (`empty_sample_sheet_volume (file, sample_sheet))
           | more -> error (`more_than_one_file_in_sample_sheet_volume 
                               (file, sample_sheet, more))))

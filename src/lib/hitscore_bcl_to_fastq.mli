@@ -8,7 +8,7 @@ sig
 
   val start :
     dbh:Layout.db_handle ->
-    root:string ->
+    volume_path:(string -> string) ->
     sample_sheet:Layout.Record_sample_sheet.t ->
     hiseq_dir:Layout.Record_hiseq_raw.t ->
     availability:Layout.Record_inaccessible_hiseq_raw.t ->

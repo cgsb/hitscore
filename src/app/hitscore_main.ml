@@ -64,7 +64,7 @@ module Configuration_file = struct
                 ksprintf fail "Incomplete DB configuration (profile: %s)" name)
         in
         (name, 
-         Hitscore_threaded.configure ?root_directory ?db_configuration)
+         Hitscore_threaded.configure ?vol:None ?root_directory ?db_configuration)
       | _ -> fail "expecting a (profile ...)"
     in
     match sexp with Atom a -> fail a | List l -> List.map l parse_profile
@@ -88,6 +88,7 @@ module Configuration_file = struct
     let open Option in
     let open Hitscore_threaded in
     iter (root_directory config) (printf "Root directory: %S\n");
+    iter (volumes_directory config) (printf "VFS-Volumes directory: %S\n");
     iter (db_host     config) (printf "DB host     : %S\n"); 
     iter (db_port     config) (printf "DB port     : %d\n"); 
     iter (db_database config) (printf "DB database : %S\n"); 
@@ -588,7 +589,7 @@ module Verify = struct
 
 
   let check_file_system ?(verbose=true) hsc =
-    let root = Hitscore_threaded.root_directory hsc |>
+    let volume_path = Hitscore_threaded.volume_path_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
@@ -598,7 +599,7 @@ module Verify = struct
         Hitscore_db.File_system.cache_volume ~dbh vol >>> "Caching volume" |>
             (fun volume ->
               let path =
-                Filename.concat root 
+                volume_path
                   Hitscore_db.File_system.(volume |> volume_entry_cache |> 
                       volume_entry |> entry_unix_path) in
               if verbose then
@@ -647,7 +648,7 @@ module FS = struct
 
   let add_files_to_volume hsc vol files =
     let open Hitscore_threaded.Result_IO in
-    let root = Hitscore_threaded.root_directory hsc |>
+    let volume_path = Hitscore_threaded.volume_path_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
@@ -658,8 +659,8 @@ module FS = struct
         | Ok path ->
           let file_args = 
             String.concat ~sep:" " (List.map files (sprintf "%S")) in
-          eprintf "Copying %s to %s/%s\n" file_args root path;
-          ksprintf System.command_exn "cp %s %s/%s/" file_args root path
+          eprintf "Copying %s to %s/\n" file_args (volume_path path);
+          ksprintf System.command_exn "cp %s %s/" file_args (volume_path path)
         | Error (`layout_inconsistency (`file_system,
                                         `select_did_not_return_one_cache (s, i))) ->
           eprintf "ERROR(FS.add_tree_to_volume): \n\
@@ -913,14 +914,14 @@ module Run_bcl_to_fastq = struct
           try (return (output_string o s))
           with e -> error (`io_exn e))))
       ~mv_from_tmp:(fun volpath filepath ->
-        match (root_directory hsc) with
+        match (volume_path_fun hsc) with
         | None -> error `root_directory_not_configured
-        | Some root ->
+        | Some volume_path ->
           begin 
             try 
-              ksprintf System.command_exn "mkdir -p %s/%s/" root volpath;
-              ksprintf System.command_exn "mv %s %s/%s/%s\n"
-                tmp_file root volpath filepath;
+              ksprintf System.command_exn "mkdir -p %s/" (volume_path volpath);
+              ksprintf System.command_exn "mv %s %s/%s\n"
+                tmp_file (volume_path volpath) filepath;
               return ()
             with 
               e -> error (`sys_error (`moving_sample_sheet e))
@@ -1144,10 +1145,10 @@ module Run_bcl_to_fastq = struct
               (Time.to_string ts);
             return h)
         >>= fun availability ->
-        begin match root_directory hsc with
+        begin match volume_path_fun hsc with
         | None -> error (`root_directory_not_configured)
-        | Some root ->
-          Bcl_to_fastq.start ~dbh ~root ~make_command
+        | Some volume_path ->
+          Bcl_to_fastq.start ~dbh ~volume_path ~make_command
             ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
             ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
             (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
@@ -1187,8 +1188,8 @@ module Run_bcl_to_fastq = struct
     let bcl_to_fastq =
       try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
       with e -> None in
-    begin match bcl_to_fastq, root_directory hsc with
-    | Some bcl_to_fastq, Some root ->
+    begin match bcl_to_fastq with
+    | Some bcl_to_fastq ->
       let work =
         db_connect hsc
         >>= fun dbh ->
@@ -1199,8 +1200,11 @@ module Run_bcl_to_fastq = struct
         >>= fun _ ->
         Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root
           ~mv_dir:(fun dir trgt ->
-            ksprintf System.command 
-              "mkdir -p %s/%s/ && mv %s/* %s/%s/" root trgt dir root trgt)
+            match volume_path hsc trgt with
+            | Some vol_dir -> 
+              ksprintf System.command 
+                "mkdir -p %s/ && mv %s/* %s/" vol_dir dir vol_dir
+            | None -> error `root_directory_not_configured)
       in
       begin match work with
       | Ok (`success s) ->
@@ -1213,10 +1217,8 @@ module Run_bcl_to_fastq = struct
         display_errors (Error e)          
       end;
       Some ()
-    | None, _ ->
+    | None ->
       eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
-    | _, None ->
-      eprintf "ERROR: root directory not configured\n"; None
     end
 
   let register_failure ?reason hsc id =

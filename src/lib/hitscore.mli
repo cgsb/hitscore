@@ -39,13 +39,22 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   (** Create a [local_configuration], if no [db_configuration] is given,
       the default values will be used (i.e. PGOCaml will try to connect to
       the local database). *)
-  val configure : ?root_directory:string ->
+  val configure : ?root_directory:string -> ?vol:string ->
     ?db_configuration:db_configuration ->
     unit -> local_configuration
     
   (** Get the current root directory (if set).  *)
   val root_directory : local_configuration -> string option
     
+  (** Get the current path to the volumes (i.e. kind-of [$ROOT/vol/]). *)
+  val volumes_directory: local_configuration -> string option
+
+  (** Make a path to a VFS volume. *)
+  val volume_path: local_configuration -> string -> string option
+
+  (** Make a path-making function for VFS volumes. *)
+  val volume_path_fun: local_configuration -> (string -> string) option
+
   val db_host     : local_configuration -> string   option 
   val db_port     : local_configuration -> int      option 
   val db_database : local_configuration -> string   option 
