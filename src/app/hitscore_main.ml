@@ -1078,10 +1078,10 @@ module Run_bcl_to_fastq = struct
         Arg.Unit (fun s -> mismatch := `zero), "\n\tRun with mismatch 0.");
       ( "-mismatch-two",
         Arg.Unit (fun s -> mismatch := `two), "\n\tRun with mismatch 2.");
-      ( "-register-success",
+      ( "-hitscore-command",
         Arg.Set_string hitscore_command,
-        sprintf "<command>\n\tCommand to call to register the success of \
-            the run (default: %S)." !hitscore_command);
+        sprintf "<command>\n\tCommand-prefix to call to register success \
+                 or failure of the run (default: %S)." !hitscore_command);
       ( "-make",
         Arg.Set_string make_command,
         sprintf "<command>\n\tSet the 'make' command used by the PBS-script \
