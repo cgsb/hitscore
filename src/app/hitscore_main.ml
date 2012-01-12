@@ -848,21 +848,50 @@ module Query = struct
           let open Batteries in
           PGSQL (dbh)
             "select lane.g_id, 
+                    lane.requested_read_length_1, lane.requested_read_length_2,
+                    invoicing.pi
+             from (lane left outer join flowcell 
+                    on flowcell.lanes @> array_append ('{}', lane.g_id))
+                  left outer join invoicing on
+                   invoicing.lanes @> array_append('{}', lane.g_id)
+             where flowcell.serial_name is NULL and invoicing.pi is not NULL;"
+          @ (
+            PGSQL (dbh)
+            "select lane.g_id, 
                     lane.requested_read_length_1, lane.requested_read_length_2
-             from lane left outer join flowcell 
-                  on flowcell.lanes @> array_append ('{}', lane.g_id)
-             where flowcell.serial_name is NULL;"
+             from (lane left outer join flowcell 
+                    on flowcell.lanes @> array_append ('{}', lane.g_id))
+                  left outer join invoicing on
+                   invoicing.lanes @> array_append('{}', lane.g_id)
+             where flowcell.serial_name is NULL and invoicing.pi is NULL;"
+              |> List.map (fun (x,y,z) -> (x,y,z,0l)))
         in
-        begin match List.length lanes with
-        | 0 -> printf "No orphan lanes found.\n"
-        | n ->
-          printf "Found %d orphan lanes:\n" n;
-          List.iter lanes (function
-          | (i32, r1, None) ->
-            printf " * Lane %ld (SE %ld)\n" i32 r1
-          | (i32, r1, Some r2) ->
-            printf " * Lane %ld (PE %ldx%ld)\n" i32 r1 r2
-          )
+        let person_string p =
+          let open Batteries in
+          PGSQL (dbh) "select family_name from person where g_id = $p"
+          |> function
+            | [] -> "NO-INVOICED-PI"
+            | [one] -> one
+            | more -> String.concat "--" more
+        in
+        let run_type r1 = function
+          | Some r2 -> sprintf "PE %ldx%ld" r1 r2
+          | None -> sprintf "SE %ld" r1 in
+        let fixed =
+          List.sort lanes ~cmp:(fun (x, _, _ , _) (y, _, _ , _) -> compare x y)
+          |! List.fold_left ~init:(0l, "", 0) 
+              ~f:(fun (c, s, cpt) (x, r1, r2, pi) ->
+                if x = c then
+                  (x, sprintf "%s, %s" s (person_string pi), cpt)
+                else
+                  (x, sprintf "%s\n * %ld (%s) -> %s" s x 
+                    (run_type r1 r2) (person_string pi), 
+                   cpt + 1))
+        in
+        begin match fixed with
+        | (_, _, 0) -> printf "No orphan lanes found.\n"
+        | (_, s, n) ->
+          printf "Found %d orphan lanes:%s\n" n s
         end));
 
     ("log",
