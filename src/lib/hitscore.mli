@@ -39,13 +39,21 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   (** Create a [local_configuration], if no [db_configuration] is given,
       the default values will be used (i.e. PGOCaml will try to connect to
       the local database). *)
-  val configure : ?root_directory:string -> ?vol:string ->
+  val configure : ?root_directory:string ->
+    ?root_writers:string list -> ?root_group:string ->
+    ?vol:string ->
     ?db_configuration:db_configuration ->
     unit -> local_configuration
     
   (** Get the current root directory (if set).  *)
   val root_directory : local_configuration -> string option
     
+  (** Get the root writers' logins. *)
+  val root_writers: local_configuration -> string list
+
+  (** Get the root owner group. *)
+  val root_group: local_configuration -> string option
+
   (** Get the current path to the volumes (i.e. kind-of [$ROOT/vol/]). *)
   val volumes_directory: local_configuration -> string option
 

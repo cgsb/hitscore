@@ -47,7 +47,24 @@ module Configuration_file = struct
     let parse_profile = function
       | Atom o -> fail_atom o
       | List ( Atom "profile" :: Atom name :: l ) ->
-        let root_directory = find_field l "root" in
+        let root_config = 
+          List.find_map l (function
+          | List (Atom "root" :: Atom dir :: l) -> Some (dir, l)
+          | _ -> None) in
+        let root_directory = Option.map root_config fst in
+        let root_writers =
+          Option.value_map ~default:[] root_config ~f:(fun (_, l) ->
+            List.find_map l (function
+            | List (Atom "writers" :: l) -> Some l | _ -> None)
+            |! Option.map 
+                ~f:(List.filter_map ~f:(function Atom a -> Some a | _ -> None))
+            |! Option.value ~default:[])
+        in
+        let root_group =
+          Option.bind root_config (fun (_, c) ->
+            List.find_map c (function
+            | List (Atom "group" :: Atom g :: []) -> Some g
+            | _ -> None)) in
         let db_config = 
           List.find_map l (function
             | List (Atom "db" :: l) -> Some l
@@ -64,7 +81,8 @@ module Configuration_file = struct
                 ksprintf fail "Incomplete DB configuration (profile: %s)" name)
         in
         (name, 
-         Hitscore_threaded.configure ?vol:None ?root_directory ?db_configuration)
+         Hitscore_threaded.configure ?vol:None
+           ?root_directory ~root_writers ?root_group ?db_configuration)
       | _ -> fail "expecting a (profile ...)"
     in
     match sexp with Atom a -> fail a | List l -> List.map l parse_profile
@@ -89,6 +107,9 @@ module Configuration_file = struct
     let open Hitscore_threaded in
     iter (root_directory config) (printf "Root directory: %S\n");
     iter (volumes_directory config) (printf "VFS-Volumes directory: %S\n");
+    printf "Root-dir writers: [%s]\n"
+      (String.concat ~sep:", " (root_writers config));
+    iter (root_group config) (printf "Roor-dir group: %S\n");
     iter (db_host     config) (printf "DB host     : %S\n"); 
     iter (db_port     config) (printf "DB port     : %d\n"); 
     iter (db_database config) (printf "DB database : %S\n"); 

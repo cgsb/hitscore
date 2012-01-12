@@ -39,11 +39,15 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
   type local_configuration = {
     root_directory: string option;
     volumes_directory: string;
+    root_writers: string list;
+    root_group: string option;
     db_configuration: db_configuration option;
   }
 
-  let configure ?root_directory ?(vol="vol") ?db_configuration () =
-    { root_directory; volumes_directory = vol; db_configuration; }
+  let configure ?root_directory ?(root_writers=[]) ?root_group
+      ?(vol="vol") ?db_configuration () =
+    { root_directory; root_writers; root_group; 
+      volumes_directory = vol; db_configuration; }
 
   let root_directory t = t.root_directory
 
@@ -55,6 +59,9 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
 
   let volume_path_fun t =
     Option.(volumes_directory t >>| fun t -> (sprintf "%s/%s" t))
+
+  let root_writers t = t.root_writers
+  let root_group t = t.root_group
 
   let db_host     t = Option.map t.db_configuration (fun dbc -> dbc.db_host    ) 
   let db_port     t = Option.map t.db_configuration (fun dbc -> dbc.db_port    ) 
