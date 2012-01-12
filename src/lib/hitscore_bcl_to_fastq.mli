@@ -20,7 +20,7 @@ sig
     ?ppn:int ->
     ?work_dir:(user:string -> unique_id:string -> string) ->
     ?queue:string ->
-    ?hitscore_register_success:string ->
+    ?hitscore_command:string ->
     ?make_command:string ->
     run_command:(string ->
                  (unit,

@@ -17,7 +17,7 @@ module Make
         ?(work_dir=fun ~user ~unique_id -> 
           sprintf "/scratch/%s/_HS_B2F/%s" user unique_id)
         ?(queue="cgsb-s")
-        ?(hitscore_register_success="echo should register success: ")
+        ?(hitscore_command="echo hitscore should: ")
         ?(make_command="make -j8")
         ~run_command
         ~write_file
@@ -78,19 +78,34 @@ module Make
             | n, m -> sprintf "nodes=%d:ppn=%d," n m)
             wall_hours in
         let job_name = sprintf "HS-B2F-%s" name in
+        let checked_command ?if_ok s =
+          sprintf "%s\nif [ $? -ne 0 ]; then\n\
+                  \    echo 'Command failed: %S'\n\
+                  \    %s register-failure %ld 'shell_command_failed %S'\n\
+                  %sfi\n"
+            s s hitscore_command b2f.Layout.Function_bcl_to_fastq.id s
+            (Option.value_map ~default:"" if_ok
+               ~f:(fun sl -> sprintf "  else\n%s\n"
+                 (String.concat ~sep:"\n  " sl)))
+        in
         Sequme_pbs.(make_script
                       ~mail_options:[JobAborted; JobBegun; JobEnded]
                       ~user_list:[user ^ "@nyu.edu"]
                       ~resource_list
                       ~job_name
-                      ~stdout_path ~stderr_path ~queue
-                      [sprintf 
+                      ~stdout_path ~stderr_path ~queue [
+                        ksprintf checked_command 
                           ". /share/apps/casava/%s/intel/env.sh" casava_version;
-                       sprintf "cd %s" unaligned;
-                       sprintf "%s 1> %s 2> %s" make_command
-                         make_stdout_path make_stderr_path;
-                       sprintf "%s %ld %s" hitscore_register_success
-                         b2f.Layout.Function_bcl_to_fastq.id work_root]
+                        ksprintf checked_command "cd %s" unaligned;
+                        ksprintf checked_command "%s 1> %s 2> %s" 
+                          make_command make_stdout_path make_stderr_path;
+                        let if_ok = [
+                          sprintf "%s register-success %ld %s" hitscore_command
+                            b2f.Layout.Function_bcl_to_fastq.id work_root] in
+                        ksprintf (checked_command ~if_ok) 
+                          "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm \
+                                 | wc -l` -gt 5" unaligned;
+                      ]
                     |! script_to_string)
       in
       let create ~dbh =
