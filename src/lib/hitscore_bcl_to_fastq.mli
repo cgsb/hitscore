@@ -75,6 +75,7 @@ sig
 
   val fail:
     dbh:Layout.db_handle ->
+    ?reason:string ->
     [> `can_complete] Layout.Function_bcl_to_fastq.t ->
     ([ `can_nothing ] Layout.Function_bcl_to_fastq.t,
      [> `layout_inconsistency of

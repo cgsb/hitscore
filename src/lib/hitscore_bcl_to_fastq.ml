@@ -183,12 +183,14 @@ module Make
           >>= fun _ ->
           return (`failure (failed, e)))
 
-    let fail ~dbh bcl_to_fastq =
+    let fail ~dbh ?reason bcl_to_fastq =
       Layout.Function_bcl_to_fastq.set_failed ~dbh bcl_to_fastq
       >>= fun failed ->
       Layout.Record_log.add_value ~dbh
-        ~log:(sprintf "(set_bcl_to_fastq_failed %ld)" 
-                failed.Layout.Function_bcl_to_fastq.id)
+        ~log:(sprintf "(set_bcl_to_fastq_failed %ld%s)" 
+                failed.Layout.Function_bcl_to_fastq.id
+                (Option.value_map ~default:"" reason
+                   ~f:(sprintf " (reason %S)")))
       >>= fun _ ->
       return failed
 
