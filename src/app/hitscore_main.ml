@@ -75,13 +75,13 @@ module Configuration_file = struct
               find_field l "database", find_field l "username", 
               find_field l "password" with
               | Some host, Some port, Some database, Some username, Some password ->
-                Hitscore_threaded.db_configuration
+                Hitscore_threaded.Configuration.db_configuration
                   ~host ~port:(Int.of_string port) ~database ~username ~password
               | _ ->
                 ksprintf fail "Incomplete DB configuration (profile: %s)" name)
         in
         (name, 
-         Hitscore_threaded.configure ?vol:None
+         Hitscore_threaded.Configuration.configure ?vol:None
            ?root_directory ~root_writers ?root_group ?db_configuration)
       | _ -> fail "expecting a (profile ...)"
     in
@@ -104,7 +104,7 @@ module Configuration_file = struct
 
   let print_config config =
     let open Option in
-    let open Hitscore_threaded in
+    let open Hitscore_threaded.Configuration in
     iter (root_directory config) (printf "Root directory: %S\n");
     iter (volumes_directory config) (printf "VFS-Volumes directory: %S\n");
     printf "Root-dir writers: [%s]\n"
@@ -137,7 +137,7 @@ module Configuration_file = struct
 
   let export_env config command =
     let open Option in
-    let open Hitscore_threaded in
+    let open Hitscore_threaded.Configuration in
     let cmd = ref "" in
     let f s = cmd := !cmd ^ s in
     let print = ksprintf in
@@ -610,7 +610,8 @@ module Verify = struct
 
 
   let check_file_system ?(verbose=true) hsc =
-    let volume_path = Hitscore_threaded.volume_path_fun hsc |>
+    let volume_path =
+      Hitscore_threaded.Configuration.volume_path_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
@@ -669,7 +670,7 @@ module FS = struct
 
   let add_files_to_volume hsc vol files =
     let open Hitscore_threaded.Result_IO in
-    let volume_path = Hitscore_threaded.volume_path_fun hsc |>
+    let volume_path = Hitscore_threaded.Configuration.volume_path_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
@@ -964,7 +965,7 @@ module Run_bcl_to_fastq = struct
           try (return (output_string o s))
           with e -> error (`io_exn e))))
       ~mv_from_tmp:(fun volpath filepath ->
-        match (volume_path_fun hsc) with
+        match (Configuration.volume_path_fun hsc) with
         | None -> error `root_directory_not_configured
         | Some volume_path ->
           begin 
@@ -1195,7 +1196,7 @@ module Run_bcl_to_fastq = struct
               (Time.to_string ts);
             return h)
         >>= fun availability ->
-        begin match volume_path_fun hsc with
+        begin match Configuration.volume_path_fun hsc with
         | None -> error (`root_directory_not_configured)
         | Some volume_path ->
           Bcl_to_fastq.start ~dbh ~volume_path ~make_command
@@ -1250,7 +1251,7 @@ module Run_bcl_to_fastq = struct
         >>= fun _ ->
         Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root
           ~mv_dir:(fun dir trgt ->
-            match volume_path hsc trgt with
+            match Configuration.volume_path hsc trgt with
             | Some vol_dir -> 
               ksprintf System.command 
                 "mkdir -p %s/ && mv %s/* %s/" vol_dir dir vol_dir

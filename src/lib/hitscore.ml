@@ -18,72 +18,27 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
 
   module Layout = Hitscore_db_access.Make(Result_IO)
 
+  module Configuration = Hitscore_configuration
+
   module Assemble_sample_sheet = 
     Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
 
   module Bcl_to_fastq =
     Hitscore_bcl_to_fastq.Make (Result_IO) (Layout)
 
-  type db_configuration = {
-    db_host     : string;
-    db_port     : int;
-    db_database : string;
-    db_username : string;
-    db_password : string
-  }
-
-  let db_configuration ~host ~port ~database ~username ~password =
-    {db_host = host; db_port = port; db_database = database;
-     db_username = username; db_password = password}
-
-  type local_configuration = {
-    root_directory: string option;
-    volumes_directory: string;
-    root_writers: string list;
-    root_group: string option;
-    db_configuration: db_configuration option;
-  }
-
-  let configure ?root_directory ?(root_writers=[]) ?root_group
-      ?(vol="vol") ?db_configuration () =
-    { root_directory; root_writers; root_group; 
-      volumes_directory = vol; db_configuration; }
-
-  let root_directory t = t.root_directory
-
-  let volumes_directory t =
-    Option.(t.root_directory >>| fun r -> sprintf "%s/%s" r t.volumes_directory)
-
-  let volume_path t volume =
-    Option.(volumes_directory t >>| fun t -> sprintf "%s/%s" t volume)
-
-  let volume_path_fun t =
-    Option.(volumes_directory t >>| fun t -> (sprintf "%s/%s" t))
-
-  let root_writers t = t.root_writers
-  let root_group t = t.root_group
-
-  let db_host     t = Option.map t.db_configuration (fun dbc -> dbc.db_host    ) 
-  let db_port     t = Option.map t.db_configuration (fun dbc -> dbc.db_port    ) 
-  let db_database t = Option.map t.db_configuration (fun dbc -> dbc.db_database) 
-  let db_username t = Option.map t.db_configuration (fun dbc -> dbc.db_username) 
-  let db_password t = Option.map t.db_configuration (fun dbc -> dbc.db_password) 
     
   let db_connect t =
-    match t.db_configuration with
-    | None -> 
+    let open Configuration in
+    match db_host t, db_port t, db_database t, db_username t, db_password t with
+    | Some host, Some port, Some database, Some user, Some password ->
+      Result_IO.(bind_on_error
+                   (catch_io (Layout.PGOCaml.connect
+                                ~host ~port ~database ~user ~password) ())
+                   (fun e -> error (`pg_exn e)))
+    | _ -> 
       Result_IO.(bind_on_error
                    (catch_io Layout.PGOCaml.connect ())
                    (fun e -> error (`pg_exn e)))
-    | Some {db_host; db_port; db_database; db_username; db_password} ->
-      Result_IO.(bind_on_error
-                   (catch_io (Layout.PGOCaml.connect
-                                ~host:db_host
-                                ~port:db_port
-                                ~database:db_database
-                                ~user:db_username
-                                ~password:db_password) ())
-                   (fun e -> error (`pg_exn e)))        
         
   let db_disconnect t dbh = 
     Result_IO.(bind_on_error

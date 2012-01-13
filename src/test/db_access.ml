@@ -225,7 +225,7 @@ let test_sample_sheet_preparation ~dbh kind ~fail flowcell =
                     assembly\n"
 
 let test_lwt () =
-  let hitscore_configuration = Hitscore_lwt.configure () in
+  let hitscore_configuration = Hitscore_lwt.Configuration.configure () in
   Hitscore_lwt.db_connect hitscore_configuration >>= 
   fun dbh ->
   notif "Starting" >>= fun _ ->
