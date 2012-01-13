@@ -1196,28 +1196,24 @@ module Run_bcl_to_fastq = struct
               (Time.to_string ts);
             return h)
         >>= fun availability ->
-        begin match Configuration.volume_path_fun hsc with
-        | None -> error (`root_directory_not_configured)
-        | Some volume_path ->
-          Bcl_to_fastq.start ~dbh ~volume_path ~make_command
-            ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
-            ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
-            (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
-            ~run_command:(fun s ->
-              if not sys_dry_run then
-                (printf "RUN-COMMAND: %S\n" s; System.command s)
-              else
-                (printf "Would-RUN-COMMAND: %S\n" s; Ok ()))
-            ~write_file:(fun s file ->
-              if not sys_dry_run then
-                (printf "WRITE-FILE: %S\n" file;
-                 wrap_io Out_channel.(with_file 
-                                        ~f:(fun o -> output_string o s)) file)
-              else
-                (printf "Would-WRITE-FILE: %S:\n%s\n" file s; Ok ()))
-          >>= fun started ->
-          return ()
-        end
+        Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc
+          ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
+          ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
+          (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
+          ~run_command:(fun s ->
+            if not sys_dry_run then
+              (printf "RUN-COMMAND: %S\n" s; System.command s)
+            else
+              (printf "Would-RUN-COMMAND: %S\n" s; Ok ()))
+          ~write_file:(fun s file ->
+            if not sys_dry_run then
+              (printf "WRITE-FILE: %S\n" file;
+               wrap_io Out_channel.(with_file 
+                                      ~f:(fun o -> output_string o s)) file)
+            else
+              (printf "Would-WRITE-FILE: %S:\n%s\n" file s; Ok ()))
+        >>= fun started ->
+        return ()
       | [] -> printf "Don't know what to do without arguments.\n"; return ()
       | l ->
         printf "Don't know what to do with %d arguments%s.\n"
@@ -1250,12 +1246,7 @@ module Run_bcl_to_fastq = struct
           IO.return (is_started cache))
         >>= fun _ ->
         Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root
-          ~mv_dir:(fun dir trgt ->
-            match Configuration.volume_path hsc trgt with
-            | Some vol_dir -> 
-              ksprintf System.command 
-                "mkdir -p %s/ && mv %s/* %s/" vol_dir dir vol_dir
-            | None -> error `root_directory_not_configured)
+          ~configuration:hsc ~run_command:System.command
       in
       begin match work with
       | Ok (`success s) ->

@@ -1,12 +1,31 @@
 
 module Make
+  (Configuration : Hitscore_interfaces.CONFIGURATION)
   (Result_IO : Hitscore_interfaces.RESULT_IO) 
   (Layout: module type of Hitscore_db_access.Make(Result_IO)) = struct
 
     open Hitscore_std
     open Result_IO
 
-    let start ~dbh ~volume_path
+    let set_rights ~run_command ~root ~configuration =
+      let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
+      begin match (Configuration.root_group configuration) with
+      | None -> return ()
+      | Some grp -> 
+        cmd "chown -R :%s %s" grp root >>= fun () ->
+        cmd "find %s -type d -exec chmod u+rwx,g-rw+s,o-rwx {} \\;" root
+      end
+      >>= fun () ->
+      begin match Configuration.root_writers configuration with
+      | [] -> return ()
+      | l ->
+        cmd "find %s -type d -exec setfacl -d -m %s {} \\;" root
+          (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
+      end
+
+
+
+    let start ~dbh ~configuration
         ~(sample_sheet: Layout.Record_sample_sheet.t)
         ~(hiseq_dir: Layout.Record_hiseq_raw.t)
         ~(availability: Layout.Record_inaccessible_hiseq_raw.t)
@@ -41,7 +60,12 @@ module Make
           | [one] ->
             let vol =
               volume_entry_cache vc |! volume_entry |! entry_unix_path in
-            return (sprintf "%s/%s" (volume_path vol) one)
+            begin match Configuration.volume_path_fun configuration with
+            | Some vol_path ->
+              return (sprintf "%s/%s" (vol_path vol) one)
+            | None -> 
+              error `root_directory_not_configured
+            end
           | [] -> error (`empty_sample_sheet_volume (file, sample_sheet))
           | more -> error (`more_than_one_file_in_sample_sheet_volume 
                               (file, sample_sheet, more))))
@@ -137,8 +161,8 @@ module Make
           >>= fun _ -> return b2f) in            
 
       let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
-      cmd "mkdir -p %s" out_dir
-      >>= fun () ->
+      cmd "mkdir -p %s" out_dir >>= fun () ->
+      set_rights ~root:work_root ~configuration ~run_command >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     --input-dir %s \
@@ -155,7 +179,7 @@ module Make
       >>= fun () ->
       start ~dbh created
 
-    let succeed ~dbh ~bcl_to_fastq ~result_root ~mv_dir =
+    let succeed ~dbh ~configuration ~bcl_to_fastq ~result_root ~run_command =
       Layout.File_system.(
         let files = Tree.([opaque "Unaligned"]) in
         add_volume ~dbh ~hr_tag:(Filename.basename result_root)
@@ -165,7 +189,14 @@ module Make
         >>= fun vol_ec ->
         return (vol, entry_unix_path (volume_entry vol_ec)))
       >>= fun (directory, path_vol) ->
-      let move_m = mv_dir result_root path_vol in
+      let move_m =
+        match Configuration.volume_path configuration path_vol with
+        | Some vol_dir -> 
+          ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
+          set_rights ~root:vol_dir ~configuration ~run_command >>= fun () ->
+          ksprintf run_command "mv %s/* %s/" result_root vol_dir 
+        | None -> error `root_directory_not_configured
+      in
       double_bind move_m
         ~ok:(fun () ->
           Layout.Record_bcl_to_fastq_unaligned.add_value ~dbh ~directory

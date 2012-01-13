@@ -1,14 +1,14 @@
 
 (** The module to run CASAVA's demultiplexer.  *)
 module Make :
-  functor
-    (Result_IO : Hitscore_interfaces.RESULT_IO) ->
-      functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
+  functor (Configuration : Hitscore_interfaces.CONFIGURATION) ->
+  functor (Result_IO : Hitscore_interfaces.RESULT_IO) ->
+  functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
 sig
 
   val start :
     dbh:Layout.db_handle ->
-    volume_path:(string -> string) ->
+    configuration:Configuration.local_configuration ->
     sample_sheet:Layout.Record_sample_sheet.t ->
     hiseq_dir:Layout.Record_hiseq_raw.t ->
     availability:Layout.Record_inaccessible_hiseq_raw.t ->
@@ -46,7 +46,8 @@ sig
                   | `more_than_one_file_in_sample_sheet_volume of
                       Layout.File_system.volume *
                         Layout.Record_sample_sheet.t * string list
-                  | `pg_exn of exn ]
+                  | `pg_exn of exn 
+                  | `root_directory_not_configured]
                     as 'a)
                    Result_IO.monad) ->
     write_file:(string -> string -> (unit, 'a) Result_IO.monad) ->
@@ -56,9 +57,10 @@ sig
 
   val succeed:
     dbh:Layout.db_handle ->
+    configuration:Configuration.local_configuration ->
     bcl_to_fastq:[`can_complete] Layout.Function_bcl_to_fastq.t ->
     result_root:string ->
-    mv_dir:(string -> string -> 
+    run_command:(string ->
             (unit,
              [> `layout_inconsistency of
                  [> `file_system
@@ -67,7 +69,8 @@ sig
                    [> `add_did_not_return_one of string * int32 list
                    | `insert_did_not_return_one_id of string * int32 list
                    | `select_did_not_return_one_cache of string * int ]
-             | `pg_exn of exn ] as 'a) Result_IO.monad) ->
+             | `pg_exn of exn
+             | `root_directory_not_configured] as 'a) Result_IO.monad) ->
     ([ `failure of
         [ `can_nothing ] Layout.Function_bcl_to_fastq.t * 'a
      | `success of

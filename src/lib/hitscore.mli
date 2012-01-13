@@ -25,7 +25,7 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   module type of Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
 
   module Bcl_to_fastq: 
-  module type of Hitscore_bcl_to_fastq.Make (Result_IO) (Layout)
+  module type of Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (Layout)
 
   (** Attempt to connect to the database. *)
   val db_connect : Configuration.local_configuration -> 
