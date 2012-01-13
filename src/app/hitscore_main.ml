@@ -111,6 +111,7 @@ module Configuration_file = struct
     printf "Root-dir writers: [%s]\n"
       (String.concat ~sep:", " (root_writers config));
     iter (root_group config) (printf "Roor-dir group: %S\n");
+    iter (work_directory config) (printf "Work directory: %S\n");
     iter (db_host     config) (printf "DB host     : %S\n"); 
     iter (db_port     config) (printf "DB port     : %d\n"); 
     iter (db_database config) (printf "DB database : %S\n"); 
