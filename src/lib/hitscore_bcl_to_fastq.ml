@@ -14,8 +14,11 @@ module Make
         begin match (Configuration.root_group configuration) with
         | None -> return ()
         | Some grp -> 
-          cmd "chown -R :%s %s" grp root >>= fun () ->
+          cmd "chown -R :%s %s" grp root 
+          >>= fun () ->
           cmd "find %s -type d -exec chmod u+rwx,g-rw,g+xs,o-rwx {} \\;" root
+          >>= fun () ->
+          cmd "find %s -type f -exec chmod u+rwx,g-rwx,o-rwx {} \\;" root
         end
         >>= fun () ->
         begin match Configuration.root_writers configuration with
@@ -23,6 +26,9 @@ module Make
         | l ->
           cmd "find %s -type d -exec setfacl -d -m %s {} \\;" root
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
+          >>= fun () ->
+          cmd "find %s -type f -exec setfacl -m %s {} \\;" root
+            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw")))
         end
       | `file f ->
         begin match (Configuration.root_group configuration) with
@@ -119,11 +125,11 @@ module Make
             wall_hours in
         let job_name = sprintf "HS-B2F-%s" name in
         let checked_command ?if_ok s =
-          sprintf "%s\nif [ $? -ne 0 ]; then\n\
+          sprintf "echo \"$(date -R)\"\necho %S\n%s\nif [ $? -ne 0 ]; then\n\
                   \    echo 'Command failed: %S'\n\
                   \    %s register-failure %ld 'shell_command_failed %S'\n\
                   %sfi\n"
-            s s hitscore_command b2f.Layout.Function_bcl_to_fastq.id s
+            s s s hitscore_command b2f.Layout.Function_bcl_to_fastq.id s
             (Option.value_map ~default:"" if_ok
                ~f:(fun sl -> sprintf "  else\n%s\n"
                  (String.concat ~sep:"\n  " sl)))
@@ -139,12 +145,13 @@ module Make
                         ksprintf checked_command "cd %s" unaligned;
                         ksprintf checked_command "%s 1> %s 2> %s" 
                           make_command make_stdout_path make_stderr_path;
-                        let if_ok = [
-                          sprintf "%s register-success %ld %s" hitscore_command
-                            b2f.Layout.Function_bcl_to_fastq.id work_root] in
-                        ksprintf (checked_command ~if_ok) 
-                          "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm \
-                                 | wc -l` -gt 5" unaligned;
+                        (let if_ok = [
+                           sprintf "%s register-success %ld %s" hitscore_command
+                             b2f.Layout.Function_bcl_to_fastq.id work_root] in
+                         ksprintf (checked_command ~if_ok) 
+                           "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm \
+                                 | wc -l` -gt 5" unaligned);
+                        "echo \"Done: $(date -R)\"";
                       ]
                     |! script_to_string)
       in
@@ -211,8 +218,8 @@ module Make
         match Configuration.volume_path configuration path_vol with
         | Some vol_dir -> 
           ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
-          set_rights (`dir vol_dir) ~configuration ~run_command >>= fun () ->
-          ksprintf run_command "mv %s/* %s/" result_root vol_dir 
+          ksprintf run_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
+          set_rights (`dir vol_dir) ~configuration ~run_command
         | None -> error `root_directory_not_configured
       in
       double_bind move_m
