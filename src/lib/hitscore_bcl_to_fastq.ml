@@ -7,21 +7,37 @@ module Make
     open Hitscore_std
     open Result_IO
 
-    let set_rights ~run_command ~root ~configuration =
-      let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
-      begin match (Configuration.root_group configuration) with
-      | None -> return ()
-      | Some grp -> 
-        cmd "chown -R :%s %s" grp root >>= fun () ->
-        cmd "find %s -type d -exec chmod u+rwx,g-rw+s,o-rwx {} \\;" root
-      end
-      >>= fun () ->
-      begin match Configuration.root_writers configuration with
-      | [] -> return ()
-      | l ->
-        cmd "find %s -type d -exec setfacl -d -m %s {} \\;" root
-          (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
-      end
+    let set_rights ~run_command ~configuration = 
+      let cmd fmt = ksprintf (fun s -> run_command s) fmt in
+      function
+      | `dir root -> 
+        begin match (Configuration.root_group configuration) with
+        | None -> return ()
+        | Some grp -> 
+          cmd "chown -R :%s %s" grp root >>= fun () ->
+          cmd "find %s -type d -exec chmod u+rwx,g-rw,g+xs,o-rwx {} \\;" root
+        end
+        >>= fun () ->
+        begin match Configuration.root_writers configuration with
+        | [] -> return ()
+        | l ->
+          cmd "find %s -type d -exec setfacl -d -m %s {} \\;" root
+            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
+        end
+      | `file f ->
+        begin match (Configuration.root_group configuration) with
+        | None -> return ()
+        | Some grp -> 
+          cmd "chown :%s %s" grp f >>= fun () ->
+          cmd "chmod 0600 %s" f
+        end
+        >>= fun () ->
+        begin match Configuration.root_writers configuration with
+        | [] -> return ()
+        | l ->
+          cmd "setfacl -m %s %s"
+            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw"))) f
+        end
 
 
 
@@ -162,7 +178,7 @@ module Make
 
       let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
       cmd "mkdir -p %s" out_dir >>= fun () ->
-      set_rights ~root:work_root ~configuration ~run_command >>= fun () ->
+      set_rights (`dir work_root) ~configuration ~run_command >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     --input-dir %s \
@@ -173,7 +189,9 @@ module Make
       >>= fun () ->
       create ~dbh
       >>= fun created ->
-      write_file (pbs_script created) pbs_script_file
+      let pbs_script_created = pbs_script created in
+      write_file pbs_script_created pbs_script_file >>= fun () ->
+      set_rights ~run_command ~configuration (`file pbs_script_file)
       >>= fun () ->
       cmd "qsub %s" pbs_script_file
       >>= fun () ->
@@ -193,7 +211,7 @@ module Make
         match Configuration.volume_path configuration path_vol with
         | Some vol_dir -> 
           ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
-          set_rights ~root:vol_dir ~configuration ~run_command >>= fun () ->
+          set_rights (`dir vol_dir) ~configuration ~run_command >>= fun () ->
           ksprintf run_command "mv %s/* %s/" result_root vol_dir 
         | None -> error `root_directory_not_configured
       in
