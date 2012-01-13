@@ -280,6 +280,24 @@ module Make
       return failed
 
 
-    let status ~dbh = ()
+    let status ~dbh ~configuration ~run_command bcl_to_fastq = 
+      begin match Configuration.work_directory configuration with
+      | Some work_dir -> return work_dir
+      | None -> error `work_directory_not_configured
+      end
+      >>= fun work_dir ->
+      Layout.Function_bcl_to_fastq.(
+        cache_evaluation ~dbh bcl_to_fastq 
+        >>= fun cache ->
+        match (is_started cache) with
+        | Ok cache ->
+          let run_dir = work_run_time work_dir bcl_to_fastq.id in
+          ksprintf run_command "qstat `cat %s/jobid`" run_dir
+          |! double_bind
+              ~ok:(fun () -> return (`running))
+              ~error:(fun e -> return (`started_but_not_running e))
+        | Error (`status_parsing_error o) -> error (`status_parsing_error o)
+        | Error (`wrong_status s) -> return (`not_started s)
+      )
 
   end
