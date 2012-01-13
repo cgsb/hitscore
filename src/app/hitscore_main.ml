@@ -1279,6 +1279,41 @@ module Run_bcl_to_fastq = struct
     | None ->
       eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
     end
+
+  let check_status ?(fix_it=false) hsc id =
+    let open Hitscore_threaded in
+    let bcl_to_fastq =
+      try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
+      with e -> None in
+    begin match bcl_to_fastq with
+    | Some bcl_to_fastq ->
+      let work =
+        db_connect hsc >>= fun dbh -> 
+        Bcl_to_fastq.status ~dbh ~configuration:hsc 
+          ~run_command:System.command bcl_to_fastq
+        >>= function
+        |  `running ->
+          printf "The function is STILL RUNNING.\n"; 
+          return ()
+        | `started_but_not_running e -> 
+          printf "The function is STARTED BUT NOT RUNNING!!!\n";
+          if fix_it then (
+            printf "Fixing …\n";
+            Bcl_to_fastq.fail ~dbh bcl_to_fastq
+              ~reason:"checking_status_reported_started_but_not_running"
+            >>= fun _ -> return ())
+          else 
+            return ()
+        | `not_started e ->
+          printf "The function is NOT STARTED: %S.\n"
+            (Layout.Enumeration_process_status.to_string e);
+          return ()
+      in
+      display_errors work;
+      Some ()
+    | None ->
+      eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
+    end
  
 end
 
@@ -1492,6 +1527,10 @@ let () =
       Run_bcl_to_fastq.register_failure config id
     | "register-failure" :: id  :: reason :: [] ->
       Run_bcl_to_fastq.register_failure ~reason config id
+    | "status" :: id :: [] ->
+      Run_bcl_to_fastq.check_status config id
+    | "fix-status" :: id :: [] ->
+      Run_bcl_to_fastq.check_status ~fix_it:true config id
     | _ -> None);
   
 
