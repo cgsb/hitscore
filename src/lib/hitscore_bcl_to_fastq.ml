@@ -149,9 +149,8 @@ module Make
                       ~resource_list
                       ~job_name
                       ~stdout_path ~stderr_path ~queue [
-                        ksprintf checked_command "mkdir -p %s" run_dir;
                         ksprintf checked_command 
-                          "echo $PBS_JOBID > %s/jobid" run_dir;
+                          "echo $PBS_JOBID > %s/jobid_2" run_dir;
                         ksprintf checked_command "echo %S > %s/workdir" 
                           work_root run_dir;
                         ksprintf checked_command 
@@ -214,7 +213,11 @@ module Make
       write_file pbs_script_created pbs_script_file >>= fun () ->
       set_rights ~run_command ~configuration (`file pbs_script_file)
       >>= fun () ->
-      cmd "qsub %s" pbs_script_file
+      let run_dir =
+        (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
+      cmd "mkdir -p %s" run_dir
+      >>= fun () ->
+      cmd "qsub %s > %s/jobid" pbs_script_file run_dir
       >>= fun () ->
       start ~dbh created
 
@@ -292,7 +295,8 @@ module Make
         match (is_started cache) with
         | Ok cache ->
           let run_dir = work_run_time work_dir bcl_to_fastq.id in
-          ksprintf run_command "qstat `cat %s/jobid`" run_dir
+          ksprintf run_command "cat %s/jobid && qstat `cat %s/jobid`" 
+            run_dir run_dir
           |! double_bind
               ~ok:(fun () -> return (`running))
               ~error:(fun e -> return (`started_but_not_running e))
