@@ -1525,7 +1525,7 @@ let () =
   | exec :: _ :: "-version" :: args
   | exec :: _ :: "--version" :: args
   | exec :: _ :: "version" :: args ->
-    printf "Hitscore v. %s\n" Hitscore_configuration.version
+    printf "Hitscore v. %s\n" Hitscore_conf_values.version
   | exec :: "-h" :: args
   | exec :: "-help" :: args
   | exec :: "--help" :: args

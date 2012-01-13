@@ -1668,7 +1668,7 @@ let ocaml_dump_and_reload ~out dsl =
   line tmp_type "  file_system: File_system.volume_cache list;";
  
   let close_get_fun = ref [] in
-  line tmp_get_fun2 "pg_return { version = Hitscore_configuration.version;";
+  line tmp_get_fun2 "pg_return { version = Hitscore_conf_values.version;";
 
   line tmp_get_fun "pg_bind (File_system.get_all_exn ~dbh) (fun t_list ->";
   line tmp_get_fun "pg_bind (map_s ~f:(File_system.cache_volume_exn ~dbh) \
@@ -1747,9 +1747,9 @@ let ocaml_dump_and_reload ~out dsl =
   ];
   line out " =";
 
-  line out "  if dump.version <> Hitscore_configuration.version then (";
+  line out "  if dump.version <> Hitscore_conf_values.version then (";
   line out "    Result_IO.error (`wrong_version (dump.version, \
-                          Hitscore_configuration.version))";
+                          Hitscore_conf_values.version))";
   line out "  ) else";
   pgocaml_to_result_io out 
     ~transform_exceptions:

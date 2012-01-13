@@ -7,7 +7,7 @@ Authors:     Ashish Agarwal
 License:     PROP
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
-FilesAB: src/lib/hitscore_configuration.ml.ab
+FilesAB: src/lib/hitscore_conf_values.ml.ab
 
 
 Flag lwt
@@ -36,7 +36,7 @@ Library hitscore
           , Hitscore_db_access
           , Hitscore_assemble_sample_sheet
           , Hitscore_bcl_to_fastq
-          , Hitscore_configuration
+          , Hitscore_conf_values
           , Hitscore_result_IO
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)

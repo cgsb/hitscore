@@ -7,4 +7,4 @@ setup.log
 /hitscore_db_digraph.pdf
 /hitscore_layout_digraph.pdf
 /db_access.native
-/src/lib/hitscore_configuration.ml
+/src/lib/hitscore_conf_values.ml
