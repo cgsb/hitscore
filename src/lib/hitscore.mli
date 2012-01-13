@@ -19,7 +19,7 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   module Layout: module type of Hitscore_db_access.Make(Result_IO)
 
   (** The configuration information. *)
-  module Configuration: module type of Hitscore_configuration
+  module Configuration: Hitscore_interfaces.CONFIGURATION
 
   module Assemble_sample_sheet: 
   module type of Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
