@@ -129,6 +129,7 @@ module type CONFIGURATION = sig
     ?root_writers:string list -> ?root_group:string ->
     ?vol:string ->
     ?db_configuration:db_configuration ->
+    ?work_directory:string ->
     unit -> local_configuration
 
   (** Get the Data-base configuration *)
@@ -151,6 +152,9 @@ module type CONFIGURATION = sig
 
   (** Make a path-making function for VFS volumes. *)
   val volume_path_fun: local_configuration -> (string -> string) option
+
+  (**  *)
+  val work_directory: local_configuration -> string option
 
   val db_host     : local_configuration -> string   option 
   val db_port     : local_configuration -> int      option 

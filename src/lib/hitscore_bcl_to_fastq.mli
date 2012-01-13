@@ -18,7 +18,6 @@ sig
     ?wall_hours:int ->
     ?nodes:int ->
     ?ppn:int ->
-    ?work_dir:(user:string -> unique_id:string -> string) ->
     ?queue:string ->
     ?hitscore_command:string ->
     ?make_command:string ->
@@ -47,9 +46,9 @@ sig
                       Layout.File_system.volume *
                         Layout.Record_sample_sheet.t * string list
                   | `pg_exn of exn 
-                  | `root_directory_not_configured]
-                    as 'a)
-                   Result_IO.monad) ->
+                  | `root_directory_not_configured
+                  | `work_directory_not_configured
+                  ] as 'a) Result_IO.monad) ->
     write_file:(string -> string -> (unit, 'a) Result_IO.monad) ->
     string ->
     ([ `can_complete ] Layout.Function_bcl_to_fastq.t, 'a)

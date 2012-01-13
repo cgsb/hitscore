@@ -65,6 +65,7 @@ module Configuration_file = struct
             List.find_map c (function
             | List (Atom "group" :: Atom g :: []) -> Some g
             | _ -> None)) in
+        let work_directory = find_field l "work" in
         let db_config = 
           List.find_map l (function
             | List (Atom "db" :: l) -> Some l
@@ -81,7 +82,7 @@ module Configuration_file = struct
                 ksprintf fail "Incomplete DB configuration (profile: %s)" name)
         in
         (name, 
-         Hitscore_threaded.Configuration.configure ?vol:None
+         Hitscore_threaded.Configuration.configure ?work_directory ?vol:None
            ?root_directory ~root_writers ?root_group ?db_configuration)
       | _ -> fail "expecting a (profile ...)"
     in
@@ -1028,6 +1029,8 @@ module Run_bcl_to_fastq = struct
                 sample-sheet volume:\n%s\n" (String.concat ~sep:"\n" m)
       | `root_directory_not_configured ->
         printf "INVALID-CONFIGURATION: Root directory not set.\n"
+      | `work_directory_not_configured ->
+        printf "INVALID-CONFIGURATION: Work directory not set.\n"
       | `sys_error (`moving_sample_sheet e) ->
         printf "SYS-ERROR: While moving the sample-sheet: %s\n" (Exn.to_string e)
       | `sys_error (`command (cmd, status)) ->
@@ -1086,10 +1089,8 @@ module Run_bcl_to_fastq = struct
     let sys_dry_run = ref false in
     let sample_sheet_kind = ref `specific_barcodes in
     let make_command = ref "make -j8" in
-    let wall_hours, work_dir, version, mismatch =
-      ref 12, ref (fun ~user ~unique_id -> 
-        sprintf "/scratch/%s/HS_B2F/%s/" user unique_id),
-      ref `casava_182, ref `one in
+    let wall_hours, version, mismatch =
+      ref 12, ref `casava_182, ref `one in
     let hitscore_command =
       ref (sprintf "%s %s %s" 
               Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
@@ -1117,12 +1118,6 @@ module Run_bcl_to_fastq = struct
       ( "-wall-hours",
         Arg.Set_int wall_hours,
         sprintf "<hours>\n\tWalltime in hours (default: %d)." !wall_hours);
-      ( "-work-dir",
-        Arg.String (fun s ->
-          work_dir := fun ~user ~unique_id -> s
-        ),
-        sprintf "<dir>\n\tSet a working directory (the default is a function: %s)."
-          (!work_dir ~user:"<user>" ~unique_id:"<run-big-id>"));
       ( "-casava-181",
         Arg.Unit (fun () -> version := `casava_181),
         "\n\tRun with old version of CASAVA: 1.8.1.");
@@ -1151,7 +1146,7 @@ module Run_bcl_to_fastq = struct
       try Arg.parse_argv cmdline options anon usage;
           `go (List.rev !anon_args, !sys_dry_run, !sample_sheet_kind,
                !user, !queue, !nodes, !ppn,
-               !wall_hours, !work_dir, !version, !mismatch,
+               !wall_hours, !version, !mismatch,
                !hitscore_command, !make_command)
       with
       | Arg.Bad b -> `bad b
@@ -1162,7 +1157,7 @@ module Run_bcl_to_fastq = struct
     let open Hitscore_threaded in
     begin match (start_parse_cmdline prefix cl_args) with
     | `go (args, sys_dry_run, kind, user, queue, nodes, ppn,
-           wall_hours, work_dir, version, mismatch, 
+           wall_hours, version, mismatch, 
            hitscore_command, make_command) ->
       db_connect hsc
       >>= fun dbh ->
@@ -1198,7 +1193,7 @@ module Run_bcl_to_fastq = struct
         >>= fun availability ->
         Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc
           ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
-          ?user ~nodes ~ppn ?queue ~wall_hours ~work_dir ~version ~mismatch
+          ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
           (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
           ~run_command:(fun s ->
             if not sys_dry_run then

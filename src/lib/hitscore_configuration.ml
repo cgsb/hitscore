@@ -18,12 +18,13 @@ type local_configuration = {
   root_writers: string list;
   root_group: string option;
   db_configuration: db_configuration option;
+  work_directory: string option;
 }
 
 let configure ?root_directory ?(root_writers=[]) ?root_group
-    ?(vol="vol") ?db_configuration () =
+    ?(vol="vol") ?db_configuration ?work_directory () =
   { root_directory; root_writers; root_group; 
-    volumes_directory = vol; db_configuration; }
+    volumes_directory = vol; db_configuration; work_directory }
 
 let db t = t.db_configuration
 
@@ -40,6 +41,8 @@ let volume_path_fun t =
 
 let root_writers t = t.root_writers
 let root_group t = t.root_group
+
+let work_directory t = t.work_directory
 
 let db_host     t = Option.map t.db_configuration (fun dbc -> dbc.db_host    ) 
 let db_port     t = Option.map t.db_configuration (fun dbc -> dbc.db_port    ) 

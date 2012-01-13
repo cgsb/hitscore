@@ -45,7 +45,11 @@ module Make
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw"))) f
         end
 
+    let work_root_directory work_dir unique_id =
+      sprintf "%s/B2F/work/%s/" work_dir unique_id
 
+    let work_run_time work_dir db_id =
+      sprintf "%s/B2F/run/%ld" work_dir db_id
 
     let start ~dbh ~configuration
         ~(sample_sheet: Layout.Record_sample_sheet.t)
@@ -55,8 +59,6 @@ module Make
         ?(version=`casava_182)
         ?(user="sm4431")
         ?(wall_hours=12) ?(nodes=1) ?(ppn=8)
-        ?(work_dir=fun ~user ~unique_id -> 
-          sprintf "/scratch/%s/_HS_B2F/%s" user unique_id)
         ?(queue="cgsb-s")
         ?(hitscore_command="echo hitscore should: ")
         ?(make_command="make -j8")
@@ -108,7 +110,12 @@ module Make
           hiseq_dir.Layout.Record_hiseq_raw.id
           mismatch32 casava_version user in
       let unique_id = hr_tag (* TODO: uniquify for real? *) in
-      let work_root = work_dir ~user ~unique_id in
+      begin match Configuration.work_directory configuration with
+      | Some work_dir -> return work_dir
+      | None -> error `work_directory_not_configured
+      end
+      >>= fun work_dir ->
+      let work_root = work_root_directory work_dir unique_id in
       let out_dir = sprintf "%s/Output/" work_root in
       let unaligned = sprintf "%s/Unaligned" work_root in
       let pbs_script_file = sprintf "%s/script.pbs" work_root in
@@ -117,6 +124,8 @@ module Make
         let stderr_path = sprintf "%s/pbs.stderr" out_dir in
         let make_stdout_path = sprintf "%s/make.stdout" out_dir in
         let make_stderr_path = sprintf "%s/make.stderr" out_dir in
+        let run_dir = 
+          work_run_time work_dir b2f.Layout.Function_bcl_to_fastq.id in
         let resource_list =
           sprintf "%swalltime=%d:00:00\n"
             (match nodes, ppn with
@@ -140,6 +149,11 @@ module Make
                       ~resource_list
                       ~job_name
                       ~stdout_path ~stderr_path ~queue [
+                        ksprintf checked_command "mkdir -p %s" run_dir;
+                        ksprintf checked_command 
+                          "echo $PBS_JOBID > %s/jobid" run_dir;
+                        ksprintf checked_command "echo %S > %s/workdir" 
+                          work_root run_dir;
                         ksprintf checked_command 
                           ". /share/apps/casava/%s/intel/env.sh" casava_version;
                         ksprintf checked_command "cd %s" unaligned;
