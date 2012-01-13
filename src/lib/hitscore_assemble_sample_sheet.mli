@@ -2,7 +2,7 @@
 (** The module to generate sample sheets.  *)
 module Make :
   functor
-    (Result_IO : Hitscore_result_IO.RESULT_IO) ->
+    (Result_IO : Hitscore_interfaces.RESULT_IO) ->
       functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
 sig
   

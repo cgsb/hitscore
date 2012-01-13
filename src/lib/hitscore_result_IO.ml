@@ -1,32 +1,6 @@
 open Hitscore_interfaces
 open Core.Std
 
-module type RESULT_IO = sig
-  module IO : Hitscore_interfaces.IO_CONFIGURATION
-  include Monad.S2 with type ('a, 'b) monad = ('a, 'b) Result.t IO.t
-  val catch_io : f:('b -> 'a IO.t) -> 'b -> ('a, exn) monad
-  val error: 'a -> ('any, 'a) monad
-  val bind_on_error: ('a, 'err) monad -> f:('err -> ('a, 'b) monad) -> 
-    ('a, 'b) monad
-  val double_bind: ('a, 'b) monad ->
-    ok:('a -> ('c, 'd) monad) ->
-    error:('b -> ('c, 'd) monad) -> ('c, 'd) monad
-  val map_sequential: ('a, 'b) monad list -> f:('a -> ('c, 'b) monad) ->
-    ('c list, 'b) monad
-  val of_list_sequential: 'a list -> f:('a -> ('c, 'b) monad) ->
-    ('c list, 'b) monad
-  val debug: string -> (unit, [> `io_exn of exn ]) monad
-  val wrap_pgocaml: 
-    query:(unit -> 'a IO.t) ->
-    on_result:('a -> ('b, [> `pg_exn of exn ] as 'c) monad) ->
-    ('b, 'c) monad
-  val wrap_io: ('a -> 'b IO.t) -> 'a -> ('b, [> `io_exn of exn ]) monad
-  val of_option: 'a option -> f:('a -> ('c, 'b) monad) -> ('c option, 'b) monad 
-
-end
-
-
-
 module Make (IO_configuration : IO_CONFIGURATION) = struct
 
   module IO = IO_configuration

@@ -1825,7 +1825,7 @@ let ocaml_code ?(functorize=true) dsl output_string =
     raw out "\
 
 module Make \
-(Result_IO : Hitscore_result_IO.RESULT_IO) = struct\n\
+(Result_IO : Hitscore_interfaces.RESULT_IO) = struct\n\
   module PGOCaml = PGOCaml_generic.Make(Result_IO.IO)
 
 module Timestamp = struct 

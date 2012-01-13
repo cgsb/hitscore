@@ -12,7 +12,7 @@ module Preemptive_threading_config :
 module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
 
   (** A double monad: [Result.t] and [IO_configuration.t]. *)
-  module Result_IO : Hitscore_result_IO.RESULT_IO
+  module Result_IO : Hitscore_interfaces.RESULT_IO
     with type 'a IO.t = 'a IO_configuration.t
 
   (** The Layout is the thing defined by the layout DSL.  *)
