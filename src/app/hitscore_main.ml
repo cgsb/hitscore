@@ -541,7 +541,7 @@ module Hiseq_raw = struct
           flowcell := Some s
         | XML.E (((_,"RunStartDate"), _), [ XML.D s ]) ->
           let scanned =
-            Scanf.sscanf "110630" "%2d%2d%2d"
+            Scanf.sscanf s "%2d%2d%2d"
               (sprintf "20%d-%02d-%02d 09:00:00.000000-05:00") in
           start_date := Some (Time.of_string scanned)
         | XML.E (t, tl) -> List.iter tl go_through
