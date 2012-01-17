@@ -51,8 +51,11 @@ sig
                   ] as 'a) Result_IO.monad) ->
     write_file:(string -> string -> (unit, 'a) Result_IO.monad) ->
     string ->
-    ([ `can_complete ] Layout.Function_bcl_to_fastq.t, 'a)
-      Result_IO.monad
+    ([ `failure of
+        [ `can_nothing ] Layout.Function_bcl_to_fastq.t * 'a
+     | `success of [ `can_complete ] Layout.Function_bcl_to_fastq.t ],
+     'a) Result_IO.monad
+
 
   val succeed:
     dbh:Layout.db_handle ->

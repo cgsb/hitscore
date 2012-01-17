@@ -209,17 +209,29 @@ module Make
       >>= fun () ->
       create ~dbh
       >>= fun created ->
-      let pbs_script_created = pbs_script created in
-      write_file pbs_script_created pbs_script_file >>= fun () ->
-      set_rights ~run_command ~configuration (`file pbs_script_file)
-      >>= fun () ->
-      let run_dir =
-        (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
-      cmd "mkdir -p %s" run_dir
-      >>= fun () ->
-      cmd "qsub %s > %s/jobid" pbs_script_file run_dir
-      >>= fun () ->
-      start ~dbh created
+      let started =
+        let pbs_script_created = pbs_script created in
+        write_file pbs_script_created pbs_script_file >>= fun () ->
+        set_rights ~run_command ~configuration (`file pbs_script_file)
+        >>= fun () ->
+        let run_dir =
+          (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
+        cmd "mkdir -p %s" run_dir
+        >>= fun () ->
+        cmd "qsub %s > %s/jobid" pbs_script_file run_dir
+        >>= fun () ->
+        start ~dbh created
+      in
+      double_bind started
+        ~ok:(fun o -> return (`success o))
+        ~error:(fun e ->
+          Layout.Function_bcl_to_fastq.set_failed ~dbh created
+          >>= fun failed ->
+          Layout.Record_log.add_value ~dbh
+            ~log:(sprintf "(set_bcl_to_fastq_failed %ld while_creating_starting)" 
+                    failed.Layout.Function_bcl_to_fastq.id)
+          >>= fun _ ->
+          return (`failure (failed, e)))
 
     let succeed ~dbh ~configuration ~bcl_to_fastq ~result_root ~run_command =
       Layout.File_system.(

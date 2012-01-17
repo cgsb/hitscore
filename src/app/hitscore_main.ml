@@ -1209,7 +1209,15 @@ module Run_bcl_to_fastq = struct
             else
               (printf "Would-WRITE-FILE: %S:\n%s\n" file s; Ok ()))
         >>= fun started ->
-        return ()
+        begin match started with
+        | `success s -> 
+          printf "Evaluation %ld started.\n" s.Layout.Function_bcl_to_fastq.id;
+          return ()
+        | `failure (s, e) ->
+          printf "Evaluation %ld FAILED to START.\n" 
+            s.Layout.Function_bcl_to_fastq.id;
+          error e
+        end
       | [] -> printf "Don't know what to do without arguments.\n"; return ()
       | l ->
         printf "Don't know what to do with %d arguments%s.\n"
