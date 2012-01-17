@@ -1525,7 +1525,9 @@ let () =
       fprintf o "Where the commands are:\n\
           \  * start: start a bcl-to-fastq function (try \"-help\").\n\
           \  * register-success <id> <result-dir>.\n\
-          \  * register-failure <id> [<reason-log>].\n")
+          \  * register-failure <id> [<reason-log>].\n\
+          \  * status <id> : Get the current status of an evaluation.\n\
+          \  * fix-status <id> : Get the status and fix it if possible\n")
     ~run:(fun config exec cmd -> function
     | "start" :: args -> 
       Run_bcl_to_fastq.start config (sprintf "%s <config> %s start" exec cmd) args
