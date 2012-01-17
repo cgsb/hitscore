@@ -678,6 +678,22 @@ module Verify = struct
     | `error (`get_files, s) -> printf "ERROR(get-files): %s\n" s
     | `error (`file, s) -> printf "ERROR(file): %s\n" s)
 
+  let wake_up hsc =
+    begin match Hitscore_threaded.db_connect hsc with
+    | Ok dbh ->
+      let count_fs_errors =
+        List.fold_left (check_file_system ~verbose:false hsc)
+          ~init:0 ~f:(fun x -> function `info _ -> x | `error _ -> x + 1) in
+      begin match count_fs_errors with
+      | 0 -> printf "File-system: OK.\n"; 
+      | n -> printf "File-system: %d errors.\n" n
+      end
+    | Error (`pg_exn e) ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+    end;
+    Some ()
+
+
 end
 
 module FS = struct
@@ -1587,6 +1603,14 @@ let () =
       Run_bcl_to_fastq.kill config id
     | _ -> None);
   
+  define_command
+    ~names:["wake-up"; "wu"]
+    ~description:"Do some checks on the Layout"
+    ~usage:(fun o exec cmd ->
+      fprintf o "Usage: %s <profile> %s\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+    | [] -> Verify.wake_up config
+    | _ -> None);
 
   let global_usage = function
     | `error -> 
