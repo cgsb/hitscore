@@ -614,8 +614,15 @@ module Verify = struct
   let check_file_system ?(verbose=true) hsc =
     let volume_path =
       Hitscore_threaded.Configuration.volume_path_fun hsc |>
-        Option.value_exn_message "Configuration has no root directory" in 
-    match Hitscore_threaded.db_connect hsc with
+        Option.value_exn_message "Configuration has no root directory" in
+    let buffer = ref [] in
+    let log fmt =
+      let f s = buffer := (`info s) :: !buffer in
+      ksprintf f fmt in
+    let error kind fmt =
+      let f s = buffer := (`error (kind, s)) :: !buffer in
+      ksprintf f fmt in
+    begin match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       let (>>>) x f = Result.ok_exn ~fail:(Failure f) x in
       let vols = Hitscore_db.File_system.get_all ~dbh >>> "File_system.get_all" in
@@ -627,44 +634,49 @@ module Verify = struct
                   Hitscore_db.File_system.(volume |> volume_entry_cache |> 
                       volume_entry |> entry_unix_path) in
               if verbose then
-                eprintf "* Checking volume %S\n" path;
+                log "* Checking volume %S\n" path;
               Unix.(try
                       let vol_stat = stat path in
                       if vol_stat.st_kind <> S_DIR then
-                        eprintf "ERROR(volume): %S:\n  Not a directory\n" path
+                        error `volume "%S: Not a directory" path
                       else
                         if verbose then
-                          eprintf "-> OK\n"
+                          log "-> OK\n"
                         else
                           ()
                 with
                 | Unix_error (e, _, s) ->
-                  eprintf "ERROR(volume): %S:\n %S (%S)\n" path (error_message e) s);
+                  error `volume "%S: %S (%S)" path (error_message e) s);
               begin match Hitscore_db.File_system.volume_trees volume with
               | Error (`cannot_recognize_file_type s) ->
-                eprintf "ERROR(get-files): %S:\n  cannot_recognize_file_type %S??\n"
-                  path s
+                error `get_files "%S: cannot_recognize_file_type %S" path s
               | Error (`inconsistency_inode_not_found i) ->
-                eprintf "ERROR(get-files): %S:\n  inconsistency_inode_not_found %ld"
-                  path i
+                error `get_files "%S: inconsistency_inode_not_found %ld" path i
               | Ok trees ->
                 let paths =
                   Hitscore_db.File_system.trees_to_unix_paths trees in
                 List.iter paths ~f:(fun s -> 
                   let filename = Filename.concat path s in
-                  if verbose then eprintf "  \\-> %S\n" filename;
-                  Unix.(try
-                      let file_stat = stat filename in
-                      ignore file_stat
+                  if verbose then log "  \\-> %S\n" filename;
+                  Unix.(
+                    try let file_stat = stat filename in
+                        ignore file_stat
                     with
                     | Unix_error (e, _, s) ->
-                      eprintf "ERROR(file): %S:\n %S (%S)\n"
-                        filename (error_message e) s);
+                      error `file "%S: %S (%S)" filename (error_message e) s);
                 );
               end))
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+    end;
+    List.rev !buffer
 
+  let print_fs_check =
+    List.iter  ~f:(function
+    | `info s -> printf "%s" s
+    | `error (`volume, s) -> printf "ERROR(volume): %s\n" s
+    | `error (`get_files, s) -> printf "ERROR(get-files): %s\n" s
+    | `error (`file, s) -> printf "ERROR(file): %s\n" s)
 
 end
 
@@ -1446,8 +1458,9 @@ let () =
       fprintf o "  -quiet : Non-verbose output\n"
     )
     ~run:(fun config exec cmd -> function
-      | [] -> Some (Verify.check_file_system config)
-      | [ "-quiet" ] -> Some (Verify.check_file_system ~verbose:false config)
+      | [] -> Some Verify.(check_file_system config |! print_fs_check)
+      | [ "-quiet" ] -> Some Verify.(
+        check_file_system ~verbose:false config |! print_fs_check)
       | _ -> None);
 
   define_command
