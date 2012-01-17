@@ -1646,9 +1646,10 @@ let () =
     ~names:["wake-up"; "wu"]
     ~description:"Do some checks on the Layout"
     ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s\n" exec cmd)
+      fprintf o "Usage: %s <profile> %s [-fix]\n" exec cmd)
     ~run:(fun config exec cmd -> function
     | [] -> Verify.wake_up config
+    | ["-fix"] -> Verify.wake_up ~fix_it:true config
     | _ -> None);
 
   let global_usage = function
