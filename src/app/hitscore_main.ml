@@ -1021,7 +1021,39 @@ module Query = struct
                     sprintf " * %ld: %s%S" i
                       (Option.value_map p ~default:"" ~f:(sprintf "%S.")) n)))
         end));
-
+    ("flowcells-csv",
+     (["A CSV output, imitating the Flowcell in the Meta-data."],
+     fun dbh args ->
+       let work =
+         let open Hitscore_threaded in
+         let open Result_IO in
+         Layout.Record_flowcell.(
+           get_all ~dbh
+           >>= fun flowcells ->
+           of_list_sequential flowcells ~f:(fun f ->
+             cache_value ~dbh f >>| get_fields
+             >>= fun {serial_name; lanes} ->
+             of_list_sequential
+               (Array.to_list (Array.mapi lanes ~f:(fun i a -> (i,a))))
+               ~f:(fun (i, l) ->
+                 Layout.Record_lane.(
+                   cache_value ~dbh l >>| get_fields
+                   >>= fun {libraries; _} ->
+                   of_list_sequential (Array.to_list libraries) ~f:(fun lib ->
+                     Layout.Record_input_library.(
+                       cache_value ~dbh lib >>| get_fields
+                       >>= fun {library; _} ->
+                       Layout.Record_stock_library.(
+                         cache_value ~dbh library >>| get_fields
+                         >>= fun {name; _} ->
+                         return (serial_name, i + 1, name))))))))
+         >>= fun ll ->
+         return (List.iter (List.flatten (List.flatten ll)) (fun (s, i, n) ->
+           printf "%S,%d,%s\n" s i n
+         )) in
+       ignore work
+           
+     ));
   ]
 
   let describe out =
