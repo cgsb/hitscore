@@ -678,8 +678,9 @@ module Verify = struct
     | `error (`get_files, s) -> printf "ERROR(get-files): %s\n" s
     | `error (`file, s) -> printf "ERROR(file): %s\n" s)
 
-  let wake_up hsc =
-    begin match Hitscore_threaded.db_connect hsc with
+  let wake_up ?(fix_it=false) hsc =
+    let open Hitscore_threaded in
+    begin match db_connect hsc with
     | Ok dbh ->
       let count_fs_errors =
         List.fold_left (check_file_system ~verbose:false hsc)
@@ -687,7 +688,45 @@ module Verify = struct
       begin match count_fs_errors with
       | 0 -> printf "File-system: OK.\n"; 
       | n -> printf "File-system: %d errors.\n" n
-      end
+      end;
+      let () =
+        let open Layout.Function_bcl_to_fastq in
+        let started_b2fs =
+          match get_all_started ~dbh with
+          | Ok l -> l
+          | Error (`pg_exn e) -> 
+            failwithf "B2F.get_all_started: %S" (Exn.to_string e) ()
+        in
+        List.iter started_b2fs (fun bcl_to_fastq ->
+          let status = 
+            Bcl_to_fastq.status ~dbh ~configuration:hsc 
+              ~run_command:System.command bcl_to_fastq in
+          match status with
+          | Ok `running -> ()
+          | Ok (`started_but_not_running e) -> 
+            printf "The function %ld is STARTED BUT NOT RUNNING!!!\n"
+              bcl_to_fastq.id;
+            if fix_it then (
+              printf "Fixing …\n";
+              Bcl_to_fastq.fail ~dbh bcl_to_fastq
+                ~reason:"checking_status_reported_started_but_not_running"
+              |! ignore)
+          | Ok (`not_started e) ->
+            printf "ERROR: The function %ld is NOT STARTED: %S.\n"
+              bcl_to_fastq.id
+              (Layout.Enumeration_process_status.to_string e);
+          | Error (`pg_exn e) -> 
+            failwithf "B2F.status: %S" (Exn.to_string e) ()
+          | Error (`status_parsing_error e) ->
+            failwithf "B@f.status: status_parsing_error %S" e ()
+          | Error (`work_directory_not_configured) ->
+            failwithf "B2F.status: work_directory_not_configured" ()
+          | Error _ ->
+            failwithf "B2F.status ERROR" ()
+        )
+      in
+      db_disconnect hsc dbh |! ignore
+
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
     end;
