@@ -6,14 +6,17 @@ module Make :
     functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
 sig
 
+  (** Start the demultiplexer, the return type of [run-command] is
+      actually the {i error} type of the whole function (i.e. all the
+      errors that can be added by it). *)
   val start :
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
     sample_sheet:Layout.Record_sample_sheet.t ->
     hiseq_dir:Layout.Record_hiseq_raw.t ->
     availability:Layout.Record_inaccessible_hiseq_raw.t ->
-    ?mismatch:[< `one | `two | `zero > `one ] ->
-    ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
+    ?mismatch:[ `one | `two | `zero ] ->
+    ?version:[ `casava_181 | `casava_182 ] ->
     ?user:string ->
     ?wall_hours:int ->
     ?nodes:int ->
@@ -56,7 +59,8 @@ sig
      | `success of [ `can_complete ] Layout.Function_bcl_to_fastq.t ],
      'a) Result_IO.monad
 
-
+  (** Create the resulting [Layout.Record_bcl_to_fastq.t] and register
+      the [bcl_to_fastq] evaluation as a success. *)
   val succeed:
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
@@ -78,6 +82,7 @@ sig
      | `success of
          [ `can_get_result ] Layout.Function_bcl_to_fastq.t], 'a) Result_IO.monad
 
+  (** Register the evaluation as failed. *)
   val fail:
     dbh:Layout.db_handle ->
     ?reason:string ->
@@ -87,6 +92,7 @@ sig
          [> `record_log ] * [> `insert_did_not_return_one_id of string * int32 list ]
      | `pg_exn of exn ]) Result_IO.monad
 
+  (** Get the status of the evaluation. *)
   val status:
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
@@ -102,6 +108,7 @@ sig
      | `status_parsing_error of string
      | `work_directory_not_configured ]) Result_IO.monad
 
+  (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
