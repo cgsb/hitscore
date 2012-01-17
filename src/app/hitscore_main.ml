@@ -995,6 +995,32 @@ module Query = struct
             printf "[???NO DATE???] %s\n" l
           );
         end));
+    ("orphan-input-libraries", 
+     (["List of libraries which are not referenced in any lane."],
+      fun dbh args ->
+        let libs =
+          let open Batteries in
+          PGSQL (dbh)
+            "select input_library.g_id, 
+                    stock_library.project,
+                    stock_library.name
+             from (input_library left outer join lane 
+                    on lane.libraries @> array_append ('{}', input_library.g_id)),
+                  stock_library
+             where lane.g_id is NULL and input_library.library = stock_library.g_id;"
+        in
+        let fixed = libs in
+        begin match List.length fixed with
+        | 0 -> printf "No orphan input-libraries found.\n"
+        | n ->
+          printf "Found %d orphan input-librar%s:\n%s\n" n 
+            (if n > 1 then "ies" else "y")
+            (String.concat ~sep:"\n" 
+               (List.map fixed
+                  (fun (i, p, n) ->
+                    sprintf " * %ld: %s%S" i
+                      (Option.value_map p ~default:"" ~f:(sprintf "%S.")) n)))
+        end));
 
   ]
 
