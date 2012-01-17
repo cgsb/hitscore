@@ -316,4 +316,26 @@ module Make
         | Error (`wrong_status s) -> return (`not_started s)
       )
 
+    let kill ~dbh ~configuration ~run_command bcl_to_fastq = 
+      begin match Configuration.work_directory configuration with
+      | Some work_dir -> return work_dir
+      | None -> error `work_directory_not_configured
+      end
+      >>= fun work_dir ->
+      Layout.Function_bcl_to_fastq.(
+        cache_evaluation ~dbh bcl_to_fastq 
+        >>= fun cache ->
+        match (is_started cache) with
+        | Ok cache ->
+          let run_dir = work_run_time work_dir bcl_to_fastq.id in
+          ksprintf run_command "cat %s/jobid && qdel `cat %s/jobid`" 
+            run_dir run_dir
+          >>= fun () ->
+          fail ~dbh ~reason:"killed" bcl_to_fastq
+        | Error (`status_parsing_error o) -> error (`status_parsing_error o)
+        | Error (`wrong_status s) -> error (`not_started s)
+      )
+
+
+
   end

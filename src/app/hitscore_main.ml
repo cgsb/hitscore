@@ -1042,6 +1042,9 @@ module Run_bcl_to_fastq = struct
       | `wrong_status s ->
         printf "INVALID-REQUEST: Function has wrong status: %s\n"
           (Layout.Enumeration_process_status.to_string s)
+      | `not_started e ->
+        printf "INVALID-REQUEST: The function is NOT STARTED: %S.\n"
+          (Layout.Enumeration_process_status.to_string e);
       end
 
   let get_hiseq_raw ~dbh s =
@@ -1323,6 +1326,31 @@ module Run_bcl_to_fastq = struct
       eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
     end
  
+  let kill hsc id =
+    let open Hitscore_threaded in
+    let bcl_to_fastq =
+      try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
+      with e -> None in
+    begin match bcl_to_fastq with
+    | Some bcl_to_fastq ->
+      let work =
+        db_connect hsc >>= fun dbh -> 
+        Layout.Function_bcl_to_fastq.(
+          cache_evaluation ~dbh bcl_to_fastq 
+          >>= fun cache ->
+          IO.return (is_started cache))
+        >>= fun _ ->
+        Bcl_to_fastq.kill ~dbh
+          ~configuration:hsc ~run_command:System.command bcl_to_fastq in
+      display_errors work;
+      Some ()
+    | None ->
+      eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
+    end
+
+
+
+
 end
 
 
@@ -1527,7 +1555,8 @@ let () =
           \  * register-success <id> <result-dir>.\n\
           \  * register-failure <id> [<reason-log>].\n\
           \  * status <id> : Get the current status of an evaluation.\n\
-          \  * fix-status <id> : Get the status and fix it if possible\n")
+          \  * fix-status <id> : Get the status and fix it if possible\n\
+          \  * kill <id>.\n")
     ~run:(fun config exec cmd -> function
     | "start" :: args -> 
       Run_bcl_to_fastq.start config (sprintf "%s <config> %s start" exec cmd) args
@@ -1541,6 +1570,8 @@ let () =
       Run_bcl_to_fastq.check_status config id
     | "fix-status" :: id :: [] ->
       Run_bcl_to_fastq.check_status ~fix_it:true config id
+    | "kill" :: id :: [] ->
+      Run_bcl_to_fastq.kill config id
     | _ -> None);
   
 
