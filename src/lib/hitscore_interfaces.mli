@@ -160,7 +160,20 @@ module type CONFIGURATION = sig
   val db_port     : local_configuration -> int      option 
   val db_database : local_configuration -> string   option 
   val db_username : local_configuration -> string   option 
-val db_password : local_configuration -> string   option 
+  val db_password : local_configuration -> string   option 
+
+
+  type profile_set
+
+  val parse_str: string -> 
+    (profile_set, [> `configuration_parsing_error of exn ]) Result.t
+
+  val profile_names: profile_set -> string list
+
+  val use_profile: profile_set -> string -> 
+    (local_configuration, [> `profile_not_found of string]) Result.t
+
+
 end
 
 

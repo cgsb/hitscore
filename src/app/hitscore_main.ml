@@ -35,72 +35,6 @@ module Configuration_file = struct
       (Option.value_exn_message "This environment has no $HOME !"
          (Sys.getenv "HOME"))
 
-  let parse_sexp sexp =
-    let fail msg =
-      raise (Failure (sprintf "Configuration Syntax Error: %s" msg)) in
-    let fail_atom s = fail (sprintf "Unexpected atom: %s" s) in
-    let open Sexplib.Sexp in
-    let find_field l f =
-      List.find_map l (function
-        | List [ Atom n; Atom v ] when n = f -> Some v
-        | _ -> None) in
-    let parse_profile = function
-      | Atom o -> fail_atom o
-      | List ( Atom "profile" :: Atom name :: l ) ->
-        let root_config = 
-          List.find_map l (function
-          | List (Atom "root" :: Atom dir :: l) -> Some (dir, l)
-          | _ -> None) in
-        let root_directory = Option.map root_config fst in
-        let root_writers =
-          Option.value_map ~default:[] root_config ~f:(fun (_, l) ->
-            List.find_map l (function
-            | List (Atom "writers" :: l) -> Some l | _ -> None)
-            |! Option.map 
-                ~f:(List.filter_map ~f:(function Atom a -> Some a | _ -> None))
-            |! Option.value ~default:[])
-        in
-        let root_group =
-          Option.bind root_config (fun (_, c) ->
-            List.find_map c (function
-            | List (Atom "group" :: Atom g :: []) -> Some g
-            | _ -> None)) in
-        let work_directory = find_field l "work" in
-        let db_config = 
-          List.find_map l (function
-            | List (Atom "db" :: l) -> Some l
-            | _ -> None) in
-        let db_configuration =
-          Option.map db_config ~f:(fun l ->
-            match find_field l "host", find_field l "port", 
-              find_field l "database", find_field l "username", 
-              find_field l "password" with
-              | Some host, Some port, Some database, Some username, Some password ->
-                Hitscore_threaded.Configuration.db_configuration
-                  ~host ~port:(Int.of_string port) ~database ~username ~password
-              | _ ->
-                ksprintf fail "Incomplete DB configuration (profile: %s)" name)
-        in
-        (name, 
-         Hitscore_threaded.Configuration.configure ?work_directory ?vol:None
-           ?root_directory ~root_writers ?root_group ?db_configuration)
-      | _ -> fail "expecting a (profile ...)"
-    in
-    match sexp with Atom a -> fail a | List l -> List.map l parse_profile
-      
-  let parse_str str =
-    let sexp = 
-      try Sexplib.Sexp.of_string (sprintf "(%s)" str) 
-      with Failure msg ->
-        failwith (sprintf "Syntax Error (sexplib): %s" msg)
-    in
-    (parse_sexp sexp)
-
-  let configuration assoc profile =
-    match List.Assoc.find assoc profile with
-    | Some c -> c ()
-    | None -> failwithf "Can't find profile: %s" profile ()
-
   let iter = List.iter
 
   let print_config config =
@@ -129,10 +63,11 @@ module Configuration_file = struct
     iter (Sys.getenv "PGPASSWORD") (printf "Env: PGPASSWORD : %S\n");
     ()
     
-  let print_all assoc =
-    List.iter assoc (fun (n, f) ->
+  let print_all profiles =
+    let open Hitscore_threaded.Configuration in
+    List.iter (profile_names profiles) (fun n ->
       printf "** Configuration %S:\n" n;
-      print_config (f ()));
+      print_config (use_profile profiles n |! Result.ok_exn ~fail:Not_found));
     printf "** Environment:\n";
     print_env ();
     ()
@@ -1761,7 +1696,14 @@ let () =
         failwith ""
     in
     let config = In_channel.(with_file config_file ~f:input_all) in
-    let hitscore_config = Configuration_file.(parse_str config) in
+    let hitscore_config =
+      match Hitscore_threaded.Configuration.(parse_str config) with
+      | Ok o -> o
+      | Error (`configuration_parsing_error e) ->
+        eprintf "Error while parsing configuration: %s\n" (Exn.to_string e);
+        failwith "STOP"
+    in
+    
     Configuration_file.print_all hitscore_config
    
     
@@ -1775,8 +1717,21 @@ let () =
       | _ -> failwithf "Can't understand: %s" profile ()
     in
     let config = In_channel.(with_file config_file ~f:input_all) in
-    let hitscore_config = 
-      Configuration_file.(configuration (parse_str config) profile_name) in
+    let hitscore_config =
+      let open Result in
+      Hitscore_threaded.Configuration.(
+        parse_str config
+        >>= fun c ->
+        use_profile c profile_name)
+      |! function
+        | Ok o -> o
+        | Error (`configuration_parsing_error e) ->
+          eprintf "Error while parsing configuration: %s\n" (Exn.to_string e);
+          failwith "STOP"
+        | Error (`profile_not_found s) ->
+          eprintf "Profile %S not found in config-file\n" s;
+          failwith "STOP"
+    in      
     begin match find_command cmd with
     | Some (names, description, usage, run) ->
       begin match run hitscore_config exec cmd args with
