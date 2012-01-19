@@ -479,4 +479,17 @@ let package_default =
 let dispatch_default = MyOCamlbuildBase.dispatch_default package_default;;
 
 (* OASIS_STOP *)
-Ocamlbuild_plugin.dispatch dispatch_default;;
+(* Ocamlbuild_plugin.dispatch dispatch_default;; *)
+
+dispatch begin (fun d ->
+  dispatch_default d; (* Call the OASIS-generated dispatch. *)
+  (function 
+  | After_options ->
+    Options.ocamldoc := S [A"ocamlfind"; 
+                           A"ocamldoc";
+                           A"-keep-code";
+                           (* A"-css-style"; A"../doc/style.css"; *)
+                           A"-t"; A "Hitscore Library";
+                           A"-colorize-code"]
+  | _ -> ()) d) (* Add one more dispatch option. *)
+end;;
