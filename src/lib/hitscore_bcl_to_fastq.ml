@@ -7,6 +7,29 @@ module Make
     open Hitscore_std
     open Result_IO
 
+    type 'a start_error = 
+    [> `cannot_recognize_file_type of string
+    | `empty_sample_sheet_volume of
+        Layout.File_system.volume * Layout.Record_sample_sheet.t
+    | `hiseq_dir_deleted of
+        Layout.Record_hiseq_raw.t * Layout.Record_inaccessible_hiseq_raw.t
+    | `inconsistency_inode_not_found of int32
+    | `layout_inconsistency of
+        [> `file_system
+        | `function_bcl_to_fastq
+        | `record_hiseq_raw
+        | `record_inaccessible_hiseq_raw
+        | `record_log
+        | `record_sample_sheet ] *
+          [> `insert_did_not_return_one_id of string * int32 list
+          | `select_did_not_return_one_cache of string * int ]
+    | `more_than_one_file_in_sample_sheet_volume of
+        Layout.File_system.volume * Layout.Record_sample_sheet.t * string list
+    | `pg_exn of exn 
+    | `root_directory_not_configured
+    | `work_directory_not_configured
+    ] as 'a
+
     let set_rights ~run_command ~configuration = 
       let cmd fmt = ksprintf (fun s -> run_command s) fmt in
       function
@@ -233,6 +256,18 @@ module Make
           >>= fun _ ->
           return (`failure (failed, e)))
 
+
+    type 'a succeed_error = 'a constraint 'a =
+    [> `layout_inconsistency of
+        [> `file_system
+        | `record_bcl_to_fastq_unaligned
+        | `record_log ] *
+          [> `add_did_not_return_one of string * int32 list
+          | `insert_did_not_return_one_id of string * int32 list
+          | `select_did_not_return_one_cache of string * int ]
+    | `pg_exn of exn
+    | `root_directory_not_configured]
+
     let succeed ~dbh ~configuration ~bcl_to_fastq ~result_root ~run_command =
       Layout.File_system.(
         let files = Tree.([opaque "Unaligned"]) in
@@ -315,6 +350,20 @@ module Make
         | Error (`status_parsing_error o) -> error (`status_parsing_error o)
         | Error (`wrong_status s) -> return (`not_started s)
       )
+
+
+    type 'a kill_error = 'a constraint 'a =
+    [> `layout_inconsistency of
+        [> `function_bcl_to_fastq | `record_log ] *
+          [> `insert_did_not_return_one_id of
+              string * int32 list
+          | `select_did_not_return_one_cache of
+              string * int ]
+    | `not_started of
+        Layout.Enumeration_process_status.t
+    | `pg_exn of exn
+    | `status_parsing_error of string
+    | `work_directory_not_configured ]
 
     let kill ~dbh ~configuration ~run_command bcl_to_fastq = 
       begin match Configuration.work_directory configuration with
