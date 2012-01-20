@@ -1,4 +1,5 @@
 _build/
+_doc/
 _migrator/
 src/script/*.exe
 hitscoredoc.docdir

@@ -12,16 +12,25 @@ LAYOUT_SOURCE=data/hitscore_layout
 _build/hitscore_layout_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 	$(GENERATOR) digraph $(LAYOUT_SOURCE) $@
 
-hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot
+_doc/hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot
 	dot -Tpdf $< -o$@
+
+_doc/hitscore_layout_digraph.png: _build/hitscore_layout_digraph.dot
+	dot -Tpng $< -o$@
 
 _build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 	$(GENERATOR) db_digraph $(LAYOUT_SOURCE) $@
 
-hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot
+_doc/hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot
 	dot -Tpdf $< -o$@
 
-dots: hitscore_layout_digraph.pdf hitscore_db_digraph.pdf
+_doc/hitscore_db_digraph.png: _build/hitscore_db_digraph.dot
+	dot -Tpng $< -o$@
+
+_doc/:
+	mkdir _doc
+
+dots: _doc/hitscore_layout_digraph.pdf _doc/hitscore_db_digraph.pdf
 
 
 update_psql: $(GENERATOR)
@@ -42,8 +51,14 @@ install:
 uninstall:
 	ocaml setup.ml -uninstall
 
-doc:
+libdoc:
 	ocaml setup.ml -doc
+
+customdoc: _doc/hitscore_layout_digraph.png _doc/hitscore_db_digraph.png
+
+doc: libdoc customdoc
+	mkdir -p _doc/lib
+	cp hitscoredoc.docdir/* _doc/lib/
 
 clean:
 	ocaml setup.ml -clean
