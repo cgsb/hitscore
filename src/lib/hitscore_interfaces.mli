@@ -47,7 +47,8 @@ module type RESULT_IO = sig
 
   module IO : IO_CONFIGURATION
 
-  (** It a {{:http://www.janestreet.com/ocaml/doc/core/Monad.S2.html}Monad.S2}
+  (** It is 
+      a {{:http://www.janestreet.com/ocaml/doc/core/Monad.S2.html}Monad.S2}
       from {i Core}. {[
       type ('a, 'b) monad 
       val (>>=) : ('a, 'b) monad ->
@@ -135,6 +136,12 @@ module type CONFIGURATION = sig
   (** Get the Data-base configuration *)
   val db: local_configuration -> db_configuration option
     
+  val db_host     : local_configuration -> string   option 
+  val db_port     : local_configuration -> int      option 
+  val db_database : local_configuration -> string   option 
+  val db_username : local_configuration -> string   option 
+  val db_password : local_configuration -> string   option 
+
   (** Get the current root directory (if set).  *)
   val root_directory : local_configuration -> string option
     
@@ -153,23 +160,21 @@ module type CONFIGURATION = sig
   (** Make a path-making function for VFS volumes. *)
   val volume_path_fun: local_configuration -> (string -> string) option
 
-  (**  *)
+  (** Get (if configured) the current work-directory (the one used for
+  short-term storage and computations). *)
   val work_directory: local_configuration -> string option
 
-  val db_host     : local_configuration -> string   option 
-  val db_port     : local_configuration -> int      option 
-  val db_database : local_configuration -> string   option 
-  val db_username : local_configuration -> string   option 
-  val db_password : local_configuration -> string   option 
-
-
+  (** Set of available profiles. *)
   type profile_set
 
+  (** Parse a list of S-Expressions representing configuration profiles. *)
   val parse_str: string -> 
     (profile_set, [> `configuration_parsing_error of exn ]) Result.t
 
+  (** Get the list of available profile names.  *)
   val profile_names: profile_set -> string list
 
+  (** Select a profile and build a configuration with it. *)
   val use_profile: profile_set -> string -> 
     (local_configuration, [> `profile_not_found of string]) Result.t
 
