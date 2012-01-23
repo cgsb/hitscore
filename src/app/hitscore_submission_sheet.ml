@@ -82,8 +82,10 @@ let list_of_filteri f =
   List.rev !rl
 
 
-let int32 ?(msg="") s = try Some (Int32.of_string s) with e ->
-  error "%sCannot read an integer from %s" msg s; None
+let int32 ?(msg="") s =
+  try Scanf.sscanf s "%ld" Option.some
+  with e ->
+    error "%sCannot read an integer from %s" msg s; None
 
 
 let parse_run_type s =
@@ -107,7 +109,9 @@ let parse_date s =
   | [ month; day; year ] ->
     begin try
             Some (ksprintf Layout.Timestamp.of_string
-                    "%04s-%02s-%02s 08:00:00-05:00" year month day)
+                    "%04d-%02d-%02d 08:00:00-05:00"
+                    (Int.of_string year) (Int.of_string month)
+                    (Int.of_string day))
       with Failure e ->
         error "Cannot parse date: %s %s" s e; None
     end
@@ -172,7 +176,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let contacts_section = find_section sanitized "Contacts" in
       list_of_filteri (fun i ->
         let row = sanitized.(contacts_section + i + 1) in
-        if List.hd_exn row = "" && not (List.for_all row ((=) "")) then
+        if not (List.for_all row ((=) ""))
+        && List.hd_exn row <> "Invoicing" then
           begin match row with
           | "" :: [] | [] -> failwith "should not be trying this... (contacts)"
           | ["" ; email ] ->
@@ -188,15 +193,15 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | _ ->
               failwithf "Database problem while looking for %S" email ()
             end
-          | "" :: email :: first :: middle :: last :: _ as l ->
+          | printname :: email :: first :: middle :: last :: _ as l ->
             begin match (find_contact ~dbh ~verbose first last email) with
             | `one o ->
               Some (email, Some o, [])
             | `to_fix (o, msg) ->
               error "Contact to fix: %s" msg;
-              Some (email, None, (List.map (List.tl_exn l) stropt))
+              Some (email, None, (List.map l stropt))
             | `none _ -> 
-              Some (email, None, (List.map (List.tl_exn l) stropt))
+              Some (email, None, (List.map l stropt))
             end
           | l -> 
             error "Wrong contact line: %s" (strlist l); None
@@ -262,9 +267,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           let pool_libs =
             list_of_filteri (fun i ->
               let row = sanitized.(section + i + 2) in
+              let is_empty e = List.for_all e ((=) "") in
               match row with
-              | "Libraries" :: emptyness when List.for_all emptyness ((=) "") -> 
-                None
+              | emptyness when is_empty emptyness -> None
+              | "Libraries" :: emptyness when is_empty emptyness -> None
               | lib :: percent :: emptyness when List.for_all emptyness ((=) "") ->
                 begin match try Some (Float.of_string percent) with e -> None with
                 | Some p -> Some (lib, p)
@@ -272,10 +278,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   error "Wrong pool percentage %s in row [%s]" percent (strlist row);
                   None
                 end
-              | "" :: [] | [] ->  None
-              | _ ->
-                error "Wrong pool percentage row: [%s]" (strlist row);
-                None) in
+              | _ -> (* We should had hit another pool *) None) in
           let pool_libs_redistributed =
             match List.Assoc.find phix pool with
             | None -> pool_libs
@@ -418,8 +421,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             let application = mandatory row col_Application in
             let stranded = mandatory row col_Is_Stranded
                            >>| String.lowercase 
-                           >>= fun s ->
-                           try Some (Bool.of_string s) with _ -> None in
+                           >>= function
+                           | "true" | "yes" -> Some true
+                           | "false" | "no" -> Some false
+                           | _ -> None in
             let truseq_control =
               column row col_TruSeq_Control 
               >>| String.lowercase 
@@ -434,6 +439,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 | Some s ->
                   begin match Layout.Enumeration_barcode_provider.of_string s with
                   | Ok s -> s
+                  | Error "bioo scientific" -> `bioo
                   | Error s ->
                     error "Lib: %s cannot recognize barcode provider: %s" libname s;
                     `none
@@ -684,18 +690,19 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             error "Contact %S: %s not provided" email name; 
             (name ^ "-fake")
         in
-        let given_name = get 1 "Given-name" in
-        let middle_name = List.nth contents 2 |! Option.value ~default:None in
-        let family_name = get 3 "Family-name" in
-        let nickname = List.nth contents 4  |! Option.value ~default:None in
-        let login = List.nth contents 5  |! Option.value ~default:None in
+        let print_name =  List.nth contents 0 |! Option.value ~default:None in
+        let given_name = get 2 "Given-name" in
+        let middle_name = List.nth contents 3 |! Option.value ~default:None in
+        let family_name = get 4 "Family-name" in
+        let nickname = List.nth contents 5  |! Option.value ~default:None in
+        let login = List.nth contents 6  |! Option.value ~default:None in
         let id =
           run ~dbh
             ~fake:(fun x -> { Layout.Record_person.id = x })
             ~real:(fun dbh ->
               Layout.Record_person.add_value ~dbh
                 ~email ~given_name ?middle_name ~family_name
-                ?nickname ?login ?print_name:None ?note:None)
+                ?nickname ?login ?print_name ?note:None)
             ~log:(sprintf "(add_person %s)" email)
         in
         (email, id |! Result.ok)
