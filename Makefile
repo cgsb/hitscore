@@ -12,19 +12,19 @@ LAYOUT_SOURCE=data/hitscore_layout
 _build/hitscore_layout_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 	$(GENERATOR) digraph $(LAYOUT_SOURCE) $@
 
-_doc/hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot
+_doc/hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot _doc/
 	dot -Tpdf $< -o$@
 
-_doc/hitscore_layout_digraph.png: _build/hitscore_layout_digraph.dot
+_doc/hitscore_layout_digraph.png: _build/hitscore_layout_digraph.dot _doc/
 	dot -Tpng $< -o$@
 
 _build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 	$(GENERATOR) db_digraph $(LAYOUT_SOURCE) $@
 
-_doc/hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot
+_doc/hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot _doc/
 	dot -Tpdf $< -o$@
 
-_doc/hitscore_db_digraph.png: _build/hitscore_db_digraph.dot
+_doc/hitscore_db_digraph.png: _build/hitscore_db_digraph.dot _doc/
 	dot -Tpng $< -o$@
 
 _doc/:
@@ -59,6 +59,9 @@ customdoc: _doc/hitscore_layout_digraph.png _doc/hitscore_db_digraph.png
 doc: libdoc customdoc
 	mkdir -p _doc/lib
 	cp hitscoredoc.docdir/* _doc/lib/
+
+cleandoc:
+	rm -fr _doc/
 
 clean:
 	ocaml setup.ml -clean
