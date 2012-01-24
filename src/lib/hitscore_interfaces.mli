@@ -181,17 +181,28 @@ module type CONFIGURATION = sig
 
 end
 
-
+(** Posix ACLs management.  *)
 module type ACL = sig
 
-  module Config : CONFIGURATION
-  module RIO : RESULT_IO
+  (**/**)
 
+  (** Local definition of the configuration. *)
+  module Configuration : CONFIGURATION
+
+  (** Local definition of Result_IO.  *)
+  module Result_IO : RESULT_IO
+
+  (**/**)
+
+  (** Set the default ACLs for the configuration ({i group} and {i
+      writers}) if available. If the configuration does not define the
+      [group] or the list of [writer]s does not fail; it continues
+      with [()]. *)
   val set_defaults:
-    run_command:(string -> (unit, 'a) RIO.monad) ->
-    configuration:Config.local_configuration ->
+    run_command:(string -> (unit, 'a) Result_IO.monad) ->
+    configuration:Configuration.local_configuration ->
     [ `dir of string | `file of string ] ->
-    (unit, 'a) RIO.monad
+    (unit, 'a) Result_IO.monad
 
 
 end

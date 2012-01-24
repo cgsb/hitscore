@@ -3,8 +3,8 @@ module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
   (Result_IO : Hitscore_interfaces.RESULT_IO) 
   (ACL : Hitscore_interfaces.ACL 
-         with module RIO = Result_IO
-         with module Config = Configuration)
+         with module Result_IO = Result_IO
+         with module Configuration = Configuration)
   (Layout: module type of Hitscore_db_access.Make(Result_IO)) = struct
 
     open Hitscore_std

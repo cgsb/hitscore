@@ -3,8 +3,8 @@ module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
   (Result_IO : Hitscore_interfaces.RESULT_IO) = struct
 
-    module RIO = Result_IO
-    module Config = Configuration
+    module Result_IO = Result_IO
+    module Configuration = Configuration
 
     open Hitscore_std
     open Result_IO

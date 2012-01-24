@@ -23,8 +23,8 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
 
   (** The POSIX-ACLs management.  *)
   module ACL:  Hitscore_interfaces.ACL
-    with module RIO = Result_IO
-    with module Config = Configuration
+    with module Result_IO = Result_IO
+    with module Configuration = Configuration
   
 
   module Assemble_sample_sheet: 
