@@ -540,6 +540,99 @@ module Hiseq_raw = struct
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
+  let get_info directory = 
+    let summary_dir = directory ^ "Data/reports/Summary" in
+    let show_xml xml_file =
+      In_channel.with_file xml_file ~f:(fun ic ->
+        let xml = XML.(make_input (`Channel ic) |> in_tree) in
+        let rec go_through = function
+          | XML.E (((_,"Summary"), attrs), more) ->
+            printf "{section 2|Summary";
+            List.iter attrs (function
+            | (_, "Read"), nb -> 
+              printf " for read %s " nb
+            | (_, "densityRatio"), nb -> 
+              printf "(density ratio: %s)" nb
+            | _ -> ());
+            printf "}\n";
+            printf "File {t|%s}\n" xml_file;
+            printf "{begin table 26 r}\n";
+            printf "
+                {c h|Lane}\
+                {c h|Tiles}\
+                {c h|ClustersRaw}\
+                {c h|ClustersRawSD}
+                {c h|ClustersPF}\
+                {c h|ClustersPFSD}\
+                {c h|PrcPFClusters }\
+                {c h|PrcPFClustersSD}\
+                {c h|Phasing }\
+                {c h|Prephasing }\
+                {c h|CalledCyclesMin}\
+                {c h|CalledCyclesMax }\
+                {c h|PrcAlign }\
+                {c h|PrcAlignSD}\
+                {c h|ErrRatePhiX }\
+                {c h|ErrRatePhiXSD }\
+                {c h|ErrRate35}\
+                {c h|ErrRate35SD }\
+                {c h|ErrRate75 }\
+                {c h|ErrRate75SD}\
+                {c h|ErrRate100 }\
+                {c h|ErrRate100SD }\
+                {c h|FirstCycleIntPF}\
+                {c h|FirstCycleIntPFSD }\
+                {c h|PrcIntensityAfter20CyclesPF}\
+                {c h|PrcIntensityAfter20CyclesPFSD }\n";
+            List.iter ~f:go_through more;
+            printf "{end}\n"
+          | XML.E (((_,"Lane"), attrs), more) ->
+            printf "";
+            let c = printf "{c|%s}" in
+            List.iter attrs (fun ((_, k), v) ->
+              match k, v with
+              | "key", nb -> c nb
+              | "TileCount", nb -> c nb
+              | "ClustersRaw", nb -> c nb
+              | "ClustersRawSD", nb -> c nb
+              | "ClustersPF", nb -> c nb
+              | "ClustersPFSD", nb -> c nb
+              | "PrcPFClusters", nb -> c nb
+              | "PrcPFClustersSD", nb -> c nb
+              | "Phasing", nb -> c nb
+              | "Prephasing", nb -> c nb
+              | "CalledCyclesMin", nb -> c nb
+              | "CalledCyclesMax", nb -> c nb
+              | "PrcAlign", nb -> c nb
+              | "PrcAlignSD", nb -> c nb
+              | "ErrRatePhiX", nb -> c nb
+              | "ErrRatePhiXSD", nb -> c nb
+              | "ErrRate35", nb -> c nb
+              | "ErrRate35SD", nb -> c nb
+              | "ErrRate75", nb -> c nb
+              | "ErrRate75SD", nb -> c nb
+              | "ErrRate100", nb -> c nb
+              | "ErrRate100SD", nb -> c nb
+              | "FirstCycleIntPF", nb -> c nb
+              | "FirstCycleIntPFSD", nb -> c nb
+              | "PrcIntensityAfter20CyclesPF", nb -> c nb
+              | "PrcIntensityAfter20CyclesPFSD", nb -> c nb
+              | _ -> ());
+            printf "\n";
+            List.iter ~f:go_through more
+          | XML.E (_, more) ->
+            List.iter ~f:go_through more
+          | XML.D s -> ()
+        in
+        go_through (snd xml))
+    in
+    show_xml (summary_dir ^ "/read1.xml");
+    show_xml (summary_dir ^ "/read2.xml");
+    show_xml (summary_dir ^ "/read3.xml");
+
+
+
+
 
 end
 
@@ -1631,6 +1724,15 @@ let () =
     ~run:(fun config exec cmd -> function
     | [] -> Verify.wake_up config
     | ["-fix"] -> Verify.wake_up ~fix_it:true config
+    | _ -> None);
+
+  define_command 
+    ~names:["get-hiseq-raw-info"; "gri"]
+    ~description:"Get information from an HiSeq Raw directory"
+    ~usage:(fun o exec cmd ->
+      fprintf o "Usage: %s <profile> %s\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+    | [dir] -> Some (Hiseq_raw.get_info dir)
     | _ -> None);
 
   let global_usage = function
