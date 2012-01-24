@@ -47,8 +47,9 @@ module Make
         begin match Configuration.root_writers configuration with
         | [] -> return ()
         | l ->
-          cmd "find %s -type d -exec setfacl -d -m %s {} \\;" root
+          cmd "find %s -type d -exec setfacl -m %s,%s,m:rwx {} \\;" root
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
+            (String.concat ~sep:"," (List.map l (sprintf "d:user:%s:rwx")))
           >>= fun () ->
           cmd "find %s -type f -exec setfacl -m %s {} \\;" root
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw")))
