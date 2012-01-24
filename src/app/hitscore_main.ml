@@ -1021,10 +1021,10 @@ module Run_bcl_to_fastq = struct
     Assemble_sample_sheet.run
       ~configuration:hsc
       ~kind ~dbh flowcell
-      ~write_to_file:(fun s f ->
-        Out_channel.(with_file f ~f:(fun o ->
-          printf "writing to %s\n" f;
-          try (return (output_string o s))
+      ~write_to_file:(fun ~file ~content ->
+        Out_channel.(with_file file ~f:(fun o ->
+          printf "writing to %s\n" file;
+          try (return (output_string o content))
           with e -> error (`io_exn e))))
       ~run_command:System.command
     >>= function

@@ -251,8 +251,8 @@ module Make
             match Configuration.volume_path configuration path_vol with
             | Some vol_dir -> 
               ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
-              write_to_file (sprintf "%s/%s" vol_dir path_file)
-                (Buffer.contents sample_sheet.content)
+              write_to_file ~file:(sprintf "%s/%s" vol_dir path_file)
+                ~content:(Buffer.contents sample_sheet.content)
               >>= fun () ->
               ACL.set_defaults (`dir vol_dir) ~configuration ~run_command
             | None -> error `root_directory_not_configured

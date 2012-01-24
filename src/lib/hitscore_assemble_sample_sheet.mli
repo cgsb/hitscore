@@ -34,8 +34,8 @@ If any step fails (e.g. the shell command)
     kind:Layout.Enumeration_sample_sheet_kind.t ->
     configuration:ACL.Configuration.local_configuration ->
     ?note:string ->
-    write_to_file:(string ->
-                   string ->
+    write_to_file:(file:string ->
+                   content:string ->
                    (unit, [> `root_directory_not_configured ] as 'a)
                      Result_IO.monad) ->
     run_command:(string -> (unit, 'a) ACL.Result_IO.monad) ->
