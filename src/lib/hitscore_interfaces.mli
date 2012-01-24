@@ -182,3 +182,16 @@ module type CONFIGURATION = sig
 end
 
 
+module type ACL = sig
+
+  module Config : CONFIGURATION
+  module RIO : RESULT_IO
+
+  val set_defaults:
+    run_command:(string -> (unit, 'a) RIO.monad) ->
+    configuration:Config.local_configuration ->
+    [ `dir of string | `file of string ] ->
+    (unit, 'a) RIO.monad
+
+
+end

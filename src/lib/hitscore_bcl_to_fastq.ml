@@ -2,6 +2,9 @@
 module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
   (Result_IO : Hitscore_interfaces.RESULT_IO) 
+  (ACL : Hitscore_interfaces.ACL 
+         with module RIO = Result_IO
+         with module Config = Configuration)
   (Layout: module type of Hitscore_db_access.Make(Result_IO)) = struct
 
     open Hitscore_std
@@ -29,45 +32,6 @@ module Make
     | `root_directory_not_configured
     | `work_directory_not_configured
     ] as 'a
-
-    let set_rights ~run_command ~configuration = 
-      let cmd fmt = ksprintf (fun s -> run_command s) fmt in
-      function
-      | `dir root -> 
-        begin match (Configuration.root_group configuration) with
-        | None -> return ()
-        | Some grp -> 
-          cmd "chown -R :%s %s" grp root 
-          >>= fun () ->
-          cmd "find %s -type d -exec chmod u+rwx,g-rw,g+xs,o-rwx {} \\;" root
-          >>= fun () ->
-          cmd "find %s -type f -exec chmod u+rwx,g-rwx,o-rwx {} \\;" root
-        end
-        >>= fun () ->
-        begin match Configuration.root_writers configuration with
-        | [] -> return ()
-        | l ->
-          cmd "find %s -type d -exec setfacl -m %s,%s,m:rwx {} \\;" root
-            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
-            (String.concat ~sep:"," (List.map l (sprintf "d:user:%s:rwx")))
-          >>= fun () ->
-          cmd "find %s -type f -exec setfacl -m %s {} \\;" root
-            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw")))
-        end
-      | `file f ->
-        begin match (Configuration.root_group configuration) with
-        | None -> return ()
-        | Some grp -> 
-          cmd "chown :%s %s" grp f >>= fun () ->
-          cmd "chmod 0600 %s" f
-        end
-        >>= fun () ->
-        begin match Configuration.root_writers configuration with
-        | [] -> return ()
-        | l ->
-          cmd "setfacl -m %s %s"
-            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw"))) f
-        end
 
     let work_root_directory work_dir unique_id =
       sprintf "%s/B2F/work/%s/" work_dir unique_id
@@ -222,7 +186,7 @@ module Make
 
       let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
       cmd "mkdir -p %s" out_dir >>= fun () ->
-      set_rights (`dir work_root) ~configuration ~run_command >>= fun () ->
+      ACL.set_defaults (`dir work_root) ~configuration ~run_command >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     --input-dir %s \
@@ -236,7 +200,7 @@ module Make
       let started =
         let pbs_script_created = pbs_script created in
         write_file pbs_script_created pbs_script_file >>= fun () ->
-        set_rights ~run_command ~configuration (`file pbs_script_file)
+        ACL.set_defaults ~run_command ~configuration (`file pbs_script_file)
         >>= fun () ->
         let run_dir =
           (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
@@ -284,7 +248,7 @@ module Make
         | Some vol_dir -> 
           ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
           ksprintf run_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
-          set_rights (`dir vol_dir) ~configuration ~run_command
+          ACL.set_defaults (`dir vol_dir) ~configuration ~run_command
         | None -> error `root_directory_not_configured
       in
       double_bind move_m

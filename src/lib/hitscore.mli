@@ -21,11 +21,17 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   (** The configuration information. *)
   module Configuration: Hitscore_interfaces.CONFIGURATION
 
+  (** The POSIX-ACLs management.  *)
+  module ACL:  Hitscore_interfaces.ACL
+    with module RIO = Result_IO
+    with module Config = Configuration
+  
+
   module Assemble_sample_sheet: 
   module type of Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
 
   module Bcl_to_fastq: 
-  module type of Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (Layout)
+  module type of Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (ACL) (Layout)
 
   (** Attempt to connect to the database. *)
   val db_connect : Configuration.local_configuration -> 

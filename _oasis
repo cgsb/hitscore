@@ -38,6 +38,7 @@ Library hitscore
           , Hitscore_bcl_to_fastq
           , Hitscore_conf_values
           , Hitscore_configuration
+          , Hitscore_acl
           , Hitscore_result_IO
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)

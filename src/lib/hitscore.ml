@@ -20,11 +20,13 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
 
   module Configuration = Hitscore_configuration
 
+  module ACL = Hitscore_acl.Make (Configuration) (Result_IO)
+           
   module Assemble_sample_sheet = 
     Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
 
   module Bcl_to_fastq =
-    Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (Layout)
+    Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (ACL) (Layout)
 
     
   let db_connect t =

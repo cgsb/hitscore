@@ -3,6 +3,9 @@
 module Make :
   functor (Configuration : Hitscore_interfaces.CONFIGURATION) ->
   functor (Result_IO : Hitscore_interfaces.RESULT_IO) ->
+  functor (ACL : Hitscore_interfaces.ACL
+           with module RIO = Result_IO
+           with module Config = Configuration) ->
   functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
 sig
 
