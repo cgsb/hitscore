@@ -1105,18 +1105,31 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           end
           |! value ~default:{ Layout.Record_person.id = 42004200l } in
         let account_number, fund, org, program, project =
+          let open Option in
           let mandatory msg s = 
             if s = "" then (
               error "Invoicing for %s: wrong %s: %s (mandatory field)" piemail msg s;
               None) else Some s in
           let optional s = if s = "" then None else Some s in
+          let is_n_digits n msg s =
+            if String.length s = n && String.for_all s Char.is_digit 
+            then Some s else (
+              error "Invoicing for %s: wrong %s: %S should be a \
+                       %d-digit string." piemail msg s n; 
+              None) in
+          let is_n_alphanum n msg s =
+            if String.length s = n && String.for_all s Char.is_alphanum 
+            then Some s else (
+              error "Invoicing for %s: wrong %s: %S should be a \
+                       %d-alphanums string." piemail msg s n; 
+              None) in
           match chartstuff with
           | an :: f :: o :: prog :: proj :: [] ->
-            (mandatory "Account number" an,
-             mandatory "Fund" f,
-             mandatory "Org" o,
-             optional prog,
-             mandatory "Project" proj)
+            ((mandatory "Account number" an >>= is_n_digits 5 "Account number"),
+             (mandatory "Fund" f >>= is_n_digits 2 "Fund"),
+             (mandatory "Org" o >>= is_n_digits 5 "Org"),
+             (optional prog >>= is_n_alphanum 5 "Program"),
+             (mandatory "Project" proj >>= is_n_alphanum 5 "Project"))
           | _ -> 
             error "Wrong chartfield for invoice for %s: %s" piemail
               (strlist chartstuff);
