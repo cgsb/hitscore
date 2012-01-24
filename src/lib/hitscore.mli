@@ -28,7 +28,8 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   
 
   module Assemble_sample_sheet: 
-  module type of Hitscore_assemble_sample_sheet.Make (Result_IO) (Layout)
+  module type of Hitscore_assemble_sample_sheet.Make
+      (Configuration) (Result_IO) (ACL) (Layout)
 
   module Bcl_to_fastq: 
   module type of Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (ACL) (Layout)

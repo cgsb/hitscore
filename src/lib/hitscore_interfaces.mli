@@ -37,7 +37,6 @@ module type IO_CONFIGURATION = sig
   (** This is like {i {{:http://ocsigen.org/lwt/api/Lwt}Lwt}.catch}. *)
   val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
 
-
 end
 
 open Core.Std
@@ -197,7 +196,8 @@ module type ACL = sig
   (** Set the default ACLs for the configuration ({i group} and {i
       writers}) if available. If the configuration does not define the
       [group] or the list of [writer]s does not fail; it continues
-      with [()]. *)
+      with [()]. {b Note:} [`dir "some/path"] is aggressive/recursive
+      (potentially one [chown] and 4 [find]s). *)
   val set_defaults:
     run_command:(string -> (unit, 'a) Result_IO.monad) ->
     configuration:Configuration.local_configuration ->

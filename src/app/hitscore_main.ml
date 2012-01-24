@@ -1018,27 +1018,15 @@ module Run_bcl_to_fastq = struct
   open Result_IO
 
   let get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell =
-    let tmp_file = Filename.temp_file "Sample_sheet" ".csv" in
     Assemble_sample_sheet.run
+      ~configuration:hsc
       ~kind ~dbh flowcell
-      ~write_to_tmp:(fun s ->
-        Out_channel.(with_file tmp_file ~f:(fun o ->
-          printf "writing to %s\n" tmp_file;
+      ~write_to_file:(fun s f ->
+        Out_channel.(with_file f ~f:(fun o ->
+          printf "writing to %s\n" f;
           try (return (output_string o s))
           with e -> error (`io_exn e))))
-      ~mv_from_tmp:(fun volpath filepath ->
-        match (Configuration.volume_path_fun hsc) with
-        | None -> error `root_directory_not_configured
-        | Some volume_path ->
-          begin 
-            try 
-              ksprintf System.command_exn "mkdir -p %s/" (volume_path volpath);
-              ksprintf System.command_exn "mv %s %s/%s\n"
-                tmp_file (volume_path volpath) filepath;
-              return ()
-            with 
-              e -> error (`sys_error (`moving_sample_sheet e))
-          end)
+      ~run_command:System.command
     >>= function
     | `new_failure (_, e) ->
       printf "NEW FAILURE\n";

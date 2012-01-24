@@ -1,6 +1,10 @@
 
 module Make
+  (Configuration : Hitscore_interfaces.CONFIGURATION)
   (Result_IO : Hitscore_interfaces.RESULT_IO) 
+  (ACL : Hitscore_interfaces.ACL 
+         with module Result_IO = Result_IO
+         with module Configuration = Configuration)
   (Layout: module type of Hitscore_db_access.Make(Result_IO)) = struct
 
     open Hitscore_std
@@ -202,9 +206,6 @@ module Make
           return (`old_one (assembly, sample_sheet))
       )
 
-    let output samplesheet output_string =
-      output_string (Buffer.contents samplesheet.content)
-
     let get_target_file ~dbh sample_sheet =
       let files = Layout.File_system.Tree.([file "SampleSheet.csv"]) in
       Layout.File_system.add_volume ~dbh
@@ -240,16 +241,23 @@ module Make
       >>= fun assembly ->
       Layout.Function_assemble_sample_sheet.set_failed ~dbh assembly
 
-    let run ~dbh ~kind ?note ~write_to_tmp ~mv_from_tmp flowcell =
+    let run ~dbh ~kind ~configuration ?note ~write_to_file ~run_command flowcell =
       preparation ~kind ~dbh flowcell
       >>= function
         | `new_one sample_sheet ->
-          output sample_sheet write_to_tmp
-          >>= fun () ->
           get_target_file ~dbh sample_sheet
-          >>= fun (the_volume, pathd, pathf) ->
-          let movem = mv_from_tmp pathd pathf in
-          double_bind movem
+          >>= fun (the_volume, path_vol, path_file) ->
+          let commands_m =
+            match Configuration.volume_path configuration path_vol with
+            | Some vol_dir -> 
+              ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
+              write_to_file (sprintf "%s/%s" vol_dir path_file)
+                (Buffer.contents sample_sheet.content)
+              >>= fun () ->
+              ACL.set_defaults (`dir vol_dir) ~configuration ~run_command
+            | None -> error `root_directory_not_configured
+          in
+          double_bind commands_m
             ~ok:(fun () ->
               register_with_success ~dbh ?note ~file:the_volume sample_sheet
               >>= fun succeeded ->

@@ -193,37 +193,6 @@ let show_success dbh =
     end)
 
 
-let test_sample_sheet_preparation ~dbh kind ~fail flowcell =
-  let note =
-    sprintf "%s_%s_%s"
-      flowcell
-      (Hitscore_lwt.Layout.Enumeration_sample_sheet_kind.to_string kind)
-      (if fail then "fail" else "succeed")
-  in
-  let tmp_file = sprintf "/tmp/Sample_sheet_%s.csv" note in
-  print result "== Samplesheet: %s\n" note >>= fun () ->
-  Hitscore_lwt.Assemble_sample_sheet.run
-    ~kind ~dbh ~note:(sprintf "Sample-sheet assembly test: %s" note) flowcell
-    ~write_to_tmp:(fun s ->
-      Lwt_io.(wrap_io 
-                (with_file ~mode:output tmp_file)
-                (fun chan -> fprintf chan "%s" s)))
-    ~mv_from_tmp:(fun volpath filepath ->
-      print result "Should mv %s %s/%s" tmp_file volpath filepath
-      >>= fun () ->
-      if fail then error (`test (volpath, filepath)) else return ())
-  >>= function
-    | `new_failure (_, `test (volpath, filepath)) ->
-      print result "Got the expected error\n=> %s/%s was \
-            registered but will not `exist'\n" volpath filepath
-    | `new_failure (_, `lwt_log_exn e) ->
-      print result "Got AN UNEXPECTED ERROR => %s\n" (Exn.to_string e)
-    | `new_success _ ->
-      print result "Assemble_sample_sheet.run succeeded\n"
-    | `previous_success (f, r) ->
-      print result "Assemble_sample_sheet.run hit a previously ran \
-                    assembly\n"
-
 let test_lwt () =
   let hitscore_configuration = Hitscore_lwt.Configuration.configure () in
   Hitscore_lwt.db_connect hitscore_configuration >>= 
@@ -282,19 +251,6 @@ let test_lwt () =
           | (`layout_inconsistency (_, _)) | (`lwt_log_exn _) as lle ->
             error lle)
     ) >>= fun _ ->
-
-  let sample_sheet_tests = [
-    `specific_barcodes , false ,  "D0560ACXX" ; 
-    `all_barcodes      , false ,  "D0560ACXX" ; 
-    `specific_barcodes , false ,  "D03M4ACXX" ; 
-    `specific_barcodes , false ,  "C01L9ACXX" ; 
-    `specific_barcodes , true  ,  "D053CACXX" ;
-    `all_barcodes      , true  ,  "D053CACXX" ;
-  ] in
-  of_list_sequential sample_sheet_tests
-    (fun (kind, fail, flowcell) ->
-      test_sample_sheet_preparation ~dbh ~fail kind flowcell)
-  >>= fun _ ->
 
   print notif "Nice ending" >>= fun () ->
   notif "Closing the DB." >>= fun () ->
