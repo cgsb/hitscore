@@ -896,11 +896,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             ))
       in
       let bioanalyzer =
-        let dir = 
-          match bio_pdf, bio_xad with
-          | Some pdf, Some xad -> [pdf; xad]
-          | _ -> []
-        in
+        let dir = List.filter_opt [bio_pdf; bio_xad] in
         let files =
           match List.find !bio_directories (fun (l, i) -> l = dir) with
           | Some (_, i) -> i
