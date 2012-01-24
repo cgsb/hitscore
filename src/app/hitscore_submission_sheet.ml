@@ -695,7 +695,20 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         let middle_name = List.nth contents 3 |! Option.value ~default:None in
         let family_name = get 4 "Family-name" in
         let nickname = List.nth contents 5  |! Option.value ~default:None in
-        let login = List.nth contents 6  |! Option.value ~default:None in
+        let login =
+          Option.(
+            (List.nth contents 6 |! value ~default:None)
+            >>= fun l ->
+            if String.for_all l Char.is_alphanum
+            then Some l else (
+              error "Contact %S: the NetID should be alphanumeric: %S" email l;
+              None)) in
+        if String.for_all email (function
+        | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9'
+        | '.' | '-' | '_' | '+' | '@' -> true
+        | _ -> false) then () else (
+          error "Email address: %S does not pass-filter …" email;
+        );
         let id =
           run ~dbh
             ~fake:(fun x -> { Layout.Record_person.id = x })
