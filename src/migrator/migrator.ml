@@ -207,9 +207,55 @@ let v011_to_v02 file_in file_out =
 
   ()
 
+let v02_to_v03 file_in file_out =
+  let module V02 = V02.Make(Result_IO) in
+  let module V03 = V03.Make(Result_IO) in
+  let dump_v02 = In_channel.(with_file file_in ~f:input_all) in
+  let s02 = V02.dump_of_sexp Sexplib.Sexp.(of_string dump_v02) in
+
+  let d03 = {
+    V03.version = "0.3-dev";
+    file_system                    = s02.V02.file_system;
+    record_log                     = s02.V02.record_log;
+    record_person                  = s02.V02.record_person;
+    record_organism                = s02.V02.record_organism;
+    record_sample                  = s02.V02.record_sample;
+    record_protocol                = s02.V02.record_protocol;
+    record_custom_barcode          = s02.V02.record_custom_barcode;
+    record_stock_library           = s02.V02.record_stock_library;
+    record_key_value               = s02.V02.record_key_value;
+    record_input_library           = s02.V02.record_input_library;
+    record_lane                    = s02.V02.record_lane;
+    record_flowcell                = s02.V02.record_flowcell;
+    record_invoicing               = s02.V02.record_invoicing;
+    record_bioanalyzer             = s02.V02.record_bioanalyzer;
+    record_agarose_gel             = s02.V02.record_agarose_gel;
+    record_hiseq_raw               = s02.V02.record_hiseq_raw;
+    record_inaccessible_hiseq_raw  = s02.V02.record_inaccessible_hiseq_raw;
+    record_sample_sheet            = s02.V02.record_sample_sheet;
+    function_assemble_sample_sheet = s02.V02.function_assemble_sample_sheet;
+    record_bcl_to_fastq_unaligned  = s02.V02.record_bcl_to_fastq_unaligned;
+    function_bcl_to_fastq          = s02.V02.function_bcl_to_fastq;
+    function_transfer_hisqeq_raw   = s02.V02.function_transfer_hisqeq_raw;
+    function_delete_intensities    = s02.V02.function_delete_intensities;
+    record_hiseq_checksum          = s02.V02.record_hiseq_checksum;
+    function_dircmp_raw            = s02.V02.function_dircmp_raw;
+    record_client_fastqs_dir       = s02.V02.record_client_fastqs_dir;
+    function_prepare_delivery      = s02.V02.function_prepare_delivery;
+  } in
+
+  Out_channel.(with_file file_out ~f:(fun o ->
+    output_string o (Sexplib.Sexp.to_string_hum (V03.sexp_of_dump d03))));
+
+  ()
+
+
+
 let () =
   match Array.to_list Sys.argv with
   | exec :: "v011-v02" :: file_in :: file_out :: [] ->
     v011_to_v02 file_in file_out 
+  | exec :: "v02-v03" :: file_in :: file_out :: [] ->
+    v02_to_v03 file_in file_out 
   | _ ->
-    eprintf "usage: %s {v011-v02} <dump-in> <dump-out>\n" Sys.argv.(0)
+    eprintf "usage: %s {v011-v02,v02-v03} <dump-in> <dump-out>\n" Sys.argv.(0)
