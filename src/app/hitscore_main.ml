@@ -520,7 +520,7 @@ module Hiseq_raw = struct
           ~flowcell_name
           ~read_length_1 ?read_length_2:!read2 ?read_length_index:!idx_read
           ~with_intensities ~run_date ~host
-          ~hiseq_dir_name:directory
+          ~hiseq_dir_name:directory ~clusters_info:[| |]
       in
       begin match hs_raw with
       | Ok in_db ->
