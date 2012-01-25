@@ -431,37 +431,47 @@ module Hiseq_raw = struct
       let data d = D d in
       input_doc_tree ~el ~data i
   end
-  let register ?host config directory =
-    if not (Filename.is_absolute directory) then (
-      eprintf "%s is not an absolute path...\n" directory;
-      failwith "Hiseq_raw.register"
-    );
-    begin try 
-    let dir_stat = Unix.stat directory in
-    match dir_stat.Unix.st_kind with
-    | Unix.S_DIR -> ()
-    | _ ->
-      eprintf "%s is not a directory\n" directory;
-      failwith "Hiseq_raw.register"
-    with
-    | Unix.Unix_error _ ->
-      eprintf "Cannot stat %s\n" directory;
-      failwith "Hiseq_raw.register"
-    end;
-    let xml_file = Filename.concat directory "runParameters.xml" in
-    begin try Unix.stat xml_file |> ignore
-      with 
+
+  let fs_checks directory run_params sum1 =
+    begin 
+      try 
+        let dir_stat = Unix.stat directory in
+        match dir_stat.Unix.st_kind with
+        | Unix.S_DIR -> ()
+        | _ ->
+          eprintf "%s is not a directory\n" directory;
+          failwith "Hiseq_raw.register"
+      with
       | Unix.Unix_error _ ->
-        eprintf "Cannot stat %s\n" xml_file;
+        eprintf "Cannot stat %s\n" directory;
         failwith "Hiseq_raw.register"
     end;
+    begin
+      try
+        Unix.stat run_params |> ignore
+      with 
+      | Unix.Unix_error _ ->
+        eprintf "Cannot stat %s\n" run_params;
+        failwith "Hiseq_raw.register"
+    end;
+    begin
+      try
+        Unix.stat sum1 |> ignore
+      with 
+      | Unix.Unix_error _ ->
+        eprintf "Cannot stat %s\n" sum1;
+        failwith "Hiseq_raw.register"
+    end
+
+
+  let parse_run_parameters xml =
     let read1 = ref None in
     let read2 = ref None in
     let idx_read = ref None in
     let intensities_kept = ref None in
     let flowcell = ref None in
     let start_date = ref None in
-    In_channel.with_file xml_file ~f:(fun ic ->
+    In_channel.with_file xml ~f:(fun ic ->
       let xml = XML.(make_input (`Channel ic) |> in_tree) in
       let rec go_through = function
         | XML.E (((_,"Read1"), _), [ XML.D i ]) ->
@@ -512,22 +522,123 @@ module Hiseq_raw = struct
         eprintf "Could not find if the start date\n";
         failwith "Hiseq_raw.register"
       | Some s-> s in
-    let host = Option.value ~default:"bowery.es.its.nyu.edu" host in 
+    (flowcell_name, read_length_1, !read2, !idx_read,
+     with_intensities, run_date)
+
+  let parse_summary_report xml =
+
+    let result = ref [] in
+    let current_key = ref 0 in
+
+    In_channel.with_file xml ~f:(fun ic ->
+      let xml = XML.(make_input (`Channel ic) |> in_tree) in
+      let rec go_through = function
+        | XML.E (((_,"Summary"), attrs), more) -> 
+          List.iter ~f:go_through more
+        | XML.E (((_,"Lane"), attrs), more) ->
+          let c (x, y) = printf "%s: %s\n" x y in
+          let fos s = try Some (Float.of_string s) with e -> None in
+          let clusters_raw       = ref None in
+          let clusters_raw_sd    = ref None in
+          let clusters_pf        = ref None in
+          let clusters_pf_sd     = ref None in
+          let prc_pf_clusters    = ref None in
+          let prc_pf_clusters_sd = ref None in
+          List.iter attrs (fun ((_, k), v) ->
+            match k, v with
+            | "key", nb -> 
+              current_key := Int.of_string nb
+            | "ClustersRaw", nb     -> clusters_raw       := fos nb 
+            | "ClustersRawSD", nb   -> clusters_raw_sd    := fos nb 
+            | "ClustersPF", nb      -> clusters_pf        := fos nb 
+            | "ClustersPFSD", nb    -> clusters_pf_sd     := fos nb 
+            | "PrcPFClusters", nb   -> prc_pf_clusters    := fos nb 
+            | "PrcPFClustersSD", nb -> prc_pf_clusters_sd := fos nb 
+            | "TileCount", nb                     as x -> c x
+            | "Phasing", nb                       as x -> c x
+            | "Prephasing", nb                    as x -> c x
+            | "CalledCyclesMin", nb               as x -> c x
+            | "CalledCyclesMax", nb               as x -> c x
+            | "PrcAlign", nb                      as x -> c x
+            | "PrcAlignSD", nb                    as x -> c x
+            | "ErrRatePhiX", nb                   as x -> c x
+            | "ErrRatePhiXSD", nb                 as x -> c x
+            | "ErrRate35", nb                     as x -> c x
+            | "ErrRate35SD", nb                   as x -> c x
+            | "ErrRate75", nb                     as x -> c x
+            | "ErrRate75SD", nb                   as x -> c x
+            | "ErrRate100", nb                    as x -> c x
+            | "ErrRate100SD", nb                  as x -> c x
+            | "FirstCycleIntPF", nb               as x -> c x
+            | "FirstCycleIntPFSD", nb             as x -> c x
+            | "PrcIntensityAfter20CyclesPF", nb   as x -> c x
+            | "PrcIntensityAfter20CyclesPFSD", nb as x -> c x
+            | _ -> ());
+          let v = Option.value_exn_message in
+          result := (
+            v "clusters_info: Missing clusters_raw      " !clusters_raw       ,
+            v "clusters_info: Missing clusters_raw_sd   " !clusters_raw_sd    ,
+            v "clusters_info: Missing clusters_pf       " !clusters_pf        ,
+            v "clusters_info: Missing clusters_pf_sd    " !clusters_pf_sd     ,
+            v "clusters_info: Missing prc_pf_clusters   " !prc_pf_clusters    ,
+            v "clusters_info: Missing prc_pf_clusters_sd" !prc_pf_clusters_sd )
+          :: !result;
+          List.iter ~f:go_through more
+        | XML.E (_, more) ->
+          List.iter ~f:go_through more
+        | XML.D s -> ()
+      in
+      go_through (snd xml));
+    List.rev !result
+
+
+
+  let register ?host config directory =
+    if not (Filename.is_absolute directory) then (
+      eprintf "%s is not an absolute path...\n" directory;
+      failwith "Hiseq_raw.register"
+    );
+    let xml_run_params = Filename.concat directory "runParameters.xml" in
+    let xml_read1 = 
+      Filename.concat directory "Data/reports/Summary/read1.xml" in
+    fs_checks directory xml_run_params xml_read1;
+
+    let (flowcell_name, read_length_1, read_length_2, read_length_index,
+         with_intensities, run_date) = parse_run_parameters xml_run_params in
+
+    let cluster_info_per_lane = parse_summary_report xml_read1 in
+
+    let host = Option.value ~default:"bowery.es.its.nyu.edu" host in
     match Hitscore_threaded.db_connect config with
     | Ok dbh ->
       let hs_raw =
+        let open Hitscore_threaded.Result_IO in
+        of_list_sequential cluster_info_per_lane (fun (clusters_raw       ,
+                                                       clusters_raw_sd    ,
+                                                       clusters_pf        ,
+                                                       clusters_pf_sd     ,
+                                                       prc_pf_clusters    ,
+                                                       prc_pf_clusters_sd ) ->
+          Hitscore_threaded.Layout.Record_clusters_info.add_value ~dbh
+            ~clusters_raw      
+            ~clusters_raw_sd   
+            ~clusters_pf       
+            ~clusters_pf_sd    
+            ~prc_pf_clusters   
+            ~prc_pf_clusters_sd)
+        >>= fun clusters_info ->
         Hitscore_threaded.Layout.Record_hiseq_raw.add_value ~dbh
           ~flowcell_name
-          ~read_length_1 ?read_length_2:!read2 ?read_length_index:!idx_read
+          ~read_length_1 ?read_length_2 ?read_length_index
           ~with_intensities ~run_date ~host
-          ~hiseq_dir_name:directory ~clusters_info:[| |]
+          ~hiseq_dir_name:directory ~clusters_info:(Array.of_list clusters_info)
       in
       begin match hs_raw with
       | Ok in_db ->
         Hitscore_threaded.db_disconnect config dbh  |> ignore;
         eprintf "The HiSeq raw directory was successfully added as %ld\n"
         in_db.Hitscore_threaded.Layout.Record_hiseq_raw.id
-      | Error (`layout_inconsistency (`record_hiseq_raw,
+      | Error (`layout_inconsistency (_,
                                       `insert_did_not_return_one_id (s, i32l))) ->
         eprintf "ERROR: Layout Inconsistency Detected: \n\
                   insert in %s did not return one id but %d\n"
