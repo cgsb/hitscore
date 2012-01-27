@@ -67,11 +67,11 @@ module Make (IO_configuration : IO_CONFIGURATION) = struct
         ~ok:on_result
         ~error:(fun exn -> error (`pg_exn exn)) 
 
-    let wrap_io f x =        
+    let wrap_io ?(on_exn=fun e -> `io_exn e) f x =        
       let caught = catch_io f x in
       double_bind caught
         ~ok:return
-        ~error:(fun exn -> error (`io_exn exn)) 
+        ~error:(fun exn -> error (on_exn exn)) 
 
     let of_option o ~f =
       of_list_sequential (List.filter_opt [o]) ~f

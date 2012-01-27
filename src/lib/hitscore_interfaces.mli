@@ -98,9 +98,9 @@ module type RESULT_IO = sig
     ('b, 'c) monad
 
   (** Put any IO.t in a monad like [catch_io] but put the exception
-      in a polymorphic variant.  *)
-  val wrap_io: ('a -> 'b IO.t) -> 'a -> ('b, [> `io_exn of exn ]) monad
-
+      in a polymorphic variant (the default being [`io_exn e]).  *)
+  val wrap_io: ?on_exn:(exn -> ([> `io_exn of exn ] as 'c)) ->
+    ('a -> 'b IO.t) -> 'a -> ('b, 'c) monad
 
   (** [of_option] allows to put options {i inside} the monad. *)
   val of_option: 'a option -> f:('a -> ('c, 'b) monad) -> ('c option, 'b) monad 
