@@ -15,8 +15,8 @@ _build/hitscore_layout_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 _doc/hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot _doc/
 	dot -Tpdf $< -o$@
 
-_doc/hitscore_layout_digraph.png: _build/hitscore_layout_digraph.dot _doc/
-	dot -Tpng $< -o$@
+_doc/hitscore_layout_digraph.jpg: _build/hitscore_layout_digraph.dot _doc/
+	dot -Tjpg $< -o$@
 
 _build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 	$(GENERATOR) db_digraph $(LAYOUT_SOURCE) $@
@@ -24,13 +24,14 @@ _build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 _doc/hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot _doc/
 	dot -Tpdf $< -o$@
 
-_doc/hitscore_db_digraph.png: _build/hitscore_db_digraph.dot _doc/
-	dot -Tpng $< -o$@
+_doc/hitscore_db_digraph.jpg: _build/hitscore_db_digraph.dot _doc/
+	dot -Tjpg $< -o$@
 
 _doc/:
 	mkdir _doc
 
-dots: _doc/hitscore_layout_digraph.pdf _doc/hitscore_db_digraph.pdf
+dots: _doc/hitscore_layout_digraph.pdf _doc/hitscore_db_digraph.pdf \
+ _doc/hitscore_layout_digraph.jpg _doc/hitscore_db_digraph.jpg
 
 
 update_psql: $(GENERATOR)
@@ -54,7 +55,7 @@ uninstall:
 libdoc:
 	ocaml setup.ml -doc
 
-customdoc: _doc/hitscore_layout_digraph.png _doc/hitscore_db_digraph.png
+customdoc: dots
 
 doc: libdoc customdoc
 	mkdir -p _doc/lib
