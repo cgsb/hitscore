@@ -5,10 +5,14 @@ OCAMLFINDOPT='ocamlfind ocamlopt -syntax camlp4o -thread -package hitscore,sexpl
 make_module () {
 
     local name=_migrator/$1.ml
-    local tag=v$2
+    local tag=$2
     local version=$2
     local tmp=/tmp/mmm.ml
+
     git checkout $tag
+    if [ $? -ne 0 ] ; then
+        git checkout v$version
+    fi
 
     ocamlbuild src/codegen/hitscoregen.native
 
