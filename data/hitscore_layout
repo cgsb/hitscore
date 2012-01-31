@@ -5,6 +5,9 @@
 (subrecord of_project
            (project        string option))
 
+(enumeration role
+             visitor user auditor administrator) 
+
 ;; Almost static input data:
 (record person
        (print_name      string option)
@@ -14,8 +17,10 @@
        (email           string)
        (login           string option)
        (nickname        string option)
+       (roles           role array)
        notable
        )
+
 (search person by email)
 (search person by (and nickname family_name))
 (search person by (and given_name family_name))

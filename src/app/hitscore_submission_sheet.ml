@@ -715,7 +715,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             ~real:(fun dbh ->
               Layout.Record_person.add_value ~dbh
                 ~email ~given_name ?middle_name ~family_name
-                ?nickname ?login ?print_name ?note:None)
+                ?nickname ?login ?print_name ~roles:[| `user |] ?note:None)
             ~log:(sprintf "(add_person %s)" email)
         in
         (email, id |! Result.ok)
