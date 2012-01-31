@@ -164,6 +164,7 @@
           (availability inaccessible_hiseq_raw)
           (mismatch int)
           (version string)
+          (tiles string option)
           (sample_sheet sample_sheet))
 
 (function hiseq_raw transfer_hisqeq_raw
