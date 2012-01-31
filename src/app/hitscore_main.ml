@@ -472,8 +472,13 @@ module Hiseq_raw = struct
       Filename.concat directory "Data/reports/Summary/read1.xml" in
     fs_checks directory xml_run_params xml_read1;
 
-    let (flowcell_name, read_length_1, read_length_index, read_length_2,
-         with_intensities, run_date) = 
+    let { Hitscore_interfaces.Hiseq_raw_information.
+          flowcell_name     ; 
+          read_length_1     ; 
+          read_length_index ; 
+          read_length_2     ; 
+          with_intensities  ; 
+          run_date          ; } =
       let xml = 
         In_channel.with_file xml_run_params ~f:(fun ic ->
           XML.(make_input (`Channel ic) |> in_tree)) in
@@ -515,7 +520,11 @@ module Hiseq_raw = struct
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
-  let get_info dir = failwith "TODO"
+  let get_info directory = 
+(*    let xml_run_params = Filename.concat directory "runParameters.xml" in
+    let xml_read1 = 
+     Filename.concat directory "Data/reports/Summary/read1.xml" in *)
+    failwith "TODO"
 
 end
 

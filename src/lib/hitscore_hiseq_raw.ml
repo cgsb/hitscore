@@ -30,12 +30,13 @@ let run_parameters (xml : Hitscore_interfaces.XML.tree) =
   let gv m = function None -> raise (Local_wrong_field m) | Some s -> s in
   begin try
     go_through  xml;
-    Ok (gv "flowcell" !flowcell,
-        gv "read1" !read1,
-        !idx_read,
-        !read2,
-        gv "intensities_kept" !intensities_kept,
-        gv "start_date" !start_date)
+    Ok { Hitscore_interfaces.Hiseq_raw_information.
+         flowcell_name     = gv "flowcell" !flowcell;
+         read_length_1     = gv "read1" !read1;
+         read_length_index = !idx_read;
+         read_length_2     = !read2;
+         with_intensities  = gv "intensities_kept" !intensities_kept;
+         run_date          = gv "start_date" !start_date }
     with
     | Local_wrong_field m ->
       Error (`parse_run_parameters (`wrong_field m))
@@ -44,18 +45,16 @@ let run_parameters (xml : Hitscore_interfaces.XML.tree) =
   end
 
 
-type clusters_summary = (float * float * float * float * float * float) list
-
 let clusters_summary xml =
 
-  let result = ref [] in
+  let result = Array.create 8 None in
   let current_key = ref 0 in
   
   let rec go_through = function
     | `E (((_,"Summary"), attrs), more) -> 
       List.iter ~f:go_through more
     | `E (((_,"Lane"), attrs), more) ->
-      let c (x, y) = printf "%s: %s\n" x y in
+      let c (x, y) = Pervasives.ignore (x, y) in
       let fos s = try Some (Float.of_string s) with e -> None in
       let clusters_raw       = ref None in
       let clusters_raw_sd    = ref None in
@@ -94,14 +93,15 @@ let clusters_summary xml =
         | "PrcIntensityAfter20CyclesPFSD", nb as x -> c x
         | _ -> ());
       let v = Option.value_exn_message in
-      result := (
-        v "clusters_info: Missing clusters_raw      " !clusters_raw       ,
-        v "clusters_info: Missing clusters_raw_sd   " !clusters_raw_sd    ,
-        v "clusters_info: Missing clusters_pf       " !clusters_pf        ,
-        v "clusters_info: Missing clusters_pf_sd    " !clusters_pf_sd     ,
-        v "clusters_info: Missing prc_pf_clusters   " !prc_pf_clusters    ,
-        v "clusters_info: Missing prc_pf_clusters_sd" !prc_pf_clusters_sd )
-      :: !result;
+      result.(!current_key - 1) <- Some {
+        Hitscore_interfaces.Hiseq_raw_information.
+        clusters_raw       = v "Missing clusters_raw      " !clusters_raw      ;
+        clusters_raw_sd    = v "Missing clusters_raw_sd   " !clusters_raw_sd   ;
+        clusters_pf        = v "Missing clusters_pf       " !clusters_pf       ;
+        clusters_pf_sd     = v "Missing clusters_pf_sd    " !clusters_pf_sd    ;
+        prc_pf_clusters    = v "Missing prc_pf_clusters   " !prc_pf_clusters   ;
+        prc_pf_clusters_sd = v "Missing prc_pf_clusters_sd" !prc_pf_clusters_sd;
+      };
       List.iter ~f:go_through more
     | `E (_, more) ->
       List.iter ~f:go_through more
@@ -109,6 +109,6 @@ let clusters_summary xml =
   in
   try
     go_through xml;
-    Ok (List.rev !result)
+    Ok (result)
   with
   | Failure m -> Error (`parse_clusters_summary m)
