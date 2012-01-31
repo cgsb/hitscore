@@ -128,14 +128,6 @@
         bioanalyzer_like
         (files agarose_gel_directory option))
 
-(record clusters_info
-        (clusters_raw         real)
-        (clusters_raw_sd      real)
-        (clusters_pf          real)
-        (clusters_pf_sd       real)
-        (prc_pf_clusters      real)
-        (prc_pf_clusters_sd   real))
-
 (record hiseq_raw
         (flowcell_name string)
         (read_length_1 int)
@@ -143,7 +135,6 @@
         (read_length_2 int option)
         (with_intensities bool)
         (run_date timestamp)
-        (clusters_info clusters_info array)
         (host string)
         (hiseq_dir_name string))
 (search hiseq_raw by flowcell_name)

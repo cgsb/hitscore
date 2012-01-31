@@ -425,10 +425,9 @@ module Hiseq_raw = struct
 
   module XML = struct
     include Xmlm
-    type tree = E of tag * tree list | D of string
     let in_tree i = 
-      let el tag childs = E (tag, childs)  in
-      let data d = D d in
+      let el tag childs = `E (tag, childs)  in
+      let data d = `D d in
       input_doc_tree ~el ~data i
   end
 
@@ -463,136 +462,6 @@ module Hiseq_raw = struct
         failwith "Hiseq_raw.register"
     end
 
-
-  let parse_run_parameters xml =
-    let read1 = ref None in
-    let read2 = ref None in
-    let idx_read = ref None in
-    let intensities_kept = ref None in
-    let flowcell = ref None in
-    let start_date = ref None in
-    In_channel.with_file xml ~f:(fun ic ->
-      let xml = XML.(make_input (`Channel ic) |> in_tree) in
-      let rec go_through = function
-        | XML.E (((_,"Read1"), _), [ XML.D i ]) ->
-          read1 := Some (Int32.of_string i) 
-        | XML.E (((_,"Read2"), _), [ XML.D i ]) ->
-          read2 := Some (Int32.of_string i) 
-        | XML.E (((_,"KeepIntensityFiles"), _), [ XML.D b ]) ->
-          intensities_kept := Some (Bool.of_string b)
-        | XML.E (((_,"IndexRead"), _), [ XML.D i ]) ->
-          idx_read := Some (Int32.of_string i)
-        | XML.E (((_,"Barcode"), _), [ XML.D s ]) ->
-          flowcell := Some s
-        | XML.E (((_,"RunStartDate"), _), [ XML.D s ]) ->
-          let scanned =
-            Scanf.sscanf s "%2d%2d%2d"
-              (sprintf "20%d-%02d-%02d 09:00:00.000000-05:00") in
-          start_date := Some (Time.of_string scanned)
-        | XML.E (t, tl) -> List.iter tl go_through
-        | XML.D s -> ()
-      in
-      go_through (snd xml)
-    );
-    let flowcell_name = 
-      match !flowcell with
-      | None ->
-        eprintf "Could not read the flowcell id from the XML file\n";
-        failwith "Hiseq_raw.register"
-      | Some s -> s in
-    let read_length_1 =
-      match !read1 with
-      | None ->
-        eprintf "Could not read the read_length_1 from the XML file\n";
-        failwith "Hiseq_raw.register"
-      | Some s -> s in
-    if Option.is_none !read2 then
-      eprintf "Warning: This looks like a single-end run\n";
-    if Option.is_none !idx_read then
-      eprintf "Warning: This looks like a non-indexed run\n";
-    let with_intensities =
-      match !intensities_kept with
-      | None ->
-        eprintf "Could not find if the intensities were kept or not\n";
-        failwith "Hiseq_raw.register"
-      | Some s-> s in
-    let run_date =
-      match !start_date with
-      | None ->
-        eprintf "Could not find if the start date\n";
-        failwith "Hiseq_raw.register"
-      | Some s-> s in
-    (flowcell_name, read_length_1, !read2, !idx_read,
-     with_intensities, run_date)
-
-  let parse_summary_report xml =
-
-    let result = ref [] in
-    let current_key = ref 0 in
-
-    In_channel.with_file xml ~f:(fun ic ->
-      let xml = XML.(make_input (`Channel ic) |> in_tree) in
-      let rec go_through = function
-        | XML.E (((_,"Summary"), attrs), more) -> 
-          List.iter ~f:go_through more
-        | XML.E (((_,"Lane"), attrs), more) ->
-          let c (x, y) = printf "%s: %s\n" x y in
-          let fos s = try Some (Float.of_string s) with e -> None in
-          let clusters_raw       = ref None in
-          let clusters_raw_sd    = ref None in
-          let clusters_pf        = ref None in
-          let clusters_pf_sd     = ref None in
-          let prc_pf_clusters    = ref None in
-          let prc_pf_clusters_sd = ref None in
-          List.iter attrs (fun ((_, k), v) ->
-            match k, v with
-            | "key", nb -> 
-              current_key := Int.of_string nb
-            | "ClustersRaw", nb     -> clusters_raw       := fos nb 
-            | "ClustersRawSD", nb   -> clusters_raw_sd    := fos nb 
-            | "ClustersPF", nb      -> clusters_pf        := fos nb 
-            | "ClustersPFSD", nb    -> clusters_pf_sd     := fos nb 
-            | "PrcPFClusters", nb   -> prc_pf_clusters    := fos nb 
-            | "PrcPFClustersSD", nb -> prc_pf_clusters_sd := fos nb 
-            | "TileCount", nb                     as x -> c x
-            | "Phasing", nb                       as x -> c x
-            | "Prephasing", nb                    as x -> c x
-            | "CalledCyclesMin", nb               as x -> c x
-            | "CalledCyclesMax", nb               as x -> c x
-            | "PrcAlign", nb                      as x -> c x
-            | "PrcAlignSD", nb                    as x -> c x
-            | "ErrRatePhiX", nb                   as x -> c x
-            | "ErrRatePhiXSD", nb                 as x -> c x
-            | "ErrRate35", nb                     as x -> c x
-            | "ErrRate35SD", nb                   as x -> c x
-            | "ErrRate75", nb                     as x -> c x
-            | "ErrRate75SD", nb                   as x -> c x
-            | "ErrRate100", nb                    as x -> c x
-            | "ErrRate100SD", nb                  as x -> c x
-            | "FirstCycleIntPF", nb               as x -> c x
-            | "FirstCycleIntPFSD", nb             as x -> c x
-            | "PrcIntensityAfter20CyclesPF", nb   as x -> c x
-            | "PrcIntensityAfter20CyclesPFSD", nb as x -> c x
-            | _ -> ());
-          let v = Option.value_exn_message in
-          result := (
-            v "clusters_info: Missing clusters_raw      " !clusters_raw       ,
-            v "clusters_info: Missing clusters_raw_sd   " !clusters_raw_sd    ,
-            v "clusters_info: Missing clusters_pf       " !clusters_pf        ,
-            v "clusters_info: Missing clusters_pf_sd    " !clusters_pf_sd     ,
-            v "clusters_info: Missing prc_pf_clusters   " !prc_pf_clusters    ,
-            v "clusters_info: Missing prc_pf_clusters_sd" !prc_pf_clusters_sd )
-          :: !result;
-          List.iter ~f:go_through more
-        | XML.E (_, more) ->
-          List.iter ~f:go_through more
-        | XML.D s -> ()
-      in
-      go_through (snd xml));
-    List.rev !result
-
-
-
   let register ?host config directory =
     if not (Filename.is_absolute directory) then (
       eprintf "%s is not an absolute path...\n" directory;
@@ -604,34 +473,29 @@ module Hiseq_raw = struct
     fs_checks directory xml_run_params xml_read1;
 
     let (flowcell_name, read_length_1, read_length_2, read_length_index,
-         with_intensities, run_date) = parse_run_parameters xml_run_params in
-
-    let cluster_info_per_lane = parse_summary_report xml_read1 in
+         with_intensities, run_date) = 
+      let xml = 
+        In_channel.with_file xml_run_params ~f:(fun ic ->
+          XML.(make_input (`Channel ic) |> in_tree)) in
+      match Hitscore_threaded.Hiseq_raw.run_parameters (snd xml) with
+      | Ok t -> t
+      | Error (`parse_run_parameters (`wrong_date s)) ->
+        failwithf "Error while parsing date in runParameters.xml: %s" s ()
+      | Error (`parse_run_parameters (`wrong_field s)) ->
+        failwithf "Error while parsing %s in runParameters.xml" s ()
+    in
 
     let host = Option.value ~default:"bowery.es.its.nyu.edu" host in
     match Hitscore_threaded.db_connect config with
     | Ok dbh ->
       let hs_raw =
-        let open Hitscore_threaded.Result_IO in
-        of_list_sequential cluster_info_per_lane (fun (clusters_raw       ,
-                                                       clusters_raw_sd    ,
-                                                       clusters_pf        ,
-                                                       clusters_pf_sd     ,
-                                                       prc_pf_clusters    ,
-                                                       prc_pf_clusters_sd ) ->
-          Hitscore_threaded.Layout.Record_clusters_info.add_value ~dbh
-            ~clusters_raw      
-            ~clusters_raw_sd   
-            ~clusters_pf       
-            ~clusters_pf_sd    
-            ~prc_pf_clusters   
-            ~prc_pf_clusters_sd)
-        >>= fun clusters_info ->
         Hitscore_threaded.Layout.Record_hiseq_raw.add_value ~dbh
           ~flowcell_name
-          ~read_length_1 ?read_length_2 ?read_length_index
+          ~read_length_1:(Int32.of_int_exn read_length_1)
+          ?read_length_2:(Option.map read_length_2 Int32.of_int_exn)
+          ?read_length_index:(Option.map read_length_index Int32.of_int_exn)
           ~with_intensities ~run_date ~host
-          ~hiseq_dir_name:directory ~clusters_info:(Array.of_list clusters_info)
+          ~hiseq_dir_name:directory
       in
       begin match hs_raw with
       | Ok in_db ->
@@ -651,99 +515,7 @@ module Hiseq_raw = struct
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
-  let get_info directory = 
-    let summary_dir = directory ^ "Data/reports/Summary" in
-    let show_xml xml_file =
-      In_channel.with_file xml_file ~f:(fun ic ->
-        let xml = XML.(make_input (`Channel ic) |> in_tree) in
-        let rec go_through = function
-          | XML.E (((_,"Summary"), attrs), more) ->
-            printf "{section 2|Summary";
-            List.iter attrs (function
-            | (_, "Read"), nb -> 
-              printf " for read %s " nb
-            | (_, "densityRatio"), nb -> 
-              printf "(density ratio: %s)" nb
-            | _ -> ());
-            printf "}\n";
-            printf "File {t|%s}\n" xml_file;
-            printf "{begin table 26 r}\n";
-            printf "
-                {c h|Lane}\
-                {c h|Tiles}\
-                {c h|ClustersRaw}\
-                {c h|ClustersRawSD}
-                {c h|ClustersPF}\
-                {c h|ClustersPFSD}\
-                {c h|PrcPFClusters }\
-                {c h|PrcPFClustersSD}\
-                {c h|Phasing }\
-                {c h|Prephasing }\
-                {c h|CalledCyclesMin}\
-                {c h|CalledCyclesMax }\
-                {c h|PrcAlign }\
-                {c h|PrcAlignSD}\
-                {c h|ErrRatePhiX }\
-                {c h|ErrRatePhiXSD }\
-                {c h|ErrRate35}\
-                {c h|ErrRate35SD }\
-                {c h|ErrRate75 }\
-                {c h|ErrRate75SD}\
-                {c h|ErrRate100 }\
-                {c h|ErrRate100SD }\
-                {c h|FirstCycleIntPF}\
-                {c h|FirstCycleIntPFSD }\
-                {c h|PrcIntensityAfter20CyclesPF}\
-                {c h|PrcIntensityAfter20CyclesPFSD }\n";
-            List.iter ~f:go_through more;
-            printf "{end}\n"
-          | XML.E (((_,"Lane"), attrs), more) ->
-            printf "";
-            let c = printf "{c|%s}" in
-            List.iter attrs (fun ((_, k), v) ->
-              match k, v with
-              | "key", nb -> c nb
-              | "TileCount", nb -> c nb
-              | "ClustersRaw", nb -> c nb
-              | "ClustersRawSD", nb -> c nb
-              | "ClustersPF", nb -> c nb
-              | "ClustersPFSD", nb -> c nb
-              | "PrcPFClusters", nb -> c nb
-              | "PrcPFClustersSD", nb -> c nb
-              | "Phasing", nb -> c nb
-              | "Prephasing", nb -> c nb
-              | "CalledCyclesMin", nb -> c nb
-              | "CalledCyclesMax", nb -> c nb
-              | "PrcAlign", nb -> c nb
-              | "PrcAlignSD", nb -> c nb
-              | "ErrRatePhiX", nb -> c nb
-              | "ErrRatePhiXSD", nb -> c nb
-              | "ErrRate35", nb -> c nb
-              | "ErrRate35SD", nb -> c nb
-              | "ErrRate75", nb -> c nb
-              | "ErrRate75SD", nb -> c nb
-              | "ErrRate100", nb -> c nb
-              | "ErrRate100SD", nb -> c nb
-              | "FirstCycleIntPF", nb -> c nb
-              | "FirstCycleIntPFSD", nb -> c nb
-              | "PrcIntensityAfter20CyclesPF", nb -> c nb
-              | "PrcIntensityAfter20CyclesPFSD", nb -> c nb
-              | _ -> ());
-            printf "\n";
-            List.iter ~f:go_through more
-          | XML.E (_, more) ->
-            List.iter ~f:go_through more
-          | XML.D s -> ()
-        in
-        go_through (snd xml))
-    in
-    show_xml (summary_dir ^ "/read1.xml");
-    show_xml (summary_dir ^ "/read2.xml");
-    show_xml (summary_dir ^ "/read3.xml");
-
-
-
-
+  let get_info dir = failwith "TODO"
 
 end
 
