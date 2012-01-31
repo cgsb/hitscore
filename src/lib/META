@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: bbbc4014824a4c7fef7e6bb672b4bafc)
-version = "0.3-dev"
+# DO NOT EDIT (digest: 34b83a3e595fa9592985c70903ef965c)
+version = "0.4-dev"
 description = "CGSB Core Library"
 requires
  =

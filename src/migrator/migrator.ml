@@ -261,6 +261,48 @@ let v02_to_v03 file_in file_out =
 
   ()
 
+let v03_to_v04 file_in file_out =
+  let module V03M = V03.Make(Result_IO) in
+  let module V04M = V04.Make(Result_IO) in
+  let dump_v03 = In_channel.(with_file file_in ~f:input_all) in
+  let s03 = V03M.dump_of_sexp Sexplib.Sexp.(of_string dump_v03) in
+
+  let d04 = {
+    V04M.version = V04.Info.version;
+    file_system                    = s03.V03M.file_system;
+    record_log                     = s03.V03M.record_log;
+    record_person                  = s03.V03M.record_person;
+    record_organism                = s03.V03M.record_organism;
+    record_sample                  = s03.V03M.record_sample;
+    record_protocol                = s03.V03M.record_protocol;
+    record_custom_barcode          = s03.V03M.record_custom_barcode;
+    record_stock_library           = s03.V03M.record_stock_library;
+    record_key_value               = s03.V03M.record_key_value;
+    record_input_library           = s03.V03M.record_input_library;
+    record_lane                    = s03.V03M.record_lane;
+    record_flowcell                = s03.V03M.record_flowcell;
+    record_invoicing               = s03.V03M.record_invoicing;
+    record_bioanalyzer             = s03.V03M.record_bioanalyzer;
+    record_agarose_gel             = s03.V03M.record_agarose_gel;
+    record_hiseq_raw               = s03.V03M.record_hiseq_raw;
+    record_inaccessible_hiseq_raw  = s03.V03M.record_inaccessible_hiseq_raw;
+    record_sample_sheet            = s03.V03M.record_sample_sheet;
+    function_assemble_sample_sheet = s03.V03M.function_assemble_sample_sheet;
+    record_bcl_to_fastq_unaligned  = s03.V03M.record_bcl_to_fastq_unaligned;
+    function_bcl_to_fastq          = s03.V03M.function_bcl_to_fastq;
+    function_transfer_hisqeq_raw   = s03.V03M.function_transfer_hisqeq_raw;
+    function_delete_intensities    = s03.V03M.function_delete_intensities;
+    record_hiseq_checksum          = s03.V03M.record_hiseq_checksum;
+    function_dircmp_raw            = s03.V03M.function_dircmp_raw;
+    record_client_fastqs_dir       = s03.V03M.record_client_fastqs_dir;
+    function_prepare_delivery      = s03.V03M.function_prepare_delivery;
+  } in
+
+  Out_channel.(with_file file_out ~f:(fun o ->
+    output_string o (Sexplib.Sexp.to_string_hum (V04M.sexp_of_dump d04))));
+
+  ()
+
 
 
 let () =
@@ -269,5 +311,7 @@ let () =
     v011_to_v02 file_in file_out 
   | exec :: "v02-v03" :: file_in :: file_out :: [] ->
     v02_to_v03 file_in file_out 
+  | exec :: "v03-v04" :: file_in :: file_out :: [] ->
+    v03_to_v04 file_in file_out 
   | _ ->
-    eprintf "usage: %s {v011-v02,v02-v03} <dump-in> <dump-out>\n" Sys.argv.(0)
+    eprintf "usage: %s {v011-v02,v02-v03,v03-v04} <dump-in> <dump-out>\n" Sys.argv.(0)

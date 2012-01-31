@@ -1,9 +1,9 @@
 
 OASISFormat: 0.2
 Name:        hitscore
-Version:     0.3-dev
+Version:     0.4-dev
 Synopsis:    CGSB Core Library
-Authors:     Ashish Agarwal
+Authors:     Ashish Agarwal, Sebastien Mondet
 License:     PROP
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
