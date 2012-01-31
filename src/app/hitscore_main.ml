@@ -472,7 +472,7 @@ module Hiseq_raw = struct
       Filename.concat directory "Data/reports/Summary/read1.xml" in
     fs_checks directory xml_run_params xml_read1;
 
-    let (flowcell_name, read_length_1, read_length_2, read_length_index,
+    let (flowcell_name, read_length_1, read_length_index, read_length_2,
          with_intensities, run_date) = 
       let xml = 
         In_channel.with_file xml_run_params ~f:(fun ic ->

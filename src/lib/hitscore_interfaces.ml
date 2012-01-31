@@ -220,7 +220,7 @@ end
 module type HISEQ_RAW = sig
 
   (** Parse {e runParameters.xml}, to get [flowcell_name,
-      read_length_1, read_length_2, read_length_index, with_intensities,
+      read_length_1, read_length_index, read_length_2, with_intensities,
       run_date]
   *)
   val run_parameters: XML.tree -> 
