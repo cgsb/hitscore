@@ -213,6 +213,18 @@ let v02_to_v03 file_in file_out =
   let dump_v02 = In_channel.(with_file file_in ~f:input_all) in
   let s02 = V02M.dump_of_sexp Sexplib.Sexp.(of_string dump_v02) in
 
+  let function_bcl_to_fastq = 
+    List.map s02.V02M.function_bcl_to_fastq (fun cache ->
+      let (g_id, g_result, g_recomputable, g_recompute_penalty,
+           g_inserted, g_started, g_completed, g_status,
+           raw_data, availability, mismatch, version,
+           sample_sheet) = cache in
+      (g_id, g_result, g_recomputable, g_recompute_penalty,
+       g_inserted, g_started, g_completed, g_status,
+       raw_data, availability, mismatch, version,
+       None, sample_sheet))
+  in
+
   let d03 = {
     V03M.version = V03.Info.version;
     file_system                    = s02.V02M.file_system;
@@ -235,7 +247,7 @@ let v02_to_v03 file_in file_out =
     record_sample_sheet            = s02.V02M.record_sample_sheet;
     function_assemble_sample_sheet = s02.V02M.function_assemble_sample_sheet;
     record_bcl_to_fastq_unaligned  = s02.V02M.record_bcl_to_fastq_unaligned;
-    function_bcl_to_fastq          = s02.V02M.function_bcl_to_fastq;
+    function_bcl_to_fastq;
     function_transfer_hisqeq_raw   = s02.V02M.function_transfer_hisqeq_raw;
     function_delete_intensities    = s02.V02M.function_delete_intensities;
     record_hiseq_checksum          = s02.V02M.record_hiseq_checksum;
