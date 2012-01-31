@@ -267,11 +267,29 @@ let v03_to_v04 file_in file_out =
   let dump_v03 = In_channel.(with_file file_in ~f:input_all) in
   let s03 = V03M.dump_of_sexp Sexplib.Sexp.(of_string dump_v03) in
 
+
+  let record_person = 
+    List.map s03.V03M.record_person (fun cache ->
+      let (id, created, lastmodif, print_name, given_name,
+           middle_name, family_name, email, login, nickname, note) =
+        cache in
+      let roles =
+        match login with
+        | Some "aa144" | Some "sm4431" ->  "(administrator)"
+        | Some "ps103" | Some "carltj01" -> "(auditor user)"
+        | Some "jsd6" -> "(auditor)" 
+        | _ -> "(user)"
+      in
+      (id, created, lastmodif, print_name, given_name,
+       middle_name, family_name, email, login, nickname, roles, note)
+    )
+  in
+
   let d04 = {
     V04M.version = V04.Info.version;
     file_system                    = s03.V03M.file_system;
     record_log                     = s03.V03M.record_log;
-    record_person                  = s03.V03M.record_person;
+    record_person;
     record_organism                = s03.V03M.record_organism;
     record_sample                  = s03.V03M.record_sample;
     record_protocol                = s03.V03M.record_protocol;
