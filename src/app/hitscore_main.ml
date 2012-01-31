@@ -521,10 +521,67 @@ module Hiseq_raw = struct
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
   let get_info directory = 
-(*    let xml_run_params = Filename.concat directory "runParameters.xml" in
+    let xml_run_params = Filename.concat directory "runParameters.xml" in
     let xml_read1 = 
-     Filename.concat directory "Data/reports/Summary/read1.xml" in *)
-    failwith "TODO"
+      Filename.concat directory "Data/reports/Summary/read1.xml" in
+    let { Hitscore_interfaces.Hiseq_raw_information.
+          flowcell_name     ; 
+          read_length_1     ; 
+          read_length_index ; 
+          read_length_2     ; 
+          with_intensities  ; 
+          run_date          ; } =
+      let xml = 
+        In_channel.with_file xml_run_params ~f:(fun ic ->
+          XML.(make_input (`Channel ic) |> in_tree)) in
+      match Hitscore_threaded.Hiseq_raw.run_parameters (snd xml) with
+      | Ok t -> t
+      | Error (`parse_run_parameters (`wrong_date s)) ->
+        failwithf "Error while parsing date in runParameters.xml: %s" s ()
+      | Error (`parse_run_parameters (`wrong_field s)) ->
+        failwithf "Error while parsing %s in runParameters.xml" s ()
+    in
+    let clustering =
+      let xml = 
+        In_channel.with_file xml_read1 ~f:(fun ic ->
+          XML.(make_input (`Channel ic) |> in_tree)) in
+      match Hitscore_threaded.Hiseq_raw.clusters_summary (snd xml) with
+      | Ok t -> t
+      | Error (`parse_clusters_summary s) ->
+        failwithf "Error while parsing read1.xml: %s" s ()
+    in
+    printf "FCID: %s (%d%s%s from the %s run, %s intensities)\n"
+      flowcell_name
+      read_length_1
+      (Option.value_map ~default:"" ~f:(sprintf "x%d") read_length_index)
+      (Option.value_map ~default:"" ~f:(sprintf "x%d") read_length_2)  
+      (run_date |! Time.to_local_date |! Date.to_string)
+      (if with_intensities then "with" else "without");
+    let head = printf " |% 19s" in
+    printf "Lane";
+    head "clusters_raw";      
+    head "clusters_raw_sd";   
+    head "clusters_pf";
+    head "clusters_pf_sd";
+    head "prc_pf_clusters";
+    head "prc_pf_clusters_sd";
+    printf "\n";
+    Array.iteri clustering ~f:(fun i a ->
+      let open Hitscore_interfaces.Hiseq_raw_information in
+      printf "  %d " (i + 1);
+      match a with
+      | None -> printf "-- NOT AVAILABLE --"
+      | Some c ->
+        let cell = printf " |% 19.2f" in
+        cell c.clusters_raw;      
+        cell c.clusters_raw_sd;   
+        cell c.clusters_pf;
+        cell c.clusters_pf_sd;
+        cell c.prc_pf_clusters;
+        cell c.prc_pf_clusters_sd;
+        printf "\n"
+    );
+    ()
 
 end
 
@@ -1619,10 +1676,10 @@ let () =
     | _ -> None);
 
   define_command 
-    ~names:["get-hiseq-raw-info"; "gri"]
+    ~names:["get-hiseq-raw-info"; "ghri"]
     ~description:"Get information from an HiSeq Raw directory"
     ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s\n" exec cmd)
+      fprintf o "Usage: %s <profile> %s <hiseq-dir>\n" exec cmd)
     ~run:(fun config exec cmd -> function
     | [dir] -> Some (Hiseq_raw.get_info dir)
     | _ -> None);
