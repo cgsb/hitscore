@@ -158,15 +158,7 @@ let parse_sexp sexp =
   let rec parse_2nd_type fst = function
     | [] -> fst
     | Sx.Atom "option" :: l -> parse_2nd_type (Option fst) l
-    | Sx.Atom "array" :: l ->
-      begin match fst with 
-      | Real | Int | Record_name _ ->
-        parse_2nd_type (Array fst) l
-      | _ ->
-        sprintf "PGOCaml will only accept arrays of ints or records, \
-                 so I stop there (%s array)." (string_of_dsl_type fst)
-            |> fail
-      end
+    | Sx.Atom "array" :: l -> parse_2nd_type (Array fst) l
     | sx -> fail  (sprintf "I'm lost parsing types with: %s\n"
                      (Sx.to_string (Sx.List sx)))
   in
@@ -301,6 +293,7 @@ let dsl_type_to_db t =
       props := List.filter !props ~f:((<>) Psql.Not_null);
       convert t2
     | Array Real -> Psql.Text
+    | Array (Enumeration_name n) -> Psql.Text
     | Array t2 ->
       props := Psql.Array :: !props;
       convert t2
@@ -458,8 +451,6 @@ let let_in_typed_value  = function
     sprintf "  let %s = Enumeration_%s.to_string %s in\n" n e n
   | (n, Option (Enumeration_name e)) -> 
     sprintf "  let %s = option_map %s Enumeration_%s.to_string in\n" n n e
-  | (n, Array (Enumeration_name e)) -> 
-    sprintf "  let %s = array_map Enumeration_%s.to_string %s in\n" n n e
   | (n, Record_name r) ->
     sprintf "  let %s = %s.Record_%s.id in\n" n n r
   | (n, Option (Record_name r)) ->
@@ -481,6 +472,9 @@ let let_in_typed_value  = function
   | (n, Array Real) ->
     sprintf "let %s = Sexplib.Sexp.to_string \
             (Core.Std.Array.sexp_of_t Core.Std.Float.sexp_of_t %s) in" n n
+  | (n, Array (Enumeration_name e)) -> 
+    sprintf "let %s = Sexplib.Sexp.to_string \
+            (Core.Std.Array.sexp_of_t Enumeration_%s.sexp_of_t %s) in" n e n
   | _ -> ""
 
 let convert_pgocaml_type = function
@@ -488,8 +482,6 @@ let convert_pgocaml_type = function
     sprintf "(Enumeration_%s.of_string_exn %s)" e n
   | (n, Option (Enumeration_name e)) -> 
     sprintf "(option_map %s Enumeration_%s.of_string_exn)" n e
-  | (n, Array (Enumeration_name e)) -> 
-    sprintf "(array_map %s Enumeration_%s.of_string_exn)" n e
   | (n, Record_name r) ->
     sprintf "{ Record_%s.id = %s }" r n
   | (n, Option (Record_name r)) ->
@@ -510,6 +502,9 @@ let convert_pgocaml_type = function
     sprintf "(array_map %s Timestamp.of_string)" n
   | (n, Array Real) ->
     sprintf "Core.Std.(Array.t_of_sexp Float.t_of_sexp (Sexplib.Sexp.of_string %s))" n
+  | (n, Array (Enumeration_name e)) -> 
+    sprintf "Core.Std.(Array.t_of_sexp Enumeration_%s.t_of_sexp \
+              (Sexplib.Sexp.of_string %s))" e n
   | (n, _) -> n
 
 
@@ -698,7 +693,7 @@ let ocaml_enumeration_module ~out name fields =
   raw out "module Enumeration_%s = struct\n" name;
   
   doc out "The type of {i %s} items." name;
-  raw out "type t = [%s]\n\n"
+  raw out "type t = [%s] with sexp\n\n"
     (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
   raw out "let to_string : t -> string = function\n| %s\n" 
     (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |>
