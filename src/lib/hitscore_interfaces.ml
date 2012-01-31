@@ -206,3 +206,31 @@ module type ACL = sig
 
 
 end
+
+
+(** XML Dom-like representation highly-compatible with XMLM. *)
+module  XML = struct
+  type name = string * string 
+  type attribute = name * string
+  type tag = name * attribute list 
+  type tree = [ `E of tag * tree list | `D of string ]
+end
+
+(** Extract information from Hiseq-raw directories.  *)
+module type HISEQ_RAW = sig
+
+  (** Parse {e runParameters.xml}, to get [flowcell_name,
+      read_length_1, read_length_2, read_length_index, with_intensities,
+      run_date]
+  *)
+  val run_parameters: XML.tree -> 
+    (string * int * int option * int option * bool * Time.t,
+     [> `parse_run_parameters of
+         [> `wrong_date of string | `wrong_field of string ] ]) Result.t
+
+  type clusters_summary = (float * float * float * float * float * float) list
+
+  val clusters_summary: XML.tree ->
+    (clusters_summary, [> `parse_clusters_summary of string ]) Result.t
+
+end

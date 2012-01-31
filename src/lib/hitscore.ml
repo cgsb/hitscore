@@ -29,6 +29,7 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
   module Bcl_to_fastq =
     Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (ACL) (Layout)
 
+  module Hiseq_raw = Hitscore_hiseq_raw
     
   let db_connect t =
     let open Configuration in
