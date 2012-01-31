@@ -1188,7 +1188,10 @@ module Run_bcl_to_fastq = struct
     let hitscore_command =
       ref (sprintf "%s %s %s" 
               Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
+    let tiles = ref None in
     let options = [
+      ( "-tiles", Arg.String (fun s -> tiles := Some s),
+        "<regexp list>\n\tSet the --tiles option of CASAVA (copied verbatim).");
       ( "-user", 
         Arg.String (fun s -> user := Some s),
         sprintf "<login>\n\tSet the user-name (%s)."
@@ -1241,7 +1244,7 @@ module Run_bcl_to_fastq = struct
           `go (List.rev !anon_args, !sys_dry_run, !sample_sheet_kind,
                !user, !queue, !nodes, !ppn,
                !wall_hours, !version, !mismatch,
-               !hitscore_command, !make_command)
+               !hitscore_command, !make_command, !tiles)
       with
       | Arg.Bad b -> `bad b
       | Arg.Help h -> `help h
@@ -1252,7 +1255,7 @@ module Run_bcl_to_fastq = struct
     begin match (start_parse_cmdline prefix cl_args) with
     | `go (args, sys_dry_run, kind, user, queue, nodes, ppn,
            wall_hours, version, mismatch, 
-           hitscore_command, make_command) ->
+           hitscore_command, make_command, tiles) ->
       db_connect hsc
       >>= fun dbh ->
       begin match args with
@@ -1285,7 +1288,7 @@ module Run_bcl_to_fastq = struct
               (Time.to_string ts);
             return h)
         >>= fun availability ->
-        Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc
+        Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
           ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
           ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
           (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
