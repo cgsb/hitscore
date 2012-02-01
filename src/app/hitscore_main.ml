@@ -588,7 +588,7 @@ end
 module Verify = struct
 
 
-  let check_file_system ?(verbose=true) hsc =
+  let check_file_system ?(try_fix=false) ?(verbose=true) hsc =
     let volume_path =
       Hitscore_threaded.Configuration.volume_path_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in
@@ -614,16 +614,27 @@ module Verify = struct
                 log "* Checking volume %S\n" path;
               Unix.(try
                       let vol_stat = stat path in
-                      if vol_stat.st_kind <> S_DIR then
-                        error `volume "%S: Not a directory" path
-                      else
+                      if vol_stat.st_kind <> S_DIR then (
+                        error `volume "%S: Not a directory" path;
+                      ) else
                         if verbose then
                           log "-> OK\n"
                         else
                           ()
                 with
                 | Unix_error (e, _, s) ->
-                  error `volume "%S: %S (%S)" path (error_message e) s);
+                  error `volume "%S: %S (%S)" path (error_message e) s;
+                  if try_fix then
+                    begin match ksprintf System.command "mkdir -p %s" path with
+                    | Ok () ->
+                      begin match Hitscore_threaded.ACL.set_defaults 
+                          ~configuration:hsc ~run_command:System.command
+                          (`dir path) with
+                      | Ok () -> log "Fixed %S\n" path;
+                      | Error _ -> error `fix "%S: Cannot set ACLs" path
+                      end
+                    | Error _ -> error `fix "%S: Cannot mkdir" path
+                    end);
               begin match Hitscore_db.File_system.volume_trees volume with
               | Error (`cannot_recognize_file_type s) ->
                 error `get_files "%S: cannot_recognize_file_type %S" path s
@@ -651,6 +662,7 @@ module Verify = struct
   let print_fs_check =
     List.iter  ~f:(function
     | `info s -> printf "%s" s
+    | `error (`fix, s) -> printf "ERROR(fixing/mkdir): %s" s
     | `error (`volume, s) -> printf "ERROR(volume): %s\n" s
     | `error (`get_files, s) -> printf "ERROR(get-files): %s\n" s
     | `error (`file, s) -> printf "ERROR(file): %s\n" s)
@@ -1542,6 +1554,8 @@ let () =
       | [] -> Some Verify.(check_file_system config |! print_fs_check)
       | [ "-quiet" ] -> Some Verify.(
         check_file_system ~verbose:false config |! print_fs_check)
+      | [ "-try-fix" ] -> Some Verify.(
+        check_file_system ~try_fix:true config |! print_fs_check)
       | _ -> None);
 
   define_command
