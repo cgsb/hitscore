@@ -5,7 +5,8 @@ OCAMLFINDOPT='ocamlfind ocamlopt -syntax camlp4o -thread -package hitscore,sexpl
 make_module () {
 
     local name=_migrator/$1.ml
-    local tag=$2
+    local tag=v$2
+    local version=$2
     local tmp=/tmp/mmm.ml
     git checkout $tag
 
@@ -13,6 +14,7 @@ make_module () {
 
     _build/src/codegen/hitscoregen codegen data/hitscore_layout $tmp
     echo 'let ($) f x = f x' > $name
+    echo "module Info = struct let version = \"$version\" end" >> $name
     cat $tmp >> $name
 
     sed -i 's/PGSQL *(dbh)/failwith $/g' $name
@@ -26,8 +28,10 @@ if [ "$1" = "update" ]; then
     mkdir -p _migrator
     current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
                       -e 's/* \(.*\)/\1/'`
-    make_module v02 v0.2
-    make_module v011 v0.1.1
+
+    make_module v03  0.3
+    make_module v02  0.2
+    make_module v011 0.1.1
     git checkout $current_branch
     cd _migrator
     ln -sf ../src/migrator/migrator.ml
@@ -43,6 +47,6 @@ fi
 
 
 cd _migrator
-$OCAMLFINDOPT -linkpkg v02.cmx v011.cmx migrator.ml -o migrator
+$OCAMLFINDOPT -linkpkg v03.cmx v02.cmx v011.cmx migrator.ml -o migrator
 cd ..
 

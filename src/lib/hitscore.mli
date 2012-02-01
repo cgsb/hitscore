@@ -34,6 +34,8 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   module Bcl_to_fastq: 
   module type of Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (ACL) (Layout)
 
+  module Hiseq_raw: Hitscore_interfaces.HISEQ_RAW
+
   (** Attempt to connect to the database. *)
   val db_connect : Configuration.local_configuration -> 
     (Layout.db_handle, [> `pg_exn of exn]) Result_IO.monad

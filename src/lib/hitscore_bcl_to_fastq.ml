@@ -43,6 +43,7 @@ module Make
         ~(sample_sheet: Layout.Record_sample_sheet.t)
         ~(hiseq_dir: Layout.Record_hiseq_raw.t)
         ~(availability: Layout.Record_inaccessible_hiseq_raw.t)
+        ?tiles
         ?(mismatch=`one)
         ?(version=`casava_182)
         ?(user="sm4431")
@@ -159,18 +160,19 @@ module Make
       let create ~dbh =
         Layout.Function_bcl_to_fastq.(
           add_evaluation ~dbh
-            ~raw_data:hiseq_dir
+            ~raw_data:hiseq_dir ?tiles
             ~availability ~mismatch:mismatch32 ~version:casava_version
             ~sample_sheet ~recomputable:true ~recompute_penalty:100.
           >>= fun b2f ->
           let log =
             sprintf "(create_bcl_to_fastq %ld (raw_data %ld) \
                         (availability %ld) (mismatch %ld) (version %s) \
-                        (sample_sheet %ld))"
+                        %s (sample_sheet %ld))"
               b2f.id
               hiseq_dir.Layout.Record_hiseq_raw.id
               availability.Layout.Record_inaccessible_hiseq_raw.id
               mismatch32 casava_version
+              (Option.value_map ~default:"()" ~f:(sprintf "(tiles %S)") tiles)
               sample_sheet.Layout.Record_sample_sheet.id in
           Layout.Record_log.add_value ~dbh ~log
           >>= fun _ -> return b2f
@@ -189,11 +191,13 @@ module Make
       ACL.set_defaults (`dir work_root) ~configuration ~run_command >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
-                    --input-dir %s \
+                    %s --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
                     --mismatches %ld"
-        casava_version basecalls unaligned sample_sheet_path mismatch32
+        casava_version 
+        (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
+        basecalls unaligned sample_sheet_path mismatch32
       >>= fun () ->
       create ~dbh
       >>= fun created ->

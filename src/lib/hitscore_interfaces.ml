@@ -206,3 +206,54 @@ module type ACL = sig
 
 
 end
+
+
+(** XML Dom-like representation highly-compatible with XMLM. *)
+module  XML = struct
+  type name = string * string 
+  type attribute = name * string
+  type tag = name * attribute list 
+  type tree = [ `E of tag * tree list | `D of string ]
+end
+
+
+module Hiseq_raw_information = struct
+
+  (** Parameters of the Hiseq machine found in {e runParameters.xml}.  *)
+  type run_parameters = {
+    flowcell_name     : string;
+    read_length_1     : int;
+    read_length_index : int option;
+    read_length_2     : int option;
+    with_intensities  : bool;
+    run_date          : Time.t; }
+      
+  (** The information returned by the
+      [Hiseq_raw.clusters_summary] function.  *)
+  type clusters_info = {
+    clusters_raw        : float;
+    clusters_raw_sd     : float;
+    clusters_pf         : float;
+    clusters_pf_sd      : float;
+    prc_pf_clusters     : float;
+    prc_pf_clusters_sd  : float;
+  }
+
+
+end
+
+(** Extract information from Hiseq-raw directories.  *)
+module type HISEQ_RAW = sig
+
+  (** Parse {e runParameters.xml}. *)
+  val run_parameters: XML.tree -> 
+    (Hiseq_raw_information.run_parameters,
+     [> `parse_run_parameters of
+         [> `wrong_date of string | `wrong_field of string ] ]) Result.t
+
+  (** Parse the [XML.tree] to get cluster densities for each lane (0 to 7).  *)
+  val clusters_summary: XML.tree ->
+    (Hiseq_raw_information.clusters_info option array,
+     [> `parse_clusters_summary of string ]) Result.t
+
+end

@@ -228,7 +228,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
          let row = sanitized.(section + i + 2) in
          if_verbose "Row: %s\n" (strlist row);
          match row with
-         | [] -> None
+         | [] | "" :: [] -> None
          | p :: _ when String.is_prefix p ~prefix:"Pool" -> None
          | piemail :: percent :: chartstuff when 
              List.length (String.split ~on:'@' piemail) = 2 ->

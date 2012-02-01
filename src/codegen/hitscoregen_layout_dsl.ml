@@ -911,7 +911,12 @@ let ocaml_function_module ~out name args result =
 
   (* Function to insert a new function evaluation: *)
   raw out "let add_evaluation\n";
-  List.iter args (fun (n, t) -> raw out "    ~%s\n" n);
+  List.iter args (fun (n, t) ->
+    let kind_of_arg = 
+      match type_is_option t with `yes -> "?" | `no -> "~" in
+    line out "    %s(%s:%s)" kind_of_arg n (ocaml_type t);
+  );
+  (* List.iter args (fun (n, t) -> raw out "    ~%s\n" n); *)
   raw out "    ?(recomputable=false)\n";
   raw out "    ?(recompute_penalty=0.)\n";
   line out "    %s :" pgocaml_db_handle_arg;
@@ -929,8 +934,10 @@ let ocaml_function_module ~out name args result =
       "g_recomputable" :: "g_recompute_penalty" :: "g_inserted" :: "g_status" :: 
         (List.map args fst) in
     let values =
+      let prefix (n, t) =
+        (match type_is_option t with `yes -> "$?" | `no -> "$") ^ n in
       "$recomputable" :: "$recompute_penalty" :: "$now" :: "'Inserted'" ::
-        (List.map args (fun (n, t) -> "$" ^ n)) in
+        (List.map args prefix) in
     pgocaml_add_to_database_exn name intos values ~out ~on_not_one_id
   );
 

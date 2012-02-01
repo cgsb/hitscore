@@ -40,6 +40,7 @@ sig
     sample_sheet:Layout.Record_sample_sheet.t ->
     hiseq_dir:Layout.Record_hiseq_raw.t ->
     availability:Layout.Record_inaccessible_hiseq_raw.t ->
+    ?tiles:string ->
     ?mismatch:[ `one | `two | `zero ] ->
     ?version:[ `casava_181 | `casava_182 ] ->
     ?user:string -> ?wall_hours:int -> ?nodes:int -> ?ppn:int -> ?queue:string ->

@@ -425,100 +425,80 @@ module Hiseq_raw = struct
 
   module XML = struct
     include Xmlm
-    type tree = E of tag * tree list | D of string
     let in_tree i = 
-      let el tag childs = E (tag, childs)  in
-      let data d = D d in
+      let el tag childs = `E (tag, childs)  in
+      let data d = `D d in
       input_doc_tree ~el ~data i
   end
+
+  let fs_checks directory run_params sum1 =
+    begin 
+      try 
+        let dir_stat = Unix.stat directory in
+        match dir_stat.Unix.st_kind with
+        | Unix.S_DIR -> ()
+        | _ ->
+          eprintf "%s is not a directory\n" directory;
+          failwith "Hiseq_raw.register"
+      with
+      | Unix.Unix_error _ ->
+        eprintf "Cannot stat %s\n" directory;
+        failwith "Hiseq_raw.register"
+    end;
+    begin
+      try
+        Unix.stat run_params |> ignore
+      with 
+      | Unix.Unix_error _ ->
+        eprintf "Cannot stat %s\n" run_params;
+        failwith "Hiseq_raw.register"
+    end;
+    begin
+      try
+        Unix.stat sum1 |> ignore
+      with 
+      | Unix.Unix_error _ ->
+        eprintf "Cannot stat %s\n" sum1;
+        failwith "Hiseq_raw.register"
+    end
+
   let register ?host config directory =
     if not (Filename.is_absolute directory) then (
       eprintf "%s is not an absolute path...\n" directory;
       failwith "Hiseq_raw.register"
     );
-    begin try 
-    let dir_stat = Unix.stat directory in
-    match dir_stat.Unix.st_kind with
-    | Unix.S_DIR -> ()
-    | _ ->
-      eprintf "%s is not a directory\n" directory;
-      failwith "Hiseq_raw.register"
-    with
-    | Unix.Unix_error _ ->
-      eprintf "Cannot stat %s\n" directory;
-      failwith "Hiseq_raw.register"
-    end;
-    let xml_file = Filename.concat directory "runParameters.xml" in
-    begin try Unix.stat xml_file |> ignore
-      with 
-      | Unix.Unix_error _ ->
-        eprintf "Cannot stat %s\n" xml_file;
-        failwith "Hiseq_raw.register"
-    end;
-    let read1 = ref None in
-    let read2 = ref None in
-    let idx_read = ref None in
-    let intensities_kept = ref None in
-    let flowcell = ref None in
-    let start_date = ref None in
-    In_channel.with_file xml_file ~f:(fun ic ->
-      let xml = XML.(make_input (`Channel ic) |> in_tree) in
-      let rec go_through = function
-        | XML.E (((_,"Read1"), _), [ XML.D i ]) ->
-          read1 := Some (Int32.of_string i) 
-        | XML.E (((_,"Read2"), _), [ XML.D i ]) ->
-          read2 := Some (Int32.of_string i) 
-        | XML.E (((_,"KeepIntensityFiles"), _), [ XML.D b ]) ->
-          intensities_kept := Some (Bool.of_string b)
-        | XML.E (((_,"IndexRead"), _), [ XML.D i ]) ->
-          idx_read := Some (Int32.of_string i)
-        | XML.E (((_,"Barcode"), _), [ XML.D s ]) ->
-          flowcell := Some s
-        | XML.E (((_,"RunStartDate"), _), [ XML.D s ]) ->
-          let scanned =
-            Scanf.sscanf s "%2d%2d%2d"
-              (sprintf "20%d-%02d-%02d 09:00:00.000000-05:00") in
-          start_date := Some (Time.of_string scanned)
-        | XML.E (t, tl) -> List.iter tl go_through
-        | XML.D s -> ()
-      in
-      go_through (snd xml)
-    );
-    let flowcell_name = 
-      match !flowcell with
-      | None ->
-        eprintf "Could not read the flowcell id from the XML file\n";
-        failwith "Hiseq_raw.register"
-      | Some s -> s in
-    let read_length_1 =
-      match !read1 with
-      | None ->
-        eprintf "Could not read the read_length_1 from the XML file\n";
-        failwith "Hiseq_raw.register"
-      | Some s -> s in
-    if Option.is_none !read2 then
-      eprintf "Warning: This looks like a single-end run\n";
-    if Option.is_none !idx_read then
-      eprintf "Warning: This looks like a non-indexed run\n";
-    let with_intensities =
-      match !intensities_kept with
-      | None ->
-        eprintf "Could not find if the intensities were kept or not\n";
-        failwith "Hiseq_raw.register"
-      | Some s-> s in
-    let run_date =
-      match !start_date with
-      | None ->
-        eprintf "Could not find if the start date\n";
-        failwith "Hiseq_raw.register"
-      | Some s-> s in
-    let host = Option.value ~default:"bowery.es.its.nyu.edu" host in 
+    let xml_run_params = Filename.concat directory "runParameters.xml" in
+    let xml_read1 = 
+      Filename.concat directory "Data/reports/Summary/read1.xml" in
+    fs_checks directory xml_run_params xml_read1;
+
+    let { Hitscore_interfaces.Hiseq_raw_information.
+          flowcell_name     ; 
+          read_length_1     ; 
+          read_length_index ; 
+          read_length_2     ; 
+          with_intensities  ; 
+          run_date          ; } =
+      let xml = 
+        In_channel.with_file xml_run_params ~f:(fun ic ->
+          XML.(make_input (`Channel ic) |> in_tree)) in
+      match Hitscore_threaded.Hiseq_raw.run_parameters (snd xml) with
+      | Ok t -> t
+      | Error (`parse_run_parameters (`wrong_date s)) ->
+        failwithf "Error while parsing date in runParameters.xml: %s" s ()
+      | Error (`parse_run_parameters (`wrong_field s)) ->
+        failwithf "Error while parsing %s in runParameters.xml" s ()
+    in
+
+    let host = Option.value ~default:"bowery.es.its.nyu.edu" host in
     match Hitscore_threaded.db_connect config with
     | Ok dbh ->
       let hs_raw =
         Hitscore_threaded.Layout.Record_hiseq_raw.add_value ~dbh
           ~flowcell_name
-          ~read_length_1 ?read_length_2:!read2 ?read_length_index:!idx_read
+          ~read_length_1:(Int32.of_int_exn read_length_1)
+          ?read_length_2:(Option.map read_length_2 Int32.of_int_exn)
+          ?read_length_index:(Option.map read_length_index Int32.of_int_exn)
           ~with_intensities ~run_date ~host
           ~hiseq_dir_name:directory
       in
@@ -527,7 +507,7 @@ module Hiseq_raw = struct
         Hitscore_threaded.db_disconnect config dbh  |> ignore;
         eprintf "The HiSeq raw directory was successfully added as %ld\n"
         in_db.Hitscore_threaded.Layout.Record_hiseq_raw.id
-      | Error (`layout_inconsistency (`record_hiseq_raw,
+      | Error (`layout_inconsistency (_,
                                       `insert_did_not_return_one_id (s, i32l))) ->
         eprintf "ERROR: Layout Inconsistency Detected: \n\
                   insert in %s did not return one id but %d\n"
@@ -540,6 +520,68 @@ module Hiseq_raw = struct
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
+  let get_info directory = 
+    let xml_run_params = Filename.concat directory "runParameters.xml" in
+    let xml_read1 = 
+      Filename.concat directory "Data/reports/Summary/read1.xml" in
+    let { Hitscore_interfaces.Hiseq_raw_information.
+          flowcell_name     ; 
+          read_length_1     ; 
+          read_length_index ; 
+          read_length_2     ; 
+          with_intensities  ; 
+          run_date          ; } =
+      let xml = 
+        In_channel.with_file xml_run_params ~f:(fun ic ->
+          XML.(make_input (`Channel ic) |> in_tree)) in
+      match Hitscore_threaded.Hiseq_raw.run_parameters (snd xml) with
+      | Ok t -> t
+      | Error (`parse_run_parameters (`wrong_date s)) ->
+        failwithf "Error while parsing date in runParameters.xml: %s" s ()
+      | Error (`parse_run_parameters (`wrong_field s)) ->
+        failwithf "Error while parsing %s in runParameters.xml" s ()
+    in
+    let clustering =
+      let xml = 
+        In_channel.with_file xml_read1 ~f:(fun ic ->
+          XML.(make_input (`Channel ic) |> in_tree)) in
+      match Hitscore_threaded.Hiseq_raw.clusters_summary (snd xml) with
+      | Ok t -> t
+      | Error (`parse_clusters_summary s) ->
+        failwithf "Error while parsing read1.xml: %s" s ()
+    in
+    printf "FCID: %s (%d%s%s from the %s run, %s intensities)\n"
+      flowcell_name
+      read_length_1
+      (Option.value_map ~default:"" ~f:(sprintf "x%d") read_length_index)
+      (Option.value_map ~default:"" ~f:(sprintf "x%d") read_length_2)  
+      (run_date |! Time.to_local_date |! Date.to_string)
+      (if with_intensities then "with" else "without");
+    let head = printf " |% 19s" in
+    printf "Lane";
+    head "clusters_raw";      
+    head "clusters_raw_sd";   
+    head "clusters_pf";
+    head "clusters_pf_sd";
+    head "prc_pf_clusters";
+    head "prc_pf_clusters_sd";
+    printf "\n";
+    Array.iteri clustering ~f:(fun i a ->
+      let open Hitscore_interfaces.Hiseq_raw_information in
+      printf "  %d " (i + 1);
+      match a with
+      | None -> printf "-- NOT AVAILABLE --"
+      | Some c ->
+        let cell = printf " |% 19.2f" in
+        cell c.clusters_raw;      
+        cell c.clusters_raw_sd;   
+        cell c.clusters_pf;
+        cell c.clusters_pf_sd;
+        cell c.prc_pf_clusters;
+        cell c.prc_pf_clusters_sd;
+        printf "\n"
+    );
+    ()
 
 end
 
@@ -1146,7 +1188,10 @@ module Run_bcl_to_fastq = struct
     let hitscore_command =
       ref (sprintf "%s %s %s" 
               Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
+    let tiles = ref None in
     let options = [
+      ( "-tiles", Arg.String (fun s -> tiles := Some s),
+        "<regexp list>\n\tSet the --tiles option of CASAVA (copied verbatim).");
       ( "-user", 
         Arg.String (fun s -> user := Some s),
         sprintf "<login>\n\tSet the user-name (%s)."
@@ -1199,7 +1244,7 @@ module Run_bcl_to_fastq = struct
           `go (List.rev !anon_args, !sys_dry_run, !sample_sheet_kind,
                !user, !queue, !nodes, !ppn,
                !wall_hours, !version, !mismatch,
-               !hitscore_command, !make_command)
+               !hitscore_command, !make_command, !tiles)
       with
       | Arg.Bad b -> `bad b
       | Arg.Help h -> `help h
@@ -1210,7 +1255,7 @@ module Run_bcl_to_fastq = struct
     begin match (start_parse_cmdline prefix cl_args) with
     | `go (args, sys_dry_run, kind, user, queue, nodes, ppn,
            wall_hours, version, mismatch, 
-           hitscore_command, make_command) ->
+           hitscore_command, make_command, tiles) ->
       db_connect hsc
       >>= fun dbh ->
       begin match args with
@@ -1243,7 +1288,7 @@ module Run_bcl_to_fastq = struct
               (Time.to_string ts);
             return h)
         >>= fun availability ->
-        Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc
+        Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
           ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
           ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
           (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
@@ -1631,6 +1676,15 @@ let () =
     ~run:(fun config exec cmd -> function
     | [] -> Verify.wake_up config
     | ["-fix"] -> Verify.wake_up ~fix_it:true config
+    | _ -> None);
+
+  define_command 
+    ~names:["get-hiseq-raw-info"; "ghri"]
+    ~description:"Get information from an HiSeq Raw directory"
+    ~usage:(fun o exec cmd ->
+      fprintf o "Usage: %s <profile> %s <hiseq-dir>\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+    | [dir] -> Some (Hiseq_raw.get_info dir)
     | _ -> None);
 
   let global_usage = function
