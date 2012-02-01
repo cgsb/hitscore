@@ -125,6 +125,7 @@ let col_Project_Name = "Project Name"
 let col_Concentration__nM_  = "Concentration (nM)"
 let col_Note = "Note"
 let col_Sample_Name = "Sample Name"
+let col_Library_Short_Description = "Library Short Description"
 let col_Species___Source  = "Species - Source"
 let col_Application = "Application"
 let col_Is_Stranded = "Is Stranded"
@@ -416,6 +417,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             let project = column row col_Project_Name in
             let conc = column32 row col_Concentration__nM_ in
             let note = column row col_Note in
+            let short_desc = column row col_Library_Short_Description in
             let sample_name = column row col_Sample_Name in
             let species = column row col_Species___Source in
             let application = mandatory row col_Application in
@@ -495,7 +497,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             let key_value_list =
               List.map custom_keys (fun c -> (c, column rawrow c)) in
             Some (`new_lib (libname, project, conc, note,
-                            sample_name, species,
+                            short_desc, sample_name, species,
                             application, stranded,
                             truseq_control, rnaseq_control,
                             barcode_type, barcodes, 
@@ -526,7 +528,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
            | (k, None)   -> sprintf "[NO %S]" k)))
 
     | `new_lib (s, project, conc, note,
-                sample_name, species, app, strd, tsc, rsc,
+                short_desc, sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
                 p5, p7,
                 bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
@@ -548,6 +550,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       if_verbose "  new lib: %s\n    %s\n" s
         (String.concat ~sep:"    " ([
           vm project ~default:"[no project]" ~f:(sprintf "[Proj: %s]");
+          vm short_desc ~default:"[no desc]" ~f:(sprintf "[Desc: %s]");
           vm sample_name ~default:"[no sample]" ~f:(sprintf "[Sample: %s]");
           vm species ~default:"[no species]" ~f:(sprintf "[Org: %s]"); nl;
           vm app ~default:"[NO APP]" ~f:(sprintf "[App: %s]");
@@ -593,7 +596,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let assoc_sample_org =
         List.filter_map libraries ~f:(function
         | `new_lib (s, project, conc, note,
-                    sample_name, species, app, strd, tsc, rsc,
+                    short_desc, sample_name, species, app, strd, tsc, rsc,
                     bt, bcs, cbs, cbp,
                     p5, p7,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
@@ -625,7 +628,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | `wrong libname -> None
         | `existing (libname, lib_t, conc, note, kv) ->  Some libname
         | `new_lib (ln, project, conc, note,
-                    sample_name, species, app, strd, tsc, rsc,
+                    short_desc, sample_name, species, app, strd, tsc, rsc,
                     bt, bcs, cbs, cbp,
                     p5, p7,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
@@ -729,7 +732,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     | `wrong libname -> ()
     | `existing _ -> ()    
     | `new_lib (libname, project, conc, note,
-                sample_name, species, app, strd, tsc, rsc,
+                short_desc, sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
                 p5, p7,
                 bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
@@ -871,7 +874,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           run ~dbh ~fake:(fun x -> { id = x })
             ~real:(fun dbh ->
               add_value ~dbh 
-                ~name ?project 
+                ~name ?project ?description:short_desc
                 ?sample ?protocol ?application:app ~stranded
                 ~truseq_control ?rnaseq_control:rsc
                 ~barcode_type:bt ~barcodes:(Array.of_list bcs)
@@ -1012,7 +1015,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 | `existing (ln, lib_t, conc, note, kv) ->
                   if libname = ln then Some (lib_t, conc, note, kv) else None
                 | `new_lib (ln, project, conc, note,
-                            sample_name, species, app, strd, tsc, rsc,
+                            short_desc, sample_name, species, app, strd, tsc, rsc,
                             bt, bcs, cbs, cbp,
                             p5, p7,
                           bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,

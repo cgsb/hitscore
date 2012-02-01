@@ -60,6 +60,7 @@
 (record stock_library
         (name           string)
         of_project
+        (description string option)
         (sample      sample option)
         (protocol  protocol option)
         (application    string option)
