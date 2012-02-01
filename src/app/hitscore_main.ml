@@ -1050,12 +1050,14 @@ module Query = struct
           let open Batteries in
           PGSQL (dbh)
             "select bcl_to_fastq.g_id as B2F_id,
+                    hiseq_raw.flowcell_name as FCID,
                     bcl_to_fastq.tiles as TILES,
                     g_volume.g_id as VOL_id,
                     g_volume.g_hr_tag as HR_TAG
-             from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume
+             from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume, hiseq_raw
              where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
-                   bcl_to_fastq_unaligned.directory = g_volume.g_id;"
+                   bcl_to_fastq_unaligned.directory = g_volume.g_id AND
+                   bcl_to_fastq.raw_data = hiseq_raw.g_id;"
         in
         begin match List.length results with
         | 0 -> printf "No results found.\n"
@@ -1064,8 +1066,8 @@ module Query = struct
             (if n > 1 then "s" else "")
             (String.concat ~sep:"\n" 
                (List.map results
-                  (fun (i, til, v, hr) ->
-                    sprintf " * % 4ld: %- 40S --> % 4ld %s" i 
+                  (fun (i, fc, til, v, hr) ->
+                    sprintf " % 4ld: %- 10s %- 40S --> % 4ld %s" i fc
                       (Option.value ~default:"N/A" til) v
                       (Option.value ~default:"N/A" hr))))
         end));
