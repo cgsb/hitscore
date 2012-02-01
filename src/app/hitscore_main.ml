@@ -1547,8 +1547,9 @@ let () =
     ~names:["check-file-system"; "check-fs"]
     ~description:"Check the files registered in the database"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s [-quiet]\n" exec cmd;
-      fprintf o "  -quiet : Non-verbose output\n"
+      fprintf o "usage: %s <profile> %s [-quiet|-try-fix]\n" exec cmd;
+      fprintf o "  -quiet : Non-verbose output\n";
+      fprintf o "  -try-fix: Try to fix fixable errors\n"
     )
     ~run:(fun config exec cmd -> function
       | [] -> Some Verify.(check_file_system config |! print_fs_check)
