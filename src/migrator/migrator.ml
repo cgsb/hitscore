@@ -287,6 +287,44 @@ let v03_to_v04 file_in file_out =
     )
   in
 
+  let record_stock_library = 
+    List.map s03.V03M.record_stock_library (fun cache ->
+      let id, created, lastmodif, 
+        (name:           string),
+        (project: string option),
+        (sample:      int32 option),
+        (protocol:  int32 option),
+        (application:    string option),
+        (stranded:       bool),
+        (truseq_control: bool),
+        (rnaseq_control: string option),
+        (barcode_type: string),
+        (barcodes: int32 array),
+        (custom_barcodes: int32 array),
+        (p5_adapter_length: int32 option ),
+        (p7_adapter_length: int32 option),
+        (preparator: int32 option),
+        (note: string option)
+        = cache in
+      (id, created, lastmodif, 
+       (name:           string),
+       (project: string option),
+       (None: string option),
+       (sample:      int32 option),
+       (protocol:  int32 option),
+       (application:    string option),
+       (stranded:       bool),
+       (truseq_control: bool),
+       (rnaseq_control: string option),
+       (barcode_type: string),
+       (barcodes: int32 array),
+       (custom_barcodes: int32 array),
+       (p5_adapter_length: int32 option ),
+       (p7_adapter_length: int32 option),
+       (preparator: int32 option),
+       (note: string option))
+    ) in
+
   let d04 = {
     V04M.version = V04.Info.version;
     file_system                    = s03.V03M.file_system;
@@ -296,7 +334,7 @@ let v03_to_v04 file_in file_out =
     record_sample                  = s03.V03M.record_sample;
     record_protocol                = s03.V03M.record_protocol;
     record_custom_barcode          = s03.V03M.record_custom_barcode;
-    record_stock_library           = s03.V03M.record_stock_library;
+    record_stock_library;
     record_key_value               = s03.V03M.record_key_value;
     record_input_library           = s03.V03M.record_input_library;
     record_lane                    = s03.V03M.record_lane;
