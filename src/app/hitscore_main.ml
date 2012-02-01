@@ -788,97 +788,156 @@ end
 
 
 module Flowcell = struct
+  open Hitscore_threaded
+  open Result_IO
 
-  let register hsc name lanes =
-    let open Hitscore_threaded in
-    let open Result_IO in
+  let check_lane_unused ~dbh lane = 
+    let q_res =
+      let module PGOCaml = Hitscore_threaded.Layout.PGOCaml in
+      let open Batteries in
+      let lanes = [| lane |] in
+      PGSQL (dbh)
+        "select g_id, serial_name from flowcell
+         where flowcell.lanes @> $lanes"
+    in
+    if List.length q_res <> 0 then (
+      List.iter q_res (fun (id, fcid) ->
+        failwithf "Lane %ld already used in flowcell %ld (%S)" lane id fcid ()))
+    else
+      ()
+
+  let checks_and_read_lengths ~dbh lanes =
+    if List.length (List.dedup lanes) < List.length lanes then
+      failwithf "Cannot reuse same lane" ();
+    let lanes_r1_r2 =
+      List.map lanes (fun id ->
+        check_lane_unused ~dbh id;
+        Layout.Record_lane.(
+          cache_value ~dbh { id } >>| get_fields
+          >>= fun { requested_read_length_1; requested_read_length_2; _ } ->
+          return (requested_read_length_1, requested_read_length_2 )
+        ) |! function
+        | Ok (a, b) -> (a, b)
+        | Error e -> 
+          printf "ERROR while checking lane %ld\n" id;
+          failwith "ERROR") in
+    let first_r1, first_r2 = List.hd_exn lanes_r1_r2 in
+    let all_equal =
+      List.for_all lanes_r1_r2 
+        ~f:(fun (r1, r2) -> r1 = first_r1 && r2 = first_r2) in
+    if not all_equal then (
+      printf "ERROR: Requested read-lengths are not all equal: [\n%s]\n"
+        (List.mapi lanes_r1_r2 (fun i (r1, r2) ->
+          match r2 with
+          | None -> sprintf "  %d : SE %ld\n" (i + 2) r1
+          | Some r -> sprintf "  %d : PE %ldx%ld\n" (i + 2) r1 r)
+          |! String.concat ~sep:"");
+      failwith "ERROR"
+    );
+    (first_r1, first_r2)
+
+  let new_input_phix ~dbh r1 r2 =
+    begin match Layout.Search.record_stock_library_by_name ~dbh "PhiX_v3" with
+    | Ok [library] ->
+      let input_phix =
+        Layout.Record_input_library.add_value ~dbh
+          ~library ~submission_date:(Time.now ())
+          ?volume_uL:None ?concentration_nM:None ~user_db:[| |] ?note:None
+      in
+      begin match input_phix with
+      | Ok i_phix ->
+        Layout.Record_log.add_value ~dbh
+          ~log:(sprintf "(add_input_library_phix %ld)"
+                  i_phix.Layout.Record_input_library.id)
+        |! Pervasives.ignore;
+        let libraries = [| i_phix |] in
+        let phix_lane = Layout.Record_lane.add_value ~dbh
+          ~libraries  ?total_volume:None ?seeding_concentration_pM:None
+          ~pooled_percentages:[| 100. |]
+          ~requested_read_length_1:r1 ?requested_read_length_2:r2
+          ~contacts:[| |] in
+        begin match phix_lane with
+        | Ok l_phix ->
+          Layout.Record_log.add_value ~dbh
+            ~log:(sprintf "(add_lane_phix %ld)"
+                    l_phix.Layout.Record_lane.id) |! Pervasives.ignore;
+          l_phix
+        | Error e ->
+          failwithf "Could not create the lane for PhiX.\n" ();
+            (* TODO delete input_library *)
+        end
+      | Error e ->
+        failwithf "ERROR: Cannot add input_library for PhiX\n" ();
+      end
+    | _ ->
+      failwithf "ERROR: Could not find PhiX_v3\n" ();
+    end
+
+  let new_empty_lane ~dbh r1 r2 =
+    let lane = 
+      Layout.Record_lane.add_value ~dbh
+        ~libraries:[||]
+        ?total_volume:None ?seeding_concentration_pM:None
+        ~pooled_percentages:[| |]
+        ~requested_read_length_1:r1 ?requested_read_length_2:r2
+        ~contacts:[||] in
+    begin match lane with
+    | Ok l ->
+      Layout.Record_log.add_value ~dbh
+        ~log:(sprintf "(add_empty_lane %ld)" l.Layout.Record_lane.id)
+      |! Pervasives.ignore;
+      l
+    | Error e ->
+      failwithf "Could not create the empty lane.\n" ();
+    end
+
+
+  let parse_args =
+    List.map ~f:(function
+    | "PhiX" | "phix" | "PHIX" -> `phix
+    | "Empty" | "empty" | "EMPTY" -> `empty
+    | x -> 
+      let i = try Int32.of_string x with e ->
+          failwithf "Cannot understand arg: %S (should be an integer)" x () in
+      `lane i)
+
+
+  let register hsc name args =
+    if List.length args <> 8 then
+      failwith "Expecting 8 arguments after the flowcell name.";
+    let lanes = parse_args args in
     match db_connect hsc with
     | Ok dbh ->
       begin match Layout.Search.record_flowcell_by_serial_name ~dbh name with
       | Ok [] ->
         printf "Registering %s\n" name;
-        let r1, r2 =
-          let lanes_r1_r2 =
-            List.map lanes (fun i ->
-              Layout.Record_lane.(
-                cache_value ~dbh { id = Int32.of_int_exn i } >>| get_fields
-                >>= fun { requested_read_length_1; requested_read_length_2; _ } ->
-                return (requested_read_length_1, requested_read_length_2 )
-              ) |! function
-              | Ok (a, b) -> (a, b)
-              | Error e -> 
-                printf "ERROR while checking library %d\n" i;
-                failwith "ERROR") in
-          let first_r1, first_r2 = List.hd_exn lanes_r1_r2 in
-          let all_equal =
-            List.for_all lanes_r1_r2 
-              ~f:(fun (r1, r2) -> r1 = first_r1 && r2 = first_r2) in
-          if not all_equal then (
-            printf "ERROR: Requested read-lengths are not all equal: [\n%s]\n"
-              (List.mapi lanes_r1_r2 (fun i (r1, r2) ->
-                match r2 with
-                | None -> sprintf "  %d : SE %ld\n" (i + 2) r1
-                | Some r -> sprintf "  %d : PE %ldx%ld\n" (i + 2) r1 r)
-                |! String.concat ~sep:"");
-            failwith "ERROR"
-          );
-          (first_r1, first_r2) in
+        let r1, r2 = 
+          checks_and_read_lengths ~dbh 
+            (List.filter_map lanes (function `lane i -> Some i | _ -> None)) in
         printf "It is a %S flowcell\n"
           (match r2 with 
           | Some s -> sprintf "PE %ldx%ld" r1 s
           | None -> sprintf "SE %ld" r1);
-        begin match Layout.Search.record_stock_library_by_name ~dbh "PhiX_v3" with
-        | Ok [library] ->
-          let input_phix =
-            Layout.Record_input_library.add_value ~dbh
-              ~library ~submission_date:(Time.now ())
-              ?volume_uL:None ?concentration_nM:None ~user_db:[| |] ?note:None
-          in
-          begin match input_phix with
-          | Ok i_phix ->
-            Layout.Record_log.add_value ~dbh
-              ~log:(sprintf "(add_input_library_phix %ld)"
-                      i_phix.Layout.Record_input_library.id)
-            |! Pervasives.ignore;
-            let libraries = [| i_phix |] in
-            let phix_lane = Layout.Record_lane.add_value ~dbh
-              ~libraries  ?total_volume:None ?seeding_concentration_pM:None
-              ~pooled_percentages:[| 100. |]
-              ~requested_read_length_1:r1 ?requested_read_length_2:r2
-              ~contacts:[| |] in
-            begin match phix_lane with
-            | Ok l_phix ->
-              Layout.Record_log.add_value ~dbh
-                ~log:(sprintf "(add_lane_phix %ld)"
-                        l_phix.Layout.Record_lane.id) |! Pervasives.ignore;
-              let lanes =
-                l_phix :: (List.map lanes (fun i ->
-                  { Layout.Record_lane.id = Int32.of_int_exn i }))
-                |! Array.of_list in
-              let flowcell = 
-                Layout.Record_flowcell.add_value ~dbh ~serial_name:name ~lanes in
-              begin match flowcell with
-              | Ok f ->
-                Layout.Record_log.add_value ~dbh
-                  ~log:(sprintf "(add_flowcell %ld %s (lanes %s))"
-                          f.Layout.Record_flowcell.id name
-                          (List.map (Array.to_list lanes) (fun i ->
-                            sprintf "%ld" i.Layout.Record_lane.id)
-                            |! String.concat ~sep:" "))
-                |! Pervasives.ignore;
-              | Error e ->
-                printf "Could not add flowcell: %s\n" name
+        let lanes =
+          List.map lanes ~f:(function
+          | `phix ->  new_input_phix ~dbh r1 r2 
+          | `lane id -> { Layout.Record_lane.id }
+          | `empty -> new_empty_lane ~dbh r1 r2)
+          |! Array.of_list in
+        let flowcell = 
+          Layout.Record_flowcell.add_value ~dbh ~serial_name:name ~lanes in
+        begin match flowcell with
+        | Ok f ->
+          Layout.Record_log.add_value ~dbh
+            ~log:(sprintf "(add_flowcell %ld %s (lanes %s))"
+                    f.Layout.Record_flowcell.id name
+                    (List.map (Array.to_list lanes) (fun i ->
+                      sprintf "%ld" i.Layout.Record_lane.id)
+                      |! String.concat ~sep:" "))
+          |! Pervasives.ignore;
+        | Error e ->
+          printf "Could not add flowcell: %s\n" name
               (* TODO: manage input_lib and lane *)
-              end
-            | Error e ->
-              printf "Could not create the lane for PhiX.\n";
-            (* TODO delete input_library *)
-            end
-          | Error e ->
-            printf "ERROR: Cannot add input_library for PhiX\n";
-          end
-        | _ ->
-          printf "ERROR: Could not find PhiX_v3\n";
         end
       | Ok [one] ->
         printf "ERROR: Flowcell name %S already used.\n" name;
@@ -1662,15 +1721,13 @@ let () =
     ~names:["register-flowcell"]
     ~description:"Register a new flowcell (for existing lanes)"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <flowcell-name>\n" exec cmd)
+      fprintf o "Usage: %s <profile> %s <flowcell-name> <L1> <L2> .. <L8>\n"
+        exec cmd;
+      fprintf o "where Lx is 'PhiX', 'Empty', or an orphan lane's id.\n")
     ~run:(fun config exec cmd -> function
     | [] -> None
     | name :: lanes ->
-      begin 
-        try let lanes = List.map lanes Int.of_string in
-            Some (Flowcell.register config name lanes)
-        with e -> None
-      end);
+      Some (Flowcell.register config name lanes));
 
   define_command
     ~names:["query"; "Q"]
