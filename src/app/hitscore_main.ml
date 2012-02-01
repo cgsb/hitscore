@@ -1043,6 +1043,33 @@ module Query = struct
        ignore work
            
      ));
+    ("b2f-volumes", 
+     (["List of B2F results."],
+      fun dbh args ->
+        let results =
+          let open Batteries in
+          PGSQL (dbh)
+            "select bcl_to_fastq.g_id as B2F_id,
+                    bcl_to_fastq.tiles as TILES,
+                    g_volume.g_id as VOL_id,
+                    g_volume.g_hr_tag as HR_TAG
+             from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume
+             where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
+                   bcl_to_fastq_unaligned.directory = g_volume.g_id;"
+        in
+        begin match List.length results with
+        | 0 -> printf "No results found.\n"
+        | n ->
+          printf "Found %d result%s:\n%s\n" n 
+            (if n > 1 then "s" else "")
+            (String.concat ~sep:"\n" 
+               (List.map results
+                  (fun (i, til, v, hr) ->
+                    sprintf " * % 4ld: %- 40S --> % 4ld %s" i 
+                      (Option.value ~default:"N/A" til) v
+                      (Option.value ~default:"N/A" hr))))
+        end));
+
   ]
 
   let describe out =
