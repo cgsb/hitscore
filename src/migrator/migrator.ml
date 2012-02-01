@@ -280,8 +280,10 @@ let v03_to_v04 file_in file_out =
         | Some "jsd6" -> "(auditor)" 
         | _ -> "(user)"
       in
+      let secondary_emails = "()" in
       (id, created, lastmodif, print_name, given_name,
-       middle_name, family_name, email, login, nickname, roles, note)
+       middle_name, family_name, email, secondary_emails, 
+       login, nickname, roles, note)
     )
   in
 
