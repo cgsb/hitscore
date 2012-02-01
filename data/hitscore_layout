@@ -23,6 +23,7 @@
        )
 
 (search person by email)
+(search person by login)
 (search person by (and nickname family_name))
 (search person by (and given_name family_name))
 
