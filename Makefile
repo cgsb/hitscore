@@ -15,8 +15,8 @@ _build/hitscore_layout_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 _doc/hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot _doc/
 	dot -Tpdf $< -o$@
 
-_doc/hitscore_layout_digraph.png: _build/hitscore_layout_digraph.dot _doc/
-	dot -Tpng $< -o$@
+_doc/hitscore_layout_digraph.jpg: _build/hitscore_layout_digraph.dot _doc/
+	dot -Tjpg $< -o$@
 
 _build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 	$(GENERATOR) db_digraph $(LAYOUT_SOURCE) $@
@@ -24,23 +24,41 @@ _build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
 _doc/hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot _doc/
 	dot -Tpdf $< -o$@
 
-_doc/hitscore_db_digraph.png: _build/hitscore_db_digraph.dot _doc/
-	dot -Tpng $< -o$@
+_doc/hitscore_db_digraph.jpg: _build/hitscore_db_digraph.dot _doc/
+	dot -Tjpg $< -o$@
 
 _doc/:
 	mkdir _doc
 
-dots: _doc/hitscore_layout_digraph.pdf _doc/hitscore_db_digraph.pdf
+dots: _doc/hitscore_layout_digraph.pdf _doc/hitscore_db_digraph.pdf \
+ _doc/hitscore_layout_digraph.jpg _doc/hitscore_db_digraph.jpg
 
 
 update_psql: $(GENERATOR)
 	$(GENERATOR) postgres $(LAYOUT_SOURCE) _build/
-dbinit:
+
+_build/hitscore_layout_init.psql: $(LAYOUT_SOURCE) $(GENERATOR)
+	$(GENERATOR) postgres $(LAYOUT_SOURCE) _build/
+
+dbinit: _build/hitscore_layout_init.psql
 	psql -1 -q -f _build/hitscore_layout_init.psql
+#dbclear:
+# 	psql -1 -q -f _build/hitscore_layout_clear.psql
+
 dbclear:
-	psql -1 -q -f _build/hitscore_layout_clear.psql
+	psql -qAtX -c "select 'DROP table ' || quote_ident(table_schema) \
+          || '.' || quote_ident(table_name) \
+          || ' CASCADE;' from information_schema.tables \
+              where table_type = 'BASE TABLE' and \
+              not table_schema ~ '^(information_schema|pg_.*)$$'" | psql -qAtX
 
 dbupdate: dbclear update_psql dbinit
+
+PKG_VERSION=$(shell printf "`cat setup.data`\necho \$$pkg_version\n" | sed 's/ = /=/' | sh)
+BINDIR=$(shell printf "`cat setup.data`\necho \$$bindir\n" | sed 's/ = /=/' | sh)
+
+install-version: _build/src/app/hitscore setup.data
+	cp $< $(BINDIR)/hitscore-$(PKG_VERSION)
 
 build:
 	ocaml setup.ml -build
@@ -54,7 +72,7 @@ uninstall:
 libdoc:
 	ocaml setup.ml -doc
 
-customdoc: _doc/hitscore_layout_digraph.png _doc/hitscore_db_digraph.png
+customdoc: dots
 
 doc: libdoc customdoc
 	mkdir -p _doc/lib
@@ -73,4 +91,4 @@ fresh: clean uninstall
 # clean setup files, rebuilding may require additional tools
 distclean: fresh
 	ocaml setup.ml -distclean
-	oasis setup-clean
+

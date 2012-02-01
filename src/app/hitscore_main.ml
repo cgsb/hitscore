@@ -588,7 +588,7 @@ end
 module Verify = struct
 
 
-  let check_file_system ?(verbose=true) hsc =
+  let check_file_system ?(try_fix=false) ?(verbose=true) hsc =
     let volume_path =
       Hitscore_threaded.Configuration.volume_path_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in
@@ -614,16 +614,27 @@ module Verify = struct
                 log "* Checking volume %S\n" path;
               Unix.(try
                       let vol_stat = stat path in
-                      if vol_stat.st_kind <> S_DIR then
-                        error `volume "%S: Not a directory" path
-                      else
+                      if vol_stat.st_kind <> S_DIR then (
+                        error `volume "%S: Not a directory" path;
+                      ) else
                         if verbose then
                           log "-> OK\n"
                         else
                           ()
                 with
                 | Unix_error (e, _, s) ->
-                  error `volume "%S: %S (%S)" path (error_message e) s);
+                  error `volume "%S: %S (%S)" path (error_message e) s;
+                  if try_fix then
+                    begin match ksprintf System.command "mkdir -p %s" path with
+                    | Ok () ->
+                      begin match Hitscore_threaded.ACL.set_defaults 
+                          ~configuration:hsc ~run_command:System.command
+                          (`dir path) with
+                      | Ok () -> log "Fixed %S\n" path;
+                      | Error _ -> error `fix "%S: Cannot set ACLs" path
+                      end
+                    | Error _ -> error `fix "%S: Cannot mkdir" path
+                    end);
               begin match Hitscore_db.File_system.volume_trees volume with
               | Error (`cannot_recognize_file_type s) ->
                 error `get_files "%S: cannot_recognize_file_type %S" path s
@@ -651,6 +662,7 @@ module Verify = struct
   let print_fs_check =
     List.iter  ~f:(function
     | `info s -> printf "%s" s
+    | `error (`fix, s) -> printf "ERROR(fixing/mkdir): %s" s
     | `error (`volume, s) -> printf "ERROR(volume): %s\n" s
     | `error (`get_files, s) -> printf "ERROR(get-files): %s\n" s
     | `error (`file, s) -> printf "ERROR(file): %s\n" s)
@@ -1031,6 +1043,35 @@ module Query = struct
        ignore work
            
      ));
+    ("b2f-volumes", 
+     (["List of B2F results."],
+      fun dbh args ->
+        let results =
+          let open Batteries in
+          PGSQL (dbh)
+            "select bcl_to_fastq.g_id as B2F_id,
+                    hiseq_raw.flowcell_name as FCID,
+                    bcl_to_fastq.tiles as TILES,
+                    g_volume.g_id as VOL_id,
+                    g_volume.g_hr_tag as HR_TAG
+             from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume, hiseq_raw
+             where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
+                   bcl_to_fastq_unaligned.directory = g_volume.g_id AND
+                   bcl_to_fastq.raw_data = hiseq_raw.g_id;"
+        in
+        begin match List.length results with
+        | 0 -> printf "No results found.\n"
+        | n ->
+          printf "Found %d result%s:\n%s\n" n 
+            (if n > 1 then "s" else "")
+            (String.concat ~sep:"\n" 
+               (List.map results
+                  (fun (i, fc, til, v, hr) ->
+                    sprintf " % 4ld: %- 10s %- 40S --> % 4ld %s" i fc
+                      (Option.value ~default:"N/A" til) v
+                      (Option.value ~default:"N/A" hr))))
+        end));
+
   ]
 
   let describe out =
@@ -1535,13 +1576,16 @@ let () =
     ~names:["check-file-system"; "check-fs"]
     ~description:"Check the files registered in the database"
     ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s [-quiet]\n" exec cmd;
-      fprintf o "  -quiet : Non-verbose output\n"
+      fprintf o "usage: %s <profile> %s [-quiet|-try-fix]\n" exec cmd;
+      fprintf o "  -quiet : Non-verbose output\n";
+      fprintf o "  -try-fix: Try to fix fixable errors\n"
     )
     ~run:(fun config exec cmd -> function
       | [] -> Some Verify.(check_file_system config |! print_fs_check)
       | [ "-quiet" ] -> Some Verify.(
         check_file_system ~verbose:false config |! print_fs_check)
+      | [ "-try-fix" ] -> Some Verify.(
+        check_file_system ~try_fix:true config |! print_fs_check)
       | _ -> None);
 
   define_command
