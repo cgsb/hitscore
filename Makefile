@@ -54,6 +54,11 @@ dbclear:
 
 dbupdate: dbclear update_psql dbinit
 
+PKG_VERSION=$(shell printf "`cat setup.data`\necho \$$pkg_version\n" | sed 's/ = /=/' | sh)
+BINDIR=$(shell printf "`cat setup.data`\necho \$$bindir\n" | sed 's/ = /=/' | sh)
+
+install-version: _build/src/app/hitscore setup.data
+	cp $< $(BINDIR)/hitscore-$(PKG_VERSION)
 
 build:
 	ocaml setup.ml -build
@@ -86,4 +91,4 @@ fresh: clean uninstall
 # clean setup files, rebuilding may require additional tools
 distclean: fresh
 	ocaml setup.ml -distclean
-	oasis setup-clean
+
