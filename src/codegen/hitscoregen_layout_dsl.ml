@@ -294,6 +294,7 @@ let dsl_type_to_db t =
       convert t2
     | Array Real -> Psql.Text
     | Array (Enumeration_name n) -> Psql.Text
+    | Array String -> Psql.Text
     | Array t2 ->
       props := Psql.Array :: !props;
       convert t2
@@ -466,15 +467,18 @@ let let_in_typed_value  = function
   | (n, Timestamp) ->
     sprintf "let %s = Timestamp.to_string %s in"  n n
   | (n, Option Timestamp) ->
-    sprintf "let %s = option_map %s Timestamp.to_string in"  n n
+    sprintf "let %s = option_map %s Timestamp.to_string in\n"  n n
   | (n, Array Timestamp) ->
-    sprintf "let %s = array_map %s Timestamp.to_string in"  n n
+    sprintf "let %s = array_map %s Timestamp.to_string in\n"  n n
   | (n, Array Real) ->
     sprintf "let %s = Sexplib.Sexp.to_string \
-            (Core.Std.Array.sexp_of_t Core.Std.Float.sexp_of_t %s) in" n n
+            (Core.Std.Array.sexp_of_t Core.Std.Float.sexp_of_t %s) in\n" n n
+  | (n, Array String) ->
+    sprintf "let %s = Sexplib.Sexp.to_string \
+            (Core.Std.Array.sexp_of_t Core.Std.String.sexp_of_t %s) in\n" n n
   | (n, Array (Enumeration_name e)) -> 
     sprintf "let %s = Sexplib.Sexp.to_string \
-            (Core.Std.Array.sexp_of_t Enumeration_%s.sexp_of_t %s) in" n e n
+            (Core.Std.Array.sexp_of_t Enumeration_%s.sexp_of_t %s) in\n" n e n
   | _ -> ""
 
 let convert_pgocaml_type = function
@@ -502,6 +506,8 @@ let convert_pgocaml_type = function
     sprintf "(array_map %s Timestamp.of_string)" n
   | (n, Array Real) ->
     sprintf "Core.Std.(Array.t_of_sexp Float.t_of_sexp (Sexplib.Sexp.of_string %s))" n
+  | (n, Array String) ->
+    sprintf "Core.Std.(Array.t_of_sexp String.t_of_sexp (Sexplib.Sexp.of_string %s))" n
   | (n, Array (Enumeration_name e)) -> 
     sprintf "Core.Std.(Array.t_of_sexp Enumeration_%s.t_of_sexp \
               (Sexplib.Sexp.of_string %s))" e n

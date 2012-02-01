@@ -59,6 +59,7 @@ let add_random_guy dbh =
   print result "Adding %s (%s)" family_name email >>=
     (fun () ->
       Hitscore_db.Record_person.add_value ~dbh ~roles:[| `visitor |]
+        ~secondary_emails:[| "second@email.com" |]
         ~given_name:"Given" ~middle_name:"Middle"
         ?print_name ~family_name ~email ?login ?note ?nickname:None)
 

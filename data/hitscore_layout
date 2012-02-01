@@ -15,6 +15,7 @@
        (middle_name     string option)
        (family_name     string)
        (email           string)
+       (secondary_emails string array)
        (login           string option)
        (nickname        string option)
        (roles           role array)
