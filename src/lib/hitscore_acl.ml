@@ -14,21 +14,24 @@ module Make
       function
       | `dir root -> 
         begin match (Configuration.root_group configuration) with
-        | None -> return ()
+        | None -> return None
         | Some grp -> 
           cmd "chown -R :%s %s" grp root 
           >>= fun () ->
           cmd "find %s -type d -exec chmod u+rwx,g-rw,g+xs,o-rwx {} \\;" root
           >>= fun () ->
           cmd "find %s -type f -exec chmod u+rwx,g-rwx,o-rwx {} \\;" root
+          >>= fun () ->
+          return (Some grp)
         end
-        >>= fun () ->
+        >>= fun group ->
         begin match Configuration.root_writers configuration with
         | [] -> return ()
         | l ->
-          cmd "find %s -type d -exec setfacl -m %s,%s,m:rwx {} \\;" root
+          cmd "find %s -type d -exec setfacl -m %s,%s,%sm:rwx {} \\;" root
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
             (String.concat ~sep:"," (List.map l (sprintf "d:user:%s:rwx")))
+            (Option.value_map ~default:"" ~f:(sprintf "g:%s:x,") group)
           >>= fun () ->
           cmd "find %s -type f -exec setfacl -m %s {} \\;" root
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw")))
