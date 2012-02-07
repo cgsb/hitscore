@@ -14,9 +14,10 @@ make_module () {
         git checkout v$version
     fi
 
+    rm -fr _build/src/codegen
     ocamlbuild src/codegen/hitscoregen.native
 
-    _build/src/codegen/hitscoregen codegen data/hitscore_layout $tmp
+    _build/src/codegen/hitscoregen.native codegen data/hitscore_layout $tmp
     echo 'let ($) f x = f x' > $name
     echo "module Info = struct let version = \"$version\" end" >> $name
     cat $tmp >> $name
@@ -32,10 +33,11 @@ if [ "$1" = "update" ]; then
     mkdir -p _migrator
     current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
                       -e 's/* \(.*\)/\1/'`
+    make_module v05  0.5-dev
     make_module v04  0.4
     make_module v03  0.3
-    make_module v02  0.2
-    make_module v011 0.1.1
+#    make_module v02  0.2
+#    make_module v011 0.1.1
     git checkout $current_branch
     cd _migrator
     ln -sf ../src/migrator/migrator.ml
@@ -49,8 +51,7 @@ if [ "$1" = "-h" ]; then
     exit 0
 fi
 
-
 cd _migrator
-$OCAMLFINDOPT -linkpkg v04.cmx v03.cmx v02.cmx v011.cmx migrator.ml -o migrator
+$OCAMLFINDOPT -linkpkg v03.cmx v04.cmx v05.cmx migrator.ml -o migrator
 cd ..
 

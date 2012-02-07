@@ -5,262 +5,6 @@ let (|>) x f = f x
 module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
 open Hitscore_threaded
 
-let v011_to_v02 file_in file_out =
-  let module V011 = V011.Make(Result_IO) in
-  let module V02 = V02.Make(Result_IO) in
-  let dump_v011 = In_channel.(with_file file_in ~f:input_all) in
-  let s011 = V011.dump_of_sexp Sexplib.Sexp.(of_string dump_v011) in
-
-  printf "s011 version: %s\n" s011.V011.version;
-
-  let check_barcode_provider bc =
-    V02.Enumeration_barcode_provider.of_string bc |> 
-        Result.ok_exn ~fail:(Failure "barcode provider is wrong") |>
-            V02.Enumeration_barcode_provider.to_string
-  in
-
-
-  let record_lane, record_input_library, record_stock_library =
-    let sl_rl1_rl2 = ref [] in
-    let stocks =
-      List.map s011.V011.record_stock_library 
-        (fun cache ->
-          let (g_id, g_created, g_last_modified, name, sample,
-               protocol, application, stranded, truseq_control,
-               rnaseq_control, read_length_1, read_length_2, barcode_type,
-               barcodes, note) = cache in
-   
-          sl_rl1_rl2 := (g_id, read_length_1, read_length_2) :: !sl_rl1_rl2;
-
-          let project = None in
-          let custom_barcodes = [| |] in
-          let p5_adapter_length = None in
-          let p7_adapter_length = None in
-          let preparator = None in
-          (g_id, g_created, g_last_modified, 
-           name, project, sample,
-           protocol, application, stranded, truseq_control,
-           rnaseq_control,
-           check_barcode_provider barcode_type, 
-           barcodes, custom_barcodes,
-           p5_adapter_length, p7_adapter_length, preparator, note)
-        )
-    in
-    let il_sl_contacts = ref [] in
-    let inputs =
-      List.map s011.V011.record_input_library (fun cache ->
-        let (g_id, g_created, g_last_modified, library,
-             submission_date, contacts, volume_uL, concentration_nM,
-             user_db, note) = cache in
-
-        il_sl_contacts := (g_id, library, contacts) :: !il_sl_contacts;
-
-        (g_id, g_created, g_last_modified, library, submission_date,
-         volume_uL, concentration_nM, user_db, note)) in
-
-    let lanes =
-      List.map s011.V011.record_lane (fun cache ->
-        let (g_id, g_created, g_last_modified, seeding_concentration,
-             total_volume, libraries, pooled_percentages) = cache in
-
-        let seeding_concentration_pM = seeding_concentration in
-
-        let contacts =
-          let redundant_contacts =
-            List.find_all !il_sl_contacts ~f:(fun (il, sl, cs) ->
-              List.exists (Array.to_list libraries) ~f:((=) il))
-          in
-          let check_uniformity x =
-            List.reduce x ~f:(fun (il1, sl1, ca1) (il2, sl2, ca2) ->
-              let cmp = compare in
-              if il1 = 149l (* PhiX_v2 *) ||
-                il1 = 150l (* PhiX_v3 *) ||
-                Array.sort ~cmp ca1 = Array.sort ~cmp ca2 then (il2, sl2, ca2)
-              else (
-                List.iter redundant_contacts (fun (il, sl, ca) -> 
-                  printf "[%ld] " il;
-                  Array.iter ca (fun c ->
-                    printf "%ld, " c);
-                  printf "\n"); 
-                failwith "Contact list is not uniform !!")) in
-          match check_uniformity redundant_contacts with
-          | Some  (il, sl, ca) -> ca
-          | None -> failwith "a lane with no libraries???"
-        in
-
-        let requested_read_length_1, requested_read_length_2 =
-          let stock_libs = 
-            List.find_all !il_sl_contacts ~f:(fun (il, sl, cs) ->
-              List.exists (Array.to_list libraries) ~f:((=) il)) |>
-                List.map ~f:(fun (il, sl, ca) -> sl) |>
-                    List.dedup in
-          (* printf "SLs: "; *)
-          (* List.iter stock_libs (printf "%ld, "); *)
-          let read_lengths = 
-            List.find_all !sl_rl1_rl2 ~f:(fun (sl, rl1, rl2) ->
-              sl <> 149l (* PhiX_v2 *) 
-              && sl <> 150l (* PhiX_v3 *)
-            && List.exists stock_libs ~f:((=) sl)) |>
-                List.map ~f:(fun (sl, rl1, rl2) -> (rl1, rl2)) |>
-                    List.dedup
-          in
-          match read_lengths with
-          | [] -> (* Should be a PhiX *)
-            let flowcell_lanes =
-              List.find_map s011.V011.record_flowcell ~f:(fun cache ->
-                let (_, g_created, g_last_modified, serial_name, lanes) = cache in
-                if Array.mem g_id lanes then Some lanes else None) |>
-                  function
-                  | Some s -> Array.to_list s
-                  | None -> failwith "Can't find in which flowcell the lane is"
-            in
-            let sister_libs =
-              List.find_map flowcell_lanes (fun l ->
-                List.find_map s011.V011.record_lane ~f:(fun cache ->
-                  let (id, g_created, g_last_modified, seeding_concentration,
-                       total_volume, libraries, pooled_percentages) = cache in
-                  if id = l && g_id <> id then
-                    Some (Array.to_list libraries) else None)) |>
-                  function
-                  | Some s -> s
-                  | None -> failwith "Cannot find any other library ??"
-            in
-            let sister_lib_read_length =
-              (* We assume input_lib.id = stock_lib.id *)
-              List.find_map s011.V011.record_stock_library ~f:(fun cache ->
-                let (id, g_created, g_last_modified, name, sample,
-                     protocol, application, stranded, truseq_control,
-                     rnaseq_control, read_length_1, read_length_2, barcode_type,
-                     barcodes, note) = cache in
-                if id <> 149l && id <> 150l &&
-                  List.exists sister_libs ((=) id)
-                then Some (read_length_1, read_length_2)
-                  else None) |>
-                  function Some s -> s 
-                  | None -> failwith "can't find sister read length"
-            in
-            sister_lib_read_length
-          | [ one_rl1, Some one_rl2 ] -> (one_rl1, Some one_rl2)
-          | l ->
-            printf "Don't know what to do:\n";
-            List.iteri l ~f:(fun i (rl1, rl2) ->
-              printf "(%d: %ld ...) " i rl1);
-            printf "\n";
-            failwith "wrong requested_read_lengths"
-
-        in
-
-        let pooled_percentages_floats_sexp =
-          Array.map pooled_percentages ~f:(fun i32 ->
-            i32 |! Int64.of_int32 |! Float.of_int64)
-          |! Array.sexp_of_t Float.sexp_of_t |! Sexp.to_string in
-
-        (g_id, g_created, g_last_modified, seeding_concentration_pM,
-        total_volume, libraries, pooled_percentages_floats_sexp,
-        requested_read_length_1, requested_read_length_2, contacts))
-    in
-
-    lanes, inputs, stocks in
-
-  let record_sample = 
-    List.map s011.V011.record_sample (fun cache ->
-      let (g_id, g_created, g_last_modified, name, organism, note) = cache in
-      (g_id, g_created, g_last_modified, name, 
-       (None : string option), organism, note))
-  in
-  let d02 = {
-    V02.version = "0.2";
-    file_system = s011.V011.file_system;
-    record_log = s011.V011.record_log;
-    record_person = s011.V011.record_person;
-    record_organism = s011.V011.record_organism;
-    record_sample;
-    record_protocol = s011.V011.record_protocol;
-    record_custom_barcode = [];
-    record_stock_library;
-    record_key_value = s011.V011.record_key_value;
-    record_input_library;
-    record_lane;
-    record_flowcell = s011.V011.record_flowcell;
-    record_invoicing = [];
-    record_bioanalyzer = s011.V011.record_bioanalyzer;
-    record_agarose_gel = s011.V011.record_agarose_gel;
-    record_hiseq_raw = s011.V011.record_hiseq_raw;
-    record_inaccessible_hiseq_raw = s011.V011.record_inaccessible_hiseq_raw;
-    record_sample_sheet = s011.V011.record_sample_sheet;
-    function_assemble_sample_sheet = s011.V011.function_assemble_sample_sheet;
-
-    record_bcl_to_fastq_unaligned = s011.V011.record_bcl_to_fastq_unaligned;
-    function_bcl_to_fastq = s011.V011.function_bcl_to_fastq;
-    function_transfer_hisqeq_raw = s011.V011.function_transfer_hisqeq_raw;
-
-    function_delete_intensities = s011.V011.function_delete_intensities;
-
-    record_hiseq_checksum = s011.V011.record_hiseq_checksum;
-    function_dircmp_raw = s011.V011.function_dircmp_raw;
-    record_client_fastqs_dir = s011.V011.record_client_fastqs_dir;
-    function_prepare_delivery = s011.V011.function_prepare_delivery;
-  } in
-
-  Out_channel.(with_file file_out ~f:(fun o ->
-    output_string o (Sexplib.Sexp.to_string_hum (V02.sexp_of_dump d02))));
-
-  ()
-
-let v02_to_v03 file_in file_out =
-  let module V02M = V02.Make(Result_IO) in
-  let module V03M = V03.Make(Result_IO) in
-  let dump_v02 = In_channel.(with_file file_in ~f:input_all) in
-  let s02 = V02M.dump_of_sexp Sexplib.Sexp.(of_string dump_v02) in
-
-  let function_bcl_to_fastq = 
-    List.map s02.V02M.function_bcl_to_fastq (fun cache ->
-      let (g_id, g_result, g_recomputable, g_recompute_penalty,
-           g_inserted, g_started, g_completed, g_status,
-           raw_data, availability, mismatch, version,
-           sample_sheet) = cache in
-      (g_id, g_result, g_recomputable, g_recompute_penalty,
-       g_inserted, g_started, g_completed, g_status,
-       raw_data, availability, mismatch, version,
-       None, sample_sheet))
-  in
-
-  let d03 = {
-    V03M.version = V03.Info.version;
-    file_system                    = s02.V02M.file_system;
-    record_log                     = s02.V02M.record_log;
-    record_person                  = s02.V02M.record_person;
-    record_organism                = s02.V02M.record_organism;
-    record_sample                  = s02.V02M.record_sample;
-    record_protocol                = s02.V02M.record_protocol;
-    record_custom_barcode          = s02.V02M.record_custom_barcode;
-    record_stock_library           = s02.V02M.record_stock_library;
-    record_key_value               = s02.V02M.record_key_value;
-    record_input_library           = s02.V02M.record_input_library;
-    record_lane                    = s02.V02M.record_lane;
-    record_flowcell                = s02.V02M.record_flowcell;
-    record_invoicing               = s02.V02M.record_invoicing;
-    record_bioanalyzer             = s02.V02M.record_bioanalyzer;
-    record_agarose_gel             = s02.V02M.record_agarose_gel;
-    record_hiseq_raw               = s02.V02M.record_hiseq_raw;
-    record_inaccessible_hiseq_raw  = s02.V02M.record_inaccessible_hiseq_raw;
-    record_sample_sheet            = s02.V02M.record_sample_sheet;
-    function_assemble_sample_sheet = s02.V02M.function_assemble_sample_sheet;
-    record_bcl_to_fastq_unaligned  = s02.V02M.record_bcl_to_fastq_unaligned;
-    function_bcl_to_fastq;
-    function_transfer_hisqeq_raw   = s02.V02M.function_transfer_hisqeq_raw;
-    function_delete_intensities    = s02.V02M.function_delete_intensities;
-    record_hiseq_checksum          = s02.V02M.record_hiseq_checksum;
-    function_dircmp_raw            = s02.V02M.function_dircmp_raw;
-    record_client_fastqs_dir       = s02.V02M.record_client_fastqs_dir;
-    function_prepare_delivery      = s02.V02M.function_prepare_delivery;
-  } in
-
-  Out_channel.(with_file file_out ~f:(fun o ->
-    output_string o (Sexplib.Sexp.to_string_hum (V03M.sexp_of_dump d03))));
-
-  ()
-
 let v03_to_v04 file_in file_out =
   let module V03M = V03.Make(Result_IO) in
   let module V04M = V04.Make(Result_IO) in
@@ -361,15 +105,505 @@ let v03_to_v04 file_in file_out =
 
   ()
 
+let v04_to_v05 file_in file_out =
+  let module V04M = V04.Make(Result_IO) in
+  let module V05M = V05.Make(Result_IO) in
+  let dump_v04 = In_channel.(with_file file_in ~f:input_all) in
+  let s04 = V04M.dump_of_sexp Sexplib.Sexp.(of_string dump_v04) in
+
+  let option_map = Option.map in
+  let open V05M in
+
+  let file_system = 
+    List.map s04.V04M.file_system (fun cache ->
+      let (_volume_entry_cache, _file_cache_list) = cache in
+
+      let files =
+(* type _file_cache = (int32 * string * string * int32 array) 
+type file_entry = {f_id : int32; f_name : string;
+f_type : Hitscore_db_access.Mapke.Enumeration_file_type.t;
+f_content : int32 array;} *)
+        List.map _file_cache_list (fun (f_id, f_name, s_type, f_content) ->
+          {V05M.File_system.f_id; f_name;
+           f_type = V05M.Enumeration_file_type.of_string s_type
+                    |! Result.ok_exn ~fail:(Failure "file-type of string");
+           f_content})
+      in
+      let volume_entry =
+        let v_id, v_toplevel, v_hr_tag, v_content = _volume_entry_cache in
+        {V05M.File_system. v_id; v_toplevel; v_hr_tag; v_content}
+      in
+      {V05M.File_system. volume_entry; files}
+(* type _volume_entry_cache = 
+(int32 * string * string option * int32 array) with sexp
+  type volume_entry = {v_id : int32; v_toplevel : string;
+  	v_hr_tag : string option; v_content : int32 array;} *)
+    ) in
+  
+  let record_log                     =
+    List.map s04.V04M.record_log (fun cache -> 
+      (* (int32 * string option * string option * string) *)
+      let g_id, created, last_modified, log = cache in
+      {V05M.Record_log.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       log;}) in
+  let record_person                  =
+    List.map s04.V04M.record_person (fun cache -> 
+      (* (int32 * string option * string option * string option * string *
+         string option * string * string * string * string option * string
+         option * string * string option) with sexp *)
+
+      let g_id, created, last_modified, print_name, given_name,
+      middle_name, family_name, email, secondary_emails, login,
+      nickname, roles, note = cache in
+      {V05M.Record_person.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       print_name;
+       given_name;
+       middle_name;
+       family_name;
+       email;
+       secondary_emails = Array.t_of_sexp String.t_of_sexp
+          (Sexplib.Sexp.of_string secondary_emails);
+       login;
+       nickname;
+       roles = Array.t_of_sexp V05M.Enumeration_role.t_of_sexp
+          (Sexplib.Sexp.of_string roles);
+       note;}) in
+  let record_organism                =
+    List.map s04.V04M.record_organism (fun cache ->
+      let (g_id, created, last_modified, name, informal, note) = cache in
+      {V05M.Record_organism.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       name = name;
+       informal = informal;
+       note = note;
+      }) in
+  let record_sample                  =
+     List.map s04.V04M.record_sample (fun cache -> 
+      let (g_id, created, last_modified, 
+           name, project, organism, note) = cache in
+      {V05M.Record_sample.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       name = name;
+       project = project;
+       organism = (option_map organism (fun id -> { Record_organism.id }));
+       note = note;
+      }) in
+  let record_protocol                =
+    List.map s04.V04M.record_protocol (fun cache ->
+      let (g_id, created, last_modified, 
+           name, doc, note) = cache in
+      {V05M.Record_protocol.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       
+       name = name;
+       doc = { File_system.id = doc } ;
+       note = note;
+      })in
+  let record_custom_barcode          =
+    List.map s04.V04M.record_custom_barcode (fun cache -> 
+      let (g_id, created, last_modified, 
+position_in_r1, position_in_r2, position_in_index, sequence) = cache in
+        {V05M.Record_custom_barcode.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    position_in_r1 = position_in_r1;
+    position_in_r2 = position_in_r2;
+    position_in_index = position_in_index;
+    sequence = sequence;
+  }) in
+
+  let array_map a f = Array.map a ~f in
+
+  let record_stock_library          =
+    List.map s04.V04M.record_stock_library (fun cache -> 
+      let (g_id, created, last_modified, name, project, description,
+      sample, protocol, application, stranded, truseq_control,
+      rnaseq_control, barcode_type, barcodes, custom_barcodes,
+      p5_adapter_length, p7_adapter_length, preparator, note) = cache
+      in
+        {V05M.Record_stock_library.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    name = name;
+    project = project;
+    description = description;
+    sample = (option_map sample (fun id -> { Record_sample.id }));
+    protocol = (option_map protocol (fun id -> { Record_protocol.id }));
+    application = application;
+    stranded = stranded;
+    truseq_control = truseq_control;
+    rnaseq_control = rnaseq_control;
+    barcode_type = (Enumeration_barcode_provider.of_string_exn barcode_type);
+    barcodes = barcodes;
+    custom_barcodes = (array_map custom_barcodes (fun id ->  { Record_custom_barcode.id }));
+    p5_adapter_length = p5_adapter_length;
+    p7_adapter_length = p7_adapter_length;
+    preparator = (option_map preparator (fun id -> { Record_person.id }));
+    note = note;
+  })
+  in
+  let record_key_value               =
+    List.map s04.V04M.record_key_value (fun cache -> 
+      let (g_id, created, last_modified, key, value) = cache in
+      {V05M.Record_key_value.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       
+       key = key;
+       value = value;
+      })
+  in
+  let record_input_library           =
+    List.map s04.V04M.record_input_library (fun cache -> 
+      let (g_id, created, last_modified, library, submission_date,
+      volume_uL, concentration_nM, user_db, note) = cache in
+      {V05M.Record_input_library.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    library = { Record_stock_library.id = library };
+    submission_date = (Timestamp.of_string submission_date);
+    volume_uL = volume_uL;
+    concentration_nM = concentration_nM;
+    user_db = (array_map user_db (fun id ->  { Record_key_value.id }));
+    note = note;
+      })
+  in
+  let record_lane                    =
+    List.map s04.V04M.record_lane (fun cache -> 
+      let (g_id, created, last_modified, seeding_concentration_pM,
+      total_volume, libraries, pooled_percentages,
+      requested_read_length_1, requested_read_length_2, contacts) =
+      cache in
+        {V05M.Record_lane.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    seeding_concentration_pM = seeding_concentration_pM;
+    total_volume = total_volume;
+    libraries = (array_map libraries (fun id ->  { Record_input_library.id }));
+    pooled_percentages = Core.Std.(Array.t_of_sexp Float.t_of_sexp (Sexplib.Sexp.of_string pooled_percentages));
+    requested_read_length_1 = requested_read_length_1;
+    requested_read_length_2 = requested_read_length_2;
+    contacts = (array_map contacts (fun id ->  { Record_person.id }));
+  })
+  in
+  let record_flowcell                =
+    List.map s04.V04M.record_flowcell (fun cache -> 
+      let (g_id, created, last_modified, serial_name, lanes) = cache in
+        {V05M.Record_flowcell.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    serial_name = serial_name;
+    lanes = (array_map lanes (fun id ->  { Record_lane.id }));
+  })
+  in
+  let record_invoicing               =
+    List.map s04.V04M.record_invoicing (fun cache -> 
+      let (g_id, created, last_modified, pi, account_number, fund, org, program, project, lanes, percentage, note) = cache in
+        {V05M.Record_invoicing.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    pi = { Record_person.id = pi };
+    account_number = account_number;
+    fund = fund;
+    org = org;
+    program = program;
+    project = project;
+    lanes = (array_map lanes (fun id ->  { Record_lane.id }));
+    percentage = percentage;
+    note = note;
+  })
+  in
+  let record_bioanalyzer             =
+    List.map s04.V04M.record_bioanalyzer (fun cache -> 
+      let (g_id, created, last_modified, library, well_number,
+           mean_fragment_size, min_fragment_size, max_fragment_size, note,
+           files) = cache in
+      {V05M.Record_bioanalyzer.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       
+    library = { Record_stock_library.id = library };
+    well_number = well_number;
+    mean_fragment_size = mean_fragment_size;
+    min_fragment_size = min_fragment_size;
+    max_fragment_size = max_fragment_size;
+    note = note;
+    files = (option_map files (fun id -> { File_system.id }));
+        })  in
+  let record_agarose_gel             =
+    List.map s04.V04M.record_agarose_gel (fun cache -> 
+      let (g_id, created, last_modified, library, well_number, mean_fragment_size, min_fragment_size, max_fragment_size, note, files) = cache in
+        {V05M.Record_agarose_gel.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    library = { Record_stock_library.id = library };
+    well_number = well_number;
+    mean_fragment_size = mean_fragment_size;
+    min_fragment_size = min_fragment_size;
+    max_fragment_size = max_fragment_size;
+    note = note;
+    files = (option_map files (fun id -> { File_system.id }));
+  })
+  in
+  let record_hiseq_raw               =
+    List.map s04.V04M.record_hiseq_raw (fun cache -> 
+      let (g_id, created, last_modified, flowcell_name, read_length_1, read_length_index, read_length_2, with_intensities, run_date, host, hiseq_dir_name) = cache in
+        {V05M.Record_hiseq_raw.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    flowcell_name = flowcell_name;
+    read_length_1 = read_length_1;
+    read_length_index = read_length_index;
+    read_length_2 = read_length_2;
+    with_intensities = with_intensities;
+    run_date = (Timestamp.of_string run_date);
+    host = host;
+    hiseq_dir_name = hiseq_dir_name;
+  })
+  in
+  let record_inaccessible_hiseq_raw  =
+    List.map s04.V04M.record_inaccessible_hiseq_raw (fun cache -> 
+      let (g_id, created, last_modified, deleted) = cache in
+        {V05M.Record_inaccessible_hiseq_raw.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    deleted = (array_map deleted (fun id ->  { Record_hiseq_raw.id }));
+  })
+  in
+  let record_sample_sheet            =
+    List.map s04.V04M.record_sample_sheet (fun cache ->
+      let (g_id, created, last_modified, file, note) = cache in
+        {V05M.Record_sample_sheet.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    file = { File_system.id = file } ;
+    note = note;
+  })
+  in
+  let function_assemble_sample_sheet =
+    List.map s04.V04M.function_assemble_sample_sheet (fun cache -> 
+      let (g_id, result, g_recomputable, g_recompute_penalty,
+        g_inserted, g_started, g_completed, g_status,
+        kind, flowcell) = cache in
+        {V05M.Function_assemble_sample_sheet.
+  	 g_id;
+  	 g_result = option_map result (fun id -> {Record_sample_sheet.id});
+  	 g_recomputable;
+  	 g_recompute_penalty;
+  	 g_inserted = Option.map g_inserted Time.of_string;
+  	 g_started = Option.map g_started Time.of_string;
+  	 g_completed = Option.map g_completed Time.of_string;
+  	 g_status = Enumeration_process_status.of_string_exn g_status;
+         kind = (Enumeration_sample_sheet_kind.of_string_exn kind);
+         flowcell = { Record_flowcell.id = flowcell };
+        })
+  in
+  let record_bcl_to_fastq_unaligned  =
+    List.map s04.V04M.record_bcl_to_fastq_unaligned (fun cache -> 
+      let (g_id, created, last_modified, directory) = cache in
+        {V05M.Record_bcl_to_fastq_unaligned.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+
+    directory = { File_system.id = directory } ;
+  })
+  in
+  let function_bcl_to_fastq          =
+    List.map s04.V04M.function_bcl_to_fastq (fun cache -> 
+      let (g_id, result, g_recomputable, g_recompute_penalty,
+           g_inserted, g_started, g_completed, g_status,
+           raw_data, availability, mismatch, version, tiles, sample_sheet) = cache in
+        {V05M.Function_bcl_to_fastq.
+  	 g_id;
+  	 g_result = option_map result (fun id -> {Record_bcl_to_fastq_unaligned.id});
+  	 g_recomputable;
+  	 g_recompute_penalty;
+  	 g_inserted = Option.map g_inserted Time.of_string;
+  	 g_started = Option.map g_started Time.of_string;
+  	 g_completed = Option.map g_completed Time.of_string;
+  	 g_status = Enumeration_process_status.of_string_exn g_status;
+         raw_data = { Record_hiseq_raw.id = raw_data };
+         availability = { Record_inaccessible_hiseq_raw.id = availability };
+         mismatch = mismatch;
+         version = version;
+         tiles = tiles;
+         sample_sheet = { Record_sample_sheet.id = sample_sheet };
+        })
+  in
+  let function_transfer_hisqeq_raw   =
+    List.map s04.V04M.function_transfer_hisqeq_raw (fun cache -> 
+      let (g_id, result, g_recomputable, g_recompute_penalty,
+        g_inserted, g_started, g_completed, g_status,
+           hiseq_raw, availability, dest) = cache in
+        {V05M.Function_transfer_hisqeq_raw.
+  	 g_id;
+  	 g_result = option_map result (fun id -> {Record_hiseq_raw.id});
+  	 g_recomputable;
+  	 g_recompute_penalty;
+  	 g_inserted = Option.map g_inserted Time.of_string;
+  	 g_started = Option.map g_started Time.of_string;
+  	 g_completed = Option.map g_completed Time.of_string;
+  	 g_status = Enumeration_process_status.of_string_exn g_status;
+         hiseq_raw = { Record_hiseq_raw.id = hiseq_raw };
+         availability = { Record_inaccessible_hiseq_raw.id = availability };
+         dest = dest;
+        })
+  in
+  let function_delete_intensities    =
+    List.map s04.V04M.function_delete_intensities (fun cache -> 
+      let (g_id, result, g_recomputable, g_recompute_penalty,
+        g_inserted, g_started, g_completed, g_status,
+        hiseq_raw, availability) = cache in
+      {V05M.Function_delete_intensities.
+       g_id;
+  	 g_result = option_map result (fun id -> {Record_hiseq_raw.id});
+  	 g_recomputable;
+  	 g_recompute_penalty;
+  	 g_inserted = Option.map g_inserted Time.of_string;
+  	 g_started = Option.map g_started Time.of_string;
+  	 g_completed = Option.map g_completed Time.of_string;
+  	 g_status = Enumeration_process_status.of_string_exn g_status;
+    hiseq_raw = { Record_hiseq_raw.id = hiseq_raw };
+    availability = { Record_inaccessible_hiseq_raw.id = availability };
+        })
+  in
+  let record_hiseq_checksum          =
+    List.map s04.V04M.record_hiseq_checksum (fun cache -> 
+      let (g_id, created, last_modified, file) = cache in
+        {V05M.Record_hiseq_checksum.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       file = { File_system.id = file } ;
+        })
+  in
+  let function_dircmp_raw            =
+    List.map s04.V04M.function_dircmp_raw (fun cache -> 
+      let (g_id, result, g_recomputable, g_recompute_penalty,
+        g_inserted, g_started, g_completed, g_status,
+        hiseq_raw, availability) = cache in
+      {V05M.Function_dircmp_raw.
+       g_id;
+  	 g_result = option_map result (fun id -> {Record_hiseq_checksum.id});
+  	 g_recomputable;
+  	 g_recompute_penalty;
+  	 g_inserted = Option.map g_inserted Time.of_string;
+  	 g_started = Option.map g_started Time.of_string;
+  	 g_completed = Option.map g_completed Time.of_string;
+  	 g_status = Enumeration_process_status.of_string_exn g_status;
+    hiseq_raw = { Record_hiseq_raw.id = hiseq_raw };
+    availability = { Record_inaccessible_hiseq_raw.id = availability };
+        })
+
+  in
+  let record_client_fastqs_dir       =
+    List.map s04.V04M.record_client_fastqs_dir (fun cache -> 
+      let (g_id, created, last_modified,dir__dirfile) = cache in
+      {V05M.Record_client_fastqs_dir.
+       g_id;
+       g_created = Option.map created Time.of_string;
+       g_last_modified = Option.map created Time.of_string;
+       
+       dir__dirfile = dir__dirfile;
+      }) in
+  let function_prepare_delivery      =
+    List.map s04.V04M.function_prepare_delivery (fun cache -> 
+      let (g_id, result, g_recomputable, g_recompute_penalty,
+        g_inserted, g_started, g_completed, g_status,
+        unaligned, info) = cache in
+      {V05M.Function_prepare_delivery.
+       g_id;
+  	 g_result = option_map result (fun id -> {Record_client_fastqs_dir.id});
+  	 g_recomputable;
+  	 g_recompute_penalty;
+  	 g_inserted = Option.map g_inserted Time.of_string;
+  	 g_started = Option.map g_started Time.of_string;
+  	 g_completed = Option.map g_completed Time.of_string;
+  	 g_status = Enumeration_process_status.of_string_exn g_status;
+         unaligned = { Record_bcl_to_fastq_unaligned.id = unaligned };
+         info = { Record_flowcell.id = info };
+        })
+  in
+
+  let d05 =
+    let open V05M in
+    {
+      version = V05.Info.version;
+      file_system                    ;
+      record_log                     ;
+      record_person                  ;
+      record_organism                ;
+      record_sample                  ;
+      record_protocol                ;
+      record_custom_barcode          ;
+      record_stock_library           ;
+      record_key_value               ;
+      record_input_library           ;
+      record_lane                    ;
+      record_flowcell                ;
+      record_invoicing               ;
+      record_bioanalyzer             ;
+      record_agarose_gel             ;
+      record_hiseq_raw               ;
+      record_inaccessible_hiseq_raw  ;
+      record_sample_sheet            ;
+      function_assemble_sample_sheet ;
+      record_bcl_to_fastq_unaligned  ;
+      function_bcl_to_fastq          ;
+      function_transfer_hisqeq_raw   ;
+      function_delete_intensities    ;
+      record_hiseq_checksum          ;
+      function_dircmp_raw            ;
+      record_client_fastqs_dir       ;
+      function_prepare_delivery      ;
+    } in
+  Out_channel.(with_file file_out ~f:(fun o ->
+    output_string o (Sexplib.Sexp.to_string_hum (V05M.sexp_of_dump d05))));
+
+  ()
+
 
 
 let () =
   match Array.to_list Sys.argv with
-  | exec :: "v011-v02" :: file_in :: file_out :: [] ->
-    v011_to_v02 file_in file_out 
-  | exec :: "v02-v03" :: file_in :: file_out :: [] ->
-    v02_to_v03 file_in file_out 
   | exec :: "v03-v04" :: file_in :: file_out :: [] ->
     v03_to_v04 file_in file_out 
+  | exec :: "v04-v05" :: file_in :: file_out :: [] ->
+    v04_to_v05 file_in file_out 
   | _ ->
-    eprintf "usage: %s {v011-v02,v02-v03,v03-v04} <dump-in> <dump-out>\n" Sys.argv.(0)
+    eprintf "usage: %s {v03-v04,v04-v05} <dump-in> <dump-out>\n" Sys.argv.(0)
