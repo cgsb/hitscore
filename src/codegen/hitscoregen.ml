@@ -28,13 +28,13 @@ let () =
       ~f:(fun o -> Psql.clear_db_postgres db (output_string o));
     
     with_file (prefix ^ (Filename.basename file) ^ "_code.ml") 
-      ~f:(fun o -> ocaml_code dsl (output_string o));
+      ~f:(fun o -> Hitscoregen_layout_ocaml.ocaml_code dsl (output_string o));
 
   | exec :: "codegen" :: in_file :: out_file :: [] ->
     let dsl =
       In_channel.(with_file in_file ~f:(fun i -> parse_str (input_all i))) in
-    Out_channel.(with_file out_file
-                   ~f:(fun o -> ocaml_code dsl (output_string o)))
+    Out_channel.(with_file out_file ~f:(fun o -> 
+      Hitscoregen_layout_ocaml.ocaml_code dsl (output_string o)))
       
   | exec :: "dbverify" :: file :: [] ->
     In_channel.(with_file file
