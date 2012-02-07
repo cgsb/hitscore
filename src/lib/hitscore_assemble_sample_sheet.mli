@@ -41,35 +41,39 @@ If any step fails (e.g. the shell command)
     run_command:(string -> (unit, 'a) ACL.Result_IO.monad) ->
     string ->
     ([ `new_failure of
-        [ `can_nothing ] Layout.Function_assemble_sample_sheet.t * 'a
+        [ `can_nothing ]
+          Layout.Function_assemble_sample_sheet.pointer * 'a
      | `new_success of
-         [ `can_get_result ] Layout.Function_assemble_sample_sheet.t
+         [ `can_get_result ]
+           Layout.Function_assemble_sample_sheet.pointer
      | `previous_success of
-         [ `can_get_result ] Layout.Function_assemble_sample_sheet.t *
-           Layout.Record_sample_sheet.t ],
-     [> `barcode_not_found of
-         int32 * Layout.Enumeration_barcode_provider.t
-     | `fatal_error of [> `trees_to_unix_paths_should_return_one ]
-     | `layout_inconsistency of
-         [> `file_system
-         | `function_assemble_sample_sheet
-         | `record_flowcell
-         | `record_input_library
-         | `record_lane
-         | `record_log
-         | `record_sample_sheet
-         | `record_stock_library ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `search_by_name_not_unique of
-               (int32 * Layout.PGOCaml.int32_array) list
-           | `select_did_not_return_one_cache of string * int
-           | `successful_status_with_no_result of int32 ]
-     | `pg_exn of exn
-     | `wrong_request of
-         [> `record_flowcell ] * [> `value_not_found of string ] ])
+         [ `can_get_result ]
+           Layout.Function_assemble_sample_sheet.pointer *
+           Layout.Record_sample_sheet.pointer ],
+            [> `barcode_not_found of
+                int32 * Layout.Enumeration_barcode_provider.t
+            | `fatal_error of [> `trees_to_unix_paths_should_return_one ]
+            | `layout_inconsistency of
+                [> `file_system
+                | `function_assemble_sample_sheet
+                | `record_flowcell
+                | `record_input_library
+                | `record_lane
+                | `record_log
+                | `record_sample_sheet
+                | `record_stock_library ] *
+                  [> `add_did_not_return_one of string * int32 list
+                  | `insert_did_not_return_one_id of string * int32 list
+                  | `search_by_name_not_unique of
+                      (int32 * Layout.PGOCaml.int32_array) list
+                  | `select_did_not_return_one_cache of string * int
+                  | `select_did_not_return_one_tuple of string * int
+                  | `successful_status_with_no_result of int32 ]
+            | `pg_exn of exn
+            | `wrong_request of
+                [> `record_flowcell ] * [> `value_not_found of string ] ])
       Result_IO.monad
-  
-
+      
+ 
 
 end

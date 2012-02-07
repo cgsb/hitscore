@@ -59,7 +59,7 @@ module Make
     type sample_sheet = {
       content: Buffer.t;
       kind: Layout.Enumeration_sample_sheet_kind.t;
-      flowcell: Layout.Record_flowcell.t;
+      flowcell: Layout.Record_flowcell.pointer;
       flowcell_name: string;
     }
 
@@ -101,7 +101,7 @@ module Make
             | (idf, Some idr) :: _ ->
               return (Some (
                 Layout.Function_assemble_sample_sheet.(
-                  ({ id = idf } : [ `can_get_result ] t)),
+                  ({ id = idf } : [ `can_get_result ] pointer)),
                 Layout.Record_sample_sheet.({ id = idr })))
             | (idf, None) :: _ ->
               error (`layout_inconsistency (`function_assemble_sample_sheet,
@@ -120,17 +120,16 @@ module Make
                     ,Recipe,Operator,SampleProject\n";
           of_list_sequential lane_list ~f:(fun (lane_idx, l) ->
             let open Layout.Record_lane in
-            cache_value ~dbh l
-            >>| get_fields
+            get ~dbh l
             >>= fun { libraries; _ } -> 
             begin match kind with
             | `specific_barcodes ->
               of_list_sequential (Array.to_list libraries) ~f:(fun input ->
                 let open Layout.Record_input_library in
-                cache_value ~dbh input >>| get_fields 
+                get ~dbh input
                 >>= fun { library; _ } ->
                 let open Layout.Record_stock_library in
-                cache_value ~dbh library >>| get_fields
+                get ~dbh library
                 >>= fun { name; barcode_type; barcodes; _ } ->
                 let barcode_type =
                 (* if only one lib, then no barcoding *)
@@ -170,10 +169,10 @@ module Make
                 let elected_barcode_type =
                   of_list_sequential (Array.to_list some) (fun il ->
                     let open Layout.Record_input_library in
-                    cache_value ~dbh il >>| get_fields 
+                    get ~dbh il
                     >>= fun { library; _ } ->
                     let open Layout.Record_stock_library in
-                    cache_value ~dbh library >>| get_fields
+                    get ~dbh library
                     >>= fun { barcode_type; _ } ->
                     return barcode_type)
                   >>= fun bt_list ->
@@ -214,12 +213,12 @@ module Make
                       sample_sheet.kind))
         ~kind:`sample_sheet_csv ~files
       >>= fun file ->
-      Layout.File_system.cache_volume_entry ~dbh file 
-      >>= fun vol_entry_cache ->
+      Layout.File_system.get_volume_entry ~dbh file 
+      >>= fun vol_entry ->
       Layout.File_system.(
         match trees_to_unix_paths files with
         | [ one_path ] ->
-          return (file, entry_unix_path (volume_entry vol_entry_cache), one_path)
+          return (file, entry_unix_path vol_entry, one_path)
         | _ ->
           error (`fatal_error `trees_to_unix_paths_should_return_one))
 
@@ -278,11 +277,11 @@ module Make
                         (Layout.Enumeration_sample_sheet_kind.to_string kind))
               >>= fun _ ->
               Layout.File_system.(
-                cache_volume ~dbh the_volume
+                get_volume ~dbh the_volume
                 >>= fun cache ->
-                delete_cache ~dbh cache
+                delete_volume ~dbh cache
                 >>= fun () ->
-                return (sexp_of_volume_cache cache))
+                return (sexp_of_volume cache))
               >>= fun sexp ->
               Layout.Record_log.add_value ~dbh
                 ~log:(sprintf "(delete_orphan_volume %s)"

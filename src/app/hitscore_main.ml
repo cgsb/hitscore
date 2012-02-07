@@ -604,12 +604,12 @@ module Verify = struct
       let (>>>) x f = Result.ok_exn ~fail:(Failure f) x in
       let vols = Hitscore_db.File_system.get_all ~dbh >>> "File_system.get_all" in
       List.iter vols ~f:(fun vol -> 
-        Hitscore_db.File_system.cache_volume ~dbh vol >>> "Caching volume" |>
+        Hitscore_db.File_system.get_volume ~dbh vol >>> "Caching volume" |>
             (fun volume ->
               let path =
                 volume_path
-                  Hitscore_db.File_system.(volume |> volume_entry_cache |> 
-                      volume_entry |> entry_unix_path) in
+                  Hitscore_db.File_system.(volume.volume_entry
+                                              |> entry_unix_path) in
               if verbose then
                 log "* Checking volume %S\n" path;
               Unix.(try
@@ -733,19 +733,19 @@ module FS = struct
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       Hitscore_threaded.Layout.File_system.(
-        let vol_cache = cache_volume ~dbh { id = vol } in
-        begin match vol_cache >>| volume_entry_cache
-                     >>| volume_entry >>| entry_unix_path with
-        | Ok path ->
+        let vol_cache = get_volume ~dbh { id = vol } in
+        begin match vol_cache with 
+        | Ok vc ->
+          let path = entry_unix_path vc.volume_entry in
           let file_args = 
             String.concat ~sep:" " (List.map files (sprintf "%S")) in
           eprintf "Copying %s to %s/\n" file_args (volume_path path);
           ksprintf System.command_exn "cp %s %s/" file_args (volume_path path)
         | Error (`layout_inconsistency (`file_system,
-                                        `select_did_not_return_one_cache (s, i))) ->
+                                        `select_did_not_return_one_tuple (s, i))) ->
           eprintf "ERROR(FS.add_tree_to_volume): \n\
-          Layout.File_system.cache_volume detected an inconsistency\n\
-          FILE_SYSTEM: select_did_not_return_one_cache (%s, %d)" s i;
+          Layout.File_system.get_volume detected an inconsistency\n\
+          FILE_SYSTEM: select_did_not_return_one_tuple (%s, %d)" s i;
           failwith "STOP"
         | Error (`pg_exn e) ->
           eprintf "ERROR(FS.add_tree_to_volume): \n\
@@ -813,7 +813,7 @@ module Flowcell = struct
       List.map lanes (fun id ->
         check_lane_unused ~dbh id;
         Layout.Record_lane.(
-          cache_value ~dbh { id } >>| get_fields
+          get ~dbh { id }
           >>= fun { requested_read_length_1; requested_read_length_2; _ } ->
           return (requested_read_length_1, requested_read_length_2 )
         ) |! function
@@ -1079,21 +1079,17 @@ module Query = struct
            get_all ~dbh
            >>= fun flowcells ->
            of_list_sequential flowcells ~f:(fun f ->
-             cache_value ~dbh f >>| get_fields
-             >>= fun {serial_name; lanes} ->
+             get ~dbh f >>= fun {serial_name; lanes} ->
              of_list_sequential
                (Array.to_list (Array.mapi lanes ~f:(fun i a -> (i,a))))
                ~f:(fun (i, l) ->
                  Layout.Record_lane.(
-                   cache_value ~dbh l >>| get_fields
-                   >>= fun {libraries; _} ->
+                   get ~dbh l >>= fun {libraries; _} ->
                    of_list_sequential (Array.to_list libraries) ~f:(fun lib ->
                      Layout.Record_input_library.(
-                       cache_value ~dbh lib >>| get_fields
-                       >>= fun {library; _} ->
+                       get ~dbh lib >>= fun {library; _} ->
                        Layout.Record_stock_library.(
-                         cache_value ~dbh library >>| get_fields
-                         >>= fun {name; _} ->
+                         get ~dbh library >>= fun {name; _} ->
                          return (serial_name, i + 1, name))))))))
          >>= fun ll ->
          return (List.iter (List.flatten (List.flatten ll)) (fun (s, i, n) ->
@@ -1176,9 +1172,9 @@ module Run_bcl_to_fastq = struct
     | `new_success f ->
       printf "Assemble_sample_sheet.run succeeded\n";
       Layout.Function_assemble_sample_sheet.(
-        cache_evaluation ~dbh f
-        >>= fun cache ->
-        get_result cache) 
+        get ~dbh f >>= function
+        | { g_result = None; _ } -> error `assemble_sample_sheet_no_result
+        | { g_result = Some r } -> return r)
     | `previous_success (f, r) ->
       printf "Assemble_sample_sheet.run hit a previously ran assembly\n";
       return r
@@ -1235,6 +1231,8 @@ module Run_bcl_to_fastq = struct
       | `not_started e ->
         printf "INVALID-REQUEST: The function is NOT STARTED: %S.\n"
           (Layout.Enumeration_process_status.to_string e);
+      | `assemble_sample_sheet_no_result ->
+        printf "LAYOUT-INCONSISTENCY: The sample-sheet assembly has no result"
       end
 
   let get_hiseq_raw ~dbh s =
@@ -1248,8 +1246,7 @@ module Run_bcl_to_fastq = struct
         try
           Layout.Record_hiseq_raw.(
             let hst = { id = Int32.of_string s } in
-            cache_value ~dbh hst >>| get_fields
-            >>= fun {flowcell_name; _} ->
+            get ~dbh hst >>= fun {flowcell_name; _} ->
             return ([hst], flowcell_name))
         with
           e ->
@@ -1368,9 +1365,8 @@ module Run_bcl_to_fastq = struct
           get_all ~dbh
           >>= fun all ->
           of_list_sequential all ~f:(fun ihr_t ->
-            cache_value ~dbh ihr_t
-            >>= fun cache ->
-            begin match last_modified cache with
+            get ~dbh ihr_t >>= fun { g_last_modified; _ } ->
+            begin match g_last_modified with
             | Some t -> return (ihr_t, t)
             | None -> error (`layout_inconsistency 
                                 (`record_inaccessible_hiseq_raw,
@@ -1441,9 +1437,9 @@ module Run_bcl_to_fastq = struct
         db_connect hsc
         >>= fun dbh ->
         Layout.Function_bcl_to_fastq.(
-          cache_evaluation ~dbh bcl_to_fastq 
-          >>= fun cache ->
-          IO.return (is_started cache))
+          get ~dbh bcl_to_fastq >>= function
+          | { g_status = `Started; } as e -> return e
+          | { g_status } -> error (`not_started g_status))
         >>= fun _ ->
         Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root
           ~configuration:hsc ~run_command:System.command
@@ -1473,9 +1469,9 @@ module Run_bcl_to_fastq = struct
       let work =
         db_connect hsc >>= fun dbh -> 
         Layout.Function_bcl_to_fastq.(
-          cache_evaluation ~dbh bcl_to_fastq 
-          >>= fun cache ->
-          IO.return (is_started cache))
+          get ~dbh bcl_to_fastq  >>= function
+          | { g_status = `Started; } as e -> return e
+          | { g_status } -> error (`not_started g_status))
         >>= fun _ ->
         Bcl_to_fastq.fail ~dbh ?reason bcl_to_fastq in
       display_errors work;
@@ -1529,9 +1525,9 @@ module Run_bcl_to_fastq = struct
       let work =
         db_connect hsc >>= fun dbh -> 
         Layout.Function_bcl_to_fastq.(
-          cache_evaluation ~dbh bcl_to_fastq 
-          >>= fun cache ->
-          IO.return (is_started cache))
+          get ~dbh bcl_to_fastq  >>= function
+          | { g_status = `Started; } as e -> return e
+          | { g_status } -> error (`not_started g_status))
         >>= fun _ ->
         Bcl_to_fastq.kill ~dbh
           ~configuration:hsc ~run_command:System.command bcl_to_fastq in

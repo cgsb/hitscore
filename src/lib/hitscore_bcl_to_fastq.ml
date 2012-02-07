@@ -13,9 +13,9 @@ module Make
     type 'a start_error = 
     [> `cannot_recognize_file_type of string
     | `empty_sample_sheet_volume of
-        Layout.File_system.volume * Layout.Record_sample_sheet.t
+        Layout.File_system.volume_pointer * Layout.Record_sample_sheet.pointer
     | `hiseq_dir_deleted of
-        Layout.Record_hiseq_raw.t * Layout.Record_inaccessible_hiseq_raw.t
+        Layout.Record_hiseq_raw.pointer * Layout.Record_inaccessible_hiseq_raw.pointer
     | `inconsistency_inode_not_found of int32
     | `layout_inconsistency of
         [> `file_system
@@ -25,9 +25,10 @@ module Make
         | `record_log
         | `record_sample_sheet ] *
           [> `insert_did_not_return_one_id of string * int32 list
-          | `select_did_not_return_one_cache of string * int ]
+          | `select_did_not_return_one_tuple of string * int ]
     | `more_than_one_file_in_sample_sheet_volume of
-        Layout.File_system.volume * Layout.Record_sample_sheet.t * string list
+        Layout.File_system.volume_pointer * 
+          Layout.Record_sample_sheet.pointer * string list
     | `pg_exn of exn 
     | `root_directory_not_configured
     | `work_directory_not_configured
@@ -40,9 +41,9 @@ module Make
       sprintf "%s/B2F/run/%ld" work_dir db_id
 
     let start ~dbh ~configuration
-        ~(sample_sheet: Layout.Record_sample_sheet.t)
-        ~(hiseq_dir: Layout.Record_hiseq_raw.t)
-        ~(availability: Layout.Record_inaccessible_hiseq_raw.t)
+        ~(sample_sheet: Layout.Record_sample_sheet.pointer)
+        ~(hiseq_dir: Layout.Record_hiseq_raw.pointer)
+        ~(availability: Layout.Record_inaccessible_hiseq_raw.pointer)
         ?tiles
         ?(mismatch=`one)
         ?(version=`casava_182)
@@ -56,23 +57,21 @@ module Make
         name =
 
       Layout.Record_inaccessible_hiseq_raw.(
-        cache_value ~dbh availability >>| get_fields
-        >>= fun {deleted} ->
+        get ~dbh availability >>= fun {deleted} ->
         if Array.exists deleted ((=) hiseq_dir) then
           error (`hiseq_dir_deleted (hiseq_dir, availability))
         else
           return ())
       >>= fun () ->
       Layout.Record_sample_sheet.(
-        cache_value ~dbh sample_sheet >>| get_fields
+        get ~dbh sample_sheet
         >>= fun { file; _ } ->
         Layout.File_system.(
-          cache_volume ~dbh file
+          get_volume ~dbh file
           >>= fun vc -> (volume_trees vc |! IO.return) >>| trees_to_unix_paths 
           >>= function
           | [one] ->
-            let vol =
-              volume_entry_cache vc |! volume_entry |! entry_unix_path in
+            let vol = vc.volume_entry |! entry_unix_path in
             begin match Configuration.volume_path_fun configuration with
             | Some vol_path ->
               return (sprintf "%s/%s" (vol_path vol) one)
@@ -84,8 +83,7 @@ module Make
                               (file, sample_sheet, more))))
       >>= fun sample_sheet_path ->
       Layout.Record_hiseq_raw.(
-        cache_value ~dbh hiseq_dir >>| get_fields
-        >>= fun {hiseq_dir_name; _} ->
+        get ~dbh hiseq_dir >>= fun {hiseq_dir_name; _} ->
         return (hiseq_dir_name ^ "/Data/Intensities/BaseCalls/"))
       >>= fun basecalls ->
       let mismatch32 =
@@ -233,7 +231,7 @@ module Make
         | `record_log ] *
           [> `add_did_not_return_one of string * int32 list
           | `insert_did_not_return_one_id of string * int32 list
-          | `select_did_not_return_one_cache of string * int ]
+          | `select_did_not_return_one_tuple of string * int ]
     | `pg_exn of exn
     | `root_directory_not_configured]
 
@@ -243,9 +241,9 @@ module Make
         add_volume ~dbh ~hr_tag:(Filename.basename result_root)
           ~kind:`bcl_to_fastq_unaligned_opaque ~files
         >>= fun vol ->
-        cache_volume_entry ~dbh vol
+        get_volume_entry ~dbh vol
         >>= fun vol_ec ->
-        return (vol, entry_unix_path (volume_entry vol_ec)))
+        return (vol, entry_unix_path vol_ec))
       >>= fun (directory, path_vol) ->
       let move_m =
         match Configuration.volume_path configuration path_vol with
@@ -269,11 +267,11 @@ module Make
           return (`success success))
         ~error:(fun e ->
           Layout.File_system.(
-            cache_volume ~dbh directory
+            get_volume ~dbh directory
             >>= fun cache ->
-            delete_cache ~dbh cache
+            delete_volume ~dbh cache
             >>= fun () ->
-            return (sexp_of_volume_cache cache))
+            return (sexp_of_volume cache))
           >>= fun sexp ->
           Layout.Function_bcl_to_fastq.set_failed ~dbh bcl_to_fastq
           >>= fun failed ->
@@ -306,18 +304,17 @@ module Make
       end
       >>= fun work_dir ->
       Layout.Function_bcl_to_fastq.(
-        cache_evaluation ~dbh bcl_to_fastq 
-        >>= fun cache ->
-        match (is_started cache) with
-        | Ok cache ->
+        get ~dbh bcl_to_fastq 
+        >>= fun { g_status; _ } ->
+        match g_status with
+        | `Started ->
           let run_dir = work_run_time work_dir bcl_to_fastq.id in
           ksprintf run_command "cat %s/jobid && qstat `cat %s/jobid`" 
             run_dir run_dir
           |! double_bind
               ~ok:(fun () -> return (`running))
               ~error:(fun e -> return (`started_but_not_running e))
-        | Error (`status_parsing_error o) -> error (`status_parsing_error o)
-        | Error (`wrong_status s) -> return (`not_started s)
+        | s -> return (`not_started s)
       )
 
 
@@ -326,12 +323,11 @@ module Make
         [> `function_bcl_to_fastq | `record_log ] *
           [> `insert_did_not_return_one_id of
               string * int32 list
-          | `select_did_not_return_one_cache of
+          | `select_did_not_return_one_tuple of
               string * int ]
     | `not_started of
         Layout.Enumeration_process_status.t
     | `pg_exn of exn
-    | `status_parsing_error of string
     | `work_directory_not_configured ]
 
     let kill ~dbh ~configuration ~run_command bcl_to_fastq = 
@@ -341,17 +337,16 @@ module Make
       end
       >>= fun work_dir ->
       Layout.Function_bcl_to_fastq.(
-        cache_evaluation ~dbh bcl_to_fastq 
-        >>= fun cache ->
-        match (is_started cache) with
-        | Ok cache ->
+        get ~dbh bcl_to_fastq 
+        >>= fun { g_status } ->
+        match g_status  with
+        | `Started ->
           let run_dir = work_run_time work_dir bcl_to_fastq.id in
           ksprintf run_command "cat %s/jobid && qdel `cat %s/jobid`" 
             run_dir run_dir
           >>= fun () ->
           fail ~dbh ~reason:"killed" bcl_to_fastq
-        | Error (`status_parsing_error o) -> error (`status_parsing_error o)
-        | Error (`wrong_status s) -> error (`not_started s)
+        | s -> error (`not_started s)
       )
 
 
