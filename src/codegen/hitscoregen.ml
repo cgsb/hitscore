@@ -36,6 +36,12 @@ let () =
     Out_channel.(with_file out_file ~f:(fun o -> 
       Hitscoregen_layout_ocaml.ocaml_code dsl (output_string o)))
       
+  | exec :: "codegen-itf" :: in_file :: out_file :: [] ->
+    let dsl =
+      In_channel.(with_file in_file ~f:(fun i -> parse_str (input_all i))) in
+    Out_channel.(with_file out_file ~f:(fun o -> 
+      Hitscoregen_layout_ocaml.ocaml_interface dsl (output_string o)))
+      
   | exec :: "dbverify" :: file :: [] ->
     In_channel.(with_file file
                   ~f:(fun i -> Psql.verify

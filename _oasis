@@ -33,6 +33,7 @@ Library hitscore
   Modules: Hitscore
           , Hitscore_std
           , Hitscore_interfaces
+          , Hitscore_layout_interface
           , Hitscore_db_access
           , Hitscore_assemble_sample_sheet
           , Hitscore_bcl_to_fastq

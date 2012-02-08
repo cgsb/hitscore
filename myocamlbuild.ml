@@ -8,11 +8,22 @@ let hitscoregen = A hitscoregen_cmd;;
 
 rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_db_access.ml"
   ~prod:"src/lib/hitscore_db_access.ml"
-  ~deps:["data/hitscore_layout"; hitscoregen_cmd]
+  ~deps:["src/lib/hitscore_layout_interface.ml"; 
+         "data/hitscore_layout"; hitscoregen_cmd]
   begin
     fun env build ->
       Cmd (S [hitscoregen; A "codegen"; P (env "data/hitscore_layout");
               P (env "src/lib/hitscore_db_access.ml")])
+  end
+;;
+
+rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_layout_interface.ml"
+  ~prod:"src/lib/hitscore_layout_interface.ml"
+  ~deps:["data/hitscore_layout"; hitscoregen_cmd]
+  begin
+    fun env build ->
+      Cmd (S [hitscoregen; A "codegen-itf"; P (env "data/hitscore_layout");
+              P (env "src/lib/hitscore_layout_interface.ml")])
   end
 ;;
 

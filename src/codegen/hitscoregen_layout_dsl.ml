@@ -107,7 +107,7 @@ let rec type_is_option = function
   | Real         -> `no
   | String       -> `no
   | Option o     -> `yes
-  | Array a      -> type_is_option a
+  | Array a      -> `no
   | Record_name       n -> `no
   | Enumeration_name  n -> `no
   | Function_name     n -> `no
