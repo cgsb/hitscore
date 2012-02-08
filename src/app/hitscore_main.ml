@@ -733,7 +733,7 @@ module FS = struct
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       Hitscore_threaded.Layout.File_system.(
-        let vol_cache = get_volume ~dbh { id = vol } in
+        let vol_cache = get_volume ~dbh (unsafe_cast_volume vol) in
         begin match vol_cache with 
         | Ok vc ->
           let path = entry_unix_path vc.volume_entry in
@@ -755,7 +755,7 @@ module FS = struct
         end;
         eprintf "Copy: DONE (won't go back).\n";
         begin match
-            add_tree_to_volume ~dbh { id = vol } 
+            add_tree_to_volume ~dbh (unsafe_cast_volume vol) 
               (List.map files (fun f -> Tree.file (Filename.basename f))) with
         | Ok () ->
           begin match
@@ -813,7 +813,7 @@ module Flowcell = struct
       List.map lanes (fun id ->
         check_lane_unused ~dbh id;
         Layout.Record_lane.(
-          get ~dbh { id }
+          get ~dbh (unsafe_cast id)
           >>= fun { requested_read_length_1; requested_read_length_2; _ } ->
           return (requested_read_length_1, requested_read_length_2 )
         ) |! function
@@ -921,7 +921,7 @@ module Flowcell = struct
         let lanes =
           List.map lanes ~f:(function
           | `phix ->  new_input_phix ~dbh r1 r2 
-          | `lane id -> { Layout.Record_lane.id }
+          | `lane id -> Layout.Record_lane.unsafe_cast id
           | `empty -> new_empty_lane ~dbh r1 r2)
           |! Array.of_list in
         let flowcell = 
@@ -1245,7 +1245,7 @@ module Run_bcl_to_fastq = struct
       begin 
         try
           Layout.Record_hiseq_raw.(
-            let hst = { id = Int32.of_string s } in
+            let hst = unsafe_cast (Int32.of_string s) in
             get ~dbh hst >>= fun {flowcell_name; _} ->
             return ([hst], flowcell_name))
         with
@@ -1429,7 +1429,7 @@ module Run_bcl_to_fastq = struct
   let register_success hsc id result_root = 
     let open Hitscore_threaded in
     let bcl_to_fastq =
-      try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
+      try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
       with e -> None in
     begin match bcl_to_fastq with
     | Some bcl_to_fastq ->
@@ -1462,7 +1462,7 @@ module Run_bcl_to_fastq = struct
   let register_failure ?reason hsc id =
     let open Hitscore_threaded in
     let bcl_to_fastq =
-      try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
+      try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
       with e -> None in
     begin match bcl_to_fastq with
     | Some bcl_to_fastq ->
@@ -1483,7 +1483,7 @@ module Run_bcl_to_fastq = struct
   let check_status ?(fix_it=false) hsc id =
     let open Hitscore_threaded in
     let bcl_to_fastq =
-      try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
+      try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
       with e -> None in
     begin match bcl_to_fastq with
     | Some bcl_to_fastq ->
@@ -1518,7 +1518,7 @@ module Run_bcl_to_fastq = struct
   let kill hsc id =
     let open Hitscore_threaded in
     let bcl_to_fastq =
-      try Some { Layout.Function_bcl_to_fastq.id = Int32.of_string id } 
+      try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
       with e -> None in
     begin match bcl_to_fastq with
     | Some bcl_to_fastq ->

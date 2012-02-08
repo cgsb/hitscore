@@ -714,7 +714,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         );
         let id =
           run ~dbh
-            ~fake:(fun x -> { Layout.Record_person.id = x })
+            ~fake:(fun x -> Layout.Record_person.unsafe_cast x)
             ~real:(fun dbh ->
               Layout.Record_person.add_value ~dbh
                 ~email ~given_name ?middle_name ~family_name ~secondary_emails:[||]
@@ -758,7 +758,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 | _ -> ());
                 Buffer.contents buf  in
               run ~dbh
-                ~fake:(fun x -> { Layout.File_system.id = x })
+                ~fake:(fun x -> Layout.File_system.unsafe_cast_volume x)
                   ~real:(fun dbh ->
                     Layout.File_system.add_volume ~dbh 
                       ~kind:`protocol_directory
@@ -769,12 +769,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | None ->
               error "Lib: %s, Protocol %S is not in the DB and has no file." 
                 libname name;
-              Ok { Layout.File_system.id = -1l }
+              Ok (Layout.File_system.unsafe_cast_volume (-1l))
             end
             |! (function
               | Ok doc ->
                 run ~dbh
-                  ~fake:(fun x -> { Layout.Record_protocol.id = x})
+                  ~fake:(fun x -> Layout.Record_protocol.unsafe_cast x)
                   ~real:(fun dbh ->
                     Layout.Record_protocol.add_value ~dbh
                       ~name ~doc ?note:None)
@@ -792,7 +792,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           match Layout.Search.record_organism_by_name ~dbh (Some name) with
           | Ok [] ->
             run ~dbh
-              ~fake:(fun x -> { Layout.Record_organism.id = x })
+              ~fake:(fun x -> Layout.Record_organism.unsafe_cast x)
               ~real:(fun dbh ->
                 Layout.Record_organism.add_value ~dbh 
                   ~name ?informal:None ?note:None)
@@ -811,7 +811,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           match search with
           | Ok [] ->
             Layout.Record_sample.(
-              run ~dbh ~fake:(fun x -> { id = x })
+              run ~dbh ~fake:(fun x -> unsafe_cast x)
                 ~real:(fun dbh ->
                   add_value ~dbh 
                     ~name ?organism ?project ?note:None)
@@ -838,7 +838,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             let position_in_index =
               List.find_map cbp (function | `on_i i -> Some i | _ -> None) in
             Layout.Record_custom_barcode.(
-              run ~dbh ~fake:(fun x -> { id = x })
+              run ~dbh ~fake:(fun x -> unsafe_cast x)
                 ~real:(fun dbh ->
                   add_value ~dbh
                     ?position_in_r1 ?position_in_r2 ?position_in_index ~sequence)
@@ -871,7 +871,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             end
         in
         Layout.Record_stock_library.(
-          run ~dbh ~fake:(fun x -> { id = x })
+          run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
               add_value ~dbh 
                 ~name ?project ?description:short_desc
@@ -906,7 +906,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | None ->
             let hr_tag = sprintf "xad_pdf_%s" libname in
             run ~dbh
-              ~fake:(fun x -> { Layout.File_system.id = x })
+              ~fake:(fun x -> Layout.File_system.unsafe_cast_volume x)
               ~real:(fun dbh ->
                 Layout.File_system.add_volume ~dbh 
                   ~kind:`bioanalyzer_directory
@@ -924,7 +924,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         >>= fun library ->
         let f32o o = bind o (fun x -> return (Float.of_int64 (Int64.of_int32 x))) in
         Layout.Record_bioanalyzer.(
-          run ~dbh ~fake:(fun x -> { id = x })
+          run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
               add_value ~dbh ~library
                 ?well_number:bio_wnb
@@ -952,7 +952,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | None ->
             let hr_tag = sprintf "img_%s" libname in
             run ~dbh
-              ~fake:(fun x -> { Layout.File_system.id = x })
+              ~fake:(fun x -> Layout.File_system.unsafe_cast_volume x)
               ~real:(fun dbh ->
                 Layout.File_system.add_volume ~dbh 
                   ~kind:`agarose_gel_directory
@@ -970,7 +970,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         >>= fun library ->
         let f32o o = bind o (fun x -> return (Float.of_int64 (Int64.of_int32 x))) in
         Layout.Record_agarose_gel.(
-          run ~dbh ~fake:(fun x -> { id = x })
+          run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
               add_value ~dbh ~library
                 ?well_number:arg_wnb
@@ -1034,7 +1034,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 ) with
                 | None ->
                   error "Pool: %s, can't find library %S" pool libname;
-                  ({Layout.Record_stock_library. id = 99l}, None,
+                  (Layout.Record_stock_library.unsafe_cast 99l, None,
                    Some (sprintf "Completely fake stock library: %s for pool %s"
                            libname pool), [])
                 | Some (s, conc, note, kv) -> (s, conc, note, kv)
@@ -1044,7 +1044,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               | k, None -> None
               | key, Some value ->
                 Layout.Record_key_value.(
-                  run ~dbh  ~fake:(fun x -> { id = x })
+                  run ~dbh  ~fake:(fun x -> unsafe_cast x)
                     ~real:(fun dbh ->
                       add_value ~dbh ~key ~value)
                     ~log:(sprintf "(add_key_value %S %S)" key value)) |! Result.ok)
@@ -1053,7 +1053,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               let concentration_nM =
                 concentration >>| Int64.of_int32 >>| Float.of_int64 in
               Layout.Record_input_library.(
-                run ~dbh ~fake:(fun x -> { id = x })
+                run ~dbh ~fake:(fun x -> unsafe_cast x)
                   ~real:(fun dbh ->
                     add_value ~dbh ~library:the_lib
                       ~submission_date:(value submission_date ~default:(Time.now ()))
@@ -1076,7 +1076,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           match run_type_parsed with Some (_, l, r) -> (l, r) | None -> (42l, None) in
         let contacts = List.filter_map contacts snd |! Array.of_list in
         Layout.Record_lane.(
-          run ~dbh ~fake:(fun x -> { id = x })
+          run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
               add_value ~dbh ~libraries ~pooled_percentages
                 ?seeding_concentration_pM:(spm >>| Int64.of_int32 >>| Float.of_int64)
@@ -1115,7 +1115,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | _ -> failwith "DB error searching preparator"
             end
           end
-          |! value ~default:{ Layout.Record_person.id = 42004200l } in
+          |! value ~default:(Layout.Record_person.unsafe_cast 42004200l) in
         let account_number, fund, org, program, project =
           let open Option in
           let mandatory msg s = 
@@ -1148,7 +1148,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             None, None, None, None, None 
         in
         Layout.Record_invoicing.(
-          run ~dbh ~fake:(fun x -> { id = x })
+          run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
               add_value ~dbh ~pi 
                 ~percentage:p

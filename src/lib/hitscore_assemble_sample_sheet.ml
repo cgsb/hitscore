@@ -78,9 +78,9 @@ module Make
               "select g_id, lanes from flowcell where serial_name = $flowcell_name")
           ~on_result:(function
             | [ id, array_of_ids ] ->
-              return ({ Layout.Record_flowcell.id },
+              return (Layout.Record_flowcell.unsafe_cast id,
                       Array.mapi array_of_ids 
-                        ~f:(fun i id -> i, { Layout.Record_lane.id })
+                        ~f:(fun i id -> i, Layout.Record_lane.unsafe_cast id)
                          |> Array.to_list)
             | [] -> error (`wrong_request (`record_flowcell, 
                                            `value_not_found flowcell_name))
@@ -103,8 +103,8 @@ module Make
             | (idf, Some idr) :: _ ->
               return (Some (
                 Layout.Function_assemble_sample_sheet.(
-                  ({ id = idf } : [ `can_get_result ] pointer)),
-                Layout.Record_sample_sheet.({ id = idr })))
+                  (unsafe_cast idf : [ `can_get_result ] pointer)),
+                Layout.Record_sample_sheet.unsafe_cast idr))
             | (idf, None) :: _ ->
               error (`layout_inconsistency (`function_assemble_sample_sheet,
                                             `successful_status_with_no_result idf))
