@@ -346,8 +346,8 @@ let ocaml_record_module ~out ~fashion name fields =
 
   ocaml_start_module ~out ~name:(sprintf "Record_%s" name) fashion;
 
-  doc out "Type [pointer] should be used like a private type, access to \
-          the [id] field is there for hackability/emergency purposes.";
+  doc out "A handle to a given record-value in the data-base (access to \
+          the [id] field is there for hackability/emergency purposes).";
   ocaml_sexped_type ~out ~name:"pointer" ~privated:true ~fashion "{ id: int32 }";
 
   doc out "Unsafely create a pointer.";
@@ -533,6 +533,8 @@ let ocaml_function_module ~out ~fashion name args result =
 
   ocaml_start_module ~out ~name:(sprintf "Function_%s" name) fashion;
 
+  doc out "A handle to a given function-evaluation, \
+            with {!function_capabilities} as access-rights.";
   ocaml_sexped_type ~out ~fashion ~param:"'capabilities" ~privated:true
     ~name:"pointer" "{ id: int32 }";
 
@@ -919,6 +921,7 @@ let ocaml_file_system_module ~fashion ~out dsl =
 
   ocaml_start_module ~out ~name:"File_system" fashion;
 
+  doc out "The [volume_pointer] represents a handle to a volume in the DB.";
   ocaml_sexped_type ~out ~name:"volume_pointer" ~fashion
     ~privated:true "{ id : int32 }";
 
@@ -926,6 +929,7 @@ let ocaml_file_system_module ~fashion ~out dsl =
   line out_mli "val unsafe_cast_volume: int32 -> volume_pointer";
   line out_ml "let unsafe_cast_volume id = { id }";
 
+  doc out "The [file_pointer] represents a handle to a file in the DB.";
   ocaml_sexped_type ~out ~name:"file_pointer" ~fashion 
     ~privated:true "{ inode: int32 }";
 
@@ -933,13 +937,13 @@ let ocaml_file_system_module ~fashion ~out dsl =
   line out_mli "val unsafe_cast_file: int32 -> file_pointer";
   line out_ml "let unsafe_cast_file inode = { inode }";
 
-
+  doc out "The specification of file-trees.";
   line out "type tree = ";
   line out "  | File of string * Enumeration_file_type.t";
   line out "  | Directory of string * Enumeration_file_type.t * tree list";
   line out "  | Opaque of string * Enumeration_file_type.t";
 
-  doc out "Pointers to files";
+  doc out "Contents of a file \"record\".";
   line
     (ocaml_sexped_type ~out ~name:"file_entry" ~fashion)
     "{%s}"
@@ -947,7 +951,7 @@ let ocaml_file_system_module ~fashion ~out dsl =
       sprintf "  %s: %s;" (file_ocaml_field s) (ocaml_type t))
       |! String.concat ~sep:"");
 
-  doc out "Pointers to volumes";
+  doc out "Contents of a volume \"record\".";
   line
     (ocaml_sexped_type ~out ~name:"volume_entry" ~fashion)
     "{%s}"
