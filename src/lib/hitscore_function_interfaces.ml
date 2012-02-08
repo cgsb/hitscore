@@ -1,6 +1,10 @@
+(** The interfaces of the function-implementations.  *)
 
+
+(** The sample-sheet assembly function. *)
 module type ASSEMBLE_SAMPLE_SHEET = sig
 
+(**/**)
   module Configuration : Hitscore_interfaces.CONFIGURATION
   module Result_IO : Hitscore_interfaces.RESULT_IO
   module ACL : Hitscore_interfaces.ACL
@@ -9,27 +13,9 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
   module Layout: Hitscore_layout_interface.LAYOUT
     with module Result_IO = Result_IO
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
+(**/**)
 
-  (** Assemble a sample-sheet:
-{[
-  Hitscore_lwt.Assemble_sample_sheet.run
-    ~kind:`all_barcodes ~dbh
-    ~note:"Documentation of Sample-sheet assembly"
-    "D03M4ACXX"
-
-    ~write_to_tmp:(fun s ->
-      Lwt_io.(wrap_io 
-                (with_file ~mode:output tmp_file)
-                (fun chan -> fprintf chan "%s" s)))
-
-    ~mv_from_tmp:(fun volpath filepath ->
-      ksprintf shell_command "mv %s %s/%s/%s" tmp_file root volpath filepath)
-]}
-If any step fails (e.g. the shell command)
- but the assemble_sample_sheet evaluation has been created, it will be
- set as failed, but (for now) the file-system won't be "corrected".
-
-  *)
+  (** Run the whole function to assemble a sample-sheet. *)
   val run :
     dbh:Layout.db_handle ->
     kind:Layout.Enumeration_sample_sheet_kind.t ->
@@ -80,6 +66,7 @@ end
 (** The module to run CASAVA's demultiplexer.  *)
 module type BCL_TO_FASTQ = sig
 
+(**/**)
   module Configuration : Hitscore_interfaces.CONFIGURATION
   module Result_IO : Hitscore_interfaces.RESULT_IO
   module ACL : Hitscore_interfaces.ACL
@@ -88,7 +75,7 @@ module type BCL_TO_FASTQ = sig
   module Layout: Hitscore_layout_interface.LAYOUT
     with module Result_IO = Result_IO
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
-
+(**/**)
 
   (** The errors which may be 'added' by the [start] function. *)
     type 'a start_error = 
