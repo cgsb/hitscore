@@ -9,6 +9,11 @@ module Make
      with module Result_IO = Result_IO
      with type 'a PGOCaml.monad = 'a Result_IO.IO.t) = struct
 
+    module Configuration = Configuration
+    module Result_IO = Result_IO
+    module ACL = ACL
+    module Layout = Layout
+
     open Hitscore_std
     open Result_IO
 
