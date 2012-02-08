@@ -6,8 +6,9 @@ module Make :
   functor (ACL : Hitscore_interfaces.ACL
            with module Result_IO = Result_IO
            with module Configuration = Configuration) ->
-  functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
-sig
+  functor (Layout: Hitscore_layout_interface.LAYOUT
+           with module Result_IO = Result_IO
+           with type 'a PGOCaml.monad = 'a Result_IO.IO.t) -> sig
 
   (** The errors which may be 'added' by the [start] function. *)
     type 'a start_error = 

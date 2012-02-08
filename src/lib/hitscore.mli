@@ -16,7 +16,9 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
     with type 'a IO.t = 'a IO_configuration.t
 
   (** The Layout is the thing defined by the layout DSL.  *)
-  module Layout: module type of Hitscore_db_access.Make(Result_IO)
+  module Layout: Hitscore_layout_interface.LAYOUT
+    with module Result_IO = Result_IO
+    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
 
   (** The configuration information. *)
   module Configuration: Hitscore_interfaces.CONFIGURATION

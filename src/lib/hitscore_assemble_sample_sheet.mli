@@ -6,8 +6,9 @@ module Make :
   functor (ACL : Hitscore_interfaces.ACL
            with module Result_IO = Result_IO
            with module Configuration = Configuration) ->
-  functor (Layout: module type of Hitscore_db_access.Make(Result_IO)) -> 
-sig
+  functor (Layout: Hitscore_layout_interface.LAYOUT
+           with module Result_IO = Result_IO
+           with type 'a PGOCaml.monad = 'a Result_IO.IO.t) -> sig
   
   (** Assemble a sample-sheet:
 {[
@@ -30,7 +31,7 @@ If any step fails (e.g. the shell command)
 
   *)
   val run :
-    dbh:(string, bool) Batteries.Hashtbl.t Layout.PGOCaml.t ->
+    dbh:Layout.db_handle ->
     kind:Layout.Enumeration_sample_sheet_kind.t ->
     configuration:ACL.Configuration.local_configuration ->
     ?note:string ->
@@ -65,7 +66,7 @@ If any step fails (e.g. the shell command)
                   [> `add_did_not_return_one of string * int32 list
                   | `insert_did_not_return_one_id of string * int32 list
                   | `search_by_name_not_unique of
-                      (int32 * Layout.PGOCaml.int32_array) list
+                      (int32 * int32 array) list
                   | `select_did_not_return_one_cache of string * int
                   | `select_did_not_return_one_tuple of string * int
                   | `successful_status_with_no_result of int32 ]
