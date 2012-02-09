@@ -5,28 +5,7 @@ module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
 open Hitscore_threaded
 open Result_IO
 
-
-module System = struct
-
-  let command_exn s = 
-    let status = Unix.system s in
-    if not (Unix.Process_status.is_ok status) then
-      ksprintf failwith "System.command_exn: %s" 
-        (Unix.Process_status.to_string_hum status)
-    else
-      ()
-
-  let command s =
-    let status = Unix.system s in
-    if (Unix.Process_status.is_ok status) then
-      Ok ()
-    else
-      Error (`sys_error (`command (s, status)))
-
-  let command_to_string s =
-    Unix.open_process_in s |! In_channel.input_all
-        
-end
+open Hitscore_app_util
 
 let get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell =
   Assemble_sample_sheet.run
