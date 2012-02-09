@@ -79,5 +79,6 @@ module Make (IO_configuration : IO_CONFIGURATION) = struct
       | [one] -> return (Some one)
       | _ -> return None
 
+    let of_result r = IO_configuration.return r 
 
   end

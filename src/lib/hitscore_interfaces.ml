@@ -105,6 +105,9 @@ module type RESULT_IO = sig
   (** [of_option] allows to put options {i inside} the monad. *)
   val of_option: 'a option -> f:('a -> ('c, 'b) monad) -> ('c option, 'b) monad 
 
+  (** [of_result] adds threading to a [Result.t]. *)
+  val of_result: ('a, 'b) Result.t -> ('a, 'b) monad
+
 end
 
 (** Non-I/O Runtime configuration of the library. *)
