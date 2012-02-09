@@ -9,3 +9,4 @@ setup.log
 /hitscore_layout_digraph.pdf
 /db_access.native
 /src/lib/hitscore_conf_values.ml
+/hitscore_main.native
