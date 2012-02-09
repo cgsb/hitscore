@@ -20,14 +20,14 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
 
   module Configuration = Hitscore_configuration
 
-  module ACL = Hitscore_acl.Make (Configuration) (Result_IO)
+  module ACL = Hitscore_acl.Make (Configuration) (Result_IO) (Layout)
            
   module Assemble_sample_sheet = 
     Hitscore_assemble_sample_sheet.Make
-      (Configuration) (Result_IO) (ACL) (Layout)
+      (Configuration) (Result_IO) (Layout) (ACL)
 
   module Bcl_to_fastq =
-    Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (ACL) (Layout)
+    Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (Layout) (ACL)
 
   module Hiseq_raw = Hitscore_hiseq_raw
     

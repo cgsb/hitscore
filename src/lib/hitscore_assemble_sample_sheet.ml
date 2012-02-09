@@ -2,12 +2,14 @@
 module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
   (Result_IO : Hitscore_interfaces.RESULT_IO) 
-  (ACL : Hitscore_interfaces.ACL 
-     with module Result_IO = Result_IO
-     with module Configuration = Configuration)
   (Layout: Hitscore_layout_interface.LAYOUT
      with module Result_IO = Result_IO
-     with type 'a PGOCaml.monad = 'a Result_IO.IO.t) = struct
+     with type 'a PGOCaml.monad = 'a Result_IO.IO.t)
+  (ACL : Hitscore_acl.ACL 
+     with module Result_IO = Result_IO
+     with module Configuration = Configuration
+     with module Layout = Layout)
+  = struct
 
     module Configuration = Configuration
     module Result_IO = Result_IO
@@ -260,7 +262,7 @@ module Make
               write_to_file ~file:(sprintf "%s/%s" vol_dir path_file)
                 ~content:(Buffer.contents sample_sheet.content)
               >>= fun () ->
-              ACL.set_defaults (`dir vol_dir) ~configuration ~run_command
+              ACL.set_defaults ~dbh (`dir vol_dir) ~configuration ~run_command
             | None -> error `root_directory_not_configured
           in
           double_bind commands_m

@@ -2,12 +2,14 @@
 module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
   (Result_IO : Hitscore_interfaces.RESULT_IO) 
-  (ACL : Hitscore_interfaces.ACL 
-     with module Result_IO = Result_IO
-     with module Configuration = Configuration)
   (Layout: Hitscore_layout_interface.LAYOUT
      with module Result_IO = Result_IO
-     with type 'a PGOCaml.monad = 'a Result_IO.IO.t) = struct
+     with type 'a PGOCaml.monad = 'a Result_IO.IO.t)
+  (ACL : Hitscore_acl.ACL 
+     with module Result_IO = Result_IO
+     with module Configuration = Configuration
+     with module Layout = Layout)
+  = struct
 
     module Configuration = Configuration
     module Result_IO = Result_IO
@@ -30,9 +32,12 @@ module Make
         | `record_hiseq_raw
         | `record_inaccessible_hiseq_raw
         | `record_log
+        | `record_person
         | `record_sample_sheet ] *
-          [> `insert_did_not_return_one_id of string * int32 list
-          | `select_did_not_return_one_tuple of string * int ]
+          [> `insert_did_not_return_one_id of
+              string * int32 list
+          | `select_did_not_return_one_tuple of
+              string * int ]
     | `more_than_one_file_in_sample_sheet_volume of
         Layout.File_system.volume_pointer * 
           Layout.Record_sample_sheet.pointer * string list
@@ -193,7 +198,8 @@ module Make
 
       let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
       cmd "mkdir -p %s" out_dir >>= fun () ->
-      ACL.set_defaults (`dir work_root) ~configuration ~run_command >>= fun () ->
+      ACL.set_defaults ~dbh (`dir work_root) ~configuration ~run_command
+      >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     %s --input-dir %s \
@@ -209,7 +215,7 @@ module Make
       let started =
         let pbs_script_created = pbs_script created in
         write_file pbs_script_created pbs_script_file >>= fun () ->
-        ACL.set_defaults ~run_command ~configuration (`file pbs_script_file)
+        ACL.set_defaults ~dbh ~run_command ~configuration (`file pbs_script_file)
         >>= fun () ->
         let run_dir =
           (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
@@ -230,18 +236,17 @@ module Make
           >>= fun _ ->
           return (`failure (failed, e)))
 
-
     type 'a succeed_error = 'a constraint 'a =
     [> `layout_inconsistency of
         [> `file_system
         | `record_bcl_to_fastq_unaligned
-        | `record_log ] *
+        | `record_log | `record_person] *
           [> `add_did_not_return_one of string * int32 list
           | `insert_did_not_return_one_id of string * int32 list
           | `select_did_not_return_one_tuple of string * int ]
     | `pg_exn of exn
     | `root_directory_not_configured]
-
+      
     let succeed ~dbh ~configuration ~bcl_to_fastq ~result_root ~run_command =
       Layout.File_system.(
         let files = Tree.([opaque "Unaligned"]) in
@@ -257,7 +262,7 @@ module Make
         | Some vol_dir -> 
           ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
           ksprintf run_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
-          ACL.set_defaults (`dir vol_dir) ~configuration ~run_command
+          ACL.set_defaults ~dbh (`dir vol_dir) ~configuration ~run_command
         | None -> error `root_directory_not_configured
       in
       double_bind move_m

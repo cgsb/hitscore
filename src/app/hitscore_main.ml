@@ -598,7 +598,7 @@ module Verify = struct
                   if try_fix then
                     begin match ksprintf System.command "mkdir -p %s" path with
                     | Ok () ->
-                      begin match Hitscore_threaded.ACL.set_defaults 
+                      begin match Hitscore_threaded.ACL.set_defaults ~dbh 
                           ~configuration:hsc ~run_command:System.command
                           (`dir path) with
                       | Ok () -> log "Fixed %S\n" path;

@@ -1,16 +1,91 @@
+(** Posix ACLs management.  *)
+module type ACL = sig
+
+  (**/**)
+
+  (** Local definition of the configuration. *)
+  module Configuration : Hitscore_interfaces.CONFIGURATION
+
+  (** Local definition of Result_IO.  *)
+  module Result_IO : Hitscore_interfaces.RESULT_IO
+
+  (** Local definition of Layout *)
+  module Layout : Hitscore_layout_interface.LAYOUT
+
+  (**/**)
+    
+  (** Set the default ACLs for the configuration ({i group} and {i
+      writers}) if available. If the configuration does not define the
+      [group] or the list of [writer]s does not fail; it continues
+      with [()]. {b Note:} [`dir "some/path"] is aggressive/recursive
+      (potentially one [chown] and 4 [find]s). *)
+  val set_defaults :
+    dbh:Layout.db_handle ->
+    run_command:(string ->
+                 (unit,
+                  [> `layout_inconsistency of
+                      [> `record_log | `record_person ] *
+                        [> `insert_did_not_return_one_id of
+                            string * int32 list
+                        | `select_did_not_return_one_tuple of
+                            string * int ]
+                  | `pg_exn of exn ]
+                    as 'a)
+                   Result_IO.monad) ->
+    configuration:Configuration.local_configuration ->
+    [ `dir of string | `file of string ] ->
+    (unit, 'a) Result_IO.monad
+end
 
 module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
-  (Result_IO : Hitscore_interfaces.RESULT_IO) = struct
+  (Result_IO : Hitscore_interfaces.RESULT_IO)
+  (Layout: Hitscore_layout_interface.LAYOUT
+     with module Result_IO = Result_IO
+     with type 'a PGOCaml.monad = 'a Result_IO.IO.t):
+  ACL
+  with module Configuration = Configuration
+  with module Result_IO = Result_IO
+  with module Layout = Layout
+= struct
 
     module Result_IO = Result_IO
     module Configuration = Configuration
+    module Layout = Layout
 
     open Hitscore_std
     open Result_IO
       
-    let set_defaults ~run_command ~configuration = 
-      let cmd fmt = ksprintf (fun s -> run_command s) fmt in
+
+    let get_people role ~dbh =
+      Layout.Record_person.(
+        get_all ~dbh >>= fun citizens ->
+        of_list_sequential citizens ~f:(fun k ->
+          get ~dbh k >>= function
+          | {g_id; login = Some l; roles} when Array.exists roles ~f:((=) role) ->
+            return (Some l)
+          | _ -> return None))
+      >>= fun vips ->
+      return (List.filter_opt vips)
+
+    let set_defaults ~dbh ~run_command ~configuration =
+      let runned_commands = ref [] in (* just for logging puposes *)
+      let cmd fmt = 
+        ksprintf (fun s -> 
+          runned_commands := s :: !runned_commands;
+          run_command s) fmt in
+      let try_login login =
+        cmd "groups %s" login |! double_bind
+            ~ok:(fun () -> return (Some login))
+            ~error:(fun _ -> return None)
+      in
+      let log_commands f =
+        let cmds = List.map !runned_commands ~f:(sprintf "%S")
+                   |! String.concat ~sep:" " in
+        runned_commands := [];
+        Layout.Record_log.add_value ~dbh ~log:(f cmds)
+        >>= fun _ -> return ()
+      in
       function
       | `dir root -> 
         begin match (Configuration.root_group configuration) with
@@ -21,9 +96,15 @@ module Make
           cmd "find %s -type d -exec chmod u+rwx,g-rw,g+xs,o-rwx {} \\;" root
           >>= fun () ->
           cmd "find %s -type f -exec chmod u+rwx,g-rwx,o-rwx {} \\;" root
+          >>= fun () ->
+          log_commands (sprintf "(chmod_group_dir %s %s (commands %s))" grp root)
         end
         >>= fun () ->
-        begin match Configuration.root_writers configuration with
+        let configured_writers = Configuration.root_writers configuration in
+        get_people ~dbh `administrator >>= fun admins ->
+        of_list_sequential admins try_login >>| List.filter_opt
+        >>= fun valid_admins ->
+        begin match List.dedup (valid_admins @ configured_writers) with
         | [] -> return ()
         | l ->
           cmd "find %s -type d -exec setfacl -m %s,%s,m:rwx {} \\;" root
@@ -32,6 +113,15 @@ module Make
           >>= fun () ->
           cmd "find %s -type f -exec setfacl -m %s {} \\;" root
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw")))
+          >>= fun () ->
+          log_commands (sprintf "(set_acls_on_dir %s \
+                            (configured_writers %s) \
+                            (admins %s) \
+                            (valid_admins %s) \
+                            (commands %s))" root
+                          (String.concat ~sep:" " configured_writers)
+                          (String.concat ~sep:" " admins)
+                          (String.concat ~sep:" " valid_admins))
         end
       | `file f ->
         begin match (Configuration.root_group configuration) with
@@ -39,13 +129,28 @@ module Make
         | Some grp -> 
           cmd "chown :%s %s" grp f >>= fun () ->
           cmd "chmod 0600 %s" f
+          >>= fun () ->
+          log_commands (sprintf "(chmod_group_file %s %s (commands %s))" grp f)
         end
         >>= fun () ->
-        begin match Configuration.root_writers configuration with
+        let configured_writers = Configuration.root_writers configuration in
+        get_people ~dbh `administrator >>= fun admins ->
+        of_list_sequential admins try_login >>| List.filter_opt
+        >>= fun valid_admins ->
+        begin match List.dedup (valid_admins @ configured_writers) with
         | [] -> return ()
         | l ->
           cmd "setfacl -m %s %s"
             (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw"))) f
+          >>= fun () ->
+          log_commands (sprintf "(set_acls_on_file %s \
+                            (configured_writers %s) \
+                            (admins %s) \
+                            (valid_admins %s) \
+                            (commands %s))" f
+                          (String.concat ~sep:" " configured_writers)
+                          (String.concat ~sep:" " admins)
+                          (String.concat ~sep:" " valid_admins))
         end
 
 

@@ -183,32 +183,6 @@ module type CONFIGURATION = sig
 
 end
 
-(** Posix ACLs management.  *)
-module type ACL = sig
-
-  (**/**)
-
-  (** Local definition of the configuration. *)
-  module Configuration : CONFIGURATION
-
-  (** Local definition of Result_IO.  *)
-  module Result_IO : RESULT_IO
-
-  (**/**)
-
-  (** Set the default ACLs for the configuration ({i group} and {i
-      writers}) if available. If the configuration does not define the
-      [group] or the list of [writer]s does not fail; it continues
-      with [()]. {b Note:} [`dir "some/path"] is aggressive/recursive
-      (potentially one [chown] and 4 [find]s). *)
-  val set_defaults:
-    run_command:(string -> (unit, 'a) Result_IO.monad) ->
-    configuration:Configuration.local_configuration ->
-    [ `dir of string | `file of string ] ->
-    (unit, 'a) Result_IO.monad
-
-
-end
 
 
 (** XML Dom-like representation highly-compatible with XMLM. *)
