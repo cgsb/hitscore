@@ -31,6 +31,8 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
 
   module Hiseq_raw = Hitscore_hiseq_raw
     
+  module B2F_unaligned = Hitscore_b2f_unaligned
+
   let db_connect t =
     let open Configuration in
     match db_host t, db_port t, db_database t, db_username t, db_password t with

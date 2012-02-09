@@ -260,3 +260,27 @@ module type HISEQ_RAW = sig
      [> `parse_clusters_summary of string ]) Result.t
 
 end
+
+
+module B2F_unaligned_information = struct
+
+  type library_stats = {
+    name: string;
+    mutable yield: float;
+    mutable yield_q30: float;
+    mutable cluster_count: float;
+    mutable cluster_count_m0: float;
+    mutable cluster_count_m1: float;
+    mutable quality_score_sum: float;
+  }
+  type demux_summary = library_stats list array
+
+end
+
+module type B2F_UNALIGNED = sig
+
+  val flowcell_demux_summary: XML.tree ->
+    (B2F_unaligned_information.demux_summary,
+     [> `parse_flowcell_demux_summary_error of exn]) Result.t
+
+end

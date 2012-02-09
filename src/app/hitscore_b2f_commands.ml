@@ -84,7 +84,10 @@ let display_errors = function
       printf "INVALID-REQUEST: The function is NOT STARTED: %S.\n"
         (Layout.Enumeration_process_status.to_string e);
     | `assemble_sample_sheet_no_result ->
-      printf "LAYOUT-INCONSISTENCY: The sample-sheet assembly has no result"
+      printf "LAYOUT-INCONSISTENCY: The sample-sheet assembly has no result\n"
+    | `there_is_more_than_unaligned l ->
+      printf "UNEXPECTED-LAYOUT: there is more than one unaligned directory\n";
+      List.iter l (printf " * %S\n")
     end
 
 let get_hiseq_raw ~dbh s =
@@ -387,4 +390,98 @@ let kill hsc id =
   | None ->
     eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
   end
+
+let info hsc id_or_dir = 
+  let dir = 
+    let bcl_to_fastq =
+      try Some (Layout.Function_bcl_to_fastq.unsafe_cast 
+                  (Int32.of_string id_or_dir)) 
+      with e -> None in
+    begin match bcl_to_fastq with
+    | Some bcl_to_fastq ->
+      let work = 
+        db_connect hsc >>= fun dbh -> 
+        Layout.Function_bcl_to_fastq.(
+          get ~dbh bcl_to_fastq  >>= function
+          | { g_status = `Succeeded; g_result = Some s; raw_data} -> 
+            return (raw_data, s)
+          | { g_status } -> error (`not_started g_status))
+        >>= fun (hsraw, b2fu) ->
+        Layout.Record_hiseq_raw.(
+          get ~dbh hsraw >>= fun { flowcell_name } -> return flowcell_name)
+        >>= fun fcid ->
+        Layout.Record_bcl_to_fastq_unaligned.(
+          get ~dbh b2fu >>= fun { directory } -> return directory)
+        >>= fun vol ->
+        Layout.File_system.(
+          get_volume ~dbh vol >>= fun volume ->
+          let vol_path = entry_unix_path volume.volume_entry in
+          of_result (volume_trees volume) >>| trees_to_unix_paths
+          >>= function
+          | [ unaligned ] -> return (Filename.concat vol_path unaligned)
+          | l -> error (`there_is_more_than_unaligned l))
+        >>= fun unaligned ->
+        return (Filename.concat unaligned (sprintf "Basecall_Stats_%s" fcid))
+      in
+      display_errors work;
+      let udir = Result.ok_exn work in
+      begin match Configuration.volume_path_fun hsc with
+      | Some f -> f udir
+      | None -> failwith "Root directory not configured"
+      end
+    | None -> id_or_dir
+    end
+  in
+  let dmux_sum = Filename.concat dir "Flowcell_demux_summary.xml" in
+  let xml = 
+    In_channel.with_file dmux_sum ~f:(fun ic ->
+      XML.(make_input (`Channel ic) |! in_tree)) in
+  
+  let demux_summary = 
+    match B2F_unaligned.flowcell_demux_summary (snd xml) with
+    | Ok d -> d
+    | Error (`parse_flowcell_demux_summary_error e) ->
+      eprintf "Error while parsing %S: %s" dmux_sum (Exn.to_string e);
+      failwith "B2F_commands.info"
+  in
+
+  Array.iteri demux_summary ~f:(fun i a ->
+    if a <> [] then (
+      printf "Lane %d:\n" (i + 1); 
+      printf  " - Library Name -----\
+               |- yield ------------\
+               |- yield_q30 --------\
+               |- cluster_count ----\
+               |- cluster_count_m0 -\
+               |- cluster_count_m1 -\
+               |- quality_score_sum \
+               |\n";
+    );
+    List.iter a (fun
+      { Hitscore_interfaces.B2F_unaligned_information.name;
+        yield;
+        yield_q30;
+        cluster_count;
+        cluster_count_m0;
+        cluster_count_m1;
+        quality_score_sum; } ->
+        let f2s o f = 
+          let s = sprintf "%.0f" f in
+          let rec f s =
+            if String.(length s) > 3 then
+              String.(f (drop_suffix s 3) ^ " " ^ suffix s 3)
+            else
+              s in
+          fprintf o "% 18s" (f s) in
+        printf "  % -18s | %a | %a | %a | %a | %a | %a |\n"
+          name
+          f2s yield
+          f2s yield_q30
+          f2s cluster_count
+          f2s cluster_count_m0
+          f2s cluster_count_m1
+          f2s quality_score_sum 
+    );
+  );
+  Some ()
 

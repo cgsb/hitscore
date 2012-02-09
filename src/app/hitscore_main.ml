@@ -1324,7 +1324,8 @@ let () =
           \  * register-failure <id> [<reason-log>].\n\
           \  * status <id> : Get the current status of an evaluation.\n\
           \  * fix-status <id> : Get the status and fix it if possible\n\
-          \  * kill <id>.\n")
+          \  * kill <id>.\n\
+          \  * info <b2f-id or stats-dir>: Get stats about the result.\n")
     ~run:(fun config exec cmd ->
       let module B2F = Hitscore_b2f_commands in
       function
@@ -1342,6 +1343,8 @@ let () =
         B2F.check_status ~fix_it:true config id
       | "kill" :: id :: [] ->
         B2F.kill config id
+      | "info" :: id :: [] ->
+        B2F.info config id
       | _ -> None);
   
   define_command

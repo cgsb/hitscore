@@ -43,6 +43,8 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
 
   module Hiseq_raw: Hitscore_interfaces.HISEQ_RAW
 
+  module B2F_unaligned: Hitscore_interfaces.B2F_UNALIGNED
+
   (** Attempt to connect to the database. *)
   val db_connect : Configuration.local_configuration -> 
     (Layout.db_handle, [> `pg_exn of exn]) Result_IO.monad

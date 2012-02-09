@@ -42,6 +42,7 @@ Library hitscore
           , Hitscore_configuration
           , Hitscore_acl
           , Hitscore_hiseq_raw
+          , Hitscore_b2f_unaligned
           , Hitscore_result_IO
   DataFiles: ../script/check_fastqs.ml  ($bindir)
            , ../script/Gen_all_checkscripts  ($bindir)
