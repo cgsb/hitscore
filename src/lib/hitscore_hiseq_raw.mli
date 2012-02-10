@@ -1,2 +1,0 @@
-
-include Hitscore_interfaces.HISEQ_RAW

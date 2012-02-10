@@ -8,8 +8,12 @@ module Make
   (ACL : Hitscore_acl.ACL 
      with module Result_IO = Result_IO
      with module Configuration = Configuration
-     with module Layout = Layout)
-  = struct
+     with module Layout = Layout):
+  Hitscore_function_interfaces.BCL_TO_FASTQ
+    with module Configuration = Configuration
+    with module Result_IO = Result_IO
+    with module ACL = ACL
+    with module Layout = Layout = struct
 
     module Configuration = Configuration
     module Result_IO = Result_IO

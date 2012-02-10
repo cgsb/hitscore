@@ -1,7 +1,8 @@
 open Hitscore_interfaces
 open Core.Std
 
-module Make (IO_configuration : IO_CONFIGURATION) = struct
+module Make (IO_configuration : IO_CONFIGURATION): 
+  RESULT_IO with type 'a IO.t = 'a IO_configuration.t = struct
 
   module IO = IO_configuration
  

@@ -14,11 +14,14 @@ module type ACL = sig
 
   (**/**)
     
-  (** Set the default ACLs for the configuration ({i group} and {i
-      writers}) if available. If the configuration does not define the
-      [group] or the list of [writer]s does not fail; it continues
-      with [()]. {b Note:} [`dir "some/path"] is aggressive/recursive
-      (potentially one [chown] and 4 [find]s). *)
+  (** 
+      Set the default ACLs for {ul
+        {li the configuration {i group} and {i writers}}
+        {li the [`administrator] and [`auditor] roles in the Layout}
+      }
+      {b Note:} Calling [set_defaults] with [`dir "some/path"] is
+      aggressive and recursive (potentially one [chown] and 4
+      [find]s). *)
   val set_defaults :
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->

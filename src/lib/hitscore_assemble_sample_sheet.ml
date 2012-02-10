@@ -8,7 +8,14 @@ module Make
   (ACL : Hitscore_acl.ACL 
      with module Result_IO = Result_IO
      with module Configuration = Configuration
-     with module Layout = Layout)
+     with module Layout = Layout):
+
+  Hitscore_function_interfaces.ASSEMBLE_SAMPLE_SHEET
+  with module Configuration = Configuration
+  with module Result_IO = Result_IO
+  with module ACL = ACL
+  with module Layout = Layout
+
   = struct
 
     module Configuration = Configuration
