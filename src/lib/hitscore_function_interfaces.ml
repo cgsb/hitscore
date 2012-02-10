@@ -98,24 +98,18 @@ module type BCL_TO_FASTQ = sig
     ?queue:string ->
     ?hitscore_command:string ->
     ?make_command:string ->
-    write_file:(string ->
-                string ->
-                (unit,
-                 [> `layout_inconsistency of
-                     [> `record_log | `record_person ] *
-                       [> `insert_did_not_return_one_id of
-                           string * int32 list
-                       | `select_did_not_return_one_tuple of
-                           string * int ]
-                 | `pg_exn of exn
-                 | `system_command_error of string * exn ]
-                   as 'a)
-                  Result_IO.monad) ->
     string ->
     ([> `failure of
-        [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer * 'a
+        [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer *
+          [> `layout_inconsistency of
+              [> `record_log | `record_person ] *
+                [> `insert_did_not_return_one_id of string * int32 list
+                | `select_did_not_return_one_tuple of string * int ]
+                  | `pg_exn of exn
+                  | `system_command_error of string * exn
+                  | `write_file_error of string * string * exn ]
      | `success of
-         [ `can_complete ] Layout.Function_bcl_to_fastq.pointer ],
+                 [ `can_complete ] Layout.Function_bcl_to_fastq.pointer ],
      [> `cannot_recognize_file_type of string
      | `empty_sample_sheet_volume of
          Layout.File_system.volume_pointer *
@@ -136,7 +130,7 @@ module type BCL_TO_FASTQ = sig
            | `select_did_not_return_one_tuple of string * int ]
      | `more_than_one_file_in_sample_sheet_volume of
          Layout.File_system.volume_pointer *
-           Layout.Record_sample_sheet.pointer * string list
+                 Layout.Record_sample_sheet.pointer * string list
      | `pg_exn of exn
      | `root_directory_not_configured
      | `system_command_error of string * exn

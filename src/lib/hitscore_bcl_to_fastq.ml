@@ -37,7 +37,6 @@ module Make
         ?(queue="cgsb-s")
         ?(hitscore_command="echo hitscore should: ")
         ?(make_command="make -j8")
-        ~write_file
         name =
 
       Layout.Record_inaccessible_hiseq_raw.(
@@ -186,7 +185,8 @@ module Make
       >>= fun created ->
       let started =
         let pbs_script_created = pbs_script created in
-        write_file pbs_script_created pbs_script_file >>= fun () ->
+        write_file ~file:pbs_script_created ~content:pbs_script_file
+        >>= fun () ->
         ACL.set_defaults ~dbh ~configuration (`file pbs_script_file)
         >>= fun () ->
         let run_dir =

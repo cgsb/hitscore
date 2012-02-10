@@ -230,9 +230,6 @@ let start hsc prefix cl_args =
         ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
-        ~write_file:(fun s file ->
-          wrap_io Out_channel.(with_file 
-                                 ~f:(fun o -> output_string o s)) file)
       >>= fun started ->
       begin match started with
       | `success s -> 
