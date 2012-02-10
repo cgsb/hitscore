@@ -193,11 +193,11 @@
 
 
 (record client_fastqs_dir
-        (dir__dirfile string))
+        (dir string))
 
-(function client_fastqs_dir prepare_delivery
+(function client_fastqs_dir prepare_unaligned_delivery
           (unaligned bcl_to_fastq_unaligned)
-          (info flowcell))
+          (invoice invoicing))
 
 ;;  
 ;; (function file library_fastx_stats
