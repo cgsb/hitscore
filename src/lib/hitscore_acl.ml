@@ -15,9 +15,11 @@ module type ACL = sig
   (**/**)
     
   (** 
-      Set the default ACLs for {ul
+      Set the POSIX ACLs for {ul
         {li the configuration {i group} and {i writers}}
-        {li the [`administrator] and [`auditor] roles in the Layout}
+        {li the [`administrator] (“write access”) 
+            and [`auditor] (“read access”) roles in the Layout}
+        {li the optional [more_readers]}
       }
 
       The default value for [?set] and [?follow_symlinks] is [true].
@@ -27,6 +29,7 @@ module type ACL = sig
       [find]s). *)
   val set_defaults :
     ?set:bool -> ?follow_symlinks:bool ->
+    ?more_readers: string list ->
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
     [ `dir of string | `file of string ] ->
@@ -69,7 +72,7 @@ module Make
       >>= fun vips ->
       return (List.filter_opt vips)
 
-    let set_defaults ?(set=true) ?(follow_symlinks=true) 
+    let set_defaults ?(set=true) ?(follow_symlinks=true) ?(more_readers=[])
         ~dbh ~configuration dir_or_file =
 
       let runned_commands = ref [] in (* just for logging puposes *)
@@ -117,7 +120,7 @@ module Make
       >>= fun valid_admins ->
       let valid_writers = List.dedup (valid_admins @ configured_writers) in
       get_people ~dbh `auditor >>= fun readers ->
-      of_list_sequential readers try_login >>| List.filter_opt
+      of_list_sequential (readers @ more_readers) try_login >>| List.filter_opt
       >>= fun valid_readers ->
       match dir_or_file with
       | `dir root -> 
