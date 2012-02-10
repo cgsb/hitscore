@@ -249,7 +249,7 @@ module Make
       >>= fun assembly ->
       Layout.Function_assemble_sample_sheet.set_failed ~dbh assembly
 
-    let run ~dbh ~kind ~configuration ?note ~write_to_file flowcell =
+    let run ~dbh ~kind ~configuration ?note flowcell =
       preparation ~kind ~dbh flowcell
       >>= function
         | `new_one sample_sheet ->
@@ -259,7 +259,7 @@ module Make
             match Configuration.volume_path configuration path_vol with
             | Some vol_dir -> 
               ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
-              write_to_file ~file:(sprintf "%s/%s" vol_dir path_file)
+              write_file ~file:(sprintf "%s/%s" vol_dir path_file)
                 ~content:(Buffer.contents sample_sheet.content)
               >>= fun () ->
               ACL.set_defaults ~dbh (`dir vol_dir) ~configuration

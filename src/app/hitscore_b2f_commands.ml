@@ -8,14 +8,7 @@ open Result_IO
 open Hitscore_app_util
 
 let get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell =
-  Assemble_sample_sheet.run
-    ~configuration:hsc
-    ~kind ~dbh flowcell
-    ~write_to_file:(fun ~file ~content ->
-      Out_channel.(with_file file ~f:(fun o ->
-        printf "writing to %s\n" file;
-        try (return (output_string o content))
-        with e -> error (`io_exn e))))
+  Assemble_sample_sheet.run ~configuration:hsc ~kind ~dbh flowcell
   >>= function
   | `new_failure (_, e) ->
     printf "NEW FAILURE\n";
@@ -69,8 +62,8 @@ let display_errors = function
       printf "INVALID-CONFIGURATION: Root directory not set.\n"
     | `work_directory_not_configured ->
       printf "INVALID-CONFIGURATION: Work directory not set.\n"
-    | `sys_error (`moving_sample_sheet e) ->
-      printf "SYS-ERROR: While moving the sample-sheet: %s\n" (Exn.to_string e)
+    | `write_file_error (f,c,e) ->
+      printf "SYS-FILE-ERROR: Write file error: %s\n" (Exn.to_string e)
     | `system_command_error (cmd, e) ->
       printf "SYS-CMD-ERROR: Command: %S --> %s\n" cmd (Exn.to_string e)
     | `status_parsing_error s ->

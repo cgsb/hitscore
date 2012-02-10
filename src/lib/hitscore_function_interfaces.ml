@@ -21,23 +21,18 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
     kind:Layout.Enumeration_sample_sheet_kind.t ->
     configuration:Configuration.local_configuration ->
     ?note:string ->
-    write_to_file:(file:string ->
-                   content:string ->
-                   (unit,
-                    [> `layout_inconsistency of
-                        [> `record_log | `record_person ] *
-                          [> `insert_did_not_return_one_id of
-                              string * int32 list
-                          | `select_did_not_return_one_tuple of
-                              string * int ]
-                    | `pg_exn of exn
-                    | `root_directory_not_configured 
-                    | `system_command_error of string * exn ] as 'a)
-                     Result_IO.monad) ->
     string ->
-    ([> `new_failure of
+    ([ `new_failure of
         [ `can_nothing ]
-          Layout.Function_assemble_sample_sheet.pointer * 'a
+          Layout.Function_assemble_sample_sheet.pointer *
+          [> `layout_inconsistency of
+              [> `record_log | `record_person ] *
+                [> `insert_did_not_return_one_id of string * int32 list
+                | `select_did_not_return_one_tuple of string * int ]
+          | `pg_exn of exn
+          | `root_directory_not_configured
+          | `system_command_error of string * exn
+          | `write_file_error of string * string * exn ]
      | `new_success of
          [ `can_get_result ]
            Layout.Function_assemble_sample_sheet.pointer
