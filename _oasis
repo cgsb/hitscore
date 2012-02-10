@@ -44,9 +44,7 @@ Library hitscore
           , Hitscore_hiseq_raw
           , Hitscore_b2f_unaligned
           , Hitscore_result_IO
-  DataFiles: ../script/check_fastqs.ml  ($bindir)
-           , ../script/Gen_all_checkscripts  ($bindir)
-           , ../script/hiseq_fastq_index_histogram.ml  ($bindir)
+  DataFiles: ../script/hiseq_fastq_index_histogram.ml  ($bindir)
 
 Executable hitscore
   Path: src/app
