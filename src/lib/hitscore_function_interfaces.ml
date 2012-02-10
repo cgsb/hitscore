@@ -240,3 +240,43 @@ start ~dbh ~configuration       (* common arguments *)
                                                          
 end
 
+(** The module corresponding to [prepare_unaligned_delivery] in the {i
+Layout}.  *)
+module type UNALIGNED_DELIVERY = sig
+
+(**/**)
+  module Configuration : Hitscore_interfaces.CONFIGURATION
+  module Result_IO : Hitscore_interfaces.RESULT_IO
+  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
+    with module Result_IO = Result_IO
+    with module Configuration = Configuration
+  module Layout: Hitscore_layout_interface.LAYOUT
+    with module Result_IO = Result_IO
+    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
+  (**/**)
+
+       val run :
+           dbh:Layout.db_handle ->
+           configuration:Configuration.local_configuration ->
+           bcl_to_fastq:'a Layout.Function_bcl_to_fastq.pointer ->
+           invoice:'b ->
+           destination:'c ->
+           (unit,
+            [> `bcl_to_fastq_not_succeeded of
+                 'a Layout.Function_bcl_to_fastq.pointer *
+                 Layout.Enumeration_process_status.t
+             | `cannot_recognize_file_type of string
+             | `inconsistency_inode_not_found of int32
+             | `io_exn of exn
+             | `layout_inconsistency of
+                 [> `file_system
+                  | `function_bcl_to_fastq
+                  | `record_bcl_to_fastq_unaligned ] *
+                 [> `select_did_not_return_one_tuple of string * int ]
+             | `pg_exn of exn
+             | `work_directory_not_configured
+             | `wrong_unaligned_volume of string Hitscore_std.List.t ])
+           Result_IO.monad
+
+
+end

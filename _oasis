@@ -43,6 +43,7 @@ Library hitscore
           , Hitscore_access_rights
           , Hitscore_hiseq_raw
           , Hitscore_b2f_unaligned
+          , Hitscore_unaligned_delivery
           , Hitscore_result_IO
   DataFiles: ../script/hiseq_fastq_index_histogram.ml  ($bindir)
 

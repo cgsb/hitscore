@@ -43,6 +43,10 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
     Hitscore_bcl_to_fastq.Make 
       (Configuration) (Result_IO) (Layout) (Access_rights)
 
+  module Unaligned_delivery =
+    Hitscore_unaligned_delivery.Make 
+      (Configuration) (Result_IO) (Layout) (Access_rights)
+
   module Hiseq_raw = Hitscore_hiseq_raw
     
   module B2F_unaligned = Hitscore_b2f_unaligned

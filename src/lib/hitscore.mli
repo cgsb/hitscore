@@ -45,6 +45,13 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
 
   module B2F_unaligned: Hitscore_interfaces.B2F_UNALIGNED
 
+  module Unaligned_delivery: Hitscore_function_interfaces.UNALIGNED_DELIVERY
+    with module Configuration = Configuration
+    with module Result_IO = Result_IO
+    with module Access_rights = Access_rights
+    with module Layout = Layout
+
+
   (** Attempt to connect to the database. *)
   val db_connect : Configuration.local_configuration -> 
     (Layout.db_handle, [> `pg_exn of exn]) Result_IO.monad
