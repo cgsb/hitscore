@@ -166,12 +166,16 @@ module Make
           >>= fun () ->
           log_commands (sprintf "(set_acls_on_file %s \
                             (configured_writers %s) \
-                            (admins %s) \
-                            (valid_admins %s) \
+                            (role_writers %s) \
+                            (valid_writers %s) \
+                            (role_readers %s) \
+                            (valid_readers %s) \
                             (commands %s))" f
                           (String.concat ~sep:" " configured_writers)
                           (String.concat ~sep:" " admins)
-                          (String.concat ~sep:" " valid_admins))
+                          (String.concat ~sep:" " valid_writers)
+                          (String.concat ~sep:" " readers)
+                          (String.concat ~sep:" " valid_readers))
         end
 
 
