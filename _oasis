@@ -40,7 +40,7 @@ Library hitscore
           , Hitscore_bcl_to_fastq
           , Hitscore_conf_values
           , Hitscore_configuration
-          , Hitscore_acl
+          , Hitscore_access_rights
           , Hitscore_hiseq_raw
           , Hitscore_b2f_unaligned
           , Hitscore_result_IO

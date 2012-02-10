@@ -598,8 +598,9 @@ module Verify = struct
                   if try_fix then
                     begin match ksprintf System.command "mkdir -p %s" path with
                     | Ok () ->
-                      begin match Hitscore_threaded.ACL.set_defaults ~dbh 
-                          ~configuration:hsc (`dir path) with
+                      begin match 
+                          Hitscore_threaded.Access_rights.set_posix_acls ~dbh 
+                            ~configuration:hsc (`dir path) with
                       | Ok () -> log "Fixed %S\n" path;
                       | Error _ -> error `fix "%S: Cannot set ACLs" path
                       end

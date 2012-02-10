@@ -1,5 +1,5 @@
-(** Posix ACLs management.  *)
-module type ACL = sig
+(** Permissions management.  *)
+module type ACCESS_RIGHTS = sig
 
   (**/**)
 
@@ -24,10 +24,10 @@ module type ACL = sig
 
       The default value for [?set] and [?follow_symlinks] is [true].
 
-      {b Note:} Calling [set_defaults] with [`dir "some/path"] is
+      {b Note:} Calling [set_posix_acls] with [`dir "some/path"] is
       aggressive and recursive (potentially one [chown] and 4
       [find]s). *)
-  val set_defaults :
+  val set_posix_acls :
     ?set:bool -> ?follow_symlinks:bool ->
     ?more_readers: string list ->
     dbh:Layout.db_handle ->
@@ -47,7 +47,7 @@ module Make
   (Layout: Hitscore_layout_interface.LAYOUT
      with module Result_IO = Result_IO
      with type 'a PGOCaml.monad = 'a Result_IO.IO.t):
-  ACL
+  ACCESS_RIGHTS
   with module Configuration = Configuration
   with module Result_IO = Result_IO
   with module Layout = Layout
@@ -72,7 +72,7 @@ module Make
       >>= fun vips ->
       return (List.filter_opt vips)
 
-    let set_defaults ?(set=true) ?(follow_symlinks=true) ?(more_readers=[])
+    let set_posix_acls ?(set=true) ?(follow_symlinks=true) ?(more_readers=[])
         ~dbh ~configuration dir_or_file =
 
       let runned_commands = ref [] in (* just for logging puposes *)

@@ -32,14 +32,16 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
 
   module Configuration = Hitscore_configuration
 
-  module ACL = Hitscore_acl.Make (Configuration) (Result_IO) (Layout)
+  module Access_rights = 
+    Hitscore_access_rights.Make (Configuration) (Result_IO) (Layout)
            
   module Assemble_sample_sheet = 
     Hitscore_assemble_sample_sheet.Make
-      (Configuration) (Result_IO) (Layout) (ACL)
+      (Configuration) (Result_IO) (Layout) (Access_rights)
 
   module Bcl_to_fastq =
-    Hitscore_bcl_to_fastq.Make (Configuration) (Result_IO) (Layout) (ACL)
+    Hitscore_bcl_to_fastq.Make 
+      (Configuration) (Result_IO) (Layout) (Access_rights)
 
   module Hiseq_raw = Hitscore_hiseq_raw
     

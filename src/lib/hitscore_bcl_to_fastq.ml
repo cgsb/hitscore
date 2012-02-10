@@ -5,19 +5,19 @@ module Make
   (Layout: Hitscore_layout_interface.LAYOUT
      with module Result_IO = Result_IO
      with type 'a PGOCaml.monad = 'a Result_IO.IO.t)
-  (ACL : Hitscore_acl.ACL 
+  (Access_rights : Hitscore_access_rights.ACCESS_RIGHTS 
      with module Result_IO = Result_IO
      with module Configuration = Configuration
      with module Layout = Layout):
   Hitscore_function_interfaces.BCL_TO_FASTQ
     with module Configuration = Configuration
     with module Result_IO = Result_IO
-    with module ACL = ACL
+    with module Access_rights = Access_rights
     with module Layout = Layout = struct
 
     module Configuration = Configuration
     module Result_IO = Result_IO
-    module ACL = ACL
+    module Access_rights = Access_rights
     module Layout = Layout
 
     open Hitscore_std
@@ -173,7 +173,7 @@ module Make
 
       let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
       cmd "mkdir -p %s" out_dir >>= fun () ->
-      ACL.set_defaults ~dbh (`dir work_root) ~configuration
+      Access_rights.set_posix_acls ~dbh (`dir work_root) ~configuration
       >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
@@ -191,7 +191,7 @@ module Make
         let pbs_script_created = pbs_script created in
         write_file ~file:pbs_script_created ~content:pbs_script_file
         >>= fun () ->
-        ACL.set_defaults ~dbh ~configuration (`file pbs_script_file)
+        Access_rights.set_posix_acls ~dbh ~configuration (`file pbs_script_file)
         >>= fun () ->
         let run_dir =
           (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
@@ -227,7 +227,7 @@ module Make
         | Some vol_dir -> 
           ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
           ksprintf system_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
-          ACL.set_defaults ~dbh (`dir vol_dir) ~configuration
+          Access_rights.set_posix_acls ~dbh (`dir vol_dir) ~configuration
         | None -> error `root_directory_not_configured
       in
       double_bind move_m

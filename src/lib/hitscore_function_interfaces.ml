@@ -7,7 +7,7 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
 (**/**)
   module Configuration : Hitscore_interfaces.CONFIGURATION
   module Result_IO : Hitscore_interfaces.RESULT_IO
-  module ACL : Hitscore_acl.ACL
+  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
     with module Result_IO = Result_IO
     with module Configuration = Configuration
   module Layout: Hitscore_layout_interface.LAYOUT
@@ -78,7 +78,7 @@ module type BCL_TO_FASTQ = sig
 (**/**)
   module Configuration : Hitscore_interfaces.CONFIGURATION
   module Result_IO : Hitscore_interfaces.RESULT_IO
-  module ACL : Hitscore_acl.ACL
+  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
     with module Result_IO = Result_IO
     with module Configuration = Configuration
   module Layout: Hitscore_layout_interface.LAYOUT

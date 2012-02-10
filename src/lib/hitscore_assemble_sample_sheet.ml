@@ -5,7 +5,7 @@ module Make
   (Layout: Hitscore_layout_interface.LAYOUT
      with module Result_IO = Result_IO
      with type 'a PGOCaml.monad = 'a Result_IO.IO.t)
-  (ACL : Hitscore_acl.ACL 
+  (Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
      with module Result_IO = Result_IO
      with module Configuration = Configuration
      with module Layout = Layout):
@@ -13,14 +13,14 @@ module Make
   Hitscore_function_interfaces.ASSEMBLE_SAMPLE_SHEET
   with module Configuration = Configuration
   with module Result_IO = Result_IO
-  with module ACL = ACL
+  with module Access_rights = Access_rights
   with module Layout = Layout
 
   = struct
 
     module Configuration = Configuration
     module Result_IO = Result_IO
-    module ACL = ACL
+    module Access_rights = Access_rights
     module Layout = Layout
 
     open Hitscore_std
@@ -269,7 +269,7 @@ module Make
               write_file ~file:(sprintf "%s/%s" vol_dir path_file)
                 ~content:(Buffer.contents sample_sheet.content)
               >>= fun () ->
-              ACL.set_defaults ~dbh (`dir vol_dir) ~configuration
+              Access_rights.set_posix_acls ~dbh (`dir vol_dir) ~configuration
             | None -> error `root_directory_not_configured
           in
           double_bind commands_m

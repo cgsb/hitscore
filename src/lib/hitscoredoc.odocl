@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: ff606417373e85b5b589d600709bb7ad)
+# DO NOT EDIT (digest: d78a032ab85108fbab559ae7ff72e736)
 Hitscore
 Hitscore_std
 Hitscore_interfaces
@@ -10,7 +10,7 @@ Hitscore_assemble_sample_sheet
 Hitscore_bcl_to_fastq
 Hitscore_conf_values
 Hitscore_configuration
-Hitscore_acl
+Hitscore_access_rights
 Hitscore_hiseq_raw
 Hitscore_b2f_unaligned
 Hitscore_result_IO
