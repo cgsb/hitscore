@@ -539,25 +539,10 @@ position_in_r1, position_in_r2, position_in_index, sequence) = cache in
        g_created = Option.map created Time.of_string;
        g_last_modified = Option.map created Time.of_string;
        
-       dir__dirfile = dir__dirfile;
+       dir = dir__dirfile;
       }) in
-  let function_prepare_delivery      =
-    List.map s04.V04M.function_prepare_delivery (fun cache -> 
-      let (g_id, result, g_recomputable, g_recompute_penalty,
-        g_inserted, g_started, g_completed, g_status,
-        unaligned, info) = cache in
-      {V05M.Function_prepare_delivery.
-       g_id;
-  	 g_result = option_map result (fun id -> {Record_client_fastqs_dir.id});
-  	 g_recomputable;
-  	 g_recompute_penalty;
-  	 g_inserted = Option.map g_inserted Time.of_string;
-  	 g_started = Option.map g_started Time.of_string;
-  	 g_completed = Option.map g_completed Time.of_string;
-  	 g_status = Enumeration_process_status.of_string_exn g_status;
-         unaligned = { Record_bcl_to_fastq_unaligned.id = unaligned };
-         info = { Record_flowcell.id = info };
-        })
+  let function_prepare_unaligned_delivery =
+    assert (s04.V04M.function_prepare_delivery = []); []
   in
 
   let d05 =
@@ -590,7 +575,7 @@ position_in_r1, position_in_r2, position_in_index, sequence) = cache in
       record_hiseq_checksum          ;
       function_dircmp_raw            ;
       record_client_fastqs_dir       ;
-      function_prepare_delivery      ;
+      function_prepare_unaligned_delivery;
     } in
   Out_channel.(with_file file_out ~f:(fun o ->
     output_string o (Sexplib.Sexp.to_string_hum (V05M.sexp_of_dump d05))));
