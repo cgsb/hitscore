@@ -40,6 +40,9 @@ module type IO_CONFIGURATION = sig
   (** Run a unix command (in a shell, like [Unix.system]).  *)
   val system_command: string -> unit t
 
+  (** [write_string_to_file string file] should write a string to a file.  *)
+  val write_string_to_file: string -> string -> unit t
+
 end
 
 open Core.Std
@@ -114,6 +117,10 @@ module type RESULT_IO = sig
   (** Wrapped version of [IO.system_command]. *)
   val system_command: string -> 
     (unit, [> `system_command_error of (string * exn) ]) monad
+
+  (** Wrapped version of [IO.write_string_to_file]. *)
+  val write_file: file:string -> content:string ->
+    (unit, [> `write_file_error of (string * string * exn)]) monad
 
 end
 

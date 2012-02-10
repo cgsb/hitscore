@@ -15,6 +15,10 @@ module Preemptive_threading_config :
       if (Unix.Process_status.is_ok status) then ()
       else raise (Wrong_status status)
 
+    let write_string_to_file content file =
+      Out_channel.(with_file file ~f:(fun o ->
+        output_string o content))
+      
 
 end
 

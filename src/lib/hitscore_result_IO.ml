@@ -88,4 +88,13 @@ module Make (IO_configuration : IO_CONFIGURATION) = struct
         ~ok:return
         ~error:(fun exn -> error (`system_command_error (s, exn)))
 
+
+    (* Wrapped version of [IO.write_string_to_file]. *)
+    let  write_file ~file ~content =
+      let caught = catch_io (IO.write_string_to_file content) file in
+      double_bind caught
+        ~ok:return
+        ~error:(fun exn -> error (`write_file_error (file, content, exn)))
+
+
   end
