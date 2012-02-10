@@ -1113,13 +1113,33 @@ module Query = struct
       | None ->
         printf "Unknown custom query: %S\n" name;
       end;
-      db_disconnect hsc |! Pervasives.ignore
+      db_disconnect hsc dbh |! Pervasives.ignore
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
 
 
 end
 
+module Prepare_delivery = struct
+
+  let run_function configuration bb inv dir =
+    let open Hitscore_threaded in
+    let open Result_IO in
+    match db_connect configuration with
+    | Ok dbh ->
+      let work =
+        Unaligned_delivery.run ~dbh ~configuration 
+          ~bcl_to_fastq:(Layout.Function_bcl_to_fastq.unsafe_cast
+                           (Int32.of_string bb)) 
+          ~invoice:(Layout.Record_invoicing.unsafe_cast (Int32.of_string inv))
+          ~destination:dir
+        >>= fun () -> 
+        db_disconnect configuration dbh
+      in
+      Pervasives.ignore work
+    | Error (`pg_exn e) ->
+      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+end
 
 let commands = ref []
 
@@ -1363,6 +1383,13 @@ let () =
       fprintf o "Usage: %s <profile> %s <hiseq-dir>\n" exec cmd)
     ~run:(fun config exec cmd -> function
     | [dir] -> Some (Hiseq_raw.get_info dir)
+    | _ -> None);
+
+  define_command ~names:["deliver"] ~description:"Deliver links to clients"
+    ~usage:(fun o exec cmd ->
+      fprintf o "Usage: %s <profile> %s <bcl_to_fastq> <invoice> <dir>\n" exec cmd)
+    ~run:(fun config exec cmd -> function
+    | [bb; inv; dir] -> Some (Prepare_delivery.run_function config bb inv dir)
     | _ -> None);
 
   let global_usage = function
