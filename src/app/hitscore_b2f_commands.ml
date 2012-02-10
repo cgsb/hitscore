@@ -130,7 +130,6 @@ let start_parse_cmdline usage_prefix args =
     | None -> ref None in
   let nodes = ref 1 in
   let ppn = ref 8 in
-  let sys_dry_run = ref false in
   let sample_sheet_kind = ref `specific_barcodes in
   let make_command = ref "make -j8" in
   let wall_hours, version, mismatch =
@@ -159,9 +158,6 @@ let start_parse_cmdline usage_prefix args =
     ( "-all-barcodes",
       Arg.Unit (fun () -> sample_sheet_kind := `all_barcodes),
       "\n\tUse/create an all-barcodes sample-sheet.");
-    ( "-sys-dry-run",
-      Arg.Set sys_dry_run,
-      "\n\tDo not run the system commands (it still populated the DB).");
     ( "-wall-hours",
       Arg.Set_int wall_hours,
       sprintf "<hours>\n\tWalltime in hours (default: %d)." !wall_hours);
@@ -191,7 +187,7 @@ let start_parse_cmdline usage_prefix args =
   let cmdline = Array.of_list (usage_prefix :: args) in
   begin 
     try Arg.parse_argv cmdline options anon usage;
-        `go (List.rev !anon_args, !sys_dry_run, !sample_sheet_kind,
+        `go (List.rev !anon_args, !sample_sheet_kind,
              !user, !queue, !nodes, !ppn,
              !wall_hours, !version, !mismatch,
              !hitscore_command, !make_command, !tiles)
@@ -203,7 +199,7 @@ let start_parse_cmdline usage_prefix args =
 let start hsc prefix cl_args =
   let open Hitscore_threaded in
   begin match (start_parse_cmdline prefix cl_args) with
-  | `go (args, sys_dry_run, kind, user, queue, nodes, ppn,
+  | `go (args, kind, user, queue, nodes, ppn,
          wall_hours, version, mismatch, 
          hitscore_command, make_command, tiles) ->
     db_connect hsc
@@ -242,12 +238,8 @@ let start hsc prefix cl_args =
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
         ~write_file:(fun s file ->
-          if not sys_dry_run then
-            (printf "WRITE-FILE: %S\n" file;
-             wrap_io Out_channel.(with_file 
-                                    ~f:(fun o -> output_string o s)) file)
-          else
-            (printf "Would-WRITE-FILE: %S:\n%s\n" file s; Ok ()))
+          wrap_io Out_channel.(with_file 
+                                 ~f:(fun o -> output_string o s)) file)
       >>= fun started ->
       begin match started with
       | `success s -> 
