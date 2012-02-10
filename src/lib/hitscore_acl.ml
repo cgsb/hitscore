@@ -19,10 +19,14 @@ module type ACL = sig
         {li the configuration {i group} and {i writers}}
         {li the [`administrator] and [`auditor] roles in the Layout}
       }
+
+      The default value for [?set] and [?follow_symlinks] is [true].
+
       {b Note:} Calling [set_defaults] with [`dir "some/path"] is
       aggressive and recursive (potentially one [chown] and 4
       [find]s). *)
   val set_defaults :
+    ?set:bool -> ?follow_symlinks:bool ->
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
     [ `dir of string | `file of string ] ->
@@ -65,7 +69,9 @@ module Make
       >>= fun vips ->
       return (List.filter_opt vips)
 
-    let set_defaults ~dbh ~configuration =
+    let set_defaults ?(set=true) ?(follow_symlinks=true) 
+        ~dbh ~configuration dir_or_file =
+
       let runned_commands = ref [] in (* just for logging puposes *)
       let cmd fmt = 
         ksprintf (fun s -> 
@@ -77,105 +83,92 @@ module Make
             ~error:(fun _ -> return None)
       in
       let log_commands f =
-        let cmds = List.map !runned_commands ~f:(sprintf "%S")
+        let cmds = List.rev_map !runned_commands ~f:(sprintf "%S")
                    |! String.concat ~sep:" " in
         runned_commands := [];
         Layout.Record_log.add_value ~dbh ~log:(f cmds)
         >>= fun _ -> return ()
       in
-      function
+      let find_exec what where todo =
+        cmd "find %s %s -type %s -exec %s \\;"
+          (if follow_symlinks then "-L" else "") where
+          (match what with `dir -> "d" | `file -> "f")
+          (todo "{}") in
+      let setfacl what grp rl wl =
+        if grp = None && rl = [] && wl = [] then 
+          (sprintf "echo Nothing to do on: %s")
+        else
+          let concat_map l f = String.concat ~sep:"" (List.map l f) in
+          sprintf "setfacl %s -m %s%s%sm:rwx %s"
+            (if set then "-b" else "")
+            (concat_map rl (fun u -> 
+              match what with 
+              | `dir -> sprintf "user:%s:rx,d:user:%s:rx," u u
+              | `file -> sprintf "user:%s:r," u))
+            (concat_map wl (fun u -> 
+              match what with 
+              | `dir -> sprintf "user:%s:rwx,d:user:%s:rwx," u u
+              | `file -> sprintf "user:%s:rw," u))
+            (Option.value_map ~default:"" ~f:(sprintf "g:%s:x,") grp) in
+      
+      let configured_writers = Configuration.root_writers configuration in
+      get_people ~dbh `administrator >>= fun admins ->
+      of_list_sequential admins try_login >>| List.filter_opt
+      >>= fun valid_admins ->
+      let valid_writers = List.dedup (valid_admins @ configured_writers) in
+      get_people ~dbh `auditor >>= fun readers ->
+      of_list_sequential readers try_login >>| List.filter_opt
+      >>= fun valid_readers ->
+      match dir_or_file with
       | `dir root -> 
-        begin match (Configuration.root_group configuration) with
-        | None -> return None
-        | Some grp -> 
+        of_option (Configuration.root_group configuration) ~f:(fun grp -> 
           cmd "chown -R :%s %s" grp root 
           >>= fun () ->
-          cmd "find %s -type d -exec chmod u+rwx,g-rw,g+xs,o-rwx {} \\;" root
+          find_exec `dir root (sprintf "chmod u+rwx,g-rw,g+xs,o-rwx %s")
           >>= fun () ->
-          cmd "find %s -type f -exec chmod u+rwx,g-rwx,o-rwx {} \\;" root
+          find_exec `file root (sprintf "chmod u+rwx,g-rwx,o-rwx %s")
           >>= fun () ->
           log_commands (sprintf "(chmod_group_dir %s %s (commands %s))" grp root)
           >>= fun () ->
-          return (Some grp)
-        end
+          return grp)
         >>= fun group ->
-        let configured_writers = Configuration.root_writers configuration in
-        get_people ~dbh `administrator >>= fun admins ->
-        of_list_sequential admins try_login >>| List.filter_opt
-        >>= fun valid_admins ->
-        let valid_writers = List.dedup (valid_admins @ configured_writers) in
-        get_people ~dbh `auditor >>= fun readers ->
-        of_list_sequential readers try_login >>| List.filter_opt
-        >>= fun valid_readers ->
-        begin match valid_writers, valid_readers with
-        | [], [] -> return ()
-        | w, r ->
-          let concat_map l f = String.concat ~sep:"" (List.map l f) in 
-          cmd "find %s -type d -exec setfacl -m %s%s%s%s%sm:rwx {} \\;" root
-            (concat_map r (sprintf "user:%s:rx,"))
-            (concat_map r (sprintf "d:user:%s:rx,"))
-            (concat_map w (sprintf "user:%s:rwx,"))
-            (concat_map w (sprintf "d:user:%s:rwx,"))
-            (Option.value_map ~default:"" ~f:(sprintf "g:%s:x,") group)
-          >>= fun () ->
-          cmd "find %s -type f -exec setfacl -m %s%sm:rwx {} \\;" root
-            (concat_map r (sprintf "user:%s:r,"))
-            (concat_map w (sprintf "user:%s:rw,"))
-          >>= fun () ->
-          log_commands (sprintf "(set_acls_on_dir %s \
+        find_exec `dir root (setfacl `dir group valid_readers valid_writers)
+        >>= fun () ->
+        find_exec `file root (setfacl `file group valid_readers valid_writers)
+        >>= fun () ->
+        log_commands (sprintf "(set_acls_on_dir %s \
                             (configured_writers %s) \
                             (role_writers %s) \
                             (valid_writers %s) \
                             (role_readers %s) \
                             (valid_readers %s) \
                             (commands %s))" root
-                          (String.concat ~sep:" " configured_writers)
-                          (String.concat ~sep:" " admins)
-                          (String.concat ~sep:" " valid_writers)
-                          (String.concat ~sep:" " readers)
-                          (String.concat ~sep:" " valid_readers))
-        end
+                        (String.concat ~sep:" " configured_writers)
+                        (String.concat ~sep:" " admins)
+                        (String.concat ~sep:" " valid_writers)
+                        (String.concat ~sep:" " readers)
+                        (String.concat ~sep:" " valid_readers))
       | `file f ->
-        begin match (Configuration.root_group configuration) with
-        | None -> return ()
-        | Some grp -> 
+        of_option (Configuration.root_group configuration) ~f:(fun grp ->
           cmd "chown :%s %s" grp f >>= fun () ->
           cmd "chmod 0600 %s" f
           >>= fun () ->
-          log_commands (sprintf "(chmod_group_file %s %s (commands %s))" grp f)
-        end
+          log_commands (sprintf "(chmod_group_file %s %s (commands %s))" grp f))
+        >>= fun group ->
+        cmd "%s" (setfacl `file None valid_readers valid_writers f)
         >>= fun () ->
-        let configured_writers = Configuration.root_writers configuration in
-        get_people ~dbh `administrator >>= fun admins ->
-        of_list_sequential admins try_login >>| List.filter_opt
-        >>= fun valid_admins ->
-        let valid_writers = List.dedup (valid_admins @ configured_writers) in
-        get_people ~dbh `auditor >>= fun readers ->
-        of_list_sequential readers try_login >>| List.filter_opt
-        >>= fun valid_readers ->
-        begin match valid_writers, valid_readers with
-        | [], [] -> return ()
-        | w, r ->
-          let concat_map l f = String.concat ~sep:"" (List.map l f) in 
-          cmd "setfacl -m %s%sm:rwx %s"
-            (concat_map r (sprintf "user:%s:r,"))
-            (concat_map w (sprintf "user:%s:rw,")) f
-          >>= fun () ->
-          log_commands (sprintf "(set_acls_on_file %s \
+        log_commands (sprintf "(set_acls_on_file %s \
                             (configured_writers %s) \
                             (role_writers %s) \
                             (valid_writers %s) \
                             (role_readers %s) \
                             (valid_readers %s) \
                             (commands %s))" f
-                          (String.concat ~sep:" " configured_writers)
-                          (String.concat ~sep:" " admins)
-                          (String.concat ~sep:" " valid_writers)
-                          (String.concat ~sep:" " readers)
-                          (String.concat ~sep:" " valid_readers))
-        end
-
-
+                        (String.concat ~sep:" " configured_writers)
+                        (String.concat ~sep:" " admins)
+                        (String.concat ~sep:" " valid_writers)
+                        (String.concat ~sep:" " readers)
+                        (String.concat ~sep:" " valid_readers))
 
 
 end
