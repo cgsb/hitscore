@@ -106,25 +106,37 @@ module Make
         get_people ~dbh `administrator >>= fun admins ->
         of_list_sequential admins try_login >>| List.filter_opt
         >>= fun valid_admins ->
-        begin match List.dedup (valid_admins @ configured_writers) with
-        | [] -> return ()
-        | l ->
-          cmd "find %s -type d -exec setfacl -m %s,%s,%sm:rwx {} \\;" root
-            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rwx")))
-            (String.concat ~sep:"," (List.map l (sprintf "d:user:%s:rwx")))
+        let valid_writers = List.dedup (valid_admins @ configured_writers) in
+        get_people ~dbh `auditor >>= fun readers ->
+        of_list_sequential readers try_login >>| List.filter_opt
+        >>= fun valid_readers ->
+        begin match valid_writers, valid_readers with
+        | [], [] -> return ()
+        | w, r ->
+          let concat_map l f = String.concat ~sep:"" (List.map l f) in 
+          cmd "find %s -type d -exec setfacl -m %s%s%s%s%sm:rwx {} \\;" root
+            (concat_map r (sprintf "user:%s:rx,"))
+            (concat_map r (sprintf "d:user:%s:rx,"))
+            (concat_map w (sprintf "user:%s:rwx,"))
+            (concat_map w (sprintf "d:user:%s:rwx,"))
             (Option.value_map ~default:"" ~f:(sprintf "g:%s:x,") group)
           >>= fun () ->
-          cmd "find %s -type f -exec setfacl -m %s {} \\;" root
-            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw")))
+          cmd "find %s -type f -exec setfacl -m %s%sm:rwx {} \\;" root
+            (concat_map r (sprintf "user:%s:r,"))
+            (concat_map w (sprintf "user:%s:rw,"))
           >>= fun () ->
           log_commands (sprintf "(set_acls_on_dir %s \
                             (configured_writers %s) \
-                            (admins %s) \
-                            (valid_admins %s) \
+                            (role_writers %s) \
+                            (valid_writers %s) \
+                            (role_readers %s) \
+                            (valid_readers %s) \
                             (commands %s))" root
                           (String.concat ~sep:" " configured_writers)
                           (String.concat ~sep:" " admins)
-                          (String.concat ~sep:" " valid_admins))
+                          (String.concat ~sep:" " valid_writers)
+                          (String.concat ~sep:" " readers)
+                          (String.concat ~sep:" " valid_readers))
         end
       | `file f ->
         begin match (Configuration.root_group configuration) with
@@ -140,11 +152,17 @@ module Make
         get_people ~dbh `administrator >>= fun admins ->
         of_list_sequential admins try_login >>| List.filter_opt
         >>= fun valid_admins ->
-        begin match List.dedup (valid_admins @ configured_writers) with
-        | [] -> return ()
-        | l ->
-          cmd "setfacl -m %s %s"
-            (String.concat ~sep:"," (List.map l (sprintf "user:%s:rw"))) f
+        let valid_writers = List.dedup (valid_admins @ configured_writers) in
+        get_people ~dbh `auditor >>= fun readers ->
+        of_list_sequential readers try_login >>| List.filter_opt
+        >>= fun valid_readers ->
+        begin match valid_writers, valid_readers with
+        | [], [] -> return ()
+        | w, r ->
+          let concat_map l f = String.concat ~sep:"" (List.map l f) in 
+          cmd "setfacl -m %s%sm:rwx %s"
+            (concat_map r (sprintf "user:%s:r,"))
+            (concat_map w (sprintf "user:%s:rw,")) f
           >>= fun () ->
           log_commands (sprintf "(set_acls_on_file %s \
                             (configured_writers %s) \
