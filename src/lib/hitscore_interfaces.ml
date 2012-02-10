@@ -37,6 +37,9 @@ module type IO_CONFIGURATION = sig
   (** This is like {i {{:http://ocsigen.org/lwt/api/Lwt}Lwt}.catch}. *)
   val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
 
+  (** Run a unix command (in a shell, like [Unix.system]).  *)
+  val system_command: string -> unit t
+
 end
 
 open Core.Std
@@ -107,6 +110,10 @@ module type RESULT_IO = sig
 
   (** [of_result] adds threading to a [Result.t]. *)
   val of_result: ('a, 'b) Result.t -> ('a, 'b) monad
+
+  (** Wrapped version of [IO.system_command]. *)
+  val system_command: string -> 
+    (unit, [> `system_command_error of (string * exn) ]) monad
 
 end
 

@@ -8,6 +8,14 @@ module Preemptive_threading_config :
     let log_error = eprintf "%s"
     let catch f e =
       try f () with ex -> e ex
+
+    exception Wrong_status of Unix.Process_status.t
+    let system_command s =
+      let status = Unix.system s in
+      if (Unix.Process_status.is_ok status) then ()
+      else raise (Wrong_status status)
+
+
 end
 
 

@@ -81,4 +81,11 @@ module Make (IO_configuration : IO_CONFIGURATION) = struct
 
     let of_result r = IO_configuration.return r 
 
+
+    let system_command s =
+      let caught = catch_io IO.system_command s in
+      double_bind caught
+        ~ok:return
+        ~error:(fun exn -> error (`system_command_error (s, exn)))
+
   end
