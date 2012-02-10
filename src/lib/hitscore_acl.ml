@@ -21,20 +21,14 @@ module type ACL = sig
       (potentially one [chown] and 4 [find]s). *)
   val set_defaults :
     dbh:Layout.db_handle ->
-    run_command:(string ->
-                 (unit,
-                  [> `layout_inconsistency of
-                      [> `record_log | `record_person ] *
-                        [> `insert_did_not_return_one_id of
-                            string * int32 list
-                        | `select_did_not_return_one_tuple of
-                            string * int ]
-                  | `pg_exn of exn ]
-                    as 'a)
-                   Result_IO.monad) ->
     configuration:Configuration.local_configuration ->
     [ `dir of string | `file of string ] ->
-    (unit, 'a) Result_IO.monad
+    (unit, [> `layout_inconsistency of
+        [> `record_log | `record_person ] *
+          [> `insert_did_not_return_one_id of string * int32 list
+          | `select_did_not_return_one_tuple of string * int ]
+           | `pg_exn of exn
+           | `system_command_error of string * exn ]) Result_IO.monad
 end
 
 module Make
@@ -68,12 +62,12 @@ module Make
       >>= fun vips ->
       return (List.filter_opt vips)
 
-    let set_defaults ~dbh ~run_command ~configuration =
+    let set_defaults ~dbh ~configuration =
       let runned_commands = ref [] in (* just for logging puposes *)
       let cmd fmt = 
         ksprintf (fun s -> 
           runned_commands := s :: !runned_commands;
-          run_command s) fmt in
+          system_command s) fmt in
       let try_login login =
         cmd "groups %s" login |! double_bind
             ~ok:(fun () -> return (Some login))

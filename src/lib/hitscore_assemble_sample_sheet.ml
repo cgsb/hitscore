@@ -249,7 +249,7 @@ module Make
       >>= fun assembly ->
       Layout.Function_assemble_sample_sheet.set_failed ~dbh assembly
 
-    let run ~dbh ~kind ~configuration ?note ~write_to_file ~run_command flowcell =
+    let run ~dbh ~kind ~configuration ?note ~write_to_file flowcell =
       preparation ~kind ~dbh flowcell
       >>= function
         | `new_one sample_sheet ->
@@ -258,11 +258,11 @@ module Make
           let commands_m =
             match Configuration.volume_path configuration path_vol with
             | Some vol_dir -> 
-              ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
+              ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
               write_to_file ~file:(sprintf "%s/%s" vol_dir path_file)
                 ~content:(Buffer.contents sample_sheet.content)
               >>= fun () ->
-              ACL.set_defaults ~dbh (`dir vol_dir) ~configuration ~run_command
+              ACL.set_defaults ~dbh (`dir vol_dir) ~configuration
             | None -> error `root_directory_not_configured
           in
           double_bind commands_m

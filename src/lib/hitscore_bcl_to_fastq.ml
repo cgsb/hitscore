@@ -19,33 +19,6 @@ module Make
     open Hitscore_std
     open Result_IO
 
-    type 'a start_error = 
-    [> `cannot_recognize_file_type of string
-    | `empty_sample_sheet_volume of
-        Layout.File_system.volume_pointer * Layout.Record_sample_sheet.pointer
-    | `hiseq_dir_deleted of
-        Layout.Record_hiseq_raw.pointer * Layout.Record_inaccessible_hiseq_raw.pointer
-    | `inconsistency_inode_not_found of int32
-    | `layout_inconsistency of
-        [> `file_system
-        | `function_bcl_to_fastq
-        | `record_hiseq_raw
-        | `record_inaccessible_hiseq_raw
-        | `record_log
-        | `record_person
-        | `record_sample_sheet ] *
-          [> `insert_did_not_return_one_id of
-              string * int32 list
-          | `select_did_not_return_one_tuple of
-              string * int ]
-    | `more_than_one_file_in_sample_sheet_volume of
-        Layout.File_system.volume_pointer * 
-          Layout.Record_sample_sheet.pointer * string list
-    | `pg_exn of exn 
-    | `root_directory_not_configured
-    | `work_directory_not_configured
-    ] as 'a
-
     let work_root_directory work_dir unique_id =
       sprintf "%s/B2F/work/%s/" work_dir unique_id
 
@@ -64,7 +37,6 @@ module Make
         ?(queue="cgsb-s")
         ?(hitscore_command="echo hitscore should: ")
         ?(make_command="make -j8")
-        ~run_command
         ~write_file
         name =
 
@@ -196,9 +168,9 @@ module Make
             ~log:(sprintf "(set_bcl_to_fastq_started %ld)" b2f.id)
           >>= fun _ -> return b2f) in            
 
-      let cmd fmt = ksprintf (fun s -> run_command s) fmt in 
+      let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
       cmd "mkdir -p %s" out_dir >>= fun () ->
-      ACL.set_defaults ~dbh (`dir work_root) ~configuration ~run_command
+      ACL.set_defaults ~dbh (`dir work_root) ~configuration
       >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
@@ -215,7 +187,7 @@ module Make
       let started =
         let pbs_script_created = pbs_script created in
         write_file pbs_script_created pbs_script_file >>= fun () ->
-        ACL.set_defaults ~dbh ~run_command ~configuration (`file pbs_script_file)
+        ACL.set_defaults ~dbh ~configuration (`file pbs_script_file)
         >>= fun () ->
         let run_dir =
           (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
@@ -235,19 +207,8 @@ module Make
                     failed.Layout.Function_bcl_to_fastq.id)
           >>= fun _ ->
           return (`failure (failed, e)))
-
-    type 'a succeed_error = 'a constraint 'a =
-    [> `layout_inconsistency of
-        [> `file_system
-        | `record_bcl_to_fastq_unaligned
-        | `record_log | `record_person] *
-          [> `add_did_not_return_one of string * int32 list
-          | `insert_did_not_return_one_id of string * int32 list
-          | `select_did_not_return_one_tuple of string * int ]
-    | `pg_exn of exn
-    | `root_directory_not_configured]
       
-    let succeed ~dbh ~configuration ~bcl_to_fastq ~result_root ~run_command =
+    let succeed ~dbh ~configuration ~bcl_to_fastq ~result_root =
       Layout.File_system.(
         let files = Tree.([opaque "Unaligned"]) in
         add_volume ~dbh ~hr_tag:(Filename.basename result_root)
@@ -260,9 +221,9 @@ module Make
       let move_m =
         match Configuration.volume_path configuration path_vol with
         | Some vol_dir -> 
-          ksprintf run_command "mkdir -p %s/" vol_dir >>= fun () ->
-          ksprintf run_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
-          ACL.set_defaults ~dbh (`dir vol_dir) ~configuration ~run_command
+          ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
+          ksprintf system_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
+          ACL.set_defaults ~dbh (`dir vol_dir) ~configuration
         | None -> error `root_directory_not_configured
       in
       double_bind move_m
@@ -309,7 +270,7 @@ module Make
       return failed
 
 
-    let status ~dbh ~configuration ~run_command bcl_to_fastq = 
+    let status ~dbh ~configuration bcl_to_fastq = 
       begin match Configuration.work_directory configuration with
       | Some work_dir -> return work_dir
       | None -> error `work_directory_not_configured
@@ -321,7 +282,7 @@ module Make
         match g_status with
         | `Started ->
           let run_dir = work_run_time work_dir bcl_to_fastq.id in
-          ksprintf run_command "cat %s/jobid && qstat `cat %s/jobid`" 
+          ksprintf system_command "cat %s/jobid && qstat `cat %s/jobid`" 
             run_dir run_dir
           |! double_bind
               ~ok:(fun () -> return (`running))
@@ -329,20 +290,7 @@ module Make
         | s -> return (`not_started s)
       )
 
-
-    type 'a kill_error = 'a constraint 'a =
-    [> `layout_inconsistency of
-        [> `function_bcl_to_fastq | `record_log ] *
-          [> `insert_did_not_return_one_id of
-              string * int32 list
-          | `select_did_not_return_one_tuple of
-              string * int ]
-    | `not_started of
-        Layout.Enumeration_process_status.t
-    | `pg_exn of exn
-    | `work_directory_not_configured ]
-
-    let kill ~dbh ~configuration ~run_command bcl_to_fastq = 
+    let kill ~dbh ~configuration  bcl_to_fastq = 
       begin match Configuration.work_directory configuration with
       | Some work_dir -> return work_dir
       | None -> error `work_directory_not_configured
@@ -354,7 +302,7 @@ module Make
         match g_status  with
         | `Started ->
           let run_dir = work_run_time work_dir bcl_to_fastq.id in
-          ksprintf run_command "cat %s/jobid && qdel `cat %s/jobid`" 
+          ksprintf system_command "cat %s/jobid && qdel `cat %s/jobid`" 
             run_dir run_dir
           >>= fun () ->
           fail ~dbh ~reason:"killed" bcl_to_fastq

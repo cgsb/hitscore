@@ -31,10 +31,9 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
                           | `select_did_not_return_one_tuple of
                               string * int ]
                     | `pg_exn of exn
-                    | `root_directory_not_configured ]
-                      as 'a)
+                    | `root_directory_not_configured 
+                    | `system_command_error of string * exn ] as 'a)
                      Result_IO.monad) ->
-    run_command:(string -> (unit, 'a) ACL.Result_IO.monad) ->
     string ->
     ([> `new_failure of
         [ `can_nothing ]
@@ -84,36 +83,9 @@ module type BCL_TO_FASTQ = sig
   module Layout: Hitscore_layout_interface.LAYOUT
     with module Result_IO = Result_IO
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
-(**/**)
+  (**/**)
 
-  (** The errors which may be 'added' by the [start] function. *)
-    type 'a start_error = 
-    [> `cannot_recognize_file_type of string
-    | `empty_sample_sheet_volume of
-        Layout.File_system.volume_pointer * Layout.Record_sample_sheet.pointer
-    | `hiseq_dir_deleted of
-        Layout.Record_hiseq_raw.pointer * Layout.Record_inaccessible_hiseq_raw.pointer
-    | `inconsistency_inode_not_found of int32
-    | `layout_inconsistency of
-        [> `file_system
-        | `function_bcl_to_fastq
-        | `record_hiseq_raw
-        | `record_inaccessible_hiseq_raw
-        | `record_log
-        | `record_person
-        | `record_sample_sheet ] *
-          [> `insert_did_not_return_one_id of
-              string * int32 list
-          | `select_did_not_return_one_tuple of
-              string * int ]
-    | `more_than_one_file_in_sample_sheet_volume of
-        Layout.File_system.volume_pointer * 
-          Layout.Record_sample_sheet.pointer * string list
-    | `pg_exn of exn 
-    | `root_directory_not_configured
-    | `work_directory_not_configured
-    ] as 'a
-
+           
   (** Start the demultiplexer. *)
   val start :
     dbh:Layout.db_handle ->
@@ -123,92 +95,130 @@ module type BCL_TO_FASTQ = sig
     availability:Layout.Record_inaccessible_hiseq_raw.pointer ->
     ?tiles:string ->
     ?mismatch:[ `one | `two | `zero ] ->
-    ?version:[ `casava_181 | `casava_182 ] ->
-    ?user:string -> ?wall_hours:int -> ?nodes:int -> ?ppn:int -> ?queue:string ->
-    ?hitscore_command:string -> ?make_command:string ->
-    run_command:(string -> (unit, 'a start_error) Result_IO.monad) ->
-    write_file:(string -> string -> (unit, 'a start_error) Result_IO.monad) ->
+    ?version:[`casava_181 | `casava_182 ] ->
+    ?user:string ->
+    ?wall_hours:int ->
+    ?nodes:int ->
+    ?ppn:int ->
+    ?queue:string ->
+    ?hitscore_command:string ->
+    ?make_command:string ->
+    write_file:(string ->
+                string ->
+                (unit,
+                 [> `layout_inconsistency of
+                     [> `record_log | `record_person ] *
+                       [> `insert_did_not_return_one_id of
+                           string * int32 list
+                       | `select_did_not_return_one_tuple of
+                           string * int ]
+                 | `pg_exn of exn
+                 | `system_command_error of string * exn ]
+                   as 'a)
+                  Result_IO.monad) ->
     string ->
-    ([ `failure of
-        [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer * 'a start_error
-     | `success of [ `can_complete ] Layout.Function_bcl_to_fastq.pointer ],
-     'a) Result_IO.monad
-
-
-  (** The errors which may be 'added' by the [succeed] function. *)
-  type 'a succeed_error = 'a constraint 'a =
-  [> `layout_inconsistency of
-      [> `file_system
-      | `record_bcl_to_fastq_unaligned
-      | `record_log | `record_person] *
-        [> `add_did_not_return_one of string * int32 list
-        | `insert_did_not_return_one_id of string * int32 list
-        | `select_did_not_return_one_tuple of string * int ]
-  | `pg_exn of exn
-  | `root_directory_not_configured]
+    ([> `failure of
+        [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer * 'a
+     | `success of
+         [ `can_complete ] Layout.Function_bcl_to_fastq.pointer ],
+     [> `cannot_recognize_file_type of string
+     | `empty_sample_sheet_volume of
+         Layout.File_system.volume_pointer *
+           Layout.Record_sample_sheet.pointer
+     | `hiseq_dir_deleted of
+         Layout.Record_hiseq_raw.pointer *
+           Layout.Record_inaccessible_hiseq_raw.pointer
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
+         [> `file_system
+         | `function_bcl_to_fastq
+         | `record_hiseq_raw
+         | `record_inaccessible_hiseq_raw
+         | `record_log
+         | `record_person
+         | `record_sample_sheet ] *
+           [> `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
+     | `more_than_one_file_in_sample_sheet_volume of
+         Layout.File_system.volume_pointer *
+           Layout.Record_sample_sheet.pointer * string list
+     | `pg_exn of exn
+     | `root_directory_not_configured
+     | `system_command_error of string * exn
+     | `work_directory_not_configured ])
+      Result_IO.monad
 
   (** Create the resulting [Layout.Record_bcl_to_fastq.t] and register
       the [bcl_to_fastq] evaluation as a success. *)
-  val succeed:
+  val succeed :
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
-    bcl_to_fastq:[`can_complete] Layout.Function_bcl_to_fastq.pointer ->
+    bcl_to_fastq:[> `can_complete ]
+      Layout.Function_bcl_to_fastq.pointer ->
     result_root:string ->
-    run_command:(string -> (unit, 'a succeed_error) Result_IO.monad) ->
-    ([ `failure of
-        [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer * 'a succeed_error
-     | `success of [ `can_get_result ] Layout.Function_bcl_to_fastq.pointer],
-     'a succeed_error) Result_IO.monad
-
-  (** Register the evaluation as failed. *)
-  val fail:
-    dbh:Layout.db_handle ->
-    ?reason:string ->
-    [> `can_complete] Layout.Function_bcl_to_fastq.pointer ->
-    ([ `can_nothing ] Layout.Function_bcl_to_fastq.pointer,
+    ([> `failure of
+        [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer *
+                 [> `layout_inconsistency of
+                     [> `record_log | `record_person ] *
+                       [> `insert_did_not_return_one_id of string * int32 list
+                       | `select_did_not_return_one_tuple of string * int ]
+                 | `pg_exn of exn
+                 | `root_directory_not_configured
+                 | `system_command_error of string * exn ]
+     | `success of
+         [ `can_get_result ] Layout.Function_bcl_to_fastq.pointer ],
      [> `layout_inconsistency of
-         [> `record_log ] * [> `insert_did_not_return_one_id of string * int32 list ]
+         [> `file_system
+         | `record_bcl_to_fastq_unaligned
+         | `record_log ] *
+           [> `add_did_not_return_one of string * int32 list
+           | `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn ]) Result_IO.monad
 
-  (** Get the status of the evaluation. *)
-  val status:
+  (** Register the evaluation as failed. *)
+  val fail :
     dbh:Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
-    run_command:(string -> (unit, 'a) Result_IO.monad) ->
-    'b Layout.Function_bcl_to_fastq.pointer ->
-    ([ `running
-     | `started_but_not_running of 'a
-     | `not_started of Layout.Enumeration_process_status.t ],
+    ?reason:string ->
+    [> `can_complete ] Layout.Function_bcl_to_fastq.pointer ->
+    ([ `can_nothing ] Layout.Function_bcl_to_fastq.pointer,
+     [> `layout_inconsistency of
+         [> `record_log ] *
+           [> `insert_did_not_return_one_id of string * int32 list ]
+     | `pg_exn of exn ])
+      Result_IO.monad
+      
+  (** Get the status of the evaluation. *)
+  val status :
+           dbh:Layout.db_handle ->
+           configuration:Configuration.local_configuration ->
+           'a Layout.Function_bcl_to_fastq.pointer ->
+    ([ `not_started of Layout.Enumeration_process_status.t
+     | `running
+     | `started_but_not_running of
+         [> `system_command_error of string * exn ] ],
      [> `layout_inconsistency of
          [> `function_bcl_to_fastq ] *
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
-     | `status_parsing_error of string
      | `work_directory_not_configured ]) Result_IO.monad
 
-
-  (** The errors which may be 'added' by the [kill] function. *)
-  type 'a kill_error = 'a constraint 'a =
-  [> `layout_inconsistency of
-      [> `function_bcl_to_fastq | `record_log ] *
-        [> `insert_did_not_return_one_id of
-            string * int32 list
-        | `select_did_not_return_one_tuple of
-            string * int ]
-  | `not_started of
-      Layout.Enumeration_process_status.t
-  | `pg_exn of exn
-  | `work_directory_not_configured ]
-
-    
+                               
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
-    dbh:Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
-    run_command:(string -> (unit, 'a kill_error) Result_IO.monad) ->
-    [> `can_complete ] Layout.Function_bcl_to_fastq.pointer ->
-    ([ `can_nothing ] Layout.Function_bcl_to_fastq.pointer, 'a kill_error)
-      Result_IO.monad
-      
+           dbh:Layout.db_handle ->
+           configuration:Configuration.local_configuration ->
+           [> `can_complete ] Layout.Function_bcl_to_fastq.pointer ->
+           ([ `can_nothing ] Layout.Function_bcl_to_fastq.pointer,
+            [> `layout_inconsistency of
+                 [> `function_bcl_to_fastq | `record_log ] *
+                 [> `insert_did_not_return_one_id of string * int32 list
+                  | `select_did_not_return_one_tuple of string * int ]
+             | `not_started of Layout.Enumeration_process_status.t
+             | `pg_exn of exn
+             | `system_command_error of string * exn
+             | `work_directory_not_configured ])
+           Result_IO.monad
+                                                         
 end
 

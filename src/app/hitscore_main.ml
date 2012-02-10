@@ -599,8 +599,7 @@ module Verify = struct
                     begin match ksprintf System.command "mkdir -p %s" path with
                     | Ok () ->
                       begin match Hitscore_threaded.ACL.set_defaults ~dbh 
-                          ~configuration:hsc ~run_command:System.command
-                          (`dir path) with
+                          ~configuration:hsc (`dir path) with
                       | Ok () -> log "Fixed %S\n" path;
                       | Error _ -> error `fix "%S: Cannot set ACLs" path
                       end
@@ -659,8 +658,7 @@ module Verify = struct
         in
         List.iter started_b2fs (fun bcl_to_fastq ->
           let status = 
-            Bcl_to_fastq.status ~dbh ~configuration:hsc 
-              ~run_command:System.command bcl_to_fastq in
+            Bcl_to_fastq.status ~dbh ~configuration:hsc bcl_to_fastq in
           match status with
           | Ok `running -> ()
           | Ok (`started_but_not_running e) -> 

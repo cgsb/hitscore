@@ -16,7 +16,6 @@ let get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell =
         printf "writing to %s\n" file;
         try (return (output_string o content))
         with e -> error (`io_exn e))))
-    ~run_command:System.command
   >>= function
   | `new_failure (_, e) ->
     printf "NEW FAILURE\n";
@@ -72,9 +71,8 @@ let display_errors = function
       printf "INVALID-CONFIGURATION: Work directory not set.\n"
     | `sys_error (`moving_sample_sheet e) ->
       printf "SYS-ERROR: While moving the sample-sheet: %s\n" (Exn.to_string e)
-    | `sys_error (`command (cmd, status)) ->
-      printf "SYS-ERROR: Command: %S --> %s\n" cmd 
-        (Unix.Process_status.to_string_hum status)
+    | `system_command_error (cmd, e) ->
+      printf "SYS-CMD-ERROR: Command: %S --> %s\n" cmd (Exn.to_string e)
     | `status_parsing_error s ->
       printf "LAYOUT-INCONSISTENCY-ERROR: Cannot parse function status: %s\n" s
     | `wrong_status s ->
@@ -243,11 +241,6 @@ let start hsc prefix cl_args =
         ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
-        ~run_command:(fun s ->
-          if not sys_dry_run then
-            (printf "RUN-COMMAND: %S\n" s; System.command s)
-          else
-            (printf "Would-RUN-COMMAND: %S\n" s; Ok ()))
         ~write_file:(fun s file ->
           if not sys_dry_run then
             (printf "WRITE-FILE: %S\n" file;
@@ -296,8 +289,7 @@ let register_success hsc id result_root =
         | { g_status = `Started; } as e -> return e
         | { g_status } -> error (`not_started g_status))
       >>= fun _ ->
-      Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root
-        ~configuration:hsc ~run_command:System.command
+      Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root ~configuration:hsc
     in
     begin match work with
     | Ok (`success s) ->
@@ -344,8 +336,7 @@ let check_status ?(fix_it=false) hsc id =
   | Some bcl_to_fastq ->
     let work =
       db_connect hsc >>= fun dbh -> 
-      Bcl_to_fastq.status ~dbh ~configuration:hsc 
-        ~run_command:System.command bcl_to_fastq
+      Bcl_to_fastq.status ~dbh ~configuration:hsc bcl_to_fastq
       >>= function
       |  `running ->
         printf "The function is STILL RUNNING.\n"; 
@@ -383,8 +374,7 @@ let kill hsc id =
         | { g_status = `Started; } as e -> return e
         | { g_status } -> error (`not_started g_status))
       >>= fun _ ->
-      Bcl_to_fastq.kill ~dbh
-        ~configuration:hsc ~run_command:System.command bcl_to_fastq in
+      Bcl_to_fastq.kill ~dbh ~configuration:hsc bcl_to_fastq in
     display_errors work;
     Some ()
   | None ->
