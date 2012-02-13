@@ -189,7 +189,7 @@ module Make
       >>= fun created ->
       let started =
         let pbs_script_created = pbs_script created in
-        write_file ~file:pbs_script_created ~content:pbs_script_file
+        write_file ~file:pbs_script_file ~content:pbs_script_created
         >>= fun () ->
         Access_rights.set_posix_acls ~dbh ~configuration (`file pbs_script_file)
         >>= fun () ->
