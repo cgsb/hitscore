@@ -29,7 +29,7 @@ module Make
       Layout.File_system.(
         get_volume ~dbh vol_pointer >>= fun ({volume_entry; _} as volume) ->
         of_result  (volume_trees volume) >>= fun vol_trees ->
-        match (Configuration.work_directory configuration) with
+        match (Configuration.root_directory configuration) with
         | None -> error (`work_directory_not_configured)
         | Some w ->
           let prefix = w ^ entry_unix_path volume_entry in
