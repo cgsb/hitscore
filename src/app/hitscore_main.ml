@@ -1125,20 +1125,81 @@ module Prepare_delivery = struct
   let run_function configuration bb inv dir =
     let open Hitscore_threaded in
     let open Result_IO in
-    match db_connect configuration with
-    | Ok dbh ->
-      let work =
-        Unaligned_delivery.run ~dbh ~configuration 
-          ~bcl_to_fastq:(Layout.Function_bcl_to_fastq.unsafe_cast
-                           (Int32.of_string bb)) 
-          ~invoice:(Layout.Record_invoicing.unsafe_cast (Int32.of_string inv))
-          ~destination:dir
-        >>= fun () -> 
-        db_disconnect configuration dbh
-      in
-      Pervasives.ignore work
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+    let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
+    let work =
+      db_connect configuration >>= fun dbh ->
+      Unaligned_delivery.run ~dbh ~configuration 
+        ~bcl_to_fastq:(Layout.Function_bcl_to_fastq.unsafe_cast
+                         (Int32.of_string bb)) 
+        ~invoice:(Layout.Record_invoicing.unsafe_cast (Int32.of_string inv))
+        ~destination:dir
+      >>= fun preparation ->
+      out "Done: Preparation: %ld\n" 
+        preparation.Layout.Function_prepare_unaligned_delivery.id;
+      db_disconnect configuration dbh
+    in
+    match work with
+    | Ok () -> out "OK\n"
+    | Error e ->
+      begin match e with
+      | `bcl_to_fastq_not_succeeded (fpointer, status) ->
+        out "Fun %ld is not succeeded: %s\n"
+          fpointer.Layout.Function_bcl_to_fastq.id
+          (Layout.Enumeration_process_status.to_string status)
+      | `cannot_recognize_file_type s ->
+        out "Wrong file type: %s\n" s
+      | `inconsistency_inode_not_found ld ->
+        out "Inode not found: %ld\n" ld
+      | `io_exn e ->
+        out "I/O exception: %s\n" (Exn.to_string e)
+      | `layout_inconsistency (where, what) ->
+        out "Layout problem: In ";
+        begin match where with
+        | `file_system -> "File system"
+        | `function_bcl_to_fastq -> "Function bcl_to_fastq"
+        | `function_prepare_unaligned_delivery -> 
+          "Function prepare_unaligned_delivery"
+        | `record_bcl_to_fastq_unaligned -> "Record bcl_to_fastq_unaligned"
+        | `record_client_fastqs_dir -> "Record client_fastqs_dir"
+        | `record_flowcell -> "Record flowcell"
+        | `record_lane -> "Record lane"
+        | `record_log -> "Record log"
+        | `record_invoicing -> "Record invoicing"
+        | `record_person -> "Record person"
+        end |! out "%s, ";
+        begin match what with
+        | `select_did_not_return_one_tuple (s, d) ->
+          out "not single response for the pointer:  %S, %d\n" s d
+        | `insert_did_not_return_one_id (s, l) ->
+          out "insert did not return one id: %s, [%s]\n" s 
+            (List.map l ~f:(sprintf "%ld") |! String.concat ~sep:", ")
+        end
+      | `partially_found_lanes (g_id, serial_name,
+                                invoice_lanes, find_lanes) ->
+        out "Partially found lanes in flowcell: %ld (%s), [%s] Vs [%s]\n"
+          g_id serial_name
+          (Array.to_list invoice_lanes 
+           |! List.map ~f:(fun il -> il.Layout.Record_lane.id |! sprintf "%ld")
+           |! String.concat ~sep:", ")
+          (List.map (List.filter_opt find_lanes) ~f:(sprintf "%d") 
+           |! String.concat ~sep:", ") 
+      | `not_single_flowcell [] ->
+        out "Did not find any matching flowcell\n"
+      | `not_single_flowcell l ->
+        out "Found too many flowcells: %s\n"
+          (List.map l ~f:(fun (s, l) -> s) |! String.concat ~sep:"; ")
+      | `pg_exn e ->
+        out "PostgreSQL Error: %s\n" (Exn.to_string e)
+      | `work_directory_not_configured ->
+        out "work-dir not configured\n"
+      | `wrong_unaligned_volume (sl) ->
+        out "Unaligned volume not conform to standards: [%s]\n"
+          (List.map sl (sprintf "%S") |! String.concat ~sep:", ")
+      | `system_command_error (c, e) ->
+        out "Error with system command:\n  %s\n  %s\n" c (Exn.to_string e)
+
+      end
+        
 end
 
 let commands = ref []

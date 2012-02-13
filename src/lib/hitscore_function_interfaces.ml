@@ -255,13 +255,14 @@ module type UNALIGNED_DELIVERY = sig
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
   (**/**)
 
-       val run :
+        val run :
            dbh:Layout.db_handle ->
            configuration:Configuration.local_configuration ->
            bcl_to_fastq:'a Layout.Function_bcl_to_fastq.pointer ->
-           invoice:'b ->
-           destination:'c ->
-           (unit,
+           invoice:Layout.Record_invoicing.pointer ->
+           destination:string ->
+           ([ `can_get_result ]
+            Layout.Function_prepare_unaligned_delivery.pointer,
             [> `bcl_to_fastq_not_succeeded of
                  'a Layout.Function_bcl_to_fastq.pointer *
                  Layout.Enumeration_process_status.t
@@ -271,12 +272,28 @@ module type UNALIGNED_DELIVERY = sig
              | `layout_inconsistency of
                  [> `file_system
                   | `function_bcl_to_fastq
-                  | `record_bcl_to_fastq_unaligned ] *
-                 [> `select_did_not_return_one_tuple of string * int ]
+                  | `function_prepare_unaligned_delivery
+                  | `record_bcl_to_fastq_unaligned
+                  | `record_client_fastqs_dir
+                  | `record_flowcell
+                  | `record_invoicing
+                  | `record_lane
+                  | `record_log
+                  | `record_person ] *
+                 [> `insert_did_not_return_one_id of string * int32 list
+                  | `select_did_not_return_one_tuple of string * int ]
+             | `not_single_flowcell of
+                 (string * int Hitscore_std.List.t) Hitscore_std.List.t
+             | `partially_found_lanes of
+                 int32 * string *
+                 Layout.Record_lane.pointer Hitscore_std.Array.container *
+                 int option list
              | `pg_exn of exn
+             | `system_command_error of string * exn
              | `work_directory_not_configured
              | `wrong_unaligned_volume of string Hitscore_std.List.t ])
            Result_IO.monad
+
 
 
 end
