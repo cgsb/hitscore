@@ -102,14 +102,14 @@ module Make
         let links_dir = sprintf "%s/%s/%s_%s"
           destination (sanitize_filename pi_name) delivery_date flowcell_name
         in          
-        cmd "mkdir -p %s" links_dir  >>= fun () ->
+        cmd "mkdir -m 750 -p %s" links_dir  >>= fun () ->
         debug "created links dir: %s\n" links_dir >>= fun () ->
         of_list_sequential lanes_idxs ~f:(fun idx ->
           cmd "unset CDPATH; cd %s && ln -s %s/Project_Lane%d Lane%d"
             links_dir unaligned_path (idx + 1) (idx + 1))
         >>= fun (_: unit list) ->
         Access_rights.set_posix_acls ~dbh 
-          ~more_readers:logins ~configuration (`dir destination)
+          ~more_readers:logins ~configuration (`dir links_dir)
         >>= fun () ->
         Layout.Function_prepare_unaligned_delivery.(
           add_evaluation ~dbh ~recomputable:false ~recompute_penalty:0.
