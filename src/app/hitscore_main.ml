@@ -1096,7 +1096,26 @@ module Query = struct
                       (Option.value ~default:"N/A" til) v
                       (Option.value ~default:"N/A" hr))))
         end));
-
+    ("invoices", 
+     (["List of invoices."],
+      fun dbh args ->
+        let results =
+          let open Batteries in
+          PGSQL (dbh)
+            "select invoicing.g_id, person.family_name, flowcell.serial_name 
+             from invoicing, person, flowcell
+             where invoicing.pi = person.g_id
+              and flowcell.lanes @> invoicing.lanes "
+        in
+        begin match List.length results with
+        | 0 -> printf "No results found.\n"
+        | n ->
+          printf "Found %d result%s:\n%s\n" n 
+            (if n > 1 then "s" else "")
+            (List.map results (fun (inv, pi, fcid) ->
+              sprintf "% 4ld | % 20s | % 20s" inv pi fcid)
+              |! String.concat ~sep:"\n")
+        end));
   ]
 
   let describe out =
