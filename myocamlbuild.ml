@@ -29,7 +29,7 @@ rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_layout_interface.ml"
 
 
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 101c9d2995c03fb027a54a1aa5aca9e2) *)
+(* DO NOT EDIT (digest: 1cde489a66349d4647432439892ce5c4) *)
 module OASISGettext = struct
 # 21 "/build/buildd/oasis-0.2.0/src/oasis/OASISGettext.ml"
   
@@ -481,7 +481,11 @@ end
 open Ocamlbuild_plugin;;
 let package_default =
   {
-     MyOCamlbuildBase.lib_ocaml = [("src/lib/hitscore", ["src/lib"])];
+     MyOCamlbuildBase.lib_ocaml =
+       [
+          ("src/codegen/hitscoregen", ["src/codegen"]);
+          ("src/lib/hitscore", ["src/lib"])
+       ];
      lib_c = [];
      flags = [];
      }

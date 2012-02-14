@@ -1,12 +1,15 @@
 # OASIS_START
-# DO NOT EDIT (digest: f73fdced219f7ee98e6957424b00d794)
+# DO NOT EDIT (digest: 542517c5dc6a2cb933fc101a19a85b6a)
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
+# Library hitscoregen
+"src/codegen": include
 <src/codegen/*.ml{,i}>: pkg_threads
 <src/codegen/*.ml{,i}>: pkg_core
 # Library hitscore
 "src/lib": include
+<src/lib/*.ml{,i}>: use_hitscoregen
 <src/lib/*.ml{,i}>: pkg_threads
 <src/lib/*.ml{,i}>: pkg_sexplib.syntax
 <src/lib/*.ml{,i}>: pkg_sequme
@@ -16,6 +19,7 @@
 <src/lib/*.ml{,i}>: pkg_biocaml
 # Executable hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscore
+<src/app/hitscore_main.{native,byte}>: use_hitscoregen
 <src/app/hitscore_main.{native,byte}>: pkg_threads
 <src/app/hitscore_main.{native,byte}>: pkg_sexplib.syntax
 <src/app/hitscore_main.{native,byte}>: pkg_sequme
@@ -24,6 +28,7 @@
 <src/app/hitscore_main.{native,byte}>: pkg_core
 <src/app/hitscore_main.{native,byte}>: pkg_biocaml
 <src/app/*.ml{,i}>: use_hitscore
+<src/app/*.ml{,i}>: use_hitscoregen
 <src/app/*.ml{,i}>: pkg_threads
 <src/app/*.ml{,i}>: pkg_sexplib.syntax
 <src/app/*.ml{,i}>: pkg_sequme
@@ -33,6 +38,7 @@
 <src/app/*.ml{,i}>: pkg_biocaml
 # Executable db_access_test
 <src/test/db_access.{native,byte}>: use_hitscore
+<src/test/db_access.{native,byte}>: use_hitscoregen
 <src/test/db_access.{native,byte}>: pkg_threads
 <src/test/db_access.{native,byte}>: pkg_sexplib.syntax
 <src/test/db_access.{native,byte}>: pkg_sequme
@@ -43,6 +49,7 @@
 <src/test/db_access.{native,byte}>: pkg_core
 <src/test/db_access.{native,byte}>: pkg_biocaml
 <src/test/*.ml{,i}>: use_hitscore
+<src/test/*.ml{,i}>: use_hitscoregen
 <src/test/*.ml{,i}>: pkg_threads
 <src/test/*.ml{,i}>: pkg_sexplib.syntax
 <src/test/*.ml{,i}>: pkg_sequme

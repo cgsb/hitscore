@@ -14,6 +14,12 @@ Flag lwt
   Description: Build stuff depending on Lwt
   Default: false
 
+Library hitscoregen
+  Path: src/codegen/
+  BuildDepends: threads, core
+  Install: true
+  Modules: Hitscoregen_layout_dsl, Hitscoregen_layout_ocaml, Hitscoregen_psql
+
 Executable hitscoregen
   Path: src/codegen
   MainIs: hitscoregen.ml
@@ -21,13 +27,11 @@ Executable hitscoregen
   CompiledObject: best
   Install: false
 
-
-
 Library hitscore
   Path: src/lib
   FindlibName: hitscore
   BuildDepends: threads, core, pgocaml, pgocaml.syntax, sexplib.syntax,
-               biocaml, sequme
+               biocaml, sequme, hitscoregen
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore
