@@ -255,14 +255,15 @@ module type UNALIGNED_DELIVERY = sig
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
   (**/**)
 
-        val run :
-           dbh:Layout.db_handle ->
-           configuration:Configuration.local_configuration ->
-           bcl_to_fastq:'a Layout.Function_bcl_to_fastq.pointer ->
-           invoice:Layout.Record_invoicing.pointer ->
-           destination:string ->
-           ([ `can_get_result ]
-            Layout.Function_prepare_unaligned_delivery.pointer,
+  val run :
+    dbh:Layout.db_handle ->
+    configuration:Configuration.local_configuration ->
+    ?directory_tag:string ->
+    bcl_to_fastq:'a Layout.Function_bcl_to_fastq.pointer ->
+    invoice:Layout.Record_invoicing.pointer ->
+    destination:string ->
+    ([ `can_get_result ]
+        Layout.Function_prepare_unaligned_delivery.pointer,
             [> `bcl_to_fastq_not_succeeded of
                  'a Layout.Function_bcl_to_fastq.pointer *
                  Layout.Enumeration_process_status.t

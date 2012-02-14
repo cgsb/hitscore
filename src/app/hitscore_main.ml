@@ -1141,13 +1141,13 @@ end
 
 module Prepare_delivery = struct
 
-  let run_function configuration bb inv dir =
+  let run_function configuration bb inv dir directory_tag =
     let open Hitscore_threaded in
     let open Result_IO in
     let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
     let work =
       db_connect configuration >>= fun dbh ->
-      Unaligned_delivery.run ~dbh ~configuration 
+      Unaligned_delivery.run ~dbh ~configuration ?directory_tag
         ~bcl_to_fastq:(Layout.Function_bcl_to_fastq.unsafe_cast
                          (Int32.of_string bb)) 
         ~invoice:(Layout.Record_invoicing.unsafe_cast (Int32.of_string inv))
@@ -1469,7 +1469,10 @@ let () =
     ~usage:(fun o exec cmd ->
       fprintf o "Usage: %s <profile> %s <bcl_to_fastq> <invoice> <dir>\n" exec cmd)
     ~run:(fun config exec cmd -> function
-    | [bb; inv; dir] -> Some (Prepare_delivery.run_function config bb inv dir)
+    | [bb; inv; dir] -> 
+      Some (Prepare_delivery.run_function config bb inv dir None)
+    | [bb; inv; dir; tag] -> 
+      Some (Prepare_delivery.run_function config bb inv dir (Some tag))
     | _ -> None);
 
   let global_usage = function

@@ -46,7 +46,7 @@ module Make
       | _ -> '_')
 
     let run ~(dbh:Layout.db_handle) ~configuration
-        ~bcl_to_fastq ~invoice ~destination =
+        ?directory_tag ~bcl_to_fastq ~invoice ~destination =
       Layout.Function_bcl_to_fastq.(
         get ~dbh bcl_to_fastq >>= function
         | {g_status = `Succeeded; g_result = Some result; _} ->
@@ -98,11 +98,13 @@ module Make
         >>| List.flatten >>| List.dedup
         >>= fun logins ->
         debug "logins: %s\n" (String.concat ~sep:", " logins) >>= fun () ->
-        let delivery_date = Time.(now () |! to_filename_string) in
-        let links_dir = sprintf "%s/%s/%s_%s"
-          destination (sanitize_filename pi_name) delivery_date flowcell_name
+        let links_dir =
+          let default = Time.(now () |! to_local_date) |! Date.to_string in
+          sprintf "%s/%s/%s_%s"
+            destination (sanitize_filename pi_name) 
+            (Option.value ~default directory_tag) flowcell_name
         in          
-        cmd "mkdir -m 750 -p %s" links_dir  >>= fun () ->
+        cmd "mkdir -m 750 -p %S" links_dir  >>= fun () ->
         debug "created links dir: %s\n" links_dir >>= fun () ->
         of_list_sequential lanes_idxs ~f:(fun idx ->
           cmd "unset CDPATH; cd %s && ln -s %s/Project_Lane%d Lane%d"
