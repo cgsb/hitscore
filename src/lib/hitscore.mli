@@ -62,4 +62,10 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
     (unit, [> `pg_exn of exn]) Result_IO.monad
 
     
+  (** Connect and disconnect whatever happens in [~f].  *)
+  val with_database: 
+    configuration:Configuration.local_configuration ->
+    f:(dbh:Layout.db_handle -> ('a, [> `pg_exn of exn] as 'b) Result_IO.monad) ->
+    ('a, [> `pg_exn of exn] as 'b) Result_IO.monad
+
 end 

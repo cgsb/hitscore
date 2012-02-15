@@ -69,5 +69,15 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
                  (catch_io Layout.PGOCaml.close dbh )
                  (fun e -> error (`pg_exn e)))
 
+  let with_database ~configuration ~f =
+    let open Result_IO in
+    db_connect configuration 
+    >>= fun dbh ->
+    let m = f ~dbh in
+    double_bind m
+      ~ok:(fun x -> db_disconnect configuration dbh >>= fun () -> return x)
+      ~error:(fun x -> db_disconnect configuration dbh >>= fun () -> error x)
+
+
 end
 
