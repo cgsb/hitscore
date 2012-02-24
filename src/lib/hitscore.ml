@@ -51,6 +51,10 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
     
   module B2F_unaligned = Hitscore_b2f_unaligned
 
+  module Delete_intensities =
+    Hitscore_delete_intensities.Make 
+      (Configuration) (Result_IO) (Layout) (Access_rights)
+
   let db_connect t =
     let open Configuration in
     match db_host t, db_port t, db_database t, db_username t, db_password t with

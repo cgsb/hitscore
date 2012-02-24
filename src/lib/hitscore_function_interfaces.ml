@@ -298,3 +298,21 @@ module type UNALIGNED_DELIVERY = sig
 
 
 end
+  
+module type DELETE_INTENSITIES = sig
+(**/**)
+  module Configuration : Hitscore_interfaces.CONFIGURATION
+  module Result_IO : Hitscore_interfaces.RESULT_IO
+  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
+    with module Result_IO = Result_IO
+    with module Configuration = Configuration
+  module Layout: Hitscore_layout_interface.LAYOUT
+    with module Result_IO = Result_IO
+    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
+  (**/**)
+
+  val register:
+    dbh:Layout.db_handle ->
+    hiseq_raw:Layout.Record_hiseq_raw.t ->
+    (unit, 'a) Result_IO.monad
+end
