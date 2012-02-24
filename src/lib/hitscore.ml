@@ -35,6 +35,10 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
   module Access_rights = 
     Hitscore_access_rights.Make (Configuration) (Result_IO) (Layout)
            
+  module Common = 
+    Hitscore_common.Make
+      (Configuration) (Result_IO) (Layout) (Access_rights)
+
   module Assemble_sample_sheet = 
     Hitscore_assemble_sample_sheet.Make
       (Configuration) (Result_IO) (Layout) (Access_rights)

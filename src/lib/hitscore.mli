@@ -29,6 +29,12 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
     with module Configuration = Configuration
     with module Layout = Layout
 
+  module Common : Hitscore_common.COMMON
+    with module Configuration = Configuration
+    with module Result_IO = Result_IO
+    with module Access_rights = Access_rights
+    with module Layout = Layout
+           
   module Assemble_sample_sheet: Hitscore_function_interfaces.ASSEMBLE_SAMPLE_SHEET
     with module Configuration = Configuration
     with module Result_IO = Result_IO

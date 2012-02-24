@@ -49,6 +49,7 @@ Library hitscore
           , Hitscore_b2f_unaligned
           , Hitscore_unaligned_delivery
           , Hitscore_delete_intensities
+          , Hitscore_common
           , Hitscore_result_IO
 
 Executable hitscore
