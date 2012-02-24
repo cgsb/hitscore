@@ -1232,7 +1232,7 @@ module Intensities_deletion = struct
           ~hiseq_raw: (Layout.Record_hiseq_raw.unsafe_cast (Int32.of_string dir)) 
       ) in
     match work with
-    | Ok () -> out "OK\n"
+    | Ok _ -> out "OK\n"
     | Error e ->
       begin match e with
       | `pg_exn e ->

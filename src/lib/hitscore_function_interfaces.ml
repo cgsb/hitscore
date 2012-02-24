@@ -314,10 +314,13 @@ module type DELETE_INTENSITIES = sig
   val register :
     dbh:Layout.db_handle ->
     hiseq_raw:Layout.Record_hiseq_raw.pointer ->
-    (unit,
+    ([ `can_get_result ] Layout.Function_delete_intensities.pointer,
      [> `hiseq_dir_deleted
      | `layout_inconsistency of
-         [> `record_inaccessible_hiseq_raw ] *
+         [> `function_delete_intensities
+         | `record_hiseq_raw
+         | `record_inaccessible_hiseq_raw
+         | `record_log ] *
            [> `insert_did_not_return_one_id of string * int32 list
            | `no_last_modified_timestamp of
                Layout.Record_inaccessible_hiseq_raw.pointer
