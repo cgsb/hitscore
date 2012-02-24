@@ -1221,6 +1221,28 @@ module Prepare_delivery = struct
         
 end
 
+module Intensities_deletion = struct
+  let do_registration configuration dir =
+    let open Hitscore_threaded in
+    let open Result_IO in
+    let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
+    let work =
+      with_database configuration (fun ~dbh ->
+        Delete_intensities.register ~dbh
+          ~hiseq_raw: (Layout.Record_hiseq_raw.unsafe_cast (Int32.of_string dir)) 
+      ) in
+    match work with
+    | Ok () -> out "OK\n"
+    | Error e ->
+      begin match e with
+      | `pg_exn e ->
+        out "PostgreSQL Error: %s\n" (Exn.to_string e)
+      | `hiseq_dir_deleted ->
+        out "Trying to access a deleted HiSeq-raw\n"
+      | `layout_inconsistency _ ->
+        out "LAYOUT INCONSISTENCY"
+      end
+end 
 let commands = ref []
 
 let define_command ~names ~description ~usage ~run =
@@ -1473,6 +1495,18 @@ let () =
       Some (Prepare_delivery.run_function config bb inv dir None)
     | [bb; inv; dir; tag] -> 
       Some (Prepare_delivery.run_function config bb inv dir (Some tag))
+    | _ -> None);
+
+  define_command ~names:["delete-intensities";"di"]
+    ~description:"Intensities Deletion commands"
+    ~usage:(fun o exec cmd ->
+      fprintf o "Usage: %s <profile> %s <cmd>\n" exec cmd;
+      fprintf o "  where <cmd> is:\n";
+      fprintf o "    * register <id>: Register the manual deletion of \
+        intensities in the hiseq-dir <id>.")
+    ~run:(fun config exec cmd -> function
+    | ["register"; dir] ->
+      Some (Intensities_deletion.do_registration config dir)
     | _ -> None);
 
   let global_usage = function
