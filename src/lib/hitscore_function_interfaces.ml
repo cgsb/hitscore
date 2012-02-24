@@ -311,8 +311,17 @@ module type DELETE_INTENSITIES = sig
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
   (**/**)
 
-  val register:
+  val register :
     dbh:Layout.db_handle ->
-    hiseq_raw:Layout.Record_hiseq_raw.t ->
-    (unit, 'a) Result_IO.monad
+    hiseq_raw:Layout.Record_hiseq_raw.pointer ->
+    (unit,
+     [> `hiseq_dir_deleted
+     | `layout_inconsistency of
+         [> `record_inaccessible_hiseq_raw ] *
+           [> `insert_did_not_return_one_id of string * int32 list
+           | `no_last_modified_timestamp of
+               Layout.Record_inaccessible_hiseq_raw.pointer
+           | `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn ])
+      Result_IO.monad
 end
