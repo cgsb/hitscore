@@ -9,8 +9,12 @@ module type COMMON = sig
 
   (** Local definition of Layout *)
   module Layout : Hitscore_layout_interface.LAYOUT
+    with module Result_IO = Result_IO
 
   module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
+     with module Configuration = Configuration
+    with module Result_IO = Result_IO
+    with module Layout = Layout
 
 end
 
@@ -29,9 +33,9 @@ module Make
   COMMON
     with module Configuration = Configuration
     with module Result_IO = Result_IO
+    with module Layout = Layout
     with module Access_rights = Access_rights
-    with module Layout = Layout = struct
-
+     = struct
     module Configuration = Configuration
     module Result_IO = Result_IO
     module Access_rights = Access_rights

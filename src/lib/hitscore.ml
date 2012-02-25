@@ -44,8 +44,7 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
       (Configuration) (Result_IO) (Layout) (Access_rights)
 
   module Bcl_to_fastq =
-    Hitscore_bcl_to_fastq.Make 
-      (Configuration) (Result_IO) (Layout) (Access_rights)
+    Hitscore_bcl_to_fastq.Make (Common)
 
   module Unaligned_delivery =
     Hitscore_unaligned_delivery.Make 
