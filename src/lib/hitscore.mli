@@ -36,10 +36,7 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
     with module Access_rights = Access_rights
            
   module Assemble_sample_sheet: Hitscore_function_interfaces.ASSEMBLE_SAMPLE_SHEET
-    with module Configuration = Configuration
-    with module Result_IO = Result_IO
-    with module Access_rights = Access_rights
-    with module Layout = Layout
+    with module Common = Common
 
   module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ
     with module Common = Common

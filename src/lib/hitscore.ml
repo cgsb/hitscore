@@ -40,8 +40,7 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
       (Configuration) (Result_IO) (Layout) (Access_rights)
 
   module Assemble_sample_sheet = 
-    Hitscore_assemble_sample_sheet.Make
-      (Configuration) (Result_IO) (Layout) (Access_rights)
+    Hitscore_assemble_sample_sheet.Make (Common)
 
   module Bcl_to_fastq =
     Hitscore_bcl_to_fastq.Make (Common)

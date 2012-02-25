@@ -4,7 +4,10 @@
 (** The sample-sheet assembly function. *)
 module type ASSEMBLE_SAMPLE_SHEET = sig
 
+  module Common : Hitscore_common.COMMON
+  open Common
 (**/**)
+  (*
   module Configuration : Hitscore_interfaces.CONFIGURATION
   module Result_IO : Hitscore_interfaces.RESULT_IO
   module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
@@ -13,6 +16,7 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
   module Layout: Hitscore_layout_interface.LAYOUT
     with module Result_IO = Result_IO
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
+  *)
 (**/**)
 
   (** Run the whole function to assemble a sample-sheet. Example:

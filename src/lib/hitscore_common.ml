@@ -10,7 +10,9 @@ module type COMMON = sig
   (** Local definition of Layout *)
   module Layout : Hitscore_layout_interface.LAYOUT
     with module Result_IO = Result_IO
-
+    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
+    (* This last one is used by Assemble_Sample_Sheet to call a PGSQL(dbh) *)
+           
   module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
      with module Configuration = Configuration
     with module Result_IO = Result_IO
