@@ -47,7 +47,7 @@ let display_errors = function
       printf "Cannot find a HiSeq directory for that flowcell: %S\n" flowcell
     | `found_more_than_one_hiseq_raw_for_flowcell (nb, flowcell) ->
       printf "There are %d HiSeq directories for that flowcell: %S\n" nb flowcell
-    | `hiseq_dir_deleted (_, _) ->
+    | `hiseq_dir_deleted ->
       printf "INVALID-REQUEST: The HiSeq directory is reported 'deleted'\n"
     | `cannot_recognize_file_type t ->
       printf "LAYOUT-INCONSISTENCY-ERROR: Unknown file-type: %S\n" t
@@ -203,31 +203,8 @@ let start hsc prefix cl_args =
       >>= fun (hiseq_dir, flowcell) ->
       get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell
       >>= fun sample_sheet ->
-      Layout.Record_inaccessible_hiseq_raw.(
-        get_all ~dbh
-        >>= fun all ->
-        of_list_sequential all ~f:(fun ihr_t ->
-          get ~dbh ihr_t >>= fun { g_last_modified; _ } ->
-          begin match g_last_modified with
-          | Some t -> return (ihr_t, t)
-          | None -> error (`layout_inconsistency 
-                              (`record_inaccessible_hiseq_raw,
-                               `no_last_modified_timestamp ihr_t))
-          end)
-        >>| List.sort ~cmp:(fun a b -> compare (snd b) (snd a))
-        >>= function
-        | [] ->
-          printf "There were no inaccessible_hiseq_raw => \
-                       creating the empty one.\n";
-          Layout.Record_inaccessible_hiseq_raw.add_value ~dbh ~deleted:[| |]
-        | (h, ts) :: t -> 
-          printf "Last inaccessible_hiseq_raw: %ld on %s\n"
-            h.Layout.Record_inaccessible_hiseq_raw.id
-            (Time.to_string ts);
-          return h)
-      >>= fun availability ->
       Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
-        ~sample_sheet ~hiseq_dir ~availability ~hitscore_command
+        ~sample_sheet ~hiseq_dir ~hitscore_command
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
       >>= fun started ->

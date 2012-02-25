@@ -79,7 +79,7 @@ module type BCL_TO_FASTQ = sig
 {[
 start ~dbh ~configuration       (* common arguments *)
       ~sample_sheet
-      ~hiseq_raw ~availability
+      ~hiseq_raw
       ~tiles:"s_1_11,s_[2-6]_1"
       ~mismatch:`zero           (* `one is the default *)
       ~version:`casava_181      (* `casava_182 is the default *)
@@ -98,10 +98,9 @@ start ~dbh ~configuration       (* common arguments *)
     configuration:Configuration.local_configuration ->
     sample_sheet:Layout.Record_sample_sheet.pointer ->
     hiseq_dir:Layout.Record_hiseq_raw.pointer ->
-    availability:Layout.Record_inaccessible_hiseq_raw.pointer ->
     ?tiles:string ->
-    ?mismatch:[ `one | `two | `zero ] ->
-    ?version:[`casava_181 | `casava_182 ] ->
+    ?mismatch:[< `one | `two | `zero > `one ] ->
+    ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
     ?user:string ->
     ?wall_hours:int ->
     ?nodes:int ->
@@ -110,24 +109,23 @@ start ~dbh ~configuration       (* common arguments *)
     ?hitscore_command:string ->
     ?make_command:string ->
     string ->
-    ([ `failure of
+    ([> `failure of
         [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer *
           [> `layout_inconsistency of
               [> `record_log | `record_person ] *
                 [> `insert_did_not_return_one_id of string * int32 list
                 | `select_did_not_return_one_tuple of string * int ]
-                  | `pg_exn of exn
-                  | `system_command_error of string * exn
-                  | `write_file_error of string * string * exn ]
+          | `pg_exn of exn
+          | `system_command_error of string * exn
+          | `write_file_error of string * string * exn ]
      | `success of
-                 [ `can_complete ] Layout.Function_bcl_to_fastq.pointer ],
+         [ `can_complete ]
+           Layout.Function_bcl_to_fastq.pointer ],
      [> `cannot_recognize_file_type of string
      | `empty_sample_sheet_volume of
          Layout.File_system.volume_pointer *
            Layout.Record_sample_sheet.pointer
-     | `hiseq_dir_deleted of
-         Layout.Record_hiseq_raw.pointer *
-           Layout.Record_inaccessible_hiseq_raw.pointer
+     | `hiseq_dir_deleted
      | `inconsistency_inode_not_found of int32
      | `layout_inconsistency of
          [> `file_system
@@ -138,10 +136,12 @@ start ~dbh ~configuration       (* common arguments *)
          | `record_person
          | `record_sample_sheet ] *
            [> `insert_did_not_return_one_id of string * int32 list
+           | `no_last_modified_timestamp of
+               Layout.Record_inaccessible_hiseq_raw.pointer
            | `select_did_not_return_one_tuple of string * int ]
      | `more_than_one_file_in_sample_sheet_volume of
          Layout.File_system.volume_pointer *
-                 Layout.Record_sample_sheet.pointer * string list
+           Layout.Record_sample_sheet.pointer * string list
      | `pg_exn of exn
      | `root_directory_not_configured
      | `system_command_error of string * exn

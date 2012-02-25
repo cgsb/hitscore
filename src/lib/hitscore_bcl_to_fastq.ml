@@ -17,7 +17,6 @@ module Make
     let start ~dbh ~configuration
         ~(sample_sheet: Layout.Record_sample_sheet.pointer)
         ~(hiseq_dir: Layout.Record_hiseq_raw.pointer)
-        ~(availability: Layout.Record_inaccessible_hiseq_raw.pointer)
         ?tiles
         ?(mismatch=`one)
         ?(version=`casava_182)
@@ -28,13 +27,8 @@ module Make
         ?(make_command="make -j8")
         name =
 
-      Layout.Record_inaccessible_hiseq_raw.(
-        get ~dbh availability >>= fun {deleted} ->
-        if Array.exists deleted ((=) hiseq_dir) then
-          error (`hiseq_dir_deleted (hiseq_dir, availability))
-        else
-          return ())
-      >>= fun () ->
+      check_hiseq_raw_availability ~dbh ~hiseq_raw:hiseq_dir
+      >>= fun (availability, all_deleted) ->
       Layout.Record_sample_sheet.(
         get ~dbh sample_sheet
         >>= fun { file; _ } ->
