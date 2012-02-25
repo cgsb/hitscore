@@ -46,16 +46,10 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   module B2F_unaligned: Hitscore_interfaces.B2F_UNALIGNED
 
   module Unaligned_delivery: Hitscore_function_interfaces.UNALIGNED_DELIVERY
-    with module Configuration = Configuration
-    with module Result_IO = Result_IO
-    with module Access_rights = Access_rights
-    with module Layout = Layout
+    with module Common = Common
 
   module Delete_intensities: Hitscore_function_interfaces.DELETE_INTENSITIES
-    with module Configuration = Configuration
-    with module Result_IO = Result_IO
-    with module Access_rights = Access_rights
-    with module Layout = Layout
+    with module Common = Common
 
 
   (** Attempt to connect to the database. *)

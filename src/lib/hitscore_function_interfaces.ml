@@ -4,19 +4,9 @@
 (** The sample-sheet assembly function. *)
 module type ASSEMBLE_SAMPLE_SHEET = sig
 
+(**/**)
   module Common : Hitscore_common.COMMON
   open Common
-(**/**)
-  (*
-  module Configuration : Hitscore_interfaces.CONFIGURATION
-  module Result_IO : Hitscore_interfaces.RESULT_IO
-  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
-    with module Result_IO = Result_IO
-    with module Configuration = Configuration
-  module Layout: Hitscore_layout_interface.LAYOUT
-    with module Result_IO = Result_IO
-    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
-  *)
 (**/**)
 
   (** Run the whole function to assemble a sample-sheet. Example:
@@ -79,20 +69,10 @@ end
 (** The module to run CASAVA's demultiplexer.  *)
 module type BCL_TO_FASTQ = sig
 
+(**/**)
   module Common : Hitscore_common.COMMON
   open Common
 (**/**)
-  (*
-  module Configuration : Hitscore_interfaces.CONFIGURATION
-  module Result_IO : Hitscore_interfaces.RESULT_IO
-  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
-    with module Result_IO = Result_IO
-    with module Configuration = Configuration
-  module Layout: Hitscore_layout_interface.LAYOUT
-    with module Result_IO = Result_IO
-    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
-  *)
-  (**/**)
 
            
   (** Start the demultiplexer. Example:
@@ -253,15 +233,9 @@ Layout}.  *)
 module type UNALIGNED_DELIVERY = sig
 
 (**/**)
-  module Configuration : Hitscore_interfaces.CONFIGURATION
-  module Result_IO : Hitscore_interfaces.RESULT_IO
-  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
-    with module Result_IO = Result_IO
-    with module Configuration = Configuration
-  module Layout: Hitscore_layout_interface.LAYOUT
-    with module Result_IO = Result_IO
-    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
-  (**/**)
+  module Common : Hitscore_common.COMMON
+  open Common
+(**/**)
 
   val run :
     dbh:Layout.db_handle ->
@@ -308,16 +282,11 @@ module type UNALIGNED_DELIVERY = sig
 end
   
 module type DELETE_INTENSITIES = sig
+    
 (**/**)
-  module Configuration : Hitscore_interfaces.CONFIGURATION
-  module Result_IO : Hitscore_interfaces.RESULT_IO
-  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
-    with module Result_IO = Result_IO
-    with module Configuration = Configuration
-  module Layout: Hitscore_layout_interface.LAYOUT
-    with module Result_IO = Result_IO
-    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
-  (**/**)
+  module Common : Hitscore_common.COMMON
+  open Common
+(**/**)
 
   val register :
     dbh:Layout.db_handle ->

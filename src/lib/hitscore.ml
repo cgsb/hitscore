@@ -46,16 +46,14 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
     Hitscore_bcl_to_fastq.Make (Common)
 
   module Unaligned_delivery =
-    Hitscore_unaligned_delivery.Make 
-      (Configuration) (Result_IO) (Layout) (Access_rights)
+    Hitscore_unaligned_delivery.Make (Common)
 
   module Hiseq_raw = Hitscore_hiseq_raw
     
   module B2F_unaligned = Hitscore_b2f_unaligned
 
   module Delete_intensities =
-    Hitscore_delete_intensities.Make 
-      (Configuration) (Result_IO) (Layout) (Access_rights)
+    Hitscore_delete_intensities.Make (Common)
 
   let db_connect t =
     let open Configuration in
