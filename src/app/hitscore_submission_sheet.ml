@@ -1116,7 +1116,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             end
           end
           |! value ~default:(Layout.Record_person.unsafe_cast 42004200l) in
-        let account_number, fund, org, program, project =
+        let account_number, fund, org, program, project, note =
           let open Option in
           let mandatory msg s = 
             if s = "" then (
@@ -1136,16 +1136,21 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                        %d-alphanums string." piemail msg s n; 
               None) in
           match chartstuff with
-          | an :: f :: o :: prog :: proj :: [] ->
+          | an :: f :: o :: prog :: proj :: rest ->
             ((mandatory "Account number" an >>= is_n_digits 5 "Account number"),
              (mandatory "Fund" f >>= is_n_digits 2 "Fund"),
              (mandatory "Org" o >>= is_n_digits 5 "Org"),
              (optional prog >>= is_n_alphanum 5 "Program"),
-             (mandatory "Project" proj >>= is_n_alphanum 5 "Project"))
+             (mandatory "Project" proj >>= is_n_alphanum 5 "Project"),
+             (match rest with [] -> None
+             | q :: [] -> optional q
+             | q :: t ->
+               error "Wrong row for invoice for %s: %s" piemail
+                 (strlist chartstuff); None))
           | _ -> 
             error "Wrong chartfield for invoice for %s: %s" piemail
               (strlist chartstuff);
-            None, None, None, None, None 
+            (None, None, None, None, None, None)
         in
         Layout.Record_invoicing.(
           run ~dbh ~fake:(fun x -> unsafe_cast x)
@@ -1154,9 +1159,9 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 ~percentage:p
                 ~lanes:(Array.map lanes ~f:snd)
                 ?account_number ?fund ?org ?program ?project
-                ?note:None)
+                ?note)
             ~log:(sprintf "(add_invoicing (pi %ld) (percentage %g) \
-                            (lanes (%s))%s%s%s%s%s)"
+                            (lanes (%s))%s%s%s%s%s%s)"
                     pi.Layout.Record_person.id p
                     (String.concat ~sep:" " 
                        (List.map (Array.to_list lanes) ~f:(fun (_, l) ->
@@ -1167,6 +1172,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     (value_map org ~default:"" ~f:(sprintf " (org %s)"))
                     (value_map program ~default:"" ~f:(sprintf " (program %s)"))
                     (value_map project ~default:"" ~f:(sprintf " (project %s)"))
+                    (value_map note ~default:"" ~f:(sprintf " (note %S)"))
             )) |! Result.ok)
     in
     Pervasives.ignore invoices;
