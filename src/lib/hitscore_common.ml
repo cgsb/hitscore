@@ -1,23 +1,27 @@
+(** Container-module to make it easier to pass arguments to functors. *)
 
+(** Container-module to make it easier to pass arguments to functors. *)
 module type COMMON = sig
 
-  (** Local definition of the configuration. *)
+  (** Exported definition of the Configuration. *)
   module Configuration : Hitscore_interfaces.CONFIGURATION
 
-  (** Local definition of Result_IO.  *)
+  (** Exported definition of Result_IO.  *)
   module Result_IO : Hitscore_interfaces.RESULT_IO
 
-  (** Local definition of Layout *)
+  (** Exported definition of Layout. *)
   module Layout : Hitscore_layout_interface.LAYOUT
     with module Result_IO = Result_IO
     with type 'a PGOCaml.monad = 'a Result_IO.IO.t
     (* This last one is used by Assemble_Sample_Sheet to call a PGSQL(dbh) *)
            
+  (** Exported definition of Access_rights. *)
   module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
      with module Configuration = Configuration
     with module Result_IO = Result_IO
     with module Layout = Layout
 
+  (** Check that an HiSeq-raw directory (the database) record is usable. *) 
   val check_hiseq_raw_availability :
     dbh:Layout.db_handle ->
     hiseq_raw:Layout.Record_hiseq_raw.pointer ->

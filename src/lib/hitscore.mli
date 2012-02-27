@@ -29,25 +29,33 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
     with module Configuration = Configuration
     with module Layout = Layout
 
+  (** Module containing “common” utilities, it eases the creation of
+      function functors. *)
   module Common : Hitscore_common.COMMON
     with module Configuration = Configuration
     with module Result_IO = Result_IO
     with module Layout = Layout
     with module Access_rights = Access_rights
            
+  (** Sample-sheet assembly. *) 
   module Assemble_sample_sheet: Hitscore_function_interfaces.ASSEMBLE_SAMPLE_SHEET
     with module Common = Common
 
+  (** Demultiplexing. *)
   module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ
     with module Common = Common
 
+  (** Information about the HiSeq raw directories. *)
   module Hiseq_raw: Hitscore_interfaces.HISEQ_RAW
 
+  (** Information about CASAVA Unaligned directories. *)
   module B2F_unaligned: Hitscore_interfaces.B2F_UNALIGNED
 
+  (** Prepare delivery of FASTQ files. *)
   module Unaligned_delivery: Hitscore_function_interfaces.UNALIGNED_DELIVERY
     with module Common = Common
 
+  (** Delete intensity files (for now just registration. *)
   module Delete_intensities: Hitscore_function_interfaces.DELETE_INTENSITIES
     with module Common = Common
 

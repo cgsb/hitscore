@@ -237,6 +237,11 @@ module type UNALIGNED_DELIVERY = sig
   open Common
 (**/**)
 
+  (** Do the actual preparation of the delivery. We pass the
+      [~bcl_to_fastq] function for practical reasons (it the id used
+      everywhere else); the [?directory_tag] is the prefix of the
+      directory name (the default begin the data of the current day; and
+      [~destination] is a directory path. *)
   val run :
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
@@ -281,6 +286,7 @@ module type UNALIGNED_DELIVERY = sig
 
 end
   
+(** Deletion of intensity files. *)
 module type DELETE_INTENSITIES = sig
     
 (**/**)
@@ -288,6 +294,8 @@ module type DELETE_INTENSITIES = sig
   open Common
 (**/**)
 
+  (** Register a successful deletion of intensity files and create the
+      new Hiseq_raw record. *)
   val register :
     dbh:Layout.db_handle ->
     hiseq_raw:Layout.Record_hiseq_raw.pointer ->
