@@ -638,6 +638,54 @@ module Verify = struct
     | `error (`get_files, s) -> printf "ERROR(get-files): %s\n" s
     | `error (`file, s) -> printf "ERROR(file): %s\n" s)
 
+  let check_duplicates configuration =
+    let open Hitscore_threaded in
+    let open Result_IO in
+    let work_samples =
+      with_database ~configuration ~f:(fun ~dbh ->
+        Layout.Record_sample.(
+          get_all ~dbh
+          >>= fun all ->
+          of_list_sequential all ~f:(fun p ->
+            get ~dbh p
+            >>= fun {name; project; _} ->
+            return (name, project))
+          >>= fun all_names_and_projects ->
+          return all_names_and_projects))
+    in
+    let work_libraries =
+      with_database ~configuration ~f:(fun ~dbh ->
+        Layout.Record_stock_library.(
+          get_all ~dbh
+          >>= fun all ->
+          of_list_sequential all ~f:(fun p ->
+            get ~dbh p
+            >>= fun {name; project; _} ->
+            return (name, project))
+          >>= fun all_names_and_projects ->
+          return all_names_and_projects))
+    in
+    let check work what =
+      match work with
+      | Ok l ->
+        List.iter (List.sort ~cmp:compare l) (fun (name, project) ->
+        (* printf "%s . %s\n" (Option.value ~default:"" project) name; *)
+          let all = (List.find_all l ~f:(fun (n, p) -> n = name && p <> project)) in
+          match all with
+          | []  -> ()
+          | more ->
+            printf "Duplicate %s: %S . %S " what
+              (Option.value ~default:"" project) name;
+            List.iter more (fun (n, p) ->
+              printf " ==  %S . %S" (Option.value ~default:"" p) n;);
+            printf "\n")
+      | Error e ->
+        printf "ERROR"
+    in
+    check work_samples "sample";
+    check work_libraries "stock-library";
+    ()
+    
   let wake_up ?(fix_it=false) hsc =
     let open Hitscore_threaded in
     begin match db_connect hsc with
@@ -675,11 +723,11 @@ module Verify = struct
               bcl_to_fastq.id
               (Layout.Enumeration_process_status.to_string e);
           | Error (`pg_exn e) -> 
-            failwithf "B2F.status: %S" (Exn.to_string e) ()
+            printf "ERROR B2F.status: %S\n" (Exn.to_string e) 
           | Error (`status_parsing_error e) ->
-            failwithf "B@f.status: status_parsing_error %S" e ()
+            printf "ERROR B@f.status: status_parsing_error %S\n" e 
           | Error (`work_directory_not_configured) ->
-            failwithf "B2F.status: work_directory_not_configured" ()
+            printf "ERROR B2F.status: work_directory_not_configured\n" 
           | Error _ ->
             failwithf "B2F.status ERROR" ()
         )
@@ -689,6 +737,7 @@ module Verify = struct
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
     end;
+    check_duplicates hsc;
     Some ()
 
 
