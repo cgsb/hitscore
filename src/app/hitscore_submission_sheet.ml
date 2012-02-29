@@ -822,7 +822,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                         (value_map project ~default:"" ~f:(sprintf " %S"))) 
                |! Result.ok)
           | Ok [one] -> Some one
-          | _ -> failwith "DB error search samples")
+          | Ok more ->
+            failwithf "Searching the sample %S got %d results." name
+              (List.length more) ()
+          | Error (`pg_exn e) ->
+            failwithf "DB error search samples: %s" (Exn.to_string e) ())
       in
       let stock_lib =
         let name = libname in
