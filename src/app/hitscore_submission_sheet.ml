@@ -313,6 +313,15 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
 
 
     let libraries =
+      let check_libname n =
+        if String.for_all n ~f:(function
+        | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-' | '_' -> true
+        | _ -> false) then
+          ()
+        else (
+          error "Wrong library name: %S" n
+        ) in
+          
       let check_existing_library libname rest =
         let project =
           match rest with
@@ -379,6 +388,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 !r) in
           match row with
           | libname :: rest as l when libname <> "" && is_declared_known l ->
+            check_libname libname;
             if_verbose "%s should be already known\n" libname;
             let exisiting = check_existing_library libname rest in
             let int32 = int32 ~msg:(sprintf "Lib %s: " libname) in
@@ -402,6 +412,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | None -> Some (`wrong libname)
             end
           | libname :: rest when libname <> ""->
+            check_libname libname;
             if_verbose "%s should be a new one\n" libname;
             let open Option in
             let mandatory row col =
