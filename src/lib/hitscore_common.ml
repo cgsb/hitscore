@@ -36,6 +36,11 @@ module type COMMON = sig
            | `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn ])
       Result_IO.monad
+
+  val hiseq_raw_full_path:
+    configuration:Configuration.local_configuration ->
+    string -> (string, [> `raw_data_path_not_configured]) Result_IO.monad
+      
 end
 
 
@@ -95,4 +100,9 @@ module Make
       else
         return (last_avail, all_deleted))
 
+  let hiseq_raw_full_path ~configuration dir_name =
+    match Configuration.hiseq_data_path configuration with
+    | Some s -> return (Filename.concat s dir_name)
+    | None -> error `raw_data_path_not_configured
+      
 end

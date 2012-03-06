@@ -50,7 +50,9 @@ module Make
       >>= fun sample_sheet_path ->
       Layout.Record_hiseq_raw.(
         get ~dbh hiseq_dir >>= fun {hiseq_dir_name; _} ->
-        return (hiseq_dir_name ^ "/Data/Intensities/BaseCalls/"))
+        Common.hiseq_raw_full_path ~configuration hiseq_dir_name
+        >>= fun hs_path ->
+        return (Filename.concat hs_path "Data/Intensities/BaseCalls/"))
       >>= fun basecalls ->
       let mismatch32 =
         match mismatch with `zero -> 0l | `one -> 1l | `two -> 2l in

@@ -60,6 +60,8 @@ let display_errors = function
                 sample-sheet volume:\n%s\n" (String.concat ~sep:"\n" m)
     | `root_directory_not_configured ->
       printf "INVALID-CONFIGURATION: Root directory not set.\n"
+    | `raw_data_path_not_configured ->
+      printf "INVALID-CONFIGURATION: Raw-data path not set.\n"
     | `work_directory_not_configured ->
       printf "INVALID-CONFIGURATION: Work directory not set.\n"
     | `write_file_error (f,c,e) ->

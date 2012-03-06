@@ -144,6 +144,7 @@ start ~dbh ~configuration       (* common arguments *)
            Layout.Record_sample_sheet.pointer * string list
      | `pg_exn of exn
      | `root_directory_not_configured
+     | `raw_data_path_not_configured
      | `system_command_error of string * exn
      | `work_directory_not_configured ])
       Result_IO.monad

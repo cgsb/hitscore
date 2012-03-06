@@ -473,7 +473,7 @@ module Hiseq_raw = struct
           ?read_length_2:(Option.map read_length_2 Int32.of_int_exn)
           ?read_length_index:(Option.map read_length_index Int32.of_int_exn)
           ~with_intensities ~run_date ~host
-          ~hiseq_dir_name:directory
+          ~hiseq_dir_name:(Filename.basename directory)
       in
       begin match hs_raw with
       | Ok in_db ->
