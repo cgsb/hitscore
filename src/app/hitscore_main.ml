@@ -20,16 +20,18 @@ module Configuration_file = struct
     let open Option in
     let open Hitscore_threaded.Configuration in
     iter (root_directory config) (printf "Root directory: %S\n");
-    iter (volumes_directory config) (printf "VFS-Volumes directory: %S\n");
-    printf "Root-dir writers: [%s]\n"
+    iter (volumes_directory config) (printf "  VFS-Volumes directory: %S\n");
+    printf "  Root-dir writers: [%s]\n"
       (String.concat ~sep:", " (root_writers config));
-    iter (root_group config) (printf "Roor-dir group: %S\n");
+    iter (root_group config) (printf "  Roor-dir group: %S\n");
+    iter (raw_data_path config) (printf "Raw-data path: %S\n");
+    iter (hiseq_data_path config) (printf "  Hiseq raw-data: %S\n");
     iter (work_directory config) (printf "Work directory: %S\n");
     iter (db_host     config) (printf "DB host     : %S\n"); 
-    iter (db_port     config) (printf "DB port     : %d\n"); 
-    iter (db_database config) (printf "DB database : %S\n"); 
-    iter (db_username config) (printf "DB username : %S\n"); 
-    iter (db_password config) (printf "DB password : %S\n");
+    iter (db_port     config) (printf "   port     : %d\n"); 
+    iter (db_database config) (printf "   database : %S\n"); 
+    iter (db_username config) (printf "   username : %S\n"); 
+    iter (db_password config) (printf "   password : %S\n");
     ()
 
   let print_env () =

@@ -95,7 +95,7 @@ let parse_sexp sexp =
         | _ -> None) in
       let raw_data_path = Option.map raw_config fst in
       let hiseq_directory =
-        Option.bind root_config (fun (_, c) ->
+        Option.bind raw_config (fun (_, c) ->
           List.find_map c (function
           | List (Atom "hiseq" :: Atom d :: []) -> Some d
           | _ -> None)) in
