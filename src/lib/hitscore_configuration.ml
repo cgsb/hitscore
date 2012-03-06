@@ -19,12 +19,16 @@ type local_configuration = {
   root_group: string option;
   db_configuration: db_configuration option;
   work_directory: string option;
+  raw_data_path: string option;
+  hiseq_directory: string;
 }
 
 let configure ?root_directory ?(root_writers=[]) ?root_group
-    ?(vol="vol") ?db_configuration ?work_directory () =
+    ?(vol="vol") ?db_configuration ?work_directory
+    ?raw_data_path ?(hiseq_directory="HiSeq") () =
   { root_directory; root_writers; root_group; 
-    volumes_directory = vol; db_configuration; work_directory }
+    volumes_directory = vol; db_configuration; work_directory;
+    raw_data_path; hiseq_directory;}
 
 let db t = t.db_configuration
 
@@ -44,6 +48,10 @@ let root_group t = t.root_group
 
 let work_directory t = t.work_directory
 
+let raw_data_path t = t.raw_data_path
+let hiseq_data_path t =
+  Option.(t.raw_data_path >>| fun r -> sprintf "%s/%s" r t.hiseq_directory)
+  
 let db_host     t = Option.map t.db_configuration (fun dbc -> dbc.db_host    ) 
 let db_port     t = Option.map t.db_configuration (fun dbc -> dbc.db_port    ) 
 let db_database t = Option.map t.db_configuration (fun dbc -> dbc.db_database) 
@@ -81,6 +89,16 @@ let parse_sexp sexp =
           | List (Atom "group" :: Atom g :: []) -> Some g
           | _ -> None)) in
       let work_directory = find_field l "work" in
+      let raw_config =
+        List.find_map l (function
+        | List (Atom "raw" :: Atom dir :: l) -> Some (dir, l)
+        | _ -> None) in
+      let raw_data_path = Option.map raw_config fst in
+      let hiseq_directory =
+        Option.bind root_config (fun (_, c) ->
+          List.find_map c (function
+          | List (Atom "hiseq" :: Atom d :: []) -> Some d
+          | _ -> None)) in
       let db_config = 
         List.find_map l (function
         | List (Atom "db" :: l) -> Some l
@@ -97,7 +115,7 @@ let parse_sexp sexp =
               ksprintf fail "Incomplete DB configuration (profile: %s)" name)
       in
       (name, 
-       configure ?work_directory ?vol:None
+       configure ?work_directory ?vol:None ?raw_data_path ?hiseq_directory
          ?root_directory ~root_writers ?root_group ?db_configuration)
     | _ -> fail "expecting a (profile ...)"
   in

@@ -147,6 +147,8 @@ module type CONFIGURATION = sig
     ?vol:string ->
     ?db_configuration:db_configuration ->
     ?work_directory:string ->
+    ?raw_data_path:string ->
+    ?hiseq_directory:string ->
     unit -> local_configuration
 
   (** Get the Data-base configuration *)
@@ -180,6 +182,13 @@ module type CONFIGURATION = sig
   short-term storage and computations). *)
   val work_directory: local_configuration -> string option
 
+  (** Get the path to the raw data (like "/data/cgsb/gencore-raw/"). *)
+  val raw_data_path: local_configuration -> string option
+
+  (** Get the path to the HiSeq raw data
+      (like "/data/cgsb/gencore-raw/HiSeq"). *)
+  val hiseq_data_path: local_configuration -> string option
+    
   (** Set of available profiles. *)
   type profile_set
 
