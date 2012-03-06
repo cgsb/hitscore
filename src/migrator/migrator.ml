@@ -583,6 +583,33 @@ position_in_r1, position_in_r2, position_in_index, sequence) = cache in
   ()
 
 
+let v05_to_v051 file_in file_out =
+  let dump_v05 =
+    In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
+
+  let () =
+    let module V05M = V05.Make (Result_IO) in
+    V05M.dump_of_sexp dump_v05 |! ignore in
+
+  let dump_v051 =
+    let open Sexplib.Sexp in
+    let rec parse =
+      function
+      | Atom a -> Atom a
+      | List [Atom "version"; Atom "0.5"] -> List [Atom "version"; Atom "0.5.1"] 
+      | List [Atom "hiseq_dir_name"; Atom name] ->
+        List [Atom "hiseq_dir_name"; Atom (Filename.basename name)]
+      | List l -> List (List.map ~f:parse l) in
+    parse dump_v05 in
+  
+  let () =
+    let module V05M1 = V051.Make (Result_IO) in
+    V05M1.dump_of_sexp dump_v051 |! ignore in
+  
+  let module V051M = V051.Make(Result_IO) in
+  Out_channel.(with_file file_out ~f:(fun o ->
+    output_string o (Sexplib.Sexp.to_string_hum dump_v051)));
+  ()
 
 let () =
   match Array.to_list Sys.argv with
@@ -590,5 +617,7 @@ let () =
     v03_to_v04 file_in file_out 
   | exec :: "v04-v05" :: file_in :: file_out :: [] ->
     v04_to_v05 file_in file_out 
+  | exec :: "v05-v051" :: file_in :: file_out :: [] ->
+    v05_to_v051 file_in file_out 
   | _ ->
-    eprintf "usage: %s {v03-v04,v04-v05} <dump-in> <dump-out>\n" Sys.argv.(0)
+    eprintf "usage: %s {v03-v04,v04-v05,v05-v051} <dump-in> <dump-out>\n" Sys.argv.(0)
