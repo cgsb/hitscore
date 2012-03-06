@@ -37,10 +37,25 @@ module type COMMON = sig
      | `pg_exn of exn ])
       Result_IO.monad
 
+  (** Get the full path from an HiSeq directory name. *)
   val hiseq_raw_full_path:
     configuration:Configuration.local_configuration ->
     string -> (string, [> `raw_data_path_not_configured]) Result_IO.monad
-      
+    
+  (** Get all the relative paths of a given volume pointer. *) 
+  val paths_of_volume:
+    configuration:Configuration.local_configuration ->
+    dbh:Layout.db_handle ->
+    Layout.File_system.volume_pointer ->
+    (string list,
+     [> `cannot_recognize_file_type of string
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
+         [> `file_system ] *
+           [> `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn
+     | `root_directory_not_configured ])
+      Result_IO.monad
 end
 
 
@@ -104,5 +119,23 @@ module Make
     match Configuration.hiseq_data_path configuration with
     | Some s -> return (Filename.concat s dir_name)
     | None -> error `raw_data_path_not_configured
+      
+
+  let paths_of_volume ~configuration ~dbh volume_pointer =
+    Layout.File_system.(
+      get_volume ~dbh volume_pointer
+      >>= fun vc ->
+      (volume_trees vc |! of_result) >>| trees_to_unix_paths 
+      >>= fun relative_paths ->
+      let vol = vc.volume_entry |! entry_unix_path in
+      begin match Configuration.volume_path_fun configuration with
+      | Some vol_path ->
+        return (List.map relative_paths (Filename.concat (vol_path vol)))
+      | None -> 
+        error `root_directory_not_configured
+      end)
+
+
+
       
 end
