@@ -185,6 +185,9 @@ module type CONFIGURATION = sig
   (** Get the path to the raw data (like "/data/cgsb/gencore-raw/"). *)
   val raw_data_path: local_configuration -> string option
 
+  (** Get the relative path to the HiSeq data (like "HiSeq/"). *)
+  val hiseq_directory: local_configuration -> string
+
   (** Get the path to the HiSeq raw data
       (like "/data/cgsb/gencore-raw/HiSeq"). *)
   val hiseq_data_path: local_configuration -> string option

@@ -49,6 +49,7 @@ let root_group t = t.root_group
 let work_directory t = t.work_directory
 
 let raw_data_path t = t.raw_data_path
+let hiseq_directory t = t.hiseq_directory
 let hiseq_data_path t =
   Option.(t.raw_data_path >>| fun r -> sprintf "%s/%s" r t.hiseq_directory)
   
