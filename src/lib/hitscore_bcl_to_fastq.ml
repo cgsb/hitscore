@@ -38,7 +38,7 @@ module Make
           >>= function
           | [one] ->
             let vol = vc.volume_entry |! entry_unix_path in
-            begin match Configuration.volume_path_fun configuration with
+            begin match Configuration.path_of_volume_fun configuration with
             | Some vol_path ->
               return (sprintf "%s/%s" (vol_path vol) one)
             | None -> 
@@ -65,7 +65,7 @@ module Make
           hiseq_dir.Layout.Record_hiseq_raw.id
           mismatch32 casava_version user in
       let unique_id = hr_tag (* TODO: uniquify for real? *) in
-      begin match Configuration.work_directory configuration with
+      begin match Configuration.work_path configuration with
       | Some work_dir -> return work_dir
       | None -> error `work_directory_not_configured
       end
@@ -204,7 +204,7 @@ module Make
         return (vol, entry_unix_path vol_ec))
       >>= fun (directory, path_vol) ->
       let move_m =
-        match Configuration.volume_path configuration path_vol with
+        match Configuration.path_of_volume configuration path_vol with
         | Some vol_dir -> 
           ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
           ksprintf system_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
@@ -256,7 +256,7 @@ module Make
 
 
     let status ~dbh ~configuration bcl_to_fastq = 
-      begin match Configuration.work_directory configuration with
+      begin match Configuration.work_path configuration with
       | Some work_dir -> return work_dir
       | None -> error `work_directory_not_configured
       end
@@ -276,7 +276,7 @@ module Make
       )
 
     let kill ~dbh ~configuration  bcl_to_fastq = 
-      begin match Configuration.work_directory configuration with
+      begin match Configuration.work_path configuration with
       | Some work_dir -> return work_dir
       | None -> error `work_directory_not_configured
       end

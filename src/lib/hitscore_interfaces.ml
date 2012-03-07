@@ -141,12 +141,13 @@ module type CONFIGURATION = sig
 
   (** Create a [local_configuration], if no [db_configuration] is given,
       the default values will be used (i.e. PGOCaml will try to connect to
-      the local database). *)
-  val configure : ?root_directory:string ->
+      the local database). The default [vol_directory] is ["vol"], the
+      default [hiseq_directory] is ["HiSeq"]. *)
+  val configure : ?root_path:string ->
     ?root_writers:string list -> ?root_group:string ->
-    ?vol:string ->
+    ?vol_directory:string ->
     ?db_configuration:db_configuration ->
-    ?work_directory:string ->
+    ?work_path:string ->
     ?raw_data_path:string ->
     ?hiseq_directory:string ->
     unit -> local_configuration
@@ -160,8 +161,8 @@ module type CONFIGURATION = sig
   val db_username : local_configuration -> string   option 
   val db_password : local_configuration -> string   option 
 
-  (** Get the current root directory (if set).  *)
-  val root_directory : local_configuration -> string option
+  (** Get the current root path (if set).  *)
+  val root_path : local_configuration -> string option
     
   (** Get the root writers' logins. *)
   val root_writers: local_configuration -> string list
@@ -169,18 +170,21 @@ module type CONFIGURATION = sig
   (** Get the root owner group. *)
   val root_group: local_configuration -> string option
 
+  (** Get the name of the volumes directory (i.e. ["vol"]). *)
+  val vol_directory: local_configuration -> string
+    
   (** Get the current path to the volumes (i.e. kind-of [$ROOT/vol/]). *)
-  val volumes_directory: local_configuration -> string option
+  val vol_path: local_configuration -> string option
 
   (** Make a path to a VFS volume. *)
-  val volume_path: local_configuration -> string -> string option
+  val path_of_volume: local_configuration -> string -> string option
 
   (** Make a path-making function for VFS volumes. *)
-  val volume_path_fun: local_configuration -> (string -> string) option
+  val path_of_volume_fun: local_configuration -> (string -> string) option
 
   (** Get (if configured) the current work-directory (the one used for
   short-term storage and computations). *)
-  val work_directory: local_configuration -> string option
+  val work_path: local_configuration -> string option
 
   (** Get the path to the raw data (like "/data/cgsb/gencore-raw/"). *)
   val raw_data_path: local_configuration -> string option

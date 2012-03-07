@@ -279,7 +279,7 @@ module type UNALIGNED_DELIVERY = sig
                  int option list
              | `pg_exn of exn
              | `system_command_error of string * exn
-             | `work_directory_not_configured
+             | `root_directory_not_configured
              | `wrong_unaligned_volume of string Hitscore_std.List.t ])
            Result_IO.monad
 

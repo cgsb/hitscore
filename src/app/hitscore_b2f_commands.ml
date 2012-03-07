@@ -376,7 +376,7 @@ let info hsc id_or_dir =
       in
       display_errors work;
       let udir = Result.ok_exn work in
-      begin match Configuration.volume_path_fun hsc with
+      begin match Configuration.path_of_volume_fun hsc with
       | Some f -> f udir
       | None -> failwith "Root directory not configured"
       end

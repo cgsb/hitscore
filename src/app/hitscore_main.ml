@@ -19,14 +19,14 @@ module Configuration_file = struct
   let print_config config =
     let open Option in
     let open Hitscore_threaded.Configuration in
-    iter (root_directory config) (printf "Root directory: %S\n");
-    iter (volumes_directory config) (printf "  VFS-Volumes directory: %S\n");
+    iter (root_path config) (printf "Root path: %S\n");
+    iter (vol_path config) (printf "  VFS-Volumes path: %S\n");
     printf "  Root-dir writers: [%s]\n"
       (String.concat ~sep:", " (root_writers config));
     iter (root_group config) (printf "  Roor-dir group: %S\n");
     iter (raw_data_path config) (printf "Raw-data path: %S\n");
     iter (hiseq_data_path config) (printf "  Hiseq raw-data: %S\n");
-    iter (work_directory config) (printf "Work directory: %S\n");
+    iter (work_path config) (printf "Work directory: %S\n");
     iter (db_host     config) (printf "DB host     : %S\n"); 
     iter (db_port     config) (printf "   port     : %d\n"); 
     iter (db_database config) (printf "   database : %S\n"); 
@@ -563,7 +563,7 @@ module Verify = struct
 
   let check_file_system ?(try_fix=false) ?(verbose=true) hsc =
     let volume_path =
-      Hitscore_threaded.Configuration.volume_path_fun hsc |>
+      Hitscore_threaded.Configuration.path_of_volume_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in
     let buffer = ref [] in
     let log fmt =
@@ -749,7 +749,7 @@ module FS = struct
 
   let add_files_to_volume hsc vol files =
     let open Hitscore_threaded.Result_IO in
-    let volume_path = Hitscore_threaded.Configuration.volume_path_fun hsc |>
+    let volume_path = Hitscore_threaded.Configuration.path_of_volume_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
@@ -1260,7 +1260,7 @@ module Prepare_delivery = struct
           (List.map l ~f:(fun (s, l) -> s) |! String.concat ~sep:"; ")
       | `pg_exn e ->
         out "PostgreSQL Error: %s\n" (Exn.to_string e)
-      | `work_directory_not_configured ->
+      | `root_directory_not_configured ->
         out "work-dir not configured\n"
       | `wrong_unaligned_volume (sl) ->
         out "Unaligned volume not conform to standards: [%s]\n"

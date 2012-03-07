@@ -128,7 +128,7 @@ module Make
       (volume_trees vc |! of_result) >>| trees_to_unix_paths 
       >>= fun relative_paths ->
       let vol = vc.volume_entry |! entry_unix_path in
-      begin match Configuration.volume_path_fun configuration with
+      begin match Configuration.path_of_volume_fun configuration with
       | Some vol_path ->
         return (List.map relative_paths (Filename.concat (vol_path vol)))
       | None -> 

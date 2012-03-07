@@ -13,40 +13,42 @@ let db_configuration ~host ~port ~database ~username ~password =
    db_username = username; db_password = password}
 
 type local_configuration = {
-  root_directory: string option;
-  volumes_directory: string;
+  root_path: string option;
+  vol_directory: string;
   root_writers: string list;
   root_group: string option;
   db_configuration: db_configuration option;
-  work_directory: string option;
+  work_path: string option;
   raw_data_path: string option;
   hiseq_directory: string;
 }
 
-let configure ?root_directory ?(root_writers=[]) ?root_group
-    ?(vol="vol") ?db_configuration ?work_directory
+let configure ?root_path ?(root_writers=[]) ?root_group
+    ?(vol_directory="vol") ?db_configuration ?work_path
     ?raw_data_path ?(hiseq_directory="HiSeq") () =
-  { root_directory; root_writers; root_group; 
-    volumes_directory = vol; db_configuration; work_directory;
+  { root_path; root_writers; root_group; 
+    vol_directory; db_configuration; work_path;
     raw_data_path; hiseq_directory;}
 
 let db t = t.db_configuration
 
-let root_directory t = t.root_directory
+let root_path t = t.root_path
 
-let volumes_directory t =
-  Option.(t.root_directory >>| fun r -> sprintf "%s/%s" r t.volumes_directory)
+let vol_directory t = t.vol_directory
 
-let volume_path t volume =
-  Option.(volumes_directory t >>| fun t -> sprintf "%s/%s" t volume)
+let vol_path t =
+  Option.(t.root_path >>| fun r -> sprintf "%s/%s" r t.vol_directory)
 
-let volume_path_fun t =
-  Option.(volumes_directory t >>| fun t -> (sprintf "%s/%s" t))
+let path_of_volume t volume =
+  Option.(vol_path t >>| fun t -> sprintf "%s/%s" t volume)
+
+let path_of_volume_fun t =
+  Option.(vol_path t >>| fun t -> (sprintf "%s/%s" t))
 
 let root_writers t = t.root_writers
 let root_group t = t.root_group
 
-let work_directory t = t.work_directory
+let work_path t = t.work_path
 
 let raw_data_path t = t.raw_data_path
 let hiseq_directory t = t.hiseq_directory
@@ -75,7 +77,7 @@ let parse_sexp sexp =
         List.find_map l (function
         | List (Atom "root" :: Atom dir :: l) -> Some (dir, l)
         | _ -> None) in
-      let root_directory = Option.map root_config fst in
+      let root_path = Option.map root_config fst in
       let root_writers =
         Option.value_map ~default:[] root_config ~f:(fun (_, l) ->
           List.find_map l (function
@@ -89,7 +91,7 @@ let parse_sexp sexp =
           List.find_map c (function
           | List (Atom "group" :: Atom g :: []) -> Some g
           | _ -> None)) in
-      let work_directory = find_field l "work" in
+      let work_path = find_field l "work" in
       let raw_config =
         List.find_map l (function
         | List (Atom "raw" :: Atom dir :: l) -> Some (dir, l)
@@ -116,8 +118,9 @@ let parse_sexp sexp =
               ksprintf fail "Incomplete DB configuration (profile: %s)" name)
       in
       (name, 
-       configure ?work_directory ?vol:None ?raw_data_path ?hiseq_directory
-         ?root_directory ~root_writers ?root_group ?db_configuration)
+       configure ?work_path ?vol_directory:None
+         ?raw_data_path ?hiseq_directory
+         ?root_path ~root_writers ?root_group ?db_configuration)
     | _ -> fail "expecting a (profile ...)"
   in
   match sexp with Atom a -> fail a | List l -> List.map l parse_profile

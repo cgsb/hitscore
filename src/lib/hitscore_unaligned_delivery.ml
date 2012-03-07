@@ -15,8 +15,8 @@ module Make
       Layout.File_system.(
         get_volume ~dbh vol_pointer >>= fun ({volume_entry; _} as volume) ->
         of_result  (volume_trees volume) >>= fun vol_trees ->
-        match (Configuration.volumes_directory configuration) with
-        | None -> error (`work_directory_not_configured)
+        match (Configuration.vol_path configuration) with
+        | None -> error (`root_directory_not_configured)
         | Some w ->
           let prefix = Filename.concat w (entry_unix_path volume_entry) in
           return (List.map (trees_to_unix_paths vol_trees) 

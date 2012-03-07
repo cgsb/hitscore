@@ -249,7 +249,7 @@ module Make
           get_target_file ~dbh sample_sheet
           >>= fun (the_volume, path_vol, path_file) ->
           let commands_m =
-            match Configuration.volume_path configuration path_vol with
+            match Configuration.path_of_volume configuration path_vol with
             | Some vol_dir -> 
               ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
               write_file ~file:(sprintf "%s/%s" vol_dir path_file)
