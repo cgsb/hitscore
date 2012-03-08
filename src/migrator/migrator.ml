@@ -527,14 +527,22 @@ let v051_to_v06 file_in file_out =
       | Atom a -> Atom a
       | List [Atom "version"; Atom old_version]
           when old_version = V051.Info.version ->
-        printf "%s Vs %s\n" old_version V051.Info.version;
         List [Atom "version"; Atom V06.Info.version ] 
-      | List l -> List (List.map ~f:parse l) in
-    parse dump_v051 in
+      | List l ->
+        List (List.map ~f:parse l) in
+    let add_hs_runs = function
+      | Atom a -> assert false
+      | List l ->
+        List (List [Atom "record_hiseq_run"; List []] :: l) in
+    parse (add_hs_runs dump_v051) in
   
   let () =
-    let module V05M1 = V06.Make (Result_IO) in
-    V05M1.dump_of_sexp dump_v06 |! ignore in
+    let module V06M = V06.Make (Result_IO) in
+    try
+      V06M.dump_of_sexp dump_v06 |! ignore
+    with e ->
+      printf "Could not reparse in V6: %s" (Exn.to_string e)
+  in
   
   let module V06M = V06.Make(Result_IO) in
   Out_channel.(with_file file_out ~f:(fun o ->

@@ -106,6 +106,12 @@
         (lanes lane array))
 (search flowcell by serial_name)
 
+(record hiseq_run
+        (date timestamp)
+        (flowcell_a flowcell option)
+        (flowcell_b flowcell option)
+        notable)
+
 (record invoicing
         (pi person)
         (account_number   string option)
