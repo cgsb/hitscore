@@ -5,106 +5,6 @@ let (|>) x f = f x
 module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
 open Hitscore_threaded
 
-let v03_to_v04 file_in file_out =
-  let module V03M = V03.Make(Result_IO) in
-  let module V04M = V04.Make(Result_IO) in
-  let dump_v03 = In_channel.(with_file file_in ~f:input_all) in
-  let s03 = V03M.dump_of_sexp Sexplib.Sexp.(of_string dump_v03) in
-
-
-  let record_person = 
-    List.map s03.V03M.record_person (fun cache ->
-      let (id, created, lastmodif, print_name, given_name,
-           middle_name, family_name, email, login, nickname, note) =
-        cache in
-      let roles =
-        match login with
-        | Some "aa144" | Some "sm4431" ->  "(administrator)"
-        | Some "ps103" | Some "carltj01" -> "(auditor user)"
-        | Some "jsd6" -> "(auditor)" 
-        | _ -> "(user)"
-      in
-      let secondary_emails = "()" in
-      (id, created, lastmodif, print_name, given_name,
-       middle_name, family_name, email, secondary_emails, 
-       login, nickname, roles, note)
-    )
-  in
-
-  let record_stock_library = 
-    List.map s03.V03M.record_stock_library (fun cache ->
-      let id, created, lastmodif, 
-        (name:           string),
-        (project: string option),
-        (sample:      int32 option),
-        (protocol:  int32 option),
-        (application:    string option),
-        (stranded:       bool),
-        (truseq_control: bool),
-        (rnaseq_control: string option),
-        (barcode_type: string),
-        (barcodes: int32 array),
-        (custom_barcodes: int32 array),
-        (p5_adapter_length: int32 option ),
-        (p7_adapter_length: int32 option),
-        (preparator: int32 option),
-        (note: string option)
-        = cache in
-      (id, created, lastmodif, 
-       (name:           string),
-       (project: string option),
-       (None: string option),
-       (sample:      int32 option),
-       (protocol:  int32 option),
-       (application:    string option),
-       (stranded:       bool),
-       (truseq_control: bool),
-       (rnaseq_control: string option),
-       (barcode_type: string),
-       (barcodes: int32 array),
-       (custom_barcodes: int32 array),
-       (p5_adapter_length: int32 option ),
-       (p7_adapter_length: int32 option),
-       (preparator: int32 option),
-       (note: string option))
-    ) in
-
-  let d04 = {
-    V04M.version = V04.Info.version;
-    file_system                    = s03.V03M.file_system;
-    record_log                     = s03.V03M.record_log;
-    record_person;
-    record_organism                = s03.V03M.record_organism;
-    record_sample                  = s03.V03M.record_sample;
-    record_protocol                = s03.V03M.record_protocol;
-    record_custom_barcode          = s03.V03M.record_custom_barcode;
-    record_stock_library;
-    record_key_value               = s03.V03M.record_key_value;
-    record_input_library           = s03.V03M.record_input_library;
-    record_lane                    = s03.V03M.record_lane;
-    record_flowcell                = s03.V03M.record_flowcell;
-    record_invoicing               = s03.V03M.record_invoicing;
-    record_bioanalyzer             = s03.V03M.record_bioanalyzer;
-    record_agarose_gel             = s03.V03M.record_agarose_gel;
-    record_hiseq_raw               = s03.V03M.record_hiseq_raw;
-    record_inaccessible_hiseq_raw  = s03.V03M.record_inaccessible_hiseq_raw;
-    record_sample_sheet            = s03.V03M.record_sample_sheet;
-    function_assemble_sample_sheet = s03.V03M.function_assemble_sample_sheet;
-    record_bcl_to_fastq_unaligned  = s03.V03M.record_bcl_to_fastq_unaligned;
-    function_bcl_to_fastq          = s03.V03M.function_bcl_to_fastq;
-    function_transfer_hisqeq_raw   = s03.V03M.function_transfer_hisqeq_raw;
-    function_delete_intensities    = s03.V03M.function_delete_intensities;
-    record_hiseq_checksum          = s03.V03M.record_hiseq_checksum;
-    function_dircmp_raw            = s03.V03M.function_dircmp_raw;
-    record_client_fastqs_dir       = s03.V03M.record_client_fastqs_dir;
-    function_prepare_delivery      = s03.V03M.function_prepare_delivery;
-  } in
-
-  Out_channel.(with_file file_out ~f:(fun o ->
-    output_string o (Sexplib.Sexp.to_string_hum (V04M.sexp_of_dump d04))));
-
-  ()
-
 let v04_to_v05 file_in file_out =
   let module V04M = V04.Make(Result_IO) in
   let module V05M = V05.Make(Result_IO) in
@@ -611,13 +511,44 @@ let v05_to_v051 file_in file_out =
     output_string o (Sexplib.Sexp.to_string_hum dump_v051)));
   ()
 
+
+let v051_to_v06 file_in file_out =
+  let dump_v051 =
+    In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
+
+  let () =
+    let module V051M = V051.Make (Result_IO) in
+    V051M.dump_of_sexp dump_v051 |! ignore in
+
+  let dump_v06 =
+    let open Sexplib.Sexp in
+    let rec parse =
+      function
+      | Atom a -> Atom a
+      | List [Atom "version"; Atom old_version]
+          when old_version = V051.Info.version ->
+        printf "%s Vs %s\n" old_version V051.Info.version;
+        List [Atom "version"; Atom V06.Info.version ] 
+      | List l -> List (List.map ~f:parse l) in
+    parse dump_v051 in
+  
+  let () =
+    let module V05M1 = V06.Make (Result_IO) in
+    V05M1.dump_of_sexp dump_v06 |! ignore in
+  
+  let module V06M = V06.Make(Result_IO) in
+  Out_channel.(with_file file_out ~f:(fun o ->
+    output_string o (Sexplib.Sexp.to_string_hum dump_v06)));
+  ()
+  
 let () =
   match Array.to_list Sys.argv with
-  | exec :: "v03-v04" :: file_in :: file_out :: [] ->
-    v03_to_v04 file_in file_out 
   | exec :: "v04-v05" :: file_in :: file_out :: [] ->
     v04_to_v05 file_in file_out 
   | exec :: "v05-v051" :: file_in :: file_out :: [] ->
     v05_to_v051 file_in file_out 
+  | exec :: "v051-v06" :: file_in :: file_out :: [] ->
+    v051_to_v06 file_in file_out 
   | _ ->
-    eprintf "usage: %s {v03-v04,v04-v05,v05-v051} <dump-in> <dump-out>\n" Sys.argv.(0)
+    eprintf "usage: %s {v04-v05,v05-v051,v051-v06} <dump-in> <dump-out>\n"
+      Sys.argv.(0)

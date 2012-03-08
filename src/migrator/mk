@@ -35,10 +35,11 @@ if [ "$1" = "update" ]; then
     mkdir -p _migrator
     current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
                       -e 's/* \(.*\)/\1/'`
+    make_module v06  0.6-dev
     make_module v051 0.5.1
     make_module v05  0.5
     make_module v04  0.4
-    make_module v03  0.3
+#    make_module v03  0.3
 #    make_module v02  0.2
 #    make_module v011 0.1.1
     git checkout $current_branch
@@ -55,6 +56,6 @@ if [ "$1" = "-h" ]; then
 fi
 
 cd _migrator
-$OCAMLFINDOPT -linkpkg v03.cmx v04.cmx v05.cmx v051.cmx migrator.ml -o migrator
+$OCAMLFINDOPT -linkpkg v04.cmx v05.cmx v051.cmx v06.cmx migrator.ml -o migrator
 cd ..
 
