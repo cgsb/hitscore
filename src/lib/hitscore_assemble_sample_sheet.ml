@@ -15,7 +15,10 @@ module Make
     let illumina_barcodes = [
       1l, "ATCACG"; 2l, "CGATGT"; 3l, "TTAGGC"; 4l, "TGACCA"; 5l, "ACAGTG";
       6l, "GCCAAT"; 7l, "CAGATC"; 8l, "ACTTGA"; 9l, "GATCAG"; 10l, "TAGCTT";
-      11l, "GGCTAC"; 12l, "CTTGTA"
+      11l, "GGCTAC"; 12l, "CTTGTA";
+      13l, "AGTCAA"; 14l, "AGTTCC"; 15l, "ATGTCA"; 16l, "CCGTCC";
+      18l, "GTCCGC"; 19l, "GTGAAA"; 20l, "GTGGCC"; 21l, "GTTTCG";
+      22l, "CGTACG"; 23l, "GAGTGG"; 25l, "ACTGAT"; 27l, "ATTCCT";
     ]
     let bioo_barcodes = [
       1l,"CGATGT"; 2l,"TGACCA"; 3l,"ACAGTG"; 4l,"GCCAAT"; 5l,"CAGATC";
