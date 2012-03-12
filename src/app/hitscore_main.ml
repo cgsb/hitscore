@@ -1294,6 +1294,38 @@ module Intensities_deletion = struct
         out "LAYOUT INCONSISTENCY"
       end
 end 
+
+module Hiseq_run = struct
+
+  let register configuration day_date fca fcb note =
+    let open Hitscore_threaded in
+    let open Result_IO in
+    with_database configuration (fun ~dbh ->
+      let flowcell id =
+        if id = "_" then return None else
+          try
+            return (Some (Int32.of_string id |! Layout.Record_flowcell.unsafe_cast))
+          with e ->
+            (Layout.Search.record_flowcell_by_serial_name ~dbh id
+             >>= function
+             | [one] -> return (Some one)
+             | _ -> failwithf "Error while looking for flowcell %s" id ())
+      in
+      flowcell fca >>= fun flowcell_a ->
+      flowcell fcb >>= fun flowcell_b ->
+      Layout.Record_hiseq_run.add_value
+        ~dbh ~date:(Time.of_string (day_date ^ " 10:00"))
+        ?flowcell_a ?flowcell_b ?note)
+    |! Result.ok_exn ~fail:(Failure "adding the hiseq_run went wrong")
+    |! Pervasives.ignore
+
+
+end
+
+
+
+
+  
 let commands = ref []
 
 let define_command ~names ~description ~usage ~run =
@@ -1558,6 +1590,17 @@ let () =
     ~run:(fun config exec cmd -> function
     | ["register"; dir] ->
       Some (Intensities_deletion.do_registration config dir)
+    | _ -> None);
+
+  define_command ~names:["register-hiseq-run"]
+    ~description:"Register an HiSeq 2000 run"
+    ~usage:(fun o exec cmd ->
+      fprintf o "Usage: %s <profile> %s <date> <fcidA> <fcidB> [<note>]\n" exec cmd;
+      fprintf o "  where fcid is a database id, a proper FCID, or '_'\n")
+    ~run:(fun config exec cmd -> function
+    | [date; fca; fcb] -> Some (Hiseq_run.register config date fca fcb None)
+    | [date; fca; fcb; note] ->
+      Some (Hiseq_run.register config date fca fcb (Some note))
     | _ -> None);
 
   let global_usage = function
