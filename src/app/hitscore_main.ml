@@ -1167,6 +1167,54 @@ module Query = struct
               sprintf "% 4ld | % 20s | % 20s" inv pi fcid)
               |! String.concat ~sep:"\n")
         end));
+    ("deliveries",
+     (["List of potential deliveries for a flowcell"],
+      fun dbh args ->
+        let fcid =
+          match args with [one] -> one | _ -> failwith "expecting one argument" in
+        let invoices =
+          let open Batteries in
+          PGSQL (dbh)
+            "select invoicing.g_id, person.family_name
+             from invoicing, person, flowcell
+             where invoicing.pi = person.g_id
+              and flowcell.lanes @> invoicing.lanes
+              and flowcell.serial_name = $fcid"
+        in
+        let b2fs =
+          let open Batteries in
+          PGSQL (dbh)
+            "select bcl_to_fastq.g_id as B2F_id,
+                    bcl_to_fastq.tiles as TILES,
+                    g_volume.g_id as VOL_id,
+                    g_volume.g_hr_tag as HR_TAG
+             from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume, hiseq_raw
+             where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
+                   bcl_to_fastq_unaligned.directory = g_volume.g_id AND
+                   bcl_to_fastq.raw_data = hiseq_raw.g_id AND
+                   hiseq_raw.flowcell_name = $fcid;"
+        in
+        begin match List.length invoices with
+        | 0 -> printf "No invoices found.\n"
+        | n ->
+          printf "Found %d invoice%s:\n%s\n" n 
+            (if n > 1 then "s" else "")
+            (List.map invoices
+               (fun (inv, pi) -> sprintf "% 4ld (to %s)" inv pi)
+                                 |! String.concat ~sep:"\n")
+        end;
+        begin match List.length b2fs with
+        | 0 -> printf "No bcl-to-fastqs found.\n"
+        | n ->
+          printf "Found %d bcl-to-fastqs%s:\n%s\n" n 
+            (if n > 1 then "s" else "")
+            (List.map b2fs (fun (id, tiles, volid, hrtag) ->
+              sprintf "% 4ld (tiles: %s, result: %ld/%s)" id
+                      (Option.value ~default:"N/A" tiles) volid
+                      (Option.value ~default:"N/A" hrtag))
+              |! String.concat ~sep:"\n")
+        end;
+     ));
   ]
 
   let describe out =
