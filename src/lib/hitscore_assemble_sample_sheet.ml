@@ -157,6 +157,11 @@ module Make
                     flowcell_name (lane_idx + 1) name (lane_idx + 1);
                   return ()
                 | l ->
+                  let undetermined =
+                    print out "%s,%d,UndeterminedLane%d,,,,N,,,Lane%d\n"
+                      flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
+                    return () in
+                  undetermined >>= fun () ->
                   of_list_sequential l ~f:(fun (name, bars) -> 
                     Array.iter bars ~f:(fun b ->
                       print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
