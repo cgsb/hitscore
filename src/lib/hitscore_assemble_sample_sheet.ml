@@ -69,6 +69,7 @@ module Make
     }
 
     let preparation
+        ?(force_new=false)
         ?(kind: Layout.Enumeration_sample_sheet_kind.t=`specific_barcodes)
         ~dbh
         flowcell_name =
@@ -115,7 +116,7 @@ module Make
       in
       flowcell_lanes
       >>= (fun (flowcell, lane_list) ->
-        previous_assembly flowcell 
+        (if force_new then return None else previous_assembly flowcell)
         >>= function
         | None ->
           let out_buf = Buffer.create 42 in
@@ -250,8 +251,8 @@ module Make
       >>= fun assembly ->
       Layout.Function_assemble_sample_sheet.set_failed ~dbh assembly
 
-    let run ~dbh ~kind ~configuration ?note flowcell =
-      preparation ~kind ~dbh flowcell
+    let run ~dbh ~kind ~configuration ?force_new ?note flowcell =
+      preparation ~kind ~dbh ?force_new flowcell
       >>= function
         | `new_one sample_sheet ->
           get_target_file ~dbh sample_sheet

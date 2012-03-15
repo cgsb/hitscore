@@ -15,11 +15,14 @@ run ~dbh ~kind:`specific_barcodes ~configuration "FC11IDXXX" >>= function
 | `new_success pointer -> ...
 | `previous_success (fun_pointer, result_pointer) -> ...
 | `new_failure (failed_fun_pointer, reason) -> ...
-      ]}. *)
+      ]}.
+  If [~force_new] is [true] the run does not check existing assemblies.
+  *)
   val run :
     dbh:(string, bool) Batteries.Hashtbl.t Layout.PGOCaml.t ->
     kind:Layout.Enumeration_sample_sheet_kind.t ->
     configuration:Configuration.local_configuration ->
+    ?force_new:bool ->
     ?note:string ->
     string ->
     ([ `new_failure of

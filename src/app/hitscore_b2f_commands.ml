@@ -7,8 +7,8 @@ open Result_IO
 
 open Hitscore_app_util
 
-let get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell =
-  Assemble_sample_sheet.run ~configuration:hsc ~kind ~dbh flowcell
+let get_or_make_sample_sheet ~dbh ~hsc ~kind ?force_new flowcell =
+  Assemble_sample_sheet.run ~configuration:hsc ~kind ~dbh ?force_new flowcell
   >>= function
   | `new_failure (_, e) ->
     printf "NEW FAILURE\n";
@@ -133,6 +133,7 @@ let start_parse_cmdline usage_prefix args =
     ref (sprintf "%s %s %s" 
            Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
   let tiles = ref None in
+  let force_new = ref false in
   let options = [
     ( "-tiles", Arg.String (fun s -> tiles := Some s),
       "<regexp list>\n\tSet the --tiles option of CASAVA (copied verbatim).");
@@ -153,6 +154,9 @@ let start_parse_cmdline usage_prefix args =
     ( "-all-barcodes",
       Arg.Unit (fun () -> sample_sheet_kind := `all_barcodes),
       "\n\tUse/create an all-barcodes sample-sheet.");
+    ( "-force-new-samplesheet",
+      Arg.Unit (fun () -> force_new := true),
+      "\n\tDo not check for existing sample-sheets (Default: false).");
     ( "-wall-hours",
       Arg.Set_int wall_hours,
       sprintf "<hours>\n\tWalltime in hours (default: %d)." !wall_hours);
@@ -182,7 +186,7 @@ let start_parse_cmdline usage_prefix args =
   let cmdline = Array.of_list (usage_prefix :: args) in
   begin 
     try Arg.parse_argv cmdline options anon usage;
-        `go (List.rev !anon_args, !sample_sheet_kind,
+        `go (List.rev !anon_args, !sample_sheet_kind, !force_new,
              !user, !queue, !nodes, !ppn,
              !wall_hours, !version, !mismatch,
              !hitscore_command, !make_command, !tiles)
@@ -194,7 +198,7 @@ let start_parse_cmdline usage_prefix args =
 let start hsc prefix cl_args =
   let open Hitscore_threaded in
   begin match (start_parse_cmdline prefix cl_args) with
-  | `go (args, kind, user, queue, nodes, ppn,
+  | `go (args, kind, force_new, user, queue, nodes, ppn,
          wall_hours, version, mismatch, 
          hitscore_command, make_command, tiles) ->
     db_connect hsc
@@ -203,7 +207,7 @@ let start hsc prefix cl_args =
     | [flowcell_or_dir_or_id] ->
       get_hiseq_raw ~dbh flowcell_or_dir_or_id
       >>= fun (hiseq_dir, flowcell) ->
-      get_or_make_sample_sheet ~dbh ~hsc ~kind flowcell
+      get_or_make_sample_sheet ~dbh ~hsc ~kind ~force_new flowcell
       >>= fun sample_sheet ->
       Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
         ~sample_sheet ~hiseq_dir ~hitscore_command
