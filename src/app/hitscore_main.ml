@@ -1244,6 +1244,8 @@ module Prepare_delivery = struct
     let open Hitscore_threaded in
     let open Result_IO in
     let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
+    if not (Filename.is_absolute dir)
+    then (eprintf "%s is not an absolute path" dir; failwith "STOP");
     let work =
       db_connect configuration >>= fun dbh ->
       Unaligned_delivery.run ~dbh ~configuration ?directory_tag
@@ -1620,7 +1622,8 @@ let () =
 
   define_command ~names:["deliver"] ~description:"Deliver links to clients"
     ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s <bcl_to_fastq> <invoice> <dir>\n" exec cmd)
+      fprintf o "Usage: %s <profile> %s <bcl_to_fastq> <invoice> <dir> [<tag>]\n"
+        exec cmd)
     ~run:(fun config exec cmd -> function
     | [bb; inv; dir] -> 
       Some (Prepare_delivery.run_function config bb inv dir None)
