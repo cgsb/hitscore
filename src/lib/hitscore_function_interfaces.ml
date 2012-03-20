@@ -327,15 +327,29 @@ module type COERCE_B2F_UNALIGNED = sig
   open Common
 (**/**)
 
-           
+  
   (** Start *)
   val run :
     dbh:Layout.db_handle ->
     configuration:Configuration.local_configuration ->
     input:Layout.Record_bcl_to_fastq_unaligned.pointer ->
-    (Layout.Record_generic_fastqs.pointer,
-    [> `pg_exn of exn])
-      Result_IO.monad
+    ([ `can_get_result ]
+        Common.Layout.Function_coerce_b2f_unaligned.pointer,
+     [> `cannot_recognize_file_type of string
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
+         [> `file_system
+         | `function_coerce_b2f_unaligned
+         | `record_bcl_to_fastq_unaligned
+         | `record_generic_fastqs ] *
+           [> `add_did_not_return_one of string * int32 list
+           | `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn
+     | `root_directory_not_configured
+     | `system_command_error of string * exn
+     | `wrong_unaligned_volume of string list ])
+      Common.Result_IO.monad
 
 
 end
