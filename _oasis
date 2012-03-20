@@ -51,6 +51,7 @@ Library hitscore
           , Hitscore_delete_intensities
           , Hitscore_common
           , Hitscore_result_IO
+          , Hitscore_generic_fastqs
 
 Executable hitscore
   Path: src/app

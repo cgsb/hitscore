@@ -55,8 +55,12 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   module Unaligned_delivery: Hitscore_function_interfaces.UNALIGNED_DELIVERY
     with module Common = Common
 
-  (** Delete intensity files (for now just registration. *)
+  (** Delete intensity files (for now just registration). *)
   module Delete_intensities: Hitscore_function_interfaces.DELETE_INTENSITIES
+    with module Common = Common
+
+  (** Coerce an Unaligned directory to a generic fastqs directory. *)
+  module Coerce_b2f_unaligned: Hitscore_function_interfaces.COERCE_B2F_UNALIGNED
     with module Common = Common
 
 

@@ -317,3 +317,25 @@ module type DELETE_INTENSITIES = sig
      | `pg_exn of exn ])
       Result_IO.monad
 end
+
+
+(** The module to create “untyped” fastq directories.  *)
+module type COERCE_B2F_UNALIGNED = sig
+
+(**/**)
+  module Common : Hitscore_common.COMMON
+  open Common
+(**/**)
+
+           
+  (** Start *)
+  val run :
+    dbh:Layout.db_handle ->
+    configuration:Configuration.local_configuration ->
+    input:Layout.Record_bcl_to_fastq_unaligned.pointer ->
+    (Layout.Record_generic_fastqs.pointer,
+    [> `pg_exn of exn])
+      Result_IO.monad
+
+
+end
