@@ -205,6 +205,20 @@
           (unaligned bcl_to_fastq_unaligned)
           (invoice invoicing))
 
+(volume generic_fastqs_dir generic_fastqs)
+(record generic_fastqs (directory generic_fastqs_dir))
+(function generic_fastqs coerce_b2f_unaligned
+          (input bcl_to_fastq_unaligned))
+          
+
+(volume fastx_result_dir fastx)
+(record fastx_results
+        (dir fastx_result_dir))
+(function fastx_results fastx_quality_stats
+          (input_dir generic_fastqs)
+          (option_Q int)
+          (filter_names string option))
+
 ;;  
 ;; (function file library_fastx_stats
 ;;           (library_fastqs file)

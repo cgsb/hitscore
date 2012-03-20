@@ -42,6 +42,13 @@ let v051_to_v06 file_in file_out =
     output_string o (Sexplib.Sexp.to_string_hum dump_v06)));
   ()
   
+let add_empty name =
+  let open Sexplib.Sexp in
+  function
+  | Atom a -> assert false
+  | List l ->
+    List (List [Atom name; List []] :: l)
+      
 let v06_to_v07 file_in file_out =
   let dump_v06 =
     In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
@@ -60,7 +67,13 @@ let v06_to_v07 file_in file_out =
         List [Atom "version"; Atom V07.Info.version ] 
       | List l ->
         List (List.map ~f:parse l) in
-    parse  dump_v06 in
+    dump_v06
+    |! add_empty "record_fastx_results"
+    |! add_empty "function_fastx_quality_stats"
+    |! add_empty "record_generic_fastqs"
+    |! add_empty "function_coerce_b2f_unaligned"
+    |! parse
+  in
   
   let () =
     let module V07M = V07.Make (Result_IO) in
