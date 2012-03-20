@@ -17,7 +17,7 @@ module Make_unaligned_coercion
   let run ~dbh ~configuration ~input =
     Layout.Record_bcl_to_fastq_unaligned.(
       get ~dbh input >>= fun {directory} ->
-      Common.paths_of_volume ~dbh ~configuration directory
+      Common.all_paths_of_volume ~dbh ~configuration directory
       >>= fun paths ->
       match paths with
       | [unaligned] -> 
@@ -34,13 +34,7 @@ module Make_unaligned_coercion
           add_volume ~dbh ~kind:`generic_fastqs_dir
             ~hr_tag:"_b2f" ~files:[Opaque ("Unaligned", `opaque)]
           >>= fun vol_pointer ->
-          get_volume_entry ~dbh vol_pointer
-          >>= fun vol_entry ->
-          begin match Configuration.path_of_volume
-              configuration (entry_unix_path vol_entry) with
-              | Some p -> return p 
-              | None -> error `root_directory_not_configured
-          end
+          Common.path_of_volume ~dbh ~configuration vol_pointer
           >>= fun new_vol_path ->
           eprintf "new_vol_path: %s\n%!" new_vol_path;
           ksprintf system_command "mkdir -p %s" new_vol_path >>= fun () ->

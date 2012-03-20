@@ -769,7 +769,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 | _ -> ());
                 Buffer.contents buf  in
               run ~dbh
-                ~fake:(fun x -> Layout.File_system.unsafe_cast_volume x)
+                ~fake:(fun x -> Layout.File_system.unsafe_cast x)
                   ~real:(fun dbh ->
                     Layout.File_system.add_volume ~dbh 
                       ~kind:`protocol_directory
@@ -780,7 +780,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | None ->
               error "Lib: %s, Protocol %S is not in the DB and has no file." 
                 libname name;
-              Ok (Layout.File_system.unsafe_cast_volume (-1l))
+              Ok (Layout.File_system.unsafe_cast (-1l))
             end
             |! (function
               | Ok doc ->
@@ -921,7 +921,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | None ->
             let hr_tag = sprintf "xad_pdf_%s" libname in
             run ~dbh
-              ~fake:(fun x -> Layout.File_system.unsafe_cast_volume x)
+              ~fake:(fun x -> Layout.File_system.unsafe_cast x)
               ~real:(fun dbh ->
                 Layout.File_system.add_volume ~dbh 
                   ~kind:`bioanalyzer_directory
@@ -967,7 +967,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | None ->
             let hr_tag = sprintf "img_%s" libname in
             run ~dbh
-              ~fake:(fun x -> Layout.File_system.unsafe_cast_volume x)
+              ~fake:(fun x -> Layout.File_system.unsafe_cast x)
               ~real:(fun dbh ->
                 Layout.File_system.add_volume ~dbh 
                   ~kind:`agarose_gel_directory

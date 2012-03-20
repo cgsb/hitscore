@@ -562,9 +562,6 @@ module Verify = struct
 
 
   let check_file_system ?(try_fix=false) ?(verbose=true) hsc =
-    let volume_path =
-      Hitscore_threaded.Configuration.path_of_volume_fun hsc |>
-        Option.value_exn_message "Configuration has no root directory" in
     let buffer = ref [] in
     let log fmt =
       let f s = buffer := (`info s) :: !buffer in
@@ -576,57 +573,48 @@ module Verify = struct
     | Ok dbh ->
       let (>>>) x f = Result.ok_exn ~fail:(Failure f) x in
       let vols = Hitscore_db.File_system.get_all ~dbh >>> "File_system.get_all" in
-      List.iter vols ~f:(fun vol -> 
-        Hitscore_db.File_system.get_volume ~dbh vol >>> "Caching volume" |>
-            (fun volume ->
-              let path =
-                volume_path
-                  Hitscore_db.File_system.(volume.volume_entry
-                                              |> entry_unix_path) in
-              if verbose then
-                log "* Checking volume %S\n" path;
-              Unix.(try
-                      let vol_stat = stat path in
-                      if vol_stat.st_kind <> S_DIR then (
-                        error `volume "%S: Not a directory" path;
-                      ) else
-                        if verbose then
-                          log "-> OK\n"
-                        else
-                          ()
-                with
-                | Unix_error (e, _, s) ->
-                  error `volume "%S: %S (%S)" path (error_message e) s;
-                  if try_fix then
-                    begin match ksprintf System.command "mkdir -p %s" path with
-                    | Ok () ->
-                      begin match 
-                          Hitscore_threaded.Access_rights.set_posix_acls ~dbh 
-                            ~configuration:hsc (`dir path) with
+      List.iter vols ~f:(fun volume -> 
+        let path =
+          Hitscore_threaded.Common.path_of_volume ~dbh ~configuration:hsc
+            volume >>> "Getting path"
+        in
+        if verbose then
+          log "* Checking volume %S\n" path;
+        Unix.(try
+                let vol_stat = stat path in
+                if vol_stat.st_kind <> S_DIR then (
+                  error `volume "%S: Not a directory" path;
+                ) else
+                  if verbose then
+                    log "-> OK\n"
+                  else
+                    ()
+          with
+          | Unix_error (e, _, s) ->
+            error `volume "%S: %S (%S)" path (error_message e) s;
+            if try_fix then
+              begin match ksprintf System.command "mkdir -p %s" path with
+              | Ok () ->
+                begin match 
+                    Hitscore_threaded.Access_rights.set_posix_acls ~dbh 
+                      ~configuration:hsc (`dir path) with
                       | Ok () -> log "Fixed %S\n" path;
                       | Error _ -> error `fix "%S: Cannot set ACLs" path
-                      end
-                    | Error _ -> error `fix "%S: Cannot mkdir" path
-                    end);
-              begin match Hitscore_db.File_system.volume_trees volume with
-              | Error (`cannot_recognize_file_type s) ->
-                error `get_files "%S: cannot_recognize_file_type %S" path s
-              | Error (`inconsistency_inode_not_found i) ->
-                error `get_files "%S: inconsistency_inode_not_found %ld" path i
-              | Ok trees ->
-                let paths =
-                  Hitscore_db.File_system.trees_to_unix_paths trees in
-                List.iter paths ~f:(fun s -> 
-                  let filename = Filename.concat path s in
-                  if verbose then log "  \\-> %S\n" filename;
-                  Unix.(
-                    try let file_stat = stat filename in
-                        ignore file_stat
-                    with
-                    | Unix_error (e, _, s) ->
-                      error `file "%S: %S (%S)" filename (error_message e) s);
-                );
-              end))
+                end
+              | Error _ -> error `fix "%S: Cannot mkdir" path
+              end);
+        let all_paths =
+          Hitscore_threaded.Common.all_paths_of_volume ~dbh ~configuration:hsc
+            volume >>> "Getting All paths" in
+        List.iter all_paths ~f:(fun filename -> 
+          if verbose then log "  \\-> %S\n" filename;
+          Unix.(
+            try let file_stat = stat filename in
+                ignore file_stat
+            with
+            | Unix_error (e, _, s) ->
+              error `file "%S: %S (%S)" filename (error_message e) s);
+        ))
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
     end;
@@ -748,13 +736,15 @@ end
 module FS = struct
 
   let add_files_to_volume hsc vol files =
+    failwith "Not implemented any more"
+     (* 
     let open Hitscore_threaded.Result_IO in
     let volume_path = Hitscore_threaded.Configuration.path_of_volume_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       Hitscore_threaded.Layout.File_system.(
-        let vol_cache = get_volume ~dbh (unsafe_cast_volume vol) in
+        let vol_cache = get_volume ~dbh (unsafe_cast vol) in
         begin match vol_cache with 
         | Ok vc ->
           let path = entry_unix_path vc.volume_entry in
@@ -803,7 +793,7 @@ module FS = struct
       )
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-
+     *)
 
 end
 
@@ -1129,7 +1119,7 @@ module Query = struct
                     hiseq_raw.flowcell_name as FCID,
                     bcl_to_fastq.tiles as TILES,
                     g_volume.g_id as VOL_id,
-                    g_volume.g_hr_tag as HR_TAG
+                    g_volume.g_sexp
              from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume, hiseq_raw
              where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
                    bcl_to_fastq_unaligned.directory = g_volume.g_id AND
@@ -1142,10 +1132,9 @@ module Query = struct
             (if n > 1 then "s" else "")
             (String.concat ~sep:"\n" 
                (List.map results
-                  (fun (i, fc, til, v, hr) ->
+                  (fun (i, fc, til, v, sexp) ->
                     sprintf " % 4ld: %- 10s %- 40S --> % 4ld %s" i fc
-                      (Option.value ~default:"N/A" til) v
-                      (Option.value ~default:"N/A" hr))))
+                      (Option.value ~default:"N/A" til) v sexp)))
         end));
     ("invoices", 
      (["List of invoices."],
@@ -1187,7 +1176,7 @@ module Query = struct
             "select bcl_to_fastq.g_id as B2F_id,
                     bcl_to_fastq.tiles as TILES,
                     g_volume.g_id as VOL_id,
-                    g_volume.g_hr_tag as HR_TAG
+                    g_volume.g_sexp
              from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume, hiseq_raw
              where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
                    bcl_to_fastq_unaligned.directory = g_volume.g_id AND
@@ -1208,10 +1197,9 @@ module Query = struct
         | n ->
           printf "Found %d bcl-to-fastqs%s:\n%s\n" n 
             (if n > 1 then "s" else "")
-            (List.map b2fs (fun (id, tiles, volid, hrtag) ->
+            (List.map b2fs (fun (id, tiles, volid, sexp) ->
               sprintf "% 4ld (tiles: %s, result: %ld/%s)" id
-                      (Option.value ~default:"N/A" tiles) volid
-                      (Option.value ~default:"N/A" hrtag))
+                      (Option.value ~default:"N/A" tiles) volid sexp)
               |! String.concat ~sep:"\n")
         end;
      ));

@@ -1,6 +1,9 @@
 
 module Make
-  (Common: Hitscore_common.COMMON) = struct
+  (Common: Hitscore_common.COMMON):
+  Hitscore_function_interfaces.BCL_TO_FASTQ
+  with module Common = Common
+ = struct
 
     module Common = Common
     open Common
@@ -32,21 +35,12 @@ module Make
       Layout.Record_sample_sheet.(
         get ~dbh sample_sheet
         >>= fun { file; _ } ->
-        Layout.File_system.(
-          get_volume ~dbh file
-          >>= fun vc -> (volume_trees vc |! IO.return) >>| trees_to_unix_paths 
-          >>= function
-          | [one] ->
-            let vol = vc.volume_entry |! entry_unix_path in
-            begin match Configuration.path_of_volume_fun configuration with
-            | Some vol_path ->
-              return (sprintf "%s/%s" (vol_path vol) one)
-            | None -> 
-              error `root_directory_not_configured
-            end
-          | [] -> error (`empty_sample_sheet_volume (file, sample_sheet))
-          | more -> error (`more_than_one_file_in_sample_sheet_volume 
-                              (file, sample_sheet, more))))
+        Common.all_paths_of_volume ~dbh ~configuration file
+        >>= function
+        | [one] -> return one
+        | [] -> error (`empty_sample_sheet_volume (file, sample_sheet))
+        | more -> error (`more_than_one_file_in_sample_sheet_volume 
+                            (file, sample_sheet, more)))
       >>= fun sample_sheet_path ->
       Layout.Record_hiseq_raw.(
         get ~dbh hiseq_dir >>= fun {hiseq_dir_name; _} ->
@@ -199,17 +193,14 @@ module Make
         add_volume ~dbh ~hr_tag:(Filename.basename result_root)
           ~kind:`bcl_to_fastq_unaligned_opaque ~files
         >>= fun vol ->
-        get_volume_entry ~dbh vol
-        >>= fun vol_ec ->
-        return (vol, entry_unix_path vol_ec))
+        Common.path_of_volume ~dbh ~configuration vol
+        >>= fun vol_path ->
+        return (vol, vol_path))
       >>= fun (directory, path_vol) ->
       let move_m =
-        match Configuration.path_of_volume configuration path_vol with
-        | Some vol_dir -> 
-          ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
-          ksprintf system_command "mv %s/* %s/" result_root vol_dir >>= fun () ->
-          Access_rights.set_posix_acls ~dbh (`dir vol_dir) ~configuration
-        | None -> error `root_directory_not_configured
+        ksprintf system_command "mkdir -p %s/" path_vol >>= fun () ->
+        ksprintf system_command "mv %s/* %s/" result_root path_vol >>= fun () ->
+        Access_rights.set_posix_acls ~dbh (`dir path_vol) ~configuration
       in
       double_bind move_m
         ~ok:(fun () ->
@@ -225,17 +216,14 @@ module Make
           return (`success success))
         ~error:(fun e ->
           Layout.File_system.(
-            get_volume ~dbh directory
-            >>= fun cache ->
-            delete_volume ~dbh cache
+            delete_volume ~dbh directory.id
             >>= fun () ->
-            return (sexp_of_volume cache))
-          >>= fun sexp ->
+            return (directory.id))
+          >>= fun volid ->
           Layout.Function_bcl_to_fastq.set_failed ~dbh bcl_to_fastq
           >>= fun failed ->
           Layout.Record_log.add_value ~dbh
-            ~log:(sprintf "(delete_orphan_volume %s)"
-                    (Sexplib.Sexp.to_string_hum sexp))
+            ~log:(sprintf "(delete_orphan_volume (id %ld))" volid)
           >>= fun _ ->
           Layout.Record_log.add_value ~dbh
             ~log:(sprintf "(set_bcl_to_fastq_failed %ld)" 

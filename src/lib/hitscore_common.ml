@@ -42,11 +42,39 @@ module type COMMON = sig
     configuration:Configuration.local_configuration ->
     string -> (string, [> `raw_data_path_not_configured]) Result_IO.monad
     
-  (** Get all the relative paths of a given volume pointer. *) 
-  val paths_of_volume:
+  (** Convert a list of file-system trees to unix paths relative to a
+      volume. *)
+  val trees_to_unix_relative_paths:
+    Layout.File_system.tree list -> string list
+
+  (** Get the directory corresponding to a given volume (i.e. something
+      like ["vol/0000042_HumanReadable"]). *)
+  val volume_unix_directory:
+    ?hr_tag: string ->
+    id:int32 ->
+    kind:Layout.Enumeration_volume_kind.t ->
+    string
+      
+  (** Get all the full paths of a given volume pointer. *) 
+  val path_of_volume:
     configuration:Configuration.local_configuration ->
     dbh:Layout.db_handle ->
-    Layout.File_system.volume_pointer ->
+    Layout.File_system.pointer ->
+    (string,
+     [> `cannot_recognize_file_type of string
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
+         [> `file_system ] *
+           [> `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn
+     | `root_directory_not_configured ])
+      Result_IO.monad
+
+  (** Get all the full paths of a given volume pointer. *) 
+  val all_paths_of_volume:
+    configuration:Configuration.local_configuration ->
+    dbh:Layout.db_handle ->
+    Layout.File_system.pointer ->
     (string list,
      [> `cannot_recognize_file_type of string
      | `inconsistency_inode_not_found of int32
@@ -120,22 +148,57 @@ module Make
     | Some s -> return (Filename.concat s dir_name)
     | None -> error `raw_data_path_not_configured
       
+  let trees_to_unix_relative_paths trees =
+    let open Layout.File_system in
+    let paths = ref [] in
+    let rec descent parent = function
+      | File (n, _) -> paths := (parent ^ n) :: !paths
+      | Opaque (n, _) -> paths := (parent ^ n ^ "/") :: !paths
+      | Directory (n, _, l) -> List.iter l (descent (parent ^ n ^ "/"))
+    in
+    List.iter trees (descent "");
+    !paths
+      
+  let volume_unix_directory ?hr_tag ~id ~kind =
+    let toplevel = Layout.File_system.toplevel_of_kind kind in
+    sprintf "%s/%09ld%s" toplevel id
+      (Option.value_map ~default:"" hr_tag ~f:((^) "_"))
 
-  let paths_of_volume ~configuration ~dbh volume_pointer =
-    Layout.File_system.(
-      get_volume ~dbh volume_pointer
-      >>= fun vc ->
-      (volume_trees vc |! of_result) >>| trees_to_unix_paths 
-      >>= fun relative_paths ->
-      let vol = vc.volume_entry |! entry_unix_path in
+
+  let rec path_of_volume ~configuration ~dbh volume_pointer =
+    let open Layout.File_system in
+    get_volume ~dbh volume_pointer
+    >>= fun { volume_pointer = { id }; volume_content } ->
+    match volume_content with
+    | Tree (kind, hr_tag, trees) ->
+      let vol = volume_unix_directory ~id ~kind ?hr_tag in
+      begin match Configuration.path_of_volume_fun configuration with
+      | Some vol_path ->
+        return (vol_path vol)
+      | None -> 
+        error `root_directory_not_configured
+      end
+    | Link pointer ->
+      path_of_volume ~configuration ~dbh pointer
+
+  let rec all_paths_of_volume ~configuration ~dbh volume_pointer =
+    let open Layout.File_system in
+    get_volume ~dbh volume_pointer
+    >>= fun { volume_pointer = { id }; volume_content } ->
+    match volume_content with
+    | Tree (kind, hr_tag, trees) ->
+      let relative_paths = trees_to_unix_relative_paths trees in
+      let vol = volume_unix_directory ~id ~kind ?hr_tag in
       begin match Configuration.path_of_volume_fun configuration with
       | Some vol_path ->
         return (List.map relative_paths (Filename.concat (vol_path vol)))
       | None -> 
         error `root_directory_not_configured
-      end)
+      end
+    | Link pointer ->
+      all_paths_of_volume ~configuration ~dbh pointer
 
 
 
-      
+        
 end

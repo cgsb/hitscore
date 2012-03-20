@@ -81,6 +81,8 @@ let display_errors = function
     | `there_is_more_than_unaligned l ->
       printf "UNEXPECTED-LAYOUT: there is more than one unaligned directory\n";
       List.iter l (printf " * %S\n")
+    | `fatal_error (`add_volume_did_not_create_a_tree_volume v) ->
+      printf "DATABASE-ERROR: add_volume_did_not_create_a_tree_volume!\n"
     end
 
 let get_hiseq_raw ~dbh s =
@@ -368,13 +370,10 @@ let info hsc id_or_dir =
         Layout.Record_bcl_to_fastq_unaligned.(
           get ~dbh b2fu >>= fun { directory } -> return directory)
         >>= fun vol ->
-        Layout.File_system.(
-          get_volume ~dbh vol >>= fun volume ->
-          let vol_path = entry_unix_path volume.volume_entry in
-          of_result (volume_trees volume) >>| trees_to_unix_paths
-          >>= function
-          | [ unaligned ] -> return (Filename.concat vol_path unaligned)
-          | l -> error (`there_is_more_than_unaligned l))
+        Common.all_paths_of_volume ~dbh ~configuration:hsc vol
+        >>= (function
+        | [ unaligned ] -> return  unaligned
+        | l -> error (`there_is_more_than_unaligned l))
         >>= fun unaligned ->
         return (Filename.concat unaligned (sprintf "Basecall_Stats_%s" fcid))
       in

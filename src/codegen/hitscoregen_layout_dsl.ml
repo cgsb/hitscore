@@ -340,14 +340,8 @@ let to_db dsl =
   let filesystem = [
     Psql.({ name = "g_volume"; fields = [
       ("g_id", Identifier, [Not_null]);
-      ("g_toplevel", Text, [Not_null]);
-      ("g_hr_tag", Text, []);
-      ("g_content", Pointer ("g_file", "g_id"), [Array; Not_null]);] });
-    Psql.({ name = "g_file"; fields = [
-      ("g_id", Identifier, [Not_null]);
-      ("g_name", Text, [Not_null]);
-      ("g_type", Text, [Not_null]);
-      ("g_content", Pointer ("g_file", "g_id"), [Array; Not_null]);] });
+      ("g_sexp", Text, [Not_null]);
+    ]})
   ] in
   let nodes =
     List.map dsl.nodes (function

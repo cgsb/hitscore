@@ -10,7 +10,7 @@ module Make
     open Common
     open Hitscore_std
     open Result_IO
-
+(*
     let volume_relative_paths ~dbh ~configuration vol_pointer =
       Layout.File_system.(
         get_volume ~dbh vol_pointer >>= fun ({volume_entry; _} as volume) ->
@@ -21,7 +21,7 @@ module Make
           let prefix = Filename.concat w (entry_unix_path volume_entry) in
           return (List.map (trees_to_unix_paths vol_trees) 
                     ~f:(Filename.concat prefix)))
- 
+*)
     let debug fmt =
       ksprintf debug fmt
     let cmd fmt =
@@ -42,7 +42,7 @@ module Make
       >>= fun unaligned ->
       Layout.Record_bcl_to_fastq_unaligned.(
         get ~dbh unaligned >>= fun {directory} -> return directory)
-      >>= volume_relative_paths ~dbh ~configuration 
+      >>= Common.all_paths_of_volume ~dbh ~configuration
       >>= (function [one] -> return one | l -> error (`wrong_unaligned_volume l))
       >>= fun unaligned_path ->
       debug "unaligned_path: %S\n" unaligned_path >>= fun () ->

@@ -45,7 +45,9 @@ run ~dbh ~kind:`specific_barcodes ~configuration "FC11IDXXX" >>= function
            Layout.Record_sample_sheet.pointer ],
      [> `barcode_not_found of
          int32 * Layout.Enumeration_barcode_provider.t
-     | `fatal_error of [> `trees_to_unix_paths_should_return_one ]
+     | `fatal_error of
+         [>`add_volume_did_not_create_a_tree_volume  of Layout.File_system.pointer
+         | `trees_to_unix_paths_should_return_one ]
      | `layout_inconsistency of
          [> `file_system
          | `function_assemble_sample_sheet
@@ -126,7 +128,7 @@ start ~dbh ~configuration       (* common arguments *)
            Layout.Function_bcl_to_fastq.pointer ],
      [> `cannot_recognize_file_type of string
      | `empty_sample_sheet_volume of
-         Layout.File_system.volume_pointer *
+         Layout.File_system.pointer *
            Layout.Record_sample_sheet.pointer
      | `hiseq_dir_deleted
      | `inconsistency_inode_not_found of int32
@@ -143,7 +145,7 @@ start ~dbh ~configuration       (* common arguments *)
                Layout.Record_inaccessible_hiseq_raw.pointer
            | `select_did_not_return_one_tuple of string * int ]
      | `more_than_one_file_in_sample_sheet_volume of
-         Layout.File_system.volume_pointer *
+         Layout.File_system.pointer *
            Layout.Record_sample_sheet.pointer * string list
      | `pg_exn of exn
      | `root_directory_not_configured
@@ -165,25 +167,29 @@ start ~dbh ~configuration       (* common arguments *)
     bcl_to_fastq:[> `can_complete ]
       Layout.Function_bcl_to_fastq.pointer ->
     result_root:string ->
-    ([ `failure of
-        [ `can_nothing ] Layout.Function_bcl_to_fastq.pointer *
-                 [> `layout_inconsistency of
-                     [> `record_log | `record_person ] *
-                       [> `insert_did_not_return_one_id of string * int32 list
-                       | `select_did_not_return_one_tuple of string * int ]
-                 | `pg_exn of exn
-                 | `root_directory_not_configured
-                 | `system_command_error of string * exn ]
+    ([> `failure of
+        [ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer *
+          [> `layout_inconsistency of
+              [> `record_log | `record_person ] *
+                [> `insert_did_not_return_one_id of string * int32 list
+                | `select_did_not_return_one_tuple of string * int ]
+          | `pg_exn of exn
+          | `system_command_error of string * exn ]
      | `success of
-         [ `can_get_result ] Layout.Function_bcl_to_fastq.pointer ],
-     [> `layout_inconsistency of
+         [ `can_get_result ]
+           Common.Layout.Function_bcl_to_fastq.pointer ],
+     [> `cannot_recognize_file_type of string
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
          [> `file_system
          | `record_bcl_to_fastq_unaligned
          | `record_log ] *
            [> `add_did_not_return_one of string * int32 list
            | `insert_did_not_return_one_id of string * int32 list
            | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ]) Result_IO.monad
+     | `pg_exn of exn
+     | `root_directory_not_configured ])
+      Common.Result_IO.monad
 
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)

@@ -217,21 +217,26 @@ module Make
       )
 
     let get_target_file ~dbh sample_sheet =
-      let files = Layout.File_system.Tree.([file "SampleSheet.csv"]) in
-      Layout.File_system.add_volume ~dbh
+      let open Layout.File_system in
+      let files = Tree.([file "SampleSheet.csv"]) in
+      add_volume ~dbh
         ~hr_tag:(sprintf "%s_%s" sample_sheet.flowcell_name 
                    (Layout.Enumeration_sample_sheet_kind.to_string
                       sample_sheet.kind))
         ~kind:`sample_sheet_csv ~files
       >>= fun file ->
-      Layout.File_system.get_volume_entry ~dbh file 
-      >>= fun vol_entry ->
-      Layout.File_system.(
-        match trees_to_unix_paths files with
+      get_volume ~dbh file 
+      >>= function
+      | { volume_pointer = { id };
+          volume_content = Tree (kind, hr_tag, trees) } ->
+        begin match Common.trees_to_unix_relative_paths files with
         | [ one_path ] ->
-          return (file, entry_unix_path vol_entry, one_path)
+          return (file, Common.volume_unix_directory ~id ~kind ?hr_tag, one_path)
         | _ ->
-          error (`fatal_error `trees_to_unix_paths_should_return_one))
+          error (`fatal_error `trees_to_unix_paths_should_return_one)
+        end
+      | _ ->
+        error (`fatal_error (`add_volume_did_not_create_a_tree_volume file))
 
 
     let register_with_success ~dbh ?note ~file sample_sheet =
@@ -288,15 +293,12 @@ module Make
                         (Layout.Enumeration_sample_sheet_kind.to_string kind))
               >>= fun _ ->
               Layout.File_system.(
-                get_volume ~dbh the_volume
-                >>= fun cache ->
-                delete_volume ~dbh cache
+                delete_volume ~dbh the_volume.id
                 >>= fun () ->
-                return (sexp_of_volume cache))
-              >>= fun sexp ->
+                return the_volume.id)
+              >>= fun id ->
               Layout.Record_log.add_value ~dbh
-                ~log:(sprintf "(delete_orphan_volume %s)"
-                        (Sexplib.Sexp.to_string_hum sexp))
+                ~log:(sprintf "(delete_orphan_volume (id %ld))" id)
               >>= fun _ ->
               return (`new_failure (failed, e)))
 
