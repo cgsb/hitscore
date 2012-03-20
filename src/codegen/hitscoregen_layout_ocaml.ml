@@ -870,7 +870,6 @@ let ocaml_toplevel_values_and_types ~out ~fashion dsl =
   line out_ml "let get_all_values %s:" pgocaml_db_handle_arg;
   ocaml_poly_result_io out "value list" ["`pg_exn of exn";];
   line out_ml " =";
-  (* FUTURE: (OCaml_hiden_exception.(poly_type_global (all_gets ()))) *)
   pgocaml_to_result_io out_ml 
     ~transform_exceptions:
     (OCaml_hiden_exception.(List.map ~f:transform_global (all_gets ())))
@@ -883,7 +882,6 @@ let ocaml_toplevel_values_and_types ~out ~fashion dsl =
   line out_ml "let get_all_evaluations %s:" pgocaml_db_handle_arg;
   ocaml_poly_result_io out "[`can_nothing] evaluation list" ["`pg_exn of exn";];
   line out_ml " =";
-  (* FUTURE: (OCaml_hiden_exception.(poly_type_global (all_gets ()))) *)
   pgocaml_to_result_io out_ml 
     ~transform_exceptions:
     (OCaml_hiden_exception.(List.map ~f:transform_global (all_gets ())))
