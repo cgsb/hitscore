@@ -1,0 +1,76 @@
+#! /bin/sh
+
+case $1 in
+    ""|"-h"|"-help"|"--help")
+        echo "usage: ./bin/hsocaml <profile> [<ml-file>]"
+        exit 2;;
+    *)
+        ;;
+esac
+profile="$1"
+  
+file_to_use=/tmp/hsocaml.ml
+
+cat <<EOF > $file_to_use
+
+#use "topfind"
+#thread
+#require "hitscore"
+open Core.Std
+open Result
+let () = printf "--> Open Core.Std, Result\n"
+module HS = Hitscore.Make(Hitscore.Preemptive_threading_config)
+let () = printf "--> Hiscore.Made -> HS\n"
+open HS
+open Result_IO
+let () = printf "--> Open HS, Result_IO\n"
+
+let ok_exn a = ok_exn ~fail:(Failure "Not Ok") a
+let () = printf "--> ok_exn\n"
+
+let default_config () =
+  sprintf "$HOME/.config/hitscore/config.sexp"
+
+let configuration =
+  let config_file, profile_name =
+    match String.split "$profile" ~on:':' with
+    | [ one ] ->
+      (default_config (), one)
+    | [ one; two ] ->
+      (one, two)
+    | _ -> failwithf "Can't understand: %s" "$profile" ()
+  in
+  let config = In_channel.(with_file config_file ~f:input_all) in
+  let hitscore_config =
+    Configuration.(
+    parse_str config
+    >>= fun c ->
+    use_profile c "$profile")
+  |! function
+    | Ok o -> o
+    | Error (\`configuration_parsing_error e) ->
+      eprintf "Error while parsing configuration: %s\n" (Exn.to_string e);
+      failwith "STOP"
+    | Error (\`profile_not_found s) ->
+      eprintf "Profile %S not found in config-file\n" s;
+      failwith "STOP"
+   in
+   hitscore_config
+let () = printf "--> configuration\n"
+EOF
+
+ocaml_init=/tmp/ocaml_init_hs.ml
+
+cat <<EOF > $ocaml_init
+
+Toploop.use_silently Format.err_formatter "$file_to_use";;
+
+EOF
+
+if [ -f "$2" ]; then
+  echo "Adding $2"
+  cat $2 >> $ocaml_init
+fi
+
+ledit ocaml -init $ocaml_init 
+
