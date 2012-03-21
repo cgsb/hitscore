@@ -66,8 +66,7 @@ let v06_to_v07 file_in file_out =
       | Atom a -> Atom a
       | List [Atom "version"; Atom old_version]
           when old_version = V06.Info.version ->
-        List [Atom "version"; Atom "0.7-dev" ] 
-        (* List [Atom "version"; Atom V07.Info.version ]  *)
+        List [Atom "version"; Atom V07.Info.version ]
 
       | List [Atom "file_system"; List volume_sexps] ->
         let module FS06 = V06M.File_system in
@@ -94,6 +93,17 @@ let v06_to_v07 file_in file_out =
             })) in
         let v07_sexps = List.map v07_volumes FS07.sexp_of_volume in
         List [Atom "file_system"; List v07_sexps]
+
+      | List [Atom "record_client_fastqs_dir"; List records] ->
+        let records07 =
+          List.map records (function
+          | Atom _ -> assert false
+          | List l ->
+            List (List.map l (function
+            | List [Atom "dir"; Atom s] -> List [Atom "directory"; Atom s] 
+            | s -> s)))
+        in
+        List [Atom "record_client_fastqs_dir"; List records07]
 
       | List l ->
         List (List.map ~f:parse l) in
