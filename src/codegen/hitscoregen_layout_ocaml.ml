@@ -918,36 +918,12 @@ let ocaml_file_system_module ~fashion ~out dsl =
   line out_mli "val unsafe_cast: int32 -> pointer";
   line out_ml "let unsafe_cast id = { id }";
 
-  (* doc out "The [file_pointer] represents a handle to a file in the DB."; *)
-  (* ocaml_sexped_type ~out ~name:"file_pointer" ~fashion  *)
-  (*   ~privated:true "{ inode: int32 }"; *)
-
-  (* doc out "Unsafely create a pointer."; *)
-  (* line out_mli "val unsafe_cast_file: int32 -> file_pointer"; *)
-  (* line out_ml "let unsafe_cast_file inode = { inode }"; *)
-
   doc out "The specification of file-trees.";
   ocaml_sexped_type ~out ~name:"tree" ~fashion
     (String.concat ~sep:"\n" [
       "  | File of string * Enumeration_file_type.t";
       "  | Directory of string * Enumeration_file_type.t * tree list";
       "  | Opaque of string * Enumeration_file_type.t";]);
-
-  (* doc out "Contents of a file \"record\"."; *)
-  (* line *)
-  (*   (ocaml_sexped_type ~out ~name:"file_entry" ~fashion) *)
-  (*   "{%s}" *)
-  (*   (List.map (id_field :: file_fields) (fun (s, t) -> *)
-  (*     sprintf "  %s: %s;" (file_ocaml_field s) (ocaml_type t)) *)
-  (*     |! String.concat ~sep:""); *)
-
-  (* doc out "Contents of a volume \"record\"."; *)
-  (* line *)
-  (*   (ocaml_sexped_type ~out ~name:"volume_entry" ~fashion) *)
-  (*   "{%s}" *)
-  (*   (List.map (id_field :: volume_fields) (fun (s, t) -> *)
-  (*     sprintf "  %s: %s;" (volume_ocaml_field s) (ocaml_type t)) *)
-  (*       |! String.concat ~sep:""); *)
 
   doc out "The volume content is …";
   ocaml_sexped_type ~out ~name:"volume_content" ~fashion
@@ -1005,44 +981,14 @@ let ocaml_file_system_module ~fashion ~out dsl =
   pgocaml_to_result_io out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert;
   ] (fun out ->
-    (*
-    line out "let added_file_list_monad = map_s ~f:(_add_tree_exn ~dbh) files in";
-    line out "pg_bind (added_file_list_monad) (fun file_list -> \n";
-    line out "     let pg_inodes = array_map (list_to_array file_list) \n\
-                       (fun { inode } ->  inode) in"; *)
     line out "let sexp = sexp_of_volume_content (Tree (hr_tag, files)) in";
     line out "let str_sexp = Sexplib.Sexp.to_string_hum sexp in";
     line out "let str_kind = Enumeration_volume_kind.to_string kind in";
     pgocaml_add_to_database_exn "g_volume" 
       (List.map volume_fields fst) [ "$str_kind"; "$str_sexp" ]
       ~out ~on_not_one_id ~id:"id";
-    (* line out ")"; *)
   );
-(* TODO: REPLACE
-  doc out "Add a tree to an existing volume.";
-  line out_mli "val add_tree_to_volume: \
-              dbh:db_handle -> volume_pointer -> tree list -> ";
-  ocaml_poly_result_io out_mli "unit" [
-    (OCaml_hiden_exception.poly_type_local [wrong_insert]);
-    "`pg_exn of exn";
-  ];
-  line out_ml "let add_tree_to_volume %s (volume: volume_pointer) tree =" 
-    pgocaml_db_handle_arg;
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
-    OCaml_hiden_exception.transform_local wrong_insert;
-  ] (fun out ->
-    line out "let added_file_list_monad = map_s ~f:(_add_tree_exn ~dbh) tree in";
-    line out "pg_bind (added_file_list_monad) (fun file_list -> \n";
-    line out "     let pg_inodes = array_map (list_to_array file_list) \n\
-                       (fun { inode } ->  inode) in";
-    line out "     let vol_id = volume.id in";
-    line out "     PGSQL (dbh)";
-    line out "       %S)"
-      "UPDATE g_volume \
-      SET g_content = ARRAY_CAT(g_content, $pg_inodes) \
-      WHERE g_id = $vol_id";
-  );
-*)
+
   doc out "Module for constructing file trees less painfully.";
   line out_ml "module Tree = struct";
   line out_ml "let file ?(t=`blob) n = File (n, t)";
@@ -1079,23 +1025,7 @@ end
     OCaml_hiden_exception.throw wrong_cache_select out
       (sprintf "(%S, List.length %s)" table_name returned) in
   OCaml_hiden_exception.define wrong_cache_select out_ml;
-(*
-  hide out_ml (fun out ->
-    doc out "Retrieve a file from the DB.";
-    line out "let get_file_exn (file: file_pointer) %s: \
-                  file_entry PGOCaml.monad =\n" pgocaml_db_handle_arg;
-    line out "  let tuple_m =";
-    pgocaml_select_from_one_by_id_exn 
-      ~out ~on_not_one_id ~get_id:"file.inode" "g_file";
-    line out "  in";
-    line out " pg_bind tuple_m (fun (%s,%s) -> " (fst id_field)
-      (List.map file_fields ~f:fst |! String.concat ~sep:", ");
-    line out "    pg_return {";
-    List.iter (id_field :: file_fields) (fun (v, t) ->
-      line out "      %s = %s;" (file_ocaml_field v) (convert_pgocaml_type (v, t)));
-    line out "    })\n";
-  );
-*)
+
   hide out_ml (fun out ->     
     raw out "let get_volume_exn (volume_pointer: pointer) %s: \
                   volume PGOCaml.monad =\n" pgocaml_db_handle_arg;
@@ -1109,10 +1039,6 @@ end
         volume_pointer;
         volume_kind = Enumeration_volume_kind.of_string_exn g_kind;
         volume_content = volume_content_of_sexp (Sexplib.Sexp.of_string g_sexp);}) ";
-    (* List.iter (id_field :: volume_fields) (fun (v, t) -> *)
-      (* line out "      %s = %s;" (volume_ocaml_field v) *)
-        (* (convert_pgocaml_type (v, t))); *)
-    (* line out "    })\n"; *)
   );
 
   doc out "Retrieve the \"entry\" part of a volume from the DB.";
@@ -1130,81 +1056,6 @@ end
     line out "get_volume_exn ~dbh pointer";
   );
 
-(*  hide out_ml (fun out ->
-    doc out "[get_volume_exn] is for internal use only.";
-    line out "let get_volume_exn %s (volume: volume_pointer) : \
-              volume Result_IO.IO.t ="
-      pgocaml_db_handle_arg;
-    line out "  let entry_m = get_volume_entry_exn ~dbh volume in";
-    line out "  pg_bind entry_m (fun volume_entry ->";
-    line out "    let files = ref ([] : file_entry list) in";
-    line out "    let contents = volume_entry.v_content in";
-    line out "    let rec get_contents arr =";
-    line out "      let contents = array_to_list arr in";
-    line out "      let f inode = get_file_exn ~dbh { inode } in";
-    line out "      pg_bind (map_s ~f contents) (fun fs ->";
-    line out "        files := list_append fs !files;";
-    line out "        let todo = list_map fs (fun t -> t.f_content) in";
-    line out "        pg_bind (map_s ~f:get_contents todo)";
-    line out "          (fun _ -> pg_return ())) in";
-    line out "    pg_bind (map_s ~f:get_contents [ contents ])";
-    line out "      (fun _ -> pg_return {volume_entry; files = !files}))";
-  );
-
-  doc out "Retrieve a \"whole\" volume.";
-  line out_ml "let get_volume %s (volume_pointer: volume_pointer) :"
-    pgocaml_db_handle_arg;
-  line out_mli "val get_volume: dbh:db_handle -> volume_pointer ->";
-  ocaml_poly_result_io out "volume" [
-    (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
-    "`pg_exn of exn";
-  ];
-  line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
-    OCaml_hiden_exception.transform_local wrong_cache_select;
-  ] (fun out ->
-    line out "get_volume_exn ~dbh volume_pointer";
-  );
-  hide out_ml (fun out -> line out "exception Inode_not_found of int32");
-*)
-  
-(*  doc out "Get a list of trees `known' for a given volume.";
-  line out_ml "let volume_trees (vol : volume) : \
-            (tree list, [> `inconsistency_inode_not_found of int32 \
-                         | `cannot_recognize_file_type of string ]) \
-             Core.Std.Result.t =";
-  line out_mli "val volume_trees: volume -> \
-            (tree list, [> `inconsistency_inode_not_found of int32 \
-                         | `cannot_recognize_file_type of string ]) \
-             Core.Std.Result.t";
-  line out_ml "  let files = vol.files in";
-  line out_ml "  let find_file i = \
-            match list_find files (fun t -> t.f_id = i) with";
-  line out_ml "    | Some f -> f";
-  line out_ml "     | None -> raise (Inode_not_found i)";
-  line out_ml " in\n";
-  line out_ml "  let rec go_through_cache inode =";
-  line out_ml "    match find_file inode with";
-  (* For the future: when the file types are customizable, 
-     this will have to change.  *)
-  line out_ml "    | {f_name; f_type = `opaque; f_content = [||]} -> \
-                    Opaque (f_name, `opaque)";
-  line out_ml "    | {f_name; f_type = `directory; f_content} ->";
-  line out_ml "      let l = array_to_list f_content in\n \
-                    Directory (f_name, `directory, \
-                      (list_map l go_through_cache))";
-  line out_ml "    | {f_name; f_type = `blob; f_content = [||]} ->";
-  line out_ml "        File (f_name, `blob)";
-  line out_ml "    | {f_name; _} -> raise (Inode_not_found inode)";
-  line out_ml "  in";
-  line out_ml "  let vol_content = list_map vol.files (fun f -> f.f_id) in";
-  line out_ml "  begin try Core.Std.Ok (list_map vol_content go_through_cache)";
-  line out_ml "  with\n  | Inode_not_found inode ->";
-  line out_ml "    Core.Std.Error (`inconsistency_inode_not_found inode)";
-  line out_ml "  | Enumeration_file_type.Of_string_error s ->";
-  line out_ml "    Core.Std.Error (`cannot_recognize_file_type s)";
-  line out_ml "  end";
-*)
   doc out "{3 Low-level Access}";
 
   let wrong_cache_insert = 
@@ -1216,39 +1067,6 @@ end
       (sprintf "(%S, %s)" table_name returned) in
   OCaml_hiden_exception.define wrong_cache_insert out_ml;
 
-    (*
-  let insert_cache_exn out =
-    line out "  let inserted_files_monad = map_s ~f:(fun f ->";
-
-    List.iter (id_field :: file_fields) ~f:(fun (s, t) ->
-      line out "  let %s = f.%s in" s (file_ocaml_field s);
-      line out "  %s" (let_in_typed_value (s,t))
-    );
-    let all_field_names = List.map (id_field :: file_fields) fst in
-    let all_field_names_prefixed =
-      let prefix (n, t) =
-        match type_is_option t with 
-          `yes -> sprintf "$?%s" n | `no -> sprintf "$%s" n in 
-      List.map (id_field :: file_fields) prefix in
-    pgocaml_insert_in_db_with_id_exn
-      ~out ~on_not_one_id "g_file" all_field_names all_field_names_prefixed;
-
-    line out "      )  vol.files in";
-    line out "  pg_bind inserted_files_monad (fun _ ->";
-    List.iter (id_field :: volume_fields) ~f:(fun (s, t) ->
-      line out "  let %s = vol.volume_entry.%s in" s (volume_ocaml_field s);
-      line out "  %s" (let_in_typed_value (s,t))
-    );
-    let all_field_names = List.map (id_field :: volume_fields) fst in
-    let all_field_names_prefixed =
-      let prefix (n, t) =
-        match type_is_option t with 
-          `yes -> sprintf "$?%s" n | `no -> sprintf "$%s" n in 
-      List.map (id_field :: volume_fields) prefix in
-
-    line out ")";
-  in
-    *)
   hide out_ml (fun out ->
     line out "let insert_volume_exn %s (volume: volume): \
             pointer PGOCaml.monad = " pgocaml_db_handle_arg;
@@ -1291,30 +1109,6 @@ end
   pgocaml_to_result_io out_ml ~transform_exceptions:[] (fun out ->
     line out "  delete_volume_exn ~dbh id";
   );
-(*
-  let unix_sep = "/" in
-  doc out "{3 Unix paths }";
-  doc out "Create a Unix directory path for a volume-entry (relative
-            to a `root').";
-  line out_mli "val entry_unix_path: volume -> string";
-  line out_ml  "let entry_unix_path (ve: volume_entry): string =";
-  line out_ml "  Printf.sprintf \"%%s/%%09ld%%s\" ";
-  line out_ml "    ve.v_toplevel ve.v_id";
-  line out_ml "    (option_value_map ~default:\"\" ve.v_hr_tag ~f:((^) \"_\"))";
-
-  doc out "Convert a bunch of trees to a list of Unix paths.";
-  line out_mli "val trees_to_unix_paths: tree list -> string list";
-  line out_ml "let trees_to_unix_paths trees =";
-  line out_ml "  let paths = ref [] in";
-  line out_ml "  let rec descent parent = function";
-  line out_ml "  | File (n, _) -> paths := (parent ^ n) :: !paths";
-  line out_ml "  | Opaque (n, _) -> paths := (parent ^ n ^ %S) :: !paths" unix_sep;
-  line out_ml "  | Directory (n, _, l) -> list_iter l (descent (parent ^ n ^ %S))"
-    unix_sep;
-  line out_ml "  in";
-  line out_ml "  list_iter trees (descent \"\");";
-  line out_ml "  !paths";
-*)
   
   line out "end (* File_system *)";
   ()
