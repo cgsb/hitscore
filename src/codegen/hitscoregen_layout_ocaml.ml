@@ -976,6 +976,16 @@ let ocaml_file_system_module ~fashion ~out dsl =
   | _ -> ());
   line out_ml "";
   
+  doc out "Get the volume-kind corresponding to a toplevel directory name.";
+  line out_mli "val kind_of_toplevel:
+       string -> (Enumeration_volume_kind.t,
+                  [> `toplevel_not_found of string]) Core.Std.Result.t";
+  line out_ml " let kind_of_toplevel = function";
+  List.iter dsl.nodes (function
+  | Volume (n, t) -> line out_ml "    | %S -> Core.Std.Ok `%s" t n
+  | _ -> ());
+  line out_ml "    | s -> Core.Std.Error (`toplevel_not_found s)";
+  
   doc out "Register a new file, directory (with its contents), or opaque \
         directory in the DB.";
   line out_ml "let add_volume %s \
