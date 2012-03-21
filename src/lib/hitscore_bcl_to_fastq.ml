@@ -64,58 +64,35 @@ module Make
       | None -> error `work_directory_not_configured
       end
       >>= fun work_dir ->
-      let work_root = work_root_directory work_dir unique_id in
-      let out_dir = sprintf "%s/Output/" work_root in
-      let unaligned = sprintf "%s/Unaligned" work_root in
-      let pbs_script_file = sprintf "%s/script.pbs" work_root in
-      let pbs_script b2f = 
-        let stdout_path = sprintf "%s/pbs.stdout" out_dir in
-        let stderr_path = sprintf "%s/pbs.stderr" out_dir in
-        let make_stdout_path = sprintf "%s/make.stdout" out_dir in
-        let make_stderr_path = sprintf "%s/make.stderr" out_dir in
+      let work_root_path = work_root_directory work_dir unique_id in
+      let out_dir = sprintf "%s/Output/" work_root_path in
+      let unaligned = sprintf "%s/Unaligned" work_root_path in
+      let pbs_script_file = sprintf "%s/script.pbs" work_root_path in
+      let pbs_script_of_id b2f = 
+        let id = b2f.Layout.Function_bcl_to_fastq.id in
+        let job_name = sprintf "HS-B2F-%ld-%s" id name in
         let run_dir = 
           work_run_time work_dir b2f.Layout.Function_bcl_to_fastq.id in
-        let resource_list =
-          sprintf "%swalltime=%d:00:00\n"
-            (match nodes, ppn with
-            | 0, 0 -> ""
-            | n, m -> sprintf "nodes=%d:ppn=%d," n m)
-            wall_hours in
-        let job_name = sprintf "HS-B2F-%s" name in
-        let checked_command ?if_ok s =
-          sprintf "echo \"$(date -R)\"\necho %S\n%s\nif [ $? -ne 0 ]; then\n\
-                  \    echo 'Command failed: %S'\n\
-                  \    %s register-failure %ld 'shell_command_failed %S'\n\
-                  %sfi\n"
-            s s s hitscore_command b2f.Layout.Function_bcl_to_fastq.id s
-            (Option.value_map ~default:"" if_ok
-               ~f:(fun sl -> sprintf "  else\n%s\n"
-                 (String.concat ~sep:"\n  " sl)))
-        in
-        Sequme_pbs.(make_script
-                      ~mail_options:[JobAborted; JobBegun; JobEnded]
-                      ~user_list:[user ^ "@nyu.edu"]
-                      ~resource_list
-                      ~job_name
-                      ~stdout_path ~stderr_path ~queue [
-                        ksprintf checked_command 
-                          "echo $PBS_JOBID > %s/jobid_2" run_dir;
-                        ksprintf checked_command "echo %S > %s/workdir" 
-                          work_root run_dir;
-                        ksprintf checked_command 
-                          ". /share/apps/casava/%s/intel/env.sh" casava_version;
-                        ksprintf checked_command "cd %s" unaligned;
-                        ksprintf checked_command "%s 1> %s 2> %s" 
-                          make_command make_stdout_path make_stderr_path;
-                        (let if_ok = [
-                           sprintf "%s register-success %ld %s" hitscore_command
-                             b2f.Layout.Function_bcl_to_fastq.id work_root] in
-                         ksprintf (checked_command ~if_ok) 
-                           "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm \
-                                 | wc -l` -gt 5" unaligned);
-                        "echo \"Done: $(date -R)\"";
-                      ]
-                    |! script_to_string)
+        let make_stdout_path = sprintf "%s/make.stdout" out_dir in
+        let make_stderr_path = sprintf "%s/make.stderr" out_dir in
+        Common.pbs_script
+          ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+          ~on_command_failure:(fun cmd ->
+            sprintf "%s register-failure %ld 'shell_command_failed %S'"
+              hitscore_command id cmd)
+          ~work_root_path ~add_commands:(fun ~checked ~non_checked ->
+            ksprintf checked "echo $PBS_JOBID > %s/jobid_2" run_dir;
+            ksprintf checked "echo %S > %s/workdir" work_root_path run_dir;
+            ksprintf checked ". /share/apps/casava/%s/intel/env.sh" casava_version;
+            ksprintf checked "cd %s" unaligned;
+            ksprintf checked "%s 1> %s 2> %s" 
+              make_command make_stdout_path make_stderr_path;
+            ksprintf checked
+              "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm | wc -l` -gt 5"
+              unaligned;
+            ksprintf checked 
+              "%s register-success %ld %s" hitscore_command id work_root_path;
+            non_checked "echo \"Done: $(date -R)\"")
       in
       let create ~dbh =
         Layout.Function_bcl_to_fastq.(
@@ -148,7 +125,7 @@ module Make
 
       let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
       cmd "mkdir -p %s" out_dir >>= fun () ->
-      Access_rights.set_posix_acls ~dbh (`dir work_root) ~configuration
+      Access_rights.set_posix_acls ~dbh (`dir work_root_path) ~configuration
       >>= fun () ->
       cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
@@ -163,7 +140,7 @@ module Make
       create ~dbh
       >>= fun created ->
       let started =
-        let pbs_script_created = pbs_script created in
+        let pbs_script_created = pbs_script_of_id created in
         write_file ~file:pbs_script_file ~content:pbs_script_created
         >>= fun () ->
         Access_rights.set_posix_acls ~dbh ~configuration (`file pbs_script_file)
