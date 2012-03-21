@@ -341,9 +341,7 @@ module type COERCE_B2F_UNALIGNED = sig
     input:Layout.Record_bcl_to_fastq_unaligned.pointer ->
     ([ `can_get_result ]
         Common.Layout.Function_coerce_b2f_unaligned.pointer,
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
+     [> `layout_inconsistency of
          [> `file_system
          | `function_coerce_b2f_unaligned
          | `record_bcl_to_fastq_unaligned
@@ -351,10 +349,7 @@ module type COERCE_B2F_UNALIGNED = sig
            [> `add_did_not_return_one of string * int32 list
            | `insert_did_not_return_one_id of string * int32 list
            | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `root_directory_not_configured
-     | `system_command_error of string * exn
-     | `wrong_unaligned_volume of string list ])
+     | `pg_exn of exn ])
       Common.Result_IO.monad
 
 
