@@ -962,8 +962,18 @@ let ocaml_file_system_module ~fashion ~out dsl =
   | _ -> ());
   line out_ml "    | s -> Core.Std.Error (`toplevel_not_found s)";
   
-  doc out "Register a new file, directory (with its contents), or opaque \
-        directory in the DB.";
+  hide out_ml (fun out ->
+    line out "let add_any_volume_exn ~dbh ~kind ~content =";
+    line out "let sexp = sexp_of_volume_content content in";
+    line out "let str_sexp = Sexplib.Sexp.to_string_hum sexp in";
+    line out "let str_kind = Enumeration_volume_kind.to_string kind in";
+    pgocaml_add_to_database_exn "g_volume" 
+      (List.map volume_fields fst) [ "$str_kind"; "$str_sexp" ]
+      ~out ~on_not_one_id ~id:"id";
+  );
+  
+  doc out "Register a new file, directory (with its contents),
+           or opaque-directory in the DB (i.e. a “classical” volume).";
   line out_ml "let add_volume %s \
                 ~(kind:Enumeration_volume_kind.t) \
                 ?(hr_tag: string option) \
@@ -981,13 +991,26 @@ let ocaml_file_system_module ~fashion ~out dsl =
   pgocaml_to_result_io out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert;
   ] (fun out ->
-    line out "let sexp = sexp_of_volume_content (Tree (hr_tag, files)) in";
-    line out "let str_sexp = Sexplib.Sexp.to_string_hum sexp in";
-    line out "let str_kind = Enumeration_volume_kind.to_string kind in";
-    pgocaml_add_to_database_exn "g_volume" 
-      (List.map volume_fields fst) [ "$str_kind"; "$str_sexp" ]
-      ~out ~on_not_one_id ~id:"id";
+    line out "add_any_volume_exn ~dbh ~kind ~content:(Tree (hr_tag, files))"
   );
+
+  doc out "Register a “link” volume to another volume.";
+  line out_ml "let add_link ~dbh ~(kind:Enumeration_volume_kind.t) pointer:"; 
+  line out_mli "val add_link: dbh:db_handle -> \
+                 kind:Enumeration_volume_kind.t -> pointer ->";
+  ocaml_poly_result_io out "pointer" [
+    (OCaml_hiden_exception.poly_type_local [wrong_insert]);
+    "`pg_exn of exn";
+  ];
+  line out_ml " =";
+  pgocaml_to_result_io out_ml ~transform_exceptions:[
+    OCaml_hiden_exception.transform_local wrong_insert;
+  ] (fun out ->
+    line out "add_any_volume_exn ~dbh ~kind ~content:(Link pointer)"
+  );
+
+
+  
 
   doc out "Module for constructing file trees less painfully.";
   line out_ml "module Tree = struct";
