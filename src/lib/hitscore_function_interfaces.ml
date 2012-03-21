@@ -352,5 +352,36 @@ module type COERCE_B2F_UNALIGNED = sig
      | `pg_exn of exn ])
       Common.Result_IO.monad
 
+end
+
+
+(** The function to run fastx on a given set of fastq files.  *)
+module type FASTX_QUALITY_STATS = sig
+
+(**/**)
+  module Common : Hitscore_common.COMMON
+  open Common
+(**/**)
+
+  
+  (** Start *)
+  val start :
+    dbh:Layout.db_handle ->
+    configuration:Configuration.local_configuration ->
+    ?option_Q:int ->
+    ?filter_names:string ->
+    ?user:string ->
+    ?wall_hours:int ->
+    ?nodes:int ->
+    ?ppn:int ->
+    ?queue:string ->
+    ?hitscore_command:string ->
+    ?make_command:string ->
+    input_dir:Layout.Record_generic_fastqs.pointer ->
+    ([ `can_complete ]
+        Common.Layout.Function_fastx_quality_stats.pointer,
+     [> `pg_exn of exn ])
+      Common.Result_IO.monad
+
 
 end

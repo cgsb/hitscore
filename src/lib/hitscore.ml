@@ -58,6 +58,9 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) = struct
   module Coerce_b2f_unaligned =
     Hitscore_generic_fastqs.Make_unaligned_coercion (Common)
 
+  module Fastx_quality_stats =
+    Hitscore_fastx_quality_stats.Make (Common)
+
   let db_connect t =
     let open Configuration in
     match db_host t, db_port t, db_database t, db_username t, db_password t with

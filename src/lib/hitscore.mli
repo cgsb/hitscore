@@ -63,6 +63,9 @@ module Make (IO_configuration : Hitscore_interfaces.IO_CONFIGURATION) : sig
   module Coerce_b2f_unaligned: Hitscore_function_interfaces.COERCE_B2F_UNALIGNED
     with module Common = Common
 
+  (** Run Fastx quality stats on a given bunch of FASTQ files. *)
+  module Fastx_quality_stats: Hitscore_function_interfaces.FASTX_QUALITY_STATS
+    with module Common = Common
 
   (** Attempt to connect to the database. *)
   val db_connect : Configuration.local_configuration -> 
