@@ -84,6 +84,20 @@ module type COMMON = sig
      | `pg_exn of exn
      | `root_directory_not_configured ])
       Result_IO.monad
+
+
+  val pbs_script :
+    nodes:int ->
+    ppn:int ->
+    wall_hours:int ->
+    queue:string ->
+    user:string ->
+    job_name:string ->
+    on_command_failure:(string -> string) ->
+    work_root_path:string ->
+    add_commands:(checked:(string -> unit) -> non_checked:(string -> unit) -> unit) ->
+    string
+      
 end
 
 
@@ -199,6 +213,43 @@ module Make
       all_paths_of_volume ~configuration ~dbh pointer
 
 
+  let pbs_script
+      ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+      ~on_command_failure ~work_root_path ~add_commands =
+    let out_path = sprintf "%s/PBS_output/" work_root_path in
 
-        
+    let stdout_path = sprintf "%s/pbs.stdout" out_path in
+    let stderr_path = sprintf "%s/pbs.stderr" out_path in
+
+    let resource_list =
+      sprintf "%swalltime=%d:00:00\n"
+        (match nodes, ppn with
+        | 0, 0 -> ""
+        | n, m -> sprintf "nodes=%d:ppn=%d," n m)
+        wall_hours in
+
+    let checked_command s =
+      sprintf "echo \"$(date -R)\"\necho %S\n%s\nif [ $? -ne 0 ]; then\n\
+                  \    echo 'Command failed: %S'\n\
+                  \    %s\n\
+                  \    exit 5\n\
+                  fi\n"
+        s s s (on_command_failure s)
+    in
+    let non_checked_command s = s in
+    let commands =
+      let r = ref [] in
+      add_commands
+        ~checked:(fun s -> r := (checked_command s) :: !r)
+        ~non_checked:(fun s -> r := (non_checked_command s) :: !r);
+      List.rev !r in
+    Sequme_pbs.(make_script
+                  ~mail_options:[JobAborted; JobBegun; JobEnded]
+                  ~user_list:[user ^ "@nyu.edu"]
+                  ~resource_list
+                  ~job_name
+                  ~stdout_path ~stderr_path ~queue commands
+                |! script_to_string)
+
+      
 end
