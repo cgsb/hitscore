@@ -168,10 +168,10 @@ module Make
   let rec path_of_volume ~configuration ~dbh volume_pointer =
     let open Layout.File_system in
     get_volume ~dbh volume_pointer
-    >>= fun { volume_pointer = { id }; volume_content } ->
+    >>= fun { volume_pointer = { id }; volume_kind; volume_content } ->
     match volume_content with
-    | Tree (kind, hr_tag, trees) ->
-      let vol = volume_unix_directory ~id ~kind ?hr_tag in
+    | Tree (hr_tag, trees) ->
+      let vol = volume_unix_directory ~id ~kind:volume_kind ?hr_tag in
       begin match Configuration.path_of_volume_fun configuration with
       | Some vol_path ->
         return (vol_path vol)
@@ -184,11 +184,11 @@ module Make
   let rec all_paths_of_volume ~configuration ~dbh volume_pointer =
     let open Layout.File_system in
     get_volume ~dbh volume_pointer
-    >>= fun { volume_pointer = { id }; volume_content } ->
+    >>= fun { volume_pointer = { id }; volume_kind; volume_content } ->
     match volume_content with
-    | Tree (kind, hr_tag, trees) ->
+    | Tree (hr_tag, trees) ->
       let relative_paths = trees_to_unix_relative_paths trees in
-      let vol = volume_unix_directory ~id ~kind ?hr_tag in
+      let vol = volume_unix_directory ~id ~kind:volume_kind ?hr_tag in
       begin match Configuration.path_of_volume_fun configuration with
       | Some vol_path ->
         return (List.map relative_paths (Filename.concat (vol_path vol)))

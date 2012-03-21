@@ -904,6 +904,7 @@ let ocaml_file_system_module ~fashion ~out dsl =
 
   let id_field = "g_id", Int in
   let volume_fields = [
+    "g_kind",  String;
     "g_sexp",  String;
   ] in
 
@@ -951,13 +952,12 @@ let ocaml_file_system_module ~fashion ~out dsl =
   doc out "The volume content is …";
   ocaml_sexped_type ~out ~name:"volume_content" ~fashion
     " | Link of pointer
-      | Tree of Enumeration_volume_kind.t * string option * tree list ";
+      | Tree of string option * tree list ";
   
-(* "\n    volume_entry: volume_entry; \n    \ files: file_entry list}"; *)
-
   doc out "A volume is then …";
   ocaml_sexped_type ~out ~name:"volume" ~fashion
-    "{ volume_pointer: pointer; volume_content: volume_content; }";
+    "{ volume_pointer: pointer; volume_kind: Enumeration_volume_kind.t;
+       volume_content: volume_content; }";
 
   let wrong_insert = 
     OCaml_hiden_exception.make "File_system" "add_did_not_return_one"
@@ -967,30 +967,7 @@ let ocaml_file_system_module ~fashion ~out dsl =
       (sprintf "(%S, %s)" table_name returned) in
 
   OCaml_hiden_exception.define ~fashion wrong_insert out;
-(*
-  hide ~fashion out (fun out ->
-    line out "let rec _add_tree_exn %s = function" pgocaml_db_handle_arg;
-    line out "  | File (name, t) | Opaque (name, t) -> begin";
-    line out "    let type_str = Enumeration_file_type.to_string t in";
-    line out "    let empty_array = [| |] in";
-    pgocaml_add_to_database_exn "g_file"
-      (List.map file_fields fst)
-      [ "$name"; "$type_str" ; "$empty_array" ]
-      ~out ~on_not_one_id ~id:"inode";
-    line out "    end";
-    line out "  | Directory (name, t, pl) -> begin";
-    line out "    let type_str = Enumeration_file_type.to_string t in";
-    line out "    let added_file_list_monad = map_s ~f:(_add_tree_exn ~dbh) pl in";
-    line out "    pg_bind (added_file_list_monad) (fun file_list -> \n";
-    line out "       let pg_inodes = array_map (list_to_array file_list) \
-                       (fun { inode } ->  inode) in";
-    pgocaml_add_to_database_exn "g_file" 
-      (List.map file_fields fst)
-      [ "$name"; "$type_str" ; "$pg_inodes" ]
-      ~out ~on_not_one_id ~id:"inode";
-    line out "  )  end";
-  );
-*)
+
   doc out "Get the toplevel directory corresponding to a volume-kind.";
   line out_mli "val toplevel_of_kind: Enumeration_volume_kind.t -> string";
   line out_ml " let toplevel_of_kind = function";
@@ -1023,10 +1000,11 @@ let ocaml_file_system_module ~fashion ~out dsl =
     line out "pg_bind (added_file_list_monad) (fun file_list -> \n";
     line out "     let pg_inodes = array_map (list_to_array file_list) \n\
                        (fun { inode } ->  inode) in"; *)
-    line out "let sexp = sexp_of_volume_content (Tree (kind, hr_tag, files)) in";
+    line out "let sexp = sexp_of_volume_content (Tree (hr_tag, files)) in";
     line out "let str_sexp = Sexplib.Sexp.to_string_hum sexp in";
+    line out "let str_kind = Enumeration_volume_kind.to_string kind in";
     pgocaml_add_to_database_exn "g_volume" 
-      (List.map volume_fields fst) [ "$str_sexp" ]
+      (List.map volume_fields fst) [ "$str_kind"; "$str_sexp" ]
       ~out ~on_not_one_id ~id:"id";
     (* line out ")"; *)
   );
@@ -1119,6 +1097,7 @@ end
       (List.map volume_fields ~f:fst |! String.concat ~sep:", ");
     line out "    pg_return {
         volume_pointer;
+        volume_kind = Enumeration_volume_kind.of_string_exn g_kind;
         volume_content = volume_content_of_sexp (Sexplib.Sexp.of_string g_sexp);}) ";
     (* List.iter (id_field :: volume_fields) (fun (v, t) -> *)
       (* line out "      %s = %s;" (volume_ocaml_field v) *)
@@ -1264,11 +1243,13 @@ end
     line out "let insert_volume_exn %s (volume: volume): \
             pointer PGOCaml.monad = " pgocaml_db_handle_arg;
     line out "let g_id = volume.volume_pointer.id in";
+    line out "let g_kind = Enumeration_volume_kind.to_string volume.volume_kind in";
     line out "let g_sexp =
        Sexplib.Sexp.to_string_hum
           (sexp_of_volume_content volume.volume_content) in";
     pgocaml_insert_in_db_with_id_exn
-      ~out ~on_not_one_id "g_volume" ["g_id"; "g_sexp"] ["$g_id"; "$g_sexp"];
+      ~out ~on_not_one_id "g_volume"
+      ["g_id"; "g_kind"; "g_sexp"] ["$g_id"; "$g_kind"; "$g_sexp"];
   );
   doc out "Load a volume in the database ({b Unsafe!}) .";
   line out_ml "let insert_volume %s (volume: volume):" pgocaml_db_handle_arg;

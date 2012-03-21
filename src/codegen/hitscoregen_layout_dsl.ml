@@ -340,6 +340,7 @@ let to_db dsl =
   let filesystem = [
     Psql.({ name = "g_volume"; fields = [
       ("g_id", Identifier, [Not_null]);
+      ("g_kind", Text, [Not_null]);
       ("g_sexp", Text, [Not_null]);
     ]})
   ] in

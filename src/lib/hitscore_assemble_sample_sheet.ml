@@ -227,8 +227,8 @@ module Make
       >>= fun file ->
       get_volume ~dbh file 
       >>= function
-      | { volume_pointer = { id };
-          volume_content = Tree (kind, hr_tag, trees) } ->
+      | { volume_pointer = { id }; volume_kind = kind;
+          volume_content = Tree (hr_tag, trees) } ->
         begin match Common.trees_to_unix_relative_paths files with
         | [ one_path ] ->
           return (file, Common.volume_unix_directory ~id ~kind ?hr_tag, one_path)
