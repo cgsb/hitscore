@@ -103,7 +103,7 @@ module Make
           add_evaluation ~dbh ~recomputable:false ~recompute_penalty:0.
             ~unaligned ~invoice >>= fun fpointer ->
           set_started ~dbh fpointer >>= fun fpointer ->
-          Layout.Record_client_fastqs_dir.(add_value ~dbh ~dir:links_dir)
+          Layout.Record_client_fastqs_dir.(add_value ~dbh ~directory:links_dir)
           >>= fun result ->
           set_succeeded ~dbh ~result fpointer)
       | l -> 

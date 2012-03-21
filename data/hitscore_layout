@@ -199,7 +199,7 @@
 
 
 (record client_fastqs_dir
-        (dir string))
+        (directory string))
 
 (function client_fastqs_dir prepare_unaligned_delivery
           (unaligned bcl_to_fastq_unaligned)
@@ -213,7 +213,7 @@
 
 (volume fastx_result_dir fastx)
 (record fastx_results
-        (dir fastx_result_dir))
+        (directory fastx_result_dir))
 (function fastx_results fastx_quality_stats
           (input_dir generic_fastqs)
           (option_Q int)
