@@ -85,19 +85,114 @@ module type COMMON = sig
      | `root_directory_not_configured ])
       Result_IO.monad
 
+  module PBS: sig
 
-  val pbs_script :
-    nodes:int ->
-    ppn:int ->
-    wall_hours:int ->
-    queue:string ->
-    user:string ->
-    job_name:string ->
-    on_command_failure:(string -> string) ->
-    work_root_path:string ->
-    add_commands:(checked:(string -> unit) -> non_checked:(string -> unit) -> unit) ->
-    string
-      
+    type t
+    type t_fun = int32 -> t
+
+    val make : ?pbs_save_directory:string -> ?pbs_script_filename:string ->
+      tag:string -> t_fun
+
+    val work_path_for_job :
+      t ->
+      configuration:Configuration.local_configuration ->
+      (string, [> `work_directory_not_configured ]) Result_IO.monad
+    val pbs_output_path :
+      t ->
+      configuration:Configuration.local_configuration ->
+      (string, [> `work_directory_not_configured ]) Result_IO.monad
+    val pbs_runtime_path :
+      t ->
+      configuration:Configuration.local_configuration ->
+      (string, [> `work_directory_not_configured ]) Result_IO.monad
+    val pbs_result_path :
+      t ->
+      configuration:Configuration.local_configuration ->
+      (string, [> `work_directory_not_configured ]) Result_IO.monad
+    val pbs_script_path :
+      t ->
+      configuration:Configuration.local_configuration ->
+      (string, [> `work_directory_not_configured ]) Result_IO.monad
+    val prepapre_work_environment :
+      t ->
+      dbh:Access_rights.Layout.db_handle ->
+      configuration:Configuration.local_configuration ->
+      (unit,
+       [> `layout_inconsistency of
+           [> `record_log | `record_person ] *
+             [> `insert_did_not_return_one_id of string * int32 list
+             | `select_did_not_return_one_tuple of string * int ]
+       | `pg_exn of exn
+       | `system_command_error of string * exn
+       | `work_directory_not_configured ])
+        Result_IO.monad
+
+    val save_pbs_runtime_information :
+      t ->
+      dbh:Access_rights.Layout.db_handle ->
+      configuration:Configuration.local_configuration ->
+      string ->
+      (unit,
+       [> `layout_inconsistency of
+           [> `record_log | `record_person ] *
+             [> `insert_did_not_return_one_id of string * int32 list
+             | `select_did_not_return_one_tuple of string * int ]
+       | `pg_exn of exn
+       | `system_command_error of string * exn
+       | `work_directory_not_configured ])
+        Result_IO.monad
+
+    (** Create a PBS script. *)
+    val pbs_script :
+      t ->
+      configuration:Configuration.local_configuration ->
+      nodes:int ->
+      ppn:int ->
+      wall_hours:int ->
+      queue:string ->
+      user:string ->
+      job_name:string ->
+      on_command_failure:(string -> string) ->
+      add_commands:(checked:(string -> unit) ->
+                    non_checked:(string -> unit) -> 'a) ->
+      (string, [> `work_directory_not_configured ]) Result_IO.monad
+
+    (** Write a PBS script to a file, set the access rights, and qsub it. *)
+    val qsub_pbs_script :
+      t ->
+      dbh:Access_rights.Layout.db_handle ->
+      configuration:Configuration.local_configuration ->
+      string ->
+      (unit,
+       [> `layout_inconsistency of
+           [> `record_log | `record_person ] *
+             [> `insert_did_not_return_one_id of string * int32 list
+             | `select_did_not_return_one_tuple of string * int ]
+       | `pg_exn of exn
+       | `system_command_error of string * exn
+       | `work_directory_not_configured
+       | `write_file_error of string * string * exn ])
+        Result_IO.monad
+        
+    val qstat :
+      t ->
+      configuration:Configuration.local_configuration ->
+      ([> `running
+       | `started_but_not_running of
+           [> `system_command_error of string * exn ] ],
+       [> `work_directory_not_configured ])
+        Result_IO.monad
+
+    val qdel :
+      t ->
+      configuration:Configuration.local_configuration ->
+      (unit, 
+       [> `system_command_error of string * exn
+       | `work_directory_not_configured ])
+        Result_IO.monad
+
+  end
+
 end
 
 
@@ -212,44 +307,121 @@ module Make
     | Link pointer ->
       all_paths_of_volume ~configuration ~dbh pointer
 
+  module PBS = struct 
 
-  let pbs_script
-      ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
-      ~on_command_failure ~work_root_path ~add_commands =
-    let out_path = sprintf "%s/PBS_output/" work_root_path in
+    type t = {
+      tag : string;
+      id : int32;
+      pbs_script_filename: string;
+      pbs_save_directory: string;
+    }
+    type t_fun = int32 -> t
+      
+    let make ?(pbs_save_directory="_pbs_run")
+        ?(pbs_script_filename="script.pbs") ~tag =
+      fun id -> { tag; id; pbs_script_filename; pbs_save_directory; }
 
-    let stdout_path = sprintf "%s/pbs.stdout" out_path in
-    let stderr_path = sprintf "%s/pbs.stderr" out_path in
+    let work_path_for_job t ~configuration =
+      begin match Configuration.work_path configuration with
+      | Some work_path -> return work_path
+      | None -> error `work_directory_not_configured
+      end
+      >>= fun work_path ->
+      return Filename.(concat work_path (sprintf "%s_%ld" t.tag t.id))
 
-    let resource_list =
-      sprintf "%swalltime=%d:00:00\n"
-        (match nodes, ppn with
-        | 0, 0 -> ""
-        | n, m -> sprintf "nodes=%d:ppn=%d," n m)
-        wall_hours in
+    let pbs_output_path t ~configuration  =
+      work_path_for_job t ~configuration  >>= fun wp ->
+      return Filename.(concat wp "PBS_output")
 
-    let checked_command s =
-      sprintf "echo \"$(date -R)\"\necho %S\n%s\nif [ $? -ne 0 ]; then\n\
+    let pbs_runtime_path t ~configuration  =
+      work_path_for_job t ~configuration  >>= fun wp ->
+      return Filename.(concat wp "run")
+
+    let pbs_result_path  t ~configuration  =
+      work_path_for_job t ~configuration  >>= fun wp ->
+      return Filename.(concat wp "work")
+
+    let pbs_script_path t ~configuration  =
+      work_path_for_job t ~configuration  >>= fun wp ->
+      return Filename.(concat wp t.pbs_script_filename)
+      
+    let prepapre_work_environment t ~dbh ~configuration  =
+      work_path_for_job t ~configuration  >>= fun wp ->
+      pbs_output_path   t ~configuration  >>= fun op ->
+      pbs_runtime_path  t ~configuration  >>= fun rp ->
+      pbs_result_path   t ~configuration  >>= fun sp ->
+      ksprintf system_command "mkdir -p %s %s %s %s" wp op rp sp >>= fun () ->
+      Access_rights.set_posix_acls ~dbh (`dir wp) ~configuration
+      
+    let save_pbs_runtime_information t ~dbh ~configuration dest =
+      pbs_output_path   t ~configuration  >>= fun op ->
+      pbs_runtime_path  t ~configuration  >>= fun rp ->
+      pbs_script_path   t ~configuration  >>= fun sp ->
+      let dest_path = Filename.concat dest t.pbs_save_directory in
+      ksprintf system_command "mkdir -p %s/" dest_path >>= fun () ->
+      ksprintf system_command "mv %s %s %s %s/" op rp sp dest_path >>= fun () ->
+      Access_rights.set_posix_acls ~dbh (`dir dest_path) ~configuration
+
+
+      
+    let pbs_script t ~configuration 
+        ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+        ~on_command_failure ~add_commands =
+      pbs_output_path t ~configuration 
+      >>= fun out_path ->
+      let stdout_path = sprintf "%s/pbs.stdout" out_path in
+      let stderr_path = sprintf "%s/pbs.stderr" out_path in
+      let resource_list =
+        sprintf "%swalltime=%d:00:00\n"
+          (match nodes, ppn with
+          | 0, 0 -> ""
+          | n, m -> sprintf "nodes=%d:ppn=%d," n m) wall_hours in
+      let checked_command s =
+        sprintf "echo \"$(date -R)\"\necho %S\n%s\nif [ $? -ne 0 ]; then\n\
                   \    echo 'Command failed: %S'\n\
                   \    %s\n\
                   \    exit 5\n\
-                  fi\n"
-        s s s (on_command_failure s)
-    in
-    let non_checked_command s = s in
-    let commands =
-      let r = ref [] in
-      add_commands
-        ~checked:(fun s -> r := (checked_command s) :: !r)
-        ~non_checked:(fun s -> r := (non_checked_command s) :: !r);
-      List.rev !r in
-    Sequme_pbs.(make_script
-                  ~mail_options:[JobAborted; JobBegun; JobEnded]
-                  ~user_list:[user ^ "@nyu.edu"]
-                  ~resource_list
-                  ~job_name
-                  ~stdout_path ~stderr_path ~queue commands
-                |! script_to_string)
+                  fi\n" s s s (on_command_failure s) in
+      let non_checked_command s = s in
+      let commands =
+        let r = ref [] in
+        add_commands
+          ~checked:(fun s -> r := (checked_command s) :: !r)
+          ~non_checked:(fun s -> r := (non_checked_command s) :: !r);
+        List.rev !r in
+      return Sequme_pbs.(make_script
+                           ~mail_options:[JobAborted; JobBegun; JobEnded]
+                           ~user_list:[user ^ "@nyu.edu"]
+                           ~resource_list
+                           ~job_name
+                           ~stdout_path ~stderr_path ~queue commands
+                         |! script_to_string)
 
+    let qsub_pbs_script t ~dbh ~configuration content = 
+      pbs_runtime_path t ~configuration >>= fun run_path ->
+      pbs_script_path t ~configuration >>= fun pbs_script_path ->
+      ksprintf system_command "mkdir -p %s" run_path >>= fun () ->
+      write_file ~file:pbs_script_path ~content >>= fun () ->
+      Access_rights.set_posix_acls ~dbh ~configuration (`file pbs_script_path)
+      >>= fun () ->
+      ksprintf system_command "qsub %s > %s/jobid" pbs_script_path run_path
       
+    let qstat t ~configuration =
+      pbs_runtime_path t ~configuration >>= fun run_path ->
+      ksprintf system_command "cat %s/jobid && qstat `cat %s/jobid`" 
+        run_path run_path
+      |! double_bind
+          ~ok:(fun () -> return (`running))
+          ~error:(function
+          | `system_command_error _ as e -> return (`started_but_not_running e)
+          | `work_directory_not_configured as e -> error e)
+
+    let qdel t ~configuration =
+      pbs_runtime_path t ~configuration >>= fun run_path ->
+      ksprintf system_command "cat %s/jobid && qdel `cat %s/jobid`" 
+        run_path run_path
+
+          
+  end
+
 end

@@ -11,12 +11,9 @@ module Make
     open Hitscore_std
     open Result_IO
 
-    let work_root_directory work_dir unique_id =
-      sprintf "%s/B2F/work/%s/" work_dir unique_id
-
-    let work_run_time work_dir db_id =
-      sprintf "%s/B2F/run/%ld" work_dir db_id
-
+    let pbs_fun =
+      Common.PBS.make ~pbs_script_filename:"make_b2f.pbs" ~tag:"b2f"
+      
     let start ~dbh ~configuration
         ~(sample_sheet: Layout.Record_sample_sheet.pointer)
         ~(hiseq_dir: Layout.Record_hiseq_raw.pointer)
@@ -52,50 +49,8 @@ module Make
         match mismatch with `zero -> 0l | `one -> 1l | `two -> 2l in
       let casava_version =
         match version with `casava_182 -> "1.8.2" | `casava_181 -> "1.8.1" in
-      let hr_tag =
-        sprintf "B2F_%s_S%ld_H%ld_M%ld_%s_%s"
-          name
-          sample_sheet.Layout.Record_sample_sheet.id
-          hiseq_dir.Layout.Record_hiseq_raw.id
-          mismatch32 casava_version user in
-      let unique_id = hr_tag (* TODO: uniquify for real? *) in
-      begin match Configuration.work_path configuration with
-      | Some work_dir -> return work_dir
-      | None -> error `work_directory_not_configured
-      end
-      >>= fun work_dir ->
-      let work_root_path = work_root_directory work_dir unique_id in
-      let out_dir = sprintf "%s/Output/" work_root_path in
-      let unaligned = sprintf "%s/Unaligned" work_root_path in
-      let pbs_script_file = sprintf "%s/script.pbs" work_root_path in
-      let pbs_script_of_id b2f = 
-        let id = b2f.Layout.Function_bcl_to_fastq.id in
-        let job_name = sprintf "HS-B2F-%ld-%s" id name in
-        let run_dir = 
-          work_run_time work_dir b2f.Layout.Function_bcl_to_fastq.id in
-        let make_stdout_path = sprintf "%s/make.stdout" out_dir in
-        let make_stderr_path = sprintf "%s/make.stderr" out_dir in
-        Common.pbs_script
-          ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
-          ~on_command_failure:(fun cmd ->
-            sprintf "%s register-failure %ld 'shell_command_failed %S'"
-              hitscore_command id cmd)
-          ~work_root_path ~add_commands:(fun ~checked ~non_checked ->
-            ksprintf checked "echo $PBS_JOBID > %s/jobid_2" run_dir;
-            ksprintf checked "echo %S > %s/workdir" work_root_path run_dir;
-            ksprintf checked ". /share/apps/casava/%s/intel/env.sh" casava_version;
-            ksprintf checked "cd %s" unaligned;
-            ksprintf checked "%s 1> %s 2> %s" 
-              make_command make_stdout_path make_stderr_path;
-            ksprintf checked
-              "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm | wc -l` -gt 5"
-              unaligned;
-            ksprintf checked 
-              "%s register-success %ld %s" hitscore_command id work_root_path;
-            non_checked "echo \"Done: $(date -R)\"")
-      in
-      let create ~dbh =
-        Layout.Function_bcl_to_fastq.(
+
+      Layout.Function_bcl_to_fastq.(
           add_evaluation ~dbh
             ~raw_data:hiseq_dir ?tiles
             ~availability ~mismatch:mismatch32 ~version:casava_version
@@ -111,72 +66,92 @@ module Make
               mismatch32 casava_version
               (Option.value_map ~default:"()" ~f:(sprintf "(tiles %S)") tiles)
               sample_sheet.Layout.Record_sample_sheet.id in
-          Layout.Record_log.add_value ~dbh ~log
-          >>= fun _ -> return b2f
-        )
-      in
-      let start ~dbh b2f =
-        Layout.Function_bcl_to_fastq.(
-          set_started ~dbh b2f
-          >>= fun b2f ->
+          Layout.Record_log.add_value ~dbh ~log >>= fun _ ->
+          set_started ~dbh b2f >>= fun b2f ->
           Layout.Record_log.add_value ~dbh 
-            ~log:(sprintf "(set_bcl_to_fastq_started %ld)" b2f.id)
-          >>= fun _ -> return b2f) in            
+            ~log:(sprintf "(set_bcl_to_fastq_started %ld)" b2f.id) >>= fun _ ->
+          return b2f
+        )
+      >>= fun started ->
 
-      let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
-      cmd "mkdir -p %s" out_dir >>= fun () ->
-      Access_rights.set_posix_acls ~dbh (`dir work_root_path) ~configuration
-      >>= fun () ->
-      cmd ". /share/apps/casava/%s/intel/env.sh && \
+      let after_start_m =
+        let id =  started.Layout.Function_bcl_to_fastq.id in
+        let pbs = pbs_fun id in
+        let job_name = sprintf "HS-B2F-%ld-%s" id name in
+        Common.PBS.pbs_result_path ~configuration pbs >>| sprintf "%s/Unaligned"
+        >>= fun unaligned ->
+        Common.PBS.pbs_output_path ~configuration pbs
+        >>= fun out_path ->
+        let make_stdout_path = sprintf "%s/make.stdout" out_path in
+        let make_stderr_path = sprintf "%s/make.stderr" out_path in
+        Common.PBS.pbs_script ~configuration pbs
+          ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+          ~on_command_failure:(fun cmd ->
+            sprintf "%s register-failure %ld 'shell_command_failed %S'"
+              hitscore_command id cmd)
+          ~add_commands:(fun ~checked ~non_checked ->
+          (* ksprintf checked "echo $PBS_JOBID > %s/jobid_2" run_dir; *)
+          (* ksprintf checked "echo %S > %s/workdir" work_root_path run_dir; *)
+            ksprintf checked ". /share/apps/casava/%s/intel/env.sh" casava_version;
+            ksprintf checked "cd %s" unaligned;
+            ksprintf checked "%s 1> %s 2> %s" 
+              make_command make_stdout_path make_stderr_path;
+            ksprintf checked
+              "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm | wc -l` -gt 5"
+              unaligned;
+            ksprintf checked 
+              "%s register-success %ld" hitscore_command id;
+            non_checked "echo \"Done: $(date -R)\"")
+        >>= fun pbs_script ->
+        let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
+        Common.PBS.prepapre_work_environment ~dbh ~configuration pbs
+        >>= fun () ->
+        cmd "mkdir -p %s" unaligned >>= fun () ->
+        cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     %s --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
                     --mismatches %ld"
-        casava_version 
-        (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
-        basecalls unaligned sample_sheet_path mismatch32
-      >>= fun () ->
-      create ~dbh
-      >>= fun created ->
-      let started =
-        let pbs_script_created = pbs_script_of_id created in
-        write_file ~file:pbs_script_file ~content:pbs_script_created
+          casava_version 
+          (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
+          basecalls unaligned sample_sheet_path mismatch32
         >>= fun () ->
-        Access_rights.set_posix_acls ~dbh ~configuration (`file pbs_script_file)
-        >>= fun () ->
-        let run_dir =
-          (work_run_time work_dir created.Layout.Function_bcl_to_fastq.id) in
-        cmd "mkdir -p %s" run_dir
-        >>= fun () ->
-        cmd "qsub %s > %s/jobid" pbs_script_file run_dir
-        >>= fun () ->
-        start ~dbh created
+        Common.PBS.qsub_pbs_script ~dbh ~configuration pbs pbs_script
       in
-      double_bind started
-        ~ok:(fun o -> return (`success o))
+      double_bind after_start_m
+        ~ok:(fun () -> return (`success started))
         ~error:(fun e ->
-          Layout.Function_bcl_to_fastq.set_failed ~dbh created
+          Layout.Function_bcl_to_fastq.set_failed ~dbh started
           >>= fun failed ->
           Layout.Record_log.add_value ~dbh
             ~log:(sprintf "(set_bcl_to_fastq_failed %ld while_creating_starting)" 
                     failed.Layout.Function_bcl_to_fastq.id)
           >>= fun _ ->
           return (`failure (failed, e)))
-      
-    let succeed ~dbh ~configuration ~bcl_to_fastq ~result_root =
+        
+    let succeed ~dbh ~configuration ~bcl_to_fastq =
+      let module LFB2F = Layout.Function_bcl_to_fastq in
+      LFB2F.(get ~dbh bcl_to_fastq >>= fun {g_id; raw_data; sample_sheet} ->
+             return (sprintf "B2F%ld_Raw%ld_Sash%ld" g_id
+                       raw_data.Layout.Record_hiseq_raw.id
+                       sample_sheet.Layout.Record_sample_sheet.id))
+      >>= fun hr_tag ->
       Layout.File_system.(
         let files = Tree.([opaque "Unaligned"]) in
-        add_volume ~dbh ~hr_tag:(Filename.basename result_root)
-          ~kind:`bcl_to_fastq_unaligned_opaque ~files
+        add_volume ~dbh ~hr_tag ~kind:`bcl_to_fastq_unaligned_opaque ~files
         >>= fun vol ->
-        Common.path_of_volume ~dbh ~configuration vol
-        >>= fun vol_path ->
+        Common.path_of_volume ~dbh ~configuration vol >>= fun vol_path ->
         return (vol, vol_path))
       >>= fun (directory, path_vol) ->
+      let pbs = pbs_fun bcl_to_fastq.LFB2F.id in
+      Common.PBS.pbs_result_path pbs ~configuration >>= fun result_root ->
+      Common.PBS.save_pbs_runtime_information pbs ~dbh ~configuration path_vol
+      >>= fun () ->
       let move_m =
         ksprintf system_command "mkdir -p %s/" path_vol >>= fun () ->
-        ksprintf system_command "mv %s/* %s/" result_root path_vol >>= fun () ->
+        ksprintf system_command "mv %s/Unaligned %s/Unaligned" result_root path_vol
+        >>= fun () ->
         Access_rights.set_posix_acls ~dbh (`dir path_vol) ~configuration
       in
       double_bind move_m
@@ -221,40 +196,21 @@ module Make
 
 
     let status ~dbh ~configuration bcl_to_fastq = 
-      begin match Configuration.work_path configuration with
-      | Some work_dir -> return work_dir
-      | None -> error `work_directory_not_configured
-      end
-      >>= fun work_dir ->
       Layout.Function_bcl_to_fastq.(
         get ~dbh bcl_to_fastq 
         >>= fun { g_status; _ } ->
         match g_status with
-        | `Started ->
-          let run_dir = work_run_time work_dir bcl_to_fastq.id in
-          ksprintf system_command "cat %s/jobid && qstat `cat %s/jobid`" 
-            run_dir run_dir
-          |! double_bind
-              ~ok:(fun () -> return (`running))
-              ~error:(fun e -> return (`started_but_not_running e))
+        | `Started -> Common.PBS.qstat (pbs_fun bcl_to_fastq.id) ~configuration
         | s -> return (`not_started s)
       )
 
     let kill ~dbh ~configuration  bcl_to_fastq = 
-      begin match Configuration.work_path configuration with
-      | Some work_dir -> return work_dir
-      | None -> error `work_directory_not_configured
-      end
-      >>= fun work_dir ->
       Layout.Function_bcl_to_fastq.(
         get ~dbh bcl_to_fastq 
         >>= fun { g_status } ->
         match g_status  with
         | `Started ->
-          let run_dir = work_run_time work_dir bcl_to_fastq.id in
-          ksprintf system_command "cat %s/jobid && qdel `cat %s/jobid`" 
-            run_dir run_dir
-          >>= fun () ->
+          Common.PBS.qdel (pbs_fun bcl_to_fastq.id) ~configuration >>= fun () ->
           fail ~dbh ~reason:"killed" bcl_to_fastq
         | s -> error (`not_started s)
       )

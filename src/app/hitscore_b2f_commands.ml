@@ -241,7 +241,7 @@ let start hsc prefix cl_args =
     |! Result.ok
 
 
-let register_success hsc id result_root = 
+let register_success hsc id = 
   let open Hitscore_threaded in
   let bcl_to_fastq =
     try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
@@ -256,7 +256,7 @@ let register_success hsc id result_root =
         | { g_status = `Started; } as e -> return e
         | { g_status } -> error (`not_started g_status))
       >>= fun _ ->
-      Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~result_root ~configuration:hsc
+      Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~configuration:hsc
     in
     begin match work with
     | Ok (`success s) ->

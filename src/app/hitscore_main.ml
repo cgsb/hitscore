@@ -1562,7 +1562,7 @@ let () =
       fprintf o "Usage: %s <profile> %s <command> <args>\n" exec cmd;
       fprintf o "Where the commands are:\n\
           \  * start: start a bcl-to-fastq function (try \"-help\").\n\
-          \  * register-success <id> <result-dir>.\n\
+          \  * register-success <id>.\n\
           \  * register-failure <id> [<reason-log>].\n\
           \  * status <id> : Get the current status of an evaluation.\n\
           \  * fix-status <id> : Get the status and fix it if possible\n\
@@ -1573,8 +1573,8 @@ let () =
       function
       | "start" :: args -> 
         B2F.start config (sprintf "%s <config> %s start" exec cmd) args
-      | "register-success" :: id :: dir :: [] ->
-        B2F.register_success config id dir
+      | "register-success" :: id :: [] ->
+        B2F.register_success config id
       | "register-failure" :: id  :: [] ->
         B2F.register_failure config id
       | "register-failure" :: id  :: reason :: [] ->
