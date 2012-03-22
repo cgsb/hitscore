@@ -22,6 +22,18 @@ module type COMMON = sig
     with module Result_IO = Result_IO
     with module Layout = Layout
 
+  (** Add a log to the database. *)
+  val add_log:
+    dbh:Layout.db_handle ->
+    string ->
+    (unit,
+     [> `layout_inconsistency of
+         [> `Record of string ] *
+           [> `insert_did_not_return_one_id of string * int32 list ]
+     | `pg_exn of exn ])
+      Result_IO.monad
+
+           
   (** Check that an HiSeq-raw directory (the database) record is usable. *) 
   val check_hiseq_raw_availability :
     dbh:Layout.db_handle ->
@@ -292,6 +304,11 @@ module Make
 
   open Hitscore_std
   open Result_IO
+
+  let add_log ~dbh log = 
+    Layout.Record_log.(
+      add_value ~dbh ~log >>= fun (_: pointer) ->
+      return ())
 
   let check_hiseq_raw_availability ~dbh ~hiseq_raw =
     Layout.Record_inaccessible_hiseq_raw.(
