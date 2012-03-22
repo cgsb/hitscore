@@ -695,6 +695,15 @@ let ocaml_function_module ~out ~fashion name args result =
     line out "get_evaluation_exn ~dbh p";
   );
 
+  doc out "Get the status of an evaluation [t].";
+  line out_mli "val get_status: 'a pointer ->  dbh:db_handle ->";
+  line out_ml "let get_status pointer ~dbh ";
+  ocaml_poly_result_io out_mli "Enumeration_process_status.t" [
+    (OCaml_hiden_exception.poly_type_local [wrong_select_one]);
+    "`pg_exn of exn";
+  ];
+  line out_ml " = Result_IO.(get pointer ~dbh >>= fun t -> return t.g_status)";
+  
   List.iter 
     [ ("inserted", "`Inserted", "[ `can_start | `can_complete]");
       ("started", "`Started", "[ `can_complete]");
