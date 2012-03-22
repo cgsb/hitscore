@@ -1,5 +1,6 @@
 (** Container-module to make it easier to pass arguments to functors. *)
 
+  
 (** Container-module to make it easier to pass arguments to functors. *)
 module type COMMON = sig
 
@@ -90,8 +91,10 @@ module type COMMON = sig
     type t
     type t_fun = int32 -> t
 
+    (** [make "B2F"] Creates a PBS management environment where the
+        run/work directories are tagged with ["B2F"]. *)
     val make : ?pbs_save_directory:string -> ?pbs_script_filename:string ->
-      tag:string -> t_fun
+      string -> t_fun
 
     val work_path_for_job :
       t ->
@@ -191,6 +194,75 @@ module type COMMON = sig
        | `work_directory_not_configured ])
         Result_IO.monad
 
+  end
+
+
+  module Make_pbs_function:
+    functor (Layout_function : sig
+      type 'a pointer = private {
+        id : int32;
+      }
+      val set_failed : [> `can_complete ] pointer -> dbh:Layout.db_handle ->
+        ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Result_IO.monad
+      val get_status :
+        'a pointer ->
+        dbh:Layout.db_handle ->
+        (Layout.Enumeration_process_status.t,
+         [> `layout_inconsistency of
+             [> `function_bcl_to_fastq ] *
+               [> `select_did_not_return_one_tuple of string * int ]
+         | `pg_exn of exn ])
+          Layout.Result_IO.monad
+    end) ->
+      functor (PBS_stuff : sig
+        val pbs_fun : PBS.t_fun
+        val name_in_log: string
+      end) ->
+  sig
+    
+  (** Register the evaluation as failed with a optional reason to add
+      to the [log] (record). *)
+    val fail :
+      dbh:Layout.db_handle ->
+      ?reason:string ->
+      [> `can_complete ] Layout_function.pointer ->
+      ([ `can_nothing ] Layout_function.pointer,
+       [> `layout_inconsistency of
+           [> `record_log ] *
+             [> `insert_did_not_return_one_id of string * int32 list ]
+       | `pg_exn of exn ])
+        Result_IO.monad
+        
+    (** Get the status of the evaluation by checking its data-base
+        status and it presence in the PBS queue. *)
+    val status :
+      dbh:Layout.db_handle ->
+      configuration:Configuration.local_configuration ->
+      'a Layout_function.pointer ->
+      ([ `not_started of Layout.Enumeration_process_status.t
+       | `running
+       | `started_but_not_running of [ `system_command_error of string * exn ] ],
+       [> `layout_inconsistency of
+           [> `function_bcl_to_fastq ] *
+             [> `select_did_not_return_one_tuple of string * int ]
+       | `pg_exn of exn
+       | `work_directory_not_configured ]) Result_IO.monad
+
+    (** Kill the evaluation ([qdel]) and set it as failed. *)
+    val kill :
+      dbh:Layout.db_handle ->
+      configuration:Configuration.local_configuration ->
+      [> `can_complete ] Layout_function.pointer ->
+      ([ `can_nothing ] Layout_function.pointer,
+       [> `layout_inconsistency of
+           [> `function_bcl_to_fastq | `record_log ] *
+             [> `insert_did_not_return_one_id of string * int32 list
+             | `select_did_not_return_one_tuple of string * int ]
+       | `not_started of Layout.Enumeration_process_status.t
+       | `pg_exn of exn
+       | `system_command_error of string * exn
+       | `work_directory_not_configured ])
+        Result_IO.monad
   end
 
 end
@@ -318,7 +390,7 @@ module Make
     type t_fun = int32 -> t
       
     let make ?(pbs_save_directory="_pbs_run")
-        ?(pbs_script_filename="script.pbs") ~tag =
+        ?(pbs_script_filename="script.pbs") tag =
       fun id -> { tag; id; pbs_script_filename; pbs_save_directory; }
 
     let work_path_for_job t ~configuration =
@@ -422,6 +494,58 @@ module Make
         run_path run_path
 
           
+  end
+
+
+  module Make_pbs_function (Layout_function : sig
+    type 'a pointer = private {
+      id : int32;
+    }
+   val set_failed : [> `can_complete ] pointer -> dbh:Layout.db_handle ->
+     ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Result_IO.monad
+
+   val get_status :
+     'a pointer ->
+     dbh:Layout.db_handle ->
+     (Layout.Enumeration_process_status.t,
+      [> `layout_inconsistency of
+          [> `function_bcl_to_fastq ] *
+            [> `select_did_not_return_one_tuple of string * int ]
+      | `pg_exn of exn ])
+       Layout.Result_IO.monad
+  end) (PBS_stuff : sig
+    val pbs_fun : PBS.t_fun
+    val name_in_log: string
+  end) = struct
+
+    let fail ~dbh ?reason f =
+      Layout_function.set_failed ~dbh f
+      >>= fun failed ->
+      Layout.Record_log.add_value ~dbh
+        ~log:(sprintf "(set_%s_failed %ld%s)" PBS_stuff.name_in_log
+                failed.Layout_function.id
+                (Option.value_map ~default:"" reason
+                   ~f:(sprintf " (reason %S)")))
+      >>= fun _ ->
+      return failed
+
+    let status ~dbh ~configuration pointer = 
+      Layout_function.(
+        get_status ~dbh pointer  
+        >>= function
+        | `Started ->
+          PBS.qstat (PBS_stuff.pbs_fun pointer.Layout_function.id) ~configuration
+        | s -> return (`not_started s))
+
+    let kill ~dbh ~configuration  f = 
+      Layout_function.(
+        get_status ~dbh f 
+        >>= function
+        | `Started ->
+          PBS.qdel (PBS_stuff.pbs_fun f.id) ~configuration >>= fun () ->
+          fail ~dbh ~reason:"killed" f
+        | s -> error (`not_started s))
+
   end
 
 end

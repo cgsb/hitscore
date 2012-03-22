@@ -12,7 +12,7 @@ module Make
     open Result_IO
 
     let pbs_fun =
-      Common.PBS.make ~pbs_script_filename:"make_b2f.pbs" ~tag:"b2f"
+      Common.PBS.make ~pbs_script_filename:"make_b2f.pbs" "b2f"
       
     let start ~dbh ~configuration
         ~(sample_sheet: Layout.Record_sample_sheet.pointer)
@@ -183,37 +183,11 @@ module Make
           >>= fun _ ->
           return (`failure (failed, e)))
 
-    let fail ~dbh ?reason bcl_to_fastq =
-      Layout.Function_bcl_to_fastq.set_failed ~dbh bcl_to_fastq
-      >>= fun failed ->
-      Layout.Record_log.add_value ~dbh
-        ~log:(sprintf "(set_bcl_to_fastq_failed %ld%s)" 
-                failed.Layout.Function_bcl_to_fastq.id
-                (Option.value_map ~default:"" reason
-                   ~f:(sprintf " (reason %S)")))
-      >>= fun _ ->
-      return failed
 
-
-    let status ~dbh ~configuration bcl_to_fastq = 
-      Layout.Function_bcl_to_fastq.(
-        get ~dbh bcl_to_fastq 
-        >>= fun { g_status; _ } ->
-        match g_status with
-        | `Started -> Common.PBS.qstat (pbs_fun bcl_to_fastq.id) ~configuration
-        | s -> return (`not_started s)
-      )
-
-    let kill ~dbh ~configuration  bcl_to_fastq = 
-      Layout.Function_bcl_to_fastq.(
-        get ~dbh bcl_to_fastq 
-        >>= fun { g_status } ->
-        match g_status  with
-        | `Started ->
-          Common.PBS.qdel (pbs_fun bcl_to_fastq.id) ~configuration >>= fun () ->
-          fail ~dbh ~reason:"killed" bcl_to_fastq
-        | s -> error (`not_started s)
-      )
+    include Common.Make_pbs_function (Layout.Function_bcl_to_fastq) (struct
+      let pbs_fun = pbs_fun
+      let name_in_log = "bcl_to_fastq"
+    end)
 
 
 
