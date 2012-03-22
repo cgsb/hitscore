@@ -34,7 +34,7 @@ module type ACCESS_RIGHTS = sig
     configuration:Configuration.local_configuration ->
     [ `dir of string | `file of string ] ->
     (unit, [> `layout_inconsistency of
-        [> `record_log | `record_person ] *
+        [>  `File_system | `Function of string | `Record of string ] *
           [> `insert_did_not_return_one_id of string * int32 list
           | `select_did_not_return_one_tuple of string * int ]
            | `pg_exn of exn

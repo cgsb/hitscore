@@ -11,25 +11,27 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
 
   (** Run the whole function to assemble a sample-sheet. Example:
       {[
-run ~dbh ~kind:`specific_barcodes ~configuration "FC11IDXXX" >>= function
-| `new_success pointer -> ...
-| `previous_success (fun_pointer, result_pointer) -> ...
-| `new_failure (failed_fun_pointer, reason) -> ...
+      run ~dbh ~kind:`specific_barcodes ~configuration "FC11IDXXX" >>= function
+      | `new_success pointer -> ...
+      | `previous_success (fun_pointer, result_pointer) -> ...
+      | `new_failure (failed_fun_pointer, reason) -> ...
       ]}.
-  If [~force_new] is [true] the run does not check existing assemblies.
+      If [~force_new] is [true] the run does not check existing assemblies.
   *)
   val run :
-    dbh:(string, bool) Batteries.Hashtbl.t Layout.PGOCaml.t ->
-    kind:Layout.Enumeration_sample_sheet_kind.t ->
-    configuration:Configuration.local_configuration ->
+    dbh:(string, bool) Batteries.Hashtbl.t Common.Layout.PGOCaml.t ->
+    kind:Common.Layout.Enumeration_sample_sheet_kind.t ->
+    configuration:Common.Configuration.local_configuration ->
     ?force_new:bool ->
     ?note:string ->
     string ->
-    ([ `new_failure of
+    ([> `new_failure of
         [ `can_nothing ]
-          Layout.Function_assemble_sample_sheet.pointer *
+          Common.Layout.Function_assemble_sample_sheet.pointer *
           [> `layout_inconsistency of
-              [> `record_log | `record_person ] *
+              [> `File_system
+              | `Function of string
+              | `Record of string ] *
                 [> `insert_did_not_return_one_id of string * int32 list
                 | `select_did_not_return_one_tuple of string * int ]
           | `pg_exn of exn
@@ -38,36 +40,32 @@ run ~dbh ~kind:`specific_barcodes ~configuration "FC11IDXXX" >>= function
           | `write_file_error of string * string * exn ]
      | `new_success of
          [ `can_get_result ]
-           Layout.Function_assemble_sample_sheet.pointer
+           Common.Layout.Function_assemble_sample_sheet.pointer
      | `previous_success of
          [ `can_get_result ]
-           Layout.Function_assemble_sample_sheet.pointer *
-           Layout.Record_sample_sheet.pointer ],
+           Common.Layout.Function_assemble_sample_sheet.pointer *
+           Common.Layout.Record_sample_sheet.pointer ],
      [> `barcode_not_found of
-         int32 * Layout.Enumeration_barcode_provider.t
+         int32 * Common.Layout.Enumeration_barcode_provider.t
      | `fatal_error of
-         [>`add_volume_did_not_create_a_tree_volume  of Layout.File_system.pointer
+         [> `add_volume_did_not_create_a_tree_volume of
+             Common.Layout.File_system.pointer
          | `trees_to_unix_paths_should_return_one ]
      | `layout_inconsistency of
-         [> `file_system
-         | `function_assemble_sample_sheet
-         | `record_flowcell
-         | `record_input_library
-         | `record_lane
-         | `record_log
-         | `record_sample_sheet
-         | `record_stock_library ] *
+         [> `File_system
+         | `Function of string
+         | `Record of string
+         | `function_assemble_sample_sheet ] *
            [> `add_did_not_return_one of string * int32 list
            | `insert_did_not_return_one_id of string * int32 list
            | `search_by_name_not_unique of
-               (int32 * Layout.PGOCaml.int32_array) list
+               (int32 * Common.Layout.PGOCaml.int32_array) list
            | `select_did_not_return_one_tuple of string * int
            | `successful_status_with_no_result of int32 ]
      | `pg_exn of exn
      | `wrong_request of
          [> `record_flowcell ] * [> `value_not_found of string ] ])
-      Result_IO.monad
-
+      Common.Result_IO.monad
 end
 
 
@@ -124,7 +122,9 @@ start ~dbh ~configuration       (* common arguments *)
     ([> `failure of
         [ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer *
           [> `layout_inconsistency of
-              [> `record_log | `record_person ] *
+              [> `File_system
+              | `Function of string
+              | `Record of string ] *
                 [> `insert_did_not_return_one_id of string * int32 list
                 | `select_did_not_return_one_tuple of string * int ]
           | `pg_exn of exn
@@ -141,13 +141,7 @@ start ~dbh ~configuration       (* common arguments *)
      | `hiseq_dir_deleted
      | `inconsistency_inode_not_found of int32
      | `layout_inconsistency of
-         [> `file_system
-         | `function_bcl_to_fastq
-         | `record_hiseq_raw
-         | `record_inaccessible_hiseq_raw
-         | `record_log
-         | `record_person
-         | `record_sample_sheet ] *
+         [> `File_system | `Function of string | `Record of string ] *
            [> `insert_did_not_return_one_id of string * int32 list
            | `no_last_modified_timestamp of
                Common.Layout.Record_inaccessible_hiseq_raw.pointer
@@ -157,8 +151,7 @@ start ~dbh ~configuration       (* common arguments *)
            Common.Layout.Record_sample_sheet.pointer * string list
      | `pg_exn of exn
      | `raw_data_path_not_configured
-     | `root_directory_not_configured
-     ])
+     | `root_directory_not_configured ])
       Common.Result_IO.monad
 
   (** Create the resulting [Layout.Record_bcl_to_fastq.t] and register
@@ -176,7 +169,9 @@ start ~dbh ~configuration       (* common arguments *)
     ([> `failure of
         [ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer *
           [> `layout_inconsistency of
-              [> `record_log | `record_person ] *
+              [> `File_system
+              | `Function of string
+              | `Record of string ] *
                 [> `insert_did_not_return_one_id of string * int32 list
                 | `select_did_not_return_one_tuple of string * int ]
           | `pg_exn of exn
@@ -187,11 +182,7 @@ start ~dbh ~configuration       (* common arguments *)
      [> `cannot_recognize_file_type of string
      | `inconsistency_inode_not_found of int32
      | `layout_inconsistency of
-         [> `file_system
-         | `function_bcl_to_fastq
-         | `record_bcl_to_fastq_unaligned
-         | `record_log
-         | `record_person ] *
+         [> `File_system | `Function of string | `Record of string ] *
            [> `add_did_not_return_one of string * int32 list
            | `insert_did_not_return_one_id of string * int32 list
            | `select_did_not_return_one_tuple of string * int ]
@@ -204,48 +195,49 @@ start ~dbh ~configuration       (* common arguments *)
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
   val fail :
-    dbh:Layout.db_handle ->
+    dbh:Common.Layout.db_handle ->
     ?reason:string ->
-    [> `can_complete ] Layout.Function_bcl_to_fastq.pointer ->
-    ([ `can_nothing ] Layout.Function_bcl_to_fastq.pointer,
+    [> `can_complete ] Common.Layout.Function_bcl_to_fastq.pointer ->
+    ([ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer,
      [> `layout_inconsistency of
-         [> `record_log ] *
+         [> `File_system | `Function of string | `Record of string ] *
            [> `insert_did_not_return_one_id of string * int32 list ]
      | `pg_exn of exn ])
-      Result_IO.monad
+      Common.Result_IO.monad
       
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
   val status :
-           dbh:Layout.db_handle ->
-           configuration:Configuration.local_configuration ->
-           'a Layout.Function_bcl_to_fastq.pointer ->
-    ([ `not_started of Layout.Enumeration_process_status.t
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
+    'a Common.Layout.Function_bcl_to_fastq.pointer ->
+    ([ `not_started of Common.Layout.Enumeration_process_status.t
      | `running
-     | `started_but_not_running of [ `system_command_error of string * exn ] ],
+     | `started_but_not_running of
+         [ `system_command_error of string * exn ] ],
      [> `layout_inconsistency of
-         [> `function_bcl_to_fastq ] *
+         [> `File_system | `Function of string | `Record of string ] *
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
-     | `work_directory_not_configured ]) Result_IO.monad
-
-                               
+     | `work_directory_not_configured ])
+      Common.Result_IO.monad
+      
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
-           dbh:Layout.db_handle ->
-           configuration:Configuration.local_configuration ->
-           [> `can_complete ] Layout.Function_bcl_to_fastq.pointer ->
-           ([ `can_nothing ] Layout.Function_bcl_to_fastq.pointer,
-            [> `layout_inconsistency of
-                 [> `function_bcl_to_fastq | `record_log ] *
-                 [> `insert_did_not_return_one_id of string * int32 list
-                  | `select_did_not_return_one_tuple of string * int ]
-             | `not_started of Layout.Enumeration_process_status.t
-             | `pg_exn of exn
-             | `system_command_error of string * exn
-             | `work_directory_not_configured ])
-           Result_IO.monad
-                                                         
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
+    [> `can_complete ] Common.Layout.Function_bcl_to_fastq.pointer ->
+    ([ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer,
+     [> `layout_inconsistency of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
+     | `not_started of Common.Layout.Enumeration_process_status.t
+     | `pg_exn of exn
+     | `system_command_error of string * exn
+     | `work_directory_not_configured ])
+      Common.Result_IO.monad
+
 end
 
 (** The module corresponding to [prepare_unaligned_delivery] in the {i
@@ -278,16 +270,7 @@ module type UNALIGNED_DELIVERY = sig
              | `inconsistency_inode_not_found of int32
              | `io_exn of exn
              | `layout_inconsistency of
-                 [> `file_system
-                  | `function_bcl_to_fastq
-                  | `function_prepare_unaligned_delivery
-                  | `record_bcl_to_fastq_unaligned
-                  | `record_client_fastqs_dir
-                  | `record_flowcell
-                  | `record_invoicing
-                  | `record_lane
-                  | `record_log
-                  | `record_person ] *
+                 [> `File_system | `Record of string | `Function of string ] *
                  [> `insert_did_not_return_one_id of string * int32 list
                   | `select_did_not_return_one_tuple of string * int ]
              | `not_single_flowcell of
@@ -317,21 +300,20 @@ module type DELETE_INTENSITIES = sig
   (** Register a successful deletion of intensity files and create the
       new Hiseq_raw record. *)
   val register :
-    dbh:Layout.db_handle ->
-    hiseq_raw:Layout.Record_hiseq_raw.pointer ->
-    ([ `can_get_result ] Layout.Function_delete_intensities.pointer,
+    dbh:Common.Layout.db_handle ->
+    hiseq_raw:Common.Layout.Record_hiseq_raw.pointer ->
+    ([ `can_get_result ]
+        Common.Layout.Function_delete_intensities.pointer,
      [> `hiseq_dir_deleted
      | `layout_inconsistency of
-         [> `function_delete_intensities
-         | `record_hiseq_raw
-         | `record_inaccessible_hiseq_raw
-         | `record_log ] *
+         [> `File_system | `Function of string | `Record of string ] *
            [> `insert_did_not_return_one_id of string * int32 list
            | `no_last_modified_timestamp of
-               Layout.Record_inaccessible_hiseq_raw.pointer
+               Common.Layout.Record_inaccessible_hiseq_raw.pointer
            | `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn ])
-      Result_IO.monad
+      Common.Result_IO.monad
+
 end
 
 
@@ -352,10 +334,7 @@ module type COERCE_B2F_UNALIGNED = sig
     ([ `can_get_result ]
         Common.Layout.Function_coerce_b2f_unaligned.pointer,
      [> `layout_inconsistency of
-         [> `file_system
-         | `function_coerce_b2f_unaligned
-         | `record_bcl_to_fastq_unaligned
-         | `record_generic_fastqs ] *
+         [> `File_system | `Record of string | `Function of string ] *
            [> `add_did_not_return_one of string * int32 list
            | `insert_did_not_return_one_id of string * int32 list
            | `select_did_not_return_one_tuple of string * int ]

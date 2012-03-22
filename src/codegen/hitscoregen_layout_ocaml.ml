@@ -179,27 +179,43 @@ module OCaml_hiden_exception = struct
   let throw t out what =
     line out "(Result_IO.IO.fail (Local_exn_%s %s))" t.name what
   
+  let explode_module_name nm =
+    match String.lsplit2 ~on:'_' nm with
+    | Some ("Record", r) -> sprintf "`Record %S" r
+    | Some ("Function", r) -> sprintf "`Function %S" r
+    | Some ("File", "system") -> sprintf "`File_system"
+    | _ -> failwithf "explode_module_name, wrong module name: %S" nm ()
+
+      
   let transform_local t =
     let vals = 
       (String.concat ~sep:", " (List.mapi t.types (fun i x -> sprintf "x%d" i)))
     in
     sprintf 
       "`pg_exn (Local_exn_%s (%s)) -> \
-        `layout_inconsistency (`%s, `%s (%s))"
-      t.name vals (String.lowercase t.module_name) t.name vals
+        `layout_inconsistency (%s, `%s (%s))"
+      t.name vals (explode_module_name t.module_name) t.name vals
 
   let transform_global t =
     let vals = 
       (String.concat ~sep:", " (List.mapi t.types (fun i x -> sprintf "x%d" i))) in
     sprintf 
       "`pg_exn (%s.Local_exn_%s (%s)) -> \
-        `layout_inconsistency (`%s, `%s (%s))"
-      t.module_name t.name vals (String.lowercase t.module_name) t.name vals
+        `layout_inconsistency (%s, `%s (%s))"
+      t.module_name t.name vals (explode_module_name t.module_name) t.name vals
       
   let poly_type_local tl = 
-    sprintf "`layout_inconsistency of [> `%s] * [> %s]"
-      (String.concat ~sep:"\n | `"
-         (List.dedup (List.map tl (fun t -> String.lowercase t.module_name))))      
+    sprintf "`layout_inconsistency of \
+              [> %s ] * [> %s]"
+      (String.concat ~sep:"\n | "
+         (List.dedup (List.map tl (fun t ->
+           match String.lsplit2 ~on:'_' t.module_name with
+           | Some ("Record", r) -> sprintf "`Record of string"
+           | Some ("Function", r) -> sprintf "`Function of string"
+           | Some ("File", "system") -> sprintf "`File_system"
+           | _ ->
+             failwithf "explode_module_name, wrong module name: %S"
+               t.module_name ()))))      
       (String.concat ~sep:"\n  | " (List.dedup (List.map tl (fun t ->
         sprintf "`%s of (%s)" t.name (String.concat ~sep:" * " t.types)))))
       

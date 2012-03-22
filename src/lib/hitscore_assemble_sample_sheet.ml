@@ -88,7 +88,7 @@ module Make
                          |> Array.to_list)
             | [] -> error (`wrong_request (`record_flowcell, 
                                            `value_not_found flowcell_name))
-            | l -> error (`layout_inconsistency (`record_flowcell,
+            | l -> error (`layout_inconsistency (`Record "flowcell",
                                                  `search_by_name_not_unique l)))
       in
       let previous_assembly flowcell =

@@ -30,7 +30,7 @@ module type COMMON = sig
        Layout.Record_hiseq_raw.pointer Hitscore_std.List.t,
      [> `hiseq_dir_deleted
      | `layout_inconsistency of
-         [> `record_inaccessible_hiseq_raw ] *
+         [>  `File_system | `Function of string | `Record of string ] *
            [> `insert_did_not_return_one_id of string * int32 list
            | `no_last_modified_timestamp of
                Layout.Record_inaccessible_hiseq_raw.pointer
@@ -65,7 +65,7 @@ module type COMMON = sig
      [> `cannot_recognize_file_type of string
      | `inconsistency_inode_not_found of int32
      | `layout_inconsistency of
-         [> `file_system ] *
+         [>  `File_system ] *
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
      | `root_directory_not_configured ])
@@ -80,7 +80,7 @@ module type COMMON = sig
      [> `cannot_recognize_file_type of string
      | `inconsistency_inode_not_found of int32
      | `layout_inconsistency of
-         [> `file_system ] *
+         [> `File_system ] *
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
      | `root_directory_not_configured ])
@@ -122,7 +122,7 @@ module type COMMON = sig
       configuration:Configuration.local_configuration ->
       (unit,
        [> `layout_inconsistency of
-           [> `record_log | `record_person ] *
+           [>  `File_system | `Function of string | `Record of string ] *
              [> `insert_did_not_return_one_id of string * int32 list
              | `select_did_not_return_one_tuple of string * int ]
        | `pg_exn of exn
@@ -137,7 +137,7 @@ module type COMMON = sig
       string ->
       (unit,
        [> `layout_inconsistency of
-           [> `record_log | `record_person ] *
+           [>  `File_system | `Function of string | `Record of string ] *
              [> `insert_did_not_return_one_id of string * int32 list
              | `select_did_not_return_one_tuple of string * int ]
        | `pg_exn of exn
@@ -168,7 +168,7 @@ module type COMMON = sig
       string ->
       (unit,
        [> `layout_inconsistency of
-           [> `record_log | `record_person ] *
+           [>  `File_system | `Function of string | `Record of string ] *
              [> `insert_did_not_return_one_id of string * int32 list
              | `select_did_not_return_one_tuple of string * int ]
        | `pg_exn of exn
@@ -209,7 +209,7 @@ module type COMMON = sig
         dbh:Layout.db_handle ->
         (Layout.Enumeration_process_status.t,
          [> `layout_inconsistency of
-             [> `function_bcl_to_fastq ] *
+             [>  `File_system | `Function of string | `Record of string ] *
                [> `select_did_not_return_one_tuple of string * int ]
          | `pg_exn of exn ])
           Layout.Result_IO.monad
@@ -228,7 +228,7 @@ module type COMMON = sig
       [> `can_complete ] Layout_function.pointer ->
       ([ `can_nothing ] Layout_function.pointer,
        [> `layout_inconsistency of
-           [> `record_log ] *
+           [>  `File_system | `Function of string | `Record of string ] *
              [> `insert_did_not_return_one_id of string * int32 list ]
        | `pg_exn of exn ])
         Result_IO.monad
@@ -243,7 +243,7 @@ module type COMMON = sig
        | `running
        | `started_but_not_running of [ `system_command_error of string * exn ] ],
        [> `layout_inconsistency of
-           [> `function_bcl_to_fastq ] *
+           [>  `File_system | `Function of string | `Record of string ] *
              [> `select_did_not_return_one_tuple of string * int ]
        | `pg_exn of exn
        | `work_directory_not_configured ]) Result_IO.monad
@@ -255,7 +255,7 @@ module type COMMON = sig
       [> `can_complete ] Layout_function.pointer ->
       ([ `can_nothing ] Layout_function.pointer,
        [> `layout_inconsistency of
-           [> `function_bcl_to_fastq | `record_log ] *
+           [>  `File_system | `Function of string | `Record of string ] *
              [> `insert_did_not_return_one_id of string * int32 list
              | `select_did_not_return_one_tuple of string * int ]
        | `not_started of Layout.Enumeration_process_status.t
@@ -301,7 +301,7 @@ module Make
         begin match g_last_modified with
         | Some t -> return (p, t, Array.to_list deleted)
         | None -> error (`layout_inconsistency 
-                            (`record_inaccessible_hiseq_raw,
+                            (`Record "inaccessible_hiseq_raw",
                              `no_last_modified_timestamp p))
         end)
       >>| List.sort ~cmp:(fun a b -> compare (snd3 b) (snd3 a))
@@ -509,7 +509,7 @@ module Make
      dbh:Layout.db_handle ->
      (Layout.Enumeration_process_status.t,
       [> `layout_inconsistency of
-          [> `function_bcl_to_fastq ] *
+          [>  `File_system | `Function of string | `Record of string ] *
             [> `select_did_not_return_one_tuple of string * int ]
       | `pg_exn of exn ])
        Layout.Result_IO.monad

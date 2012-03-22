@@ -1263,17 +1263,9 @@ module Prepare_delivery = struct
       | `layout_inconsistency (where, what) ->
         out "Layout problem: In ";
         begin match where with
-        | `file_system -> "File system"
-        | `function_bcl_to_fastq -> "Function bcl_to_fastq"
-        | `function_prepare_unaligned_delivery -> 
-          "Function prepare_unaligned_delivery"
-        | `record_bcl_to_fastq_unaligned -> "Record bcl_to_fastq_unaligned"
-        | `record_client_fastqs_dir -> "Record client_fastqs_dir"
-        | `record_flowcell -> "Record flowcell"
-        | `record_lane -> "Record lane"
-        | `record_log -> "Record log"
-        | `record_invoicing -> "Record invoicing"
-        | `record_person -> "Record person"
+        | `File_system -> "File system"
+        | `Function f -> sprintf "Function %s" f
+        | `Record r -> sprintf "Record %s" r
         end |! out "%s, ";
         begin match what with
         | `select_did_not_return_one_tuple (s, d) ->
