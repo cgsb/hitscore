@@ -104,7 +104,7 @@ module Make
             non_checked "echo \"Done: $(date -R)\"")
         >>= fun pbs_script ->
         let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
-        Common.PBS.prepapre_work_environment ~dbh ~configuration pbs
+        Common.PBS.prepare_work_environment ~dbh ~configuration pbs
         >>= fun () ->
         (*cmd "mkdir -p %s" unaligned >>= fun () ->*)
         cmd ". /share/apps/casava/%s/intel/env.sh && \

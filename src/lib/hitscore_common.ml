@@ -142,7 +142,7 @@ module type COMMON = sig
       t ->
       configuration:Configuration.local_configuration ->
       (string, [> `work_directory_not_configured ]) Result_IO.monad
-    val prepapre_work_environment :
+    val prepare_work_environment :
       t ->
       dbh:Access_rights.Layout.db_handle ->
       configuration:Configuration.local_configuration ->
@@ -455,13 +455,19 @@ module Make
       work_path_for_job t ~configuration  >>= fun wp ->
       return Filename.(concat wp t.pbs_script_filename)
       
-    let prepapre_work_environment t ~dbh ~configuration  =
+    let prepare_work_environment t ~dbh ~configuration  =
       work_path_for_job t ~configuration  >>= fun wp ->
       pbs_output_path   t ~configuration  >>= fun op ->
       pbs_runtime_path  t ~configuration  >>= fun rp ->
       pbs_result_path   t ~configuration  >>= fun sp ->
-      ksprintf system_command "mkdir -p %s %s %s %s" wp op rp sp >>= fun () ->
-      Access_rights.set_posix_acls ~dbh (`dir wp) ~configuration
+      ksprintf system_command "mkdir -p %s" wp >>= fun () -> 
+      ksprintf system_command "mkdir -p %s" op >>= fun () -> 
+      ksprintf system_command "mkdir -p %s" rp >>= fun () -> 
+      ksprintf system_command "mkdir -p %s" sp >>= fun () -> 
+      Access_rights.set_posix_acls ~dbh (`dir wp) ~configuration >>= fun () ->
+      Access_rights.set_posix_acls ~dbh (`dir op) ~configuration >>= fun () ->
+      Access_rights.set_posix_acls ~dbh (`dir rp) ~configuration >>= fun () ->
+      Access_rights.set_posix_acls ~dbh (`dir sp) ~configuration
       
     let save_pbs_runtime_information t ~dbh ~configuration dest =
       pbs_output_path   t ~configuration  >>= fun op ->

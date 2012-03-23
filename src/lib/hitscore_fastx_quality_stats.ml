@@ -83,6 +83,7 @@ module Make
               hitscore_command id cmd)
           ~add_commands:(fun ~checked ~non_checked ->
             non_checked "echo \"Start: $(date -R)\"";
+	    ksprintf checked ". /etc/profile.d/env-modules.sh";
             ksprintf checked "module load fastx_toolkit/intel/0.0.13";
             List.iter possible_paths (fun path_to_explore ->
               let filter_fastq =
@@ -96,7 +97,7 @@ module Make
             );
             non_checked "echo \"Done: $(date -R)\"")
         >>= fun pbs_script ->
-        Common.PBS.prepapre_work_environment ~dbh ~configuration pbs
+        Common.PBS.prepare_work_environment ~dbh ~configuration pbs
         >>= fun () ->
         Common.PBS.qsub_pbs_script ~dbh ~configuration pbs pbs_script
         >>= fun () ->
@@ -130,8 +131,7 @@ module Make
       Common.PBS.save_pbs_runtime_information pbs ~dbh ~configuration path_vol
       >>= fun () ->
       let move_m =
-        ksprintf system_command "mkdir -p %s/" path_vol >>= fun () ->
-        ksprintf system_command "mv %s/* %s/" result_root path_vol
+        ksprintf system_command "if [ -f %s/* ]; then mv %s/* %s; fi" result_root result_root path_vol
         >>= fun () ->
         Access_rights.set_posix_acls ~dbh (`dir path_vol) ~configuration
       in
