@@ -211,10 +211,10 @@
           (input bcl_to_fastq_unaligned))
           
 
-(volume fastx_result_dir fastx)
-(record fastx_results
-        (directory fastx_result_dir))
-(function fastx_results fastx_quality_stats
+(volume fastx_quality_stats_dir fastx_quality_stats)
+(record fastx_quality_stats_result
+        (directory fastx_quality_stats_dir))
+(function fastx_quality_stats_result fastx_quality_stats
           (input_dir generic_fastqs)
           (option_Q int)
           (filter_names string option))
