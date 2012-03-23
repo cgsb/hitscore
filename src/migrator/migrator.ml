@@ -108,7 +108,7 @@ let v06_to_v07 file_in file_out =
       | List l ->
         List (List.map ~f:parse l) in
     dump_v06
-    |! add_empty "record_fastx_results"
+    |! add_empty "record_fastx_quality_stats_result"
     |! add_empty "function_fastx_quality_stats"
     |! add_empty "record_generic_fastqs"
     |! add_empty "function_coerce_b2f_unaligned"
