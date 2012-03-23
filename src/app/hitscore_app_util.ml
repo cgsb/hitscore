@@ -112,6 +112,10 @@ let string_of_error = function
       (List.map l (sprintf " * %S\n") |! String.concat ~sep:"")
   | `fatal_error (`add_volume_did_not_create_a_tree_volume v) ->
     sprintf "DATABASE-ERROR: add_volume_did_not_create_a_tree_volume!\n"
+  | `cannot_recognize_fastq_format file ->
+    sprintf "cannot_recognize_fastq_format of %s" file
+  | `file_path_not_in_volume (file, v) ->
+    sprintf "file_path_not_in_volume (%s, %ld)" file v.Layout.File_system.id
 
 let display_errors = function
   | Ok _ -> ()

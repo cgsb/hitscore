@@ -68,7 +68,20 @@ module type COMMON = sig
     kind:Layout.Enumeration_volume_kind.t ->
     string
       
-  (** Get all the full paths of a given volume pointer. *) 
+  (** Get the trees of a volume pointer (follows virtual symbolic links). *)
+  val trees_of_volume:
+    dbh:Layout.db_handle ->
+    configuration:Configuration.local_configuration ->
+    Layout.File_system.pointer ->
+    (Layout.File_system.tree list,
+     [> `layout_inconsistency of
+         [> `File_system ] *
+           [> `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn ])
+      Result_IO.monad
+      
+  (** Get all the full paths of a given volume pointer (follows
+      virtual symbolic links). *)
   val path_of_volume:
     configuration:Configuration.local_configuration ->
     dbh:Layout.db_handle ->
@@ -83,7 +96,8 @@ module type COMMON = sig
      | `root_directory_not_configured ])
       Result_IO.monad
 
-  (** Get all the full paths of a given volume pointer. *) 
+  (** Get all the full paths of a given volume pointer (follows
+      virtual symbolic links). *)
   val all_paths_of_volume:
     configuration:Configuration.local_configuration ->
     dbh:Layout.db_handle ->
@@ -361,6 +375,13 @@ module Make
     let toplevel = Layout.File_system.toplevel_of_kind kind in
     sprintf "%s/%09ld%s" toplevel id
       (Option.value_map ~default:"" hr_tag ~f:((^) "_"))
+
+  let rec trees_of_volume ~dbh ~configuration volume_pointer =
+    Layout.File_system.(
+      get_volume ~dbh volume_pointer >>= fun {volume_content} ->
+      match volume_content with
+      | Link p -> trees_of_volume ~dbh ~configuration p
+      | Tree (_, t) -> return t)
 
 
   let rec path_of_volume ~configuration ~dbh volume_pointer =

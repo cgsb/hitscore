@@ -351,25 +351,128 @@ module type FASTX_QUALITY_STATS = sig
   open Common
 (**/**)
 
+  (** Call fastx_quality_stats the “right” way. *)
+  val call_fastx :
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
+    volume:Common.Layout.File_system.pointer ->
+    option_Q:int ->
+    Hitscore_std.String.t ->
+    string ->
+    (unit,
+     [> `cannot_recognize_file_type of string
+     | `cannot_recognize_fastq_format of string
+     | `file_path_not_in_volume of
+         Hitscore_std.String.t * Common.Layout.File_system.pointer
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
+         [> `File_system ] *
+           [> `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn
+     | `root_directory_not_configured
+     | `system_command_error of string * exn ])
+      Common.Result_IO.monad
   
   (** Start *)
   val start :
-    dbh:Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
-    ?option_Q:int ->
-    ?filter_names:string ->
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
+    ?option_Q:int32 ->
+    ?filter_names:Hitscore_std.String.sexpable
+      Hitscore_std.List.sexpable ->
     ?user:string ->
     ?wall_hours:int ->
     ?nodes:int ->
     ?ppn:int ->
     ?queue:string ->
     ?hitscore_command:string ->
-    ?make_command:string ->
-    input_dir:Layout.Record_generic_fastqs.pointer ->
-    ([ `can_complete ]
-        Common.Layout.Function_fastx_quality_stats.pointer,
-     [> `pg_exn of exn ])
+    Common.Layout.Record_generic_fastqs.pointer ->
+    ([ `can_complete ] Layout.Function_fastx_quality_stats.pointer,
+     [> `cannot_recognize_file_type of string
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn
+     | `root_directory_not_configured
+     | `system_command_error of string * exn
+     | `work_directory_not_configured
+     | `write_file_error of string * string * exn ])
       Common.Result_IO.monad
 
+  val succeed :
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
+    [> `can_complete ] Layout.Function_fastx_quality_stats.pointer ->
+    ([> `failure of
+        [ `can_nothing ] Layout.Function_fastx_quality_stats.pointer *
+          [> `layout_inconsistency of
+              [> `File_system
+              | `Function of string
+              | `Record of string ] *
+                [> `insert_did_not_return_one_id of string * int32 list
+                | `select_did_not_return_one_tuple of string * int ]
+          | `pg_exn of exn
+          | `system_command_error of string * exn ]
+     | `success of [ `can_get_result ] Layout.Function_fastx_quality_stats.pointer ],
+     [> `cannot_recognize_file_type of string
+     | `inconsistency_inode_not_found of int32
+     | `layout_inconsistency of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `add_did_not_return_one of string * int32 list
+           | `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn
+     | `root_directory_not_configured
+     | `system_command_error of string * exn
+     | `work_directory_not_configured ])
+      Common.Result_IO.monad
+      
+  (** Register the evaluation as failed with a optional reason to add
+      to the [log] (record). *)
+  val fail :
+    dbh:Common.Layout.db_handle ->
+    ?reason:string ->
+    [> `can_complete ] Common.Layout.Function_fastx_quality_stats.pointer ->
+    ([ `can_nothing ] Common.Layout.Function_fastx_quality_stats.pointer,
+     [> `layout_inconsistency of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `insert_did_not_return_one_id of string * int32 list ]
+     | `pg_exn of exn ])
+      Common.Result_IO.monad
+      
+  (** Get the status of the evaluation by checking its data-base
+      status and it presence in the PBS queue. *)
+  val status :
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
+    'a Common.Layout.Function_fastx_quality_stats.pointer ->
+    ([ `not_started of Common.Layout.Enumeration_process_status.t
+     | `running
+     | `started_but_not_running of
+         [ `system_command_error of string * exn ] ],
+     [> `layout_inconsistency of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn
+     | `work_directory_not_configured ])
+      Common.Result_IO.monad
+      
+  (** Kill the evaluation ([qdel]) and set it as failed. *)
+  val kill :
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
+    [> `can_complete ] Common.Layout.Function_fastx_quality_stats.pointer ->
+    ([ `can_nothing ] Common.Layout.Function_fastx_quality_stats.pointer,
+     [> `layout_inconsistency of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
+     | `not_started of Common.Layout.Enumeration_process_status.t
+     | `pg_exn of exn
+     | `system_command_error of string * exn
+     | `work_directory_not_configured ])
+      Common.Result_IO.monad
 
 end
