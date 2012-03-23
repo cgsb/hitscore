@@ -106,7 +106,7 @@ module Make
         let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
         Common.PBS.prepapre_work_environment ~dbh ~configuration pbs
         >>= fun () ->
-        cmd "mkdir -p %s" unaligned >>= fun () ->
+        (*cmd "mkdir -p %s" unaligned >>= fun () ->*)
         cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     %s --input-dir %s \
