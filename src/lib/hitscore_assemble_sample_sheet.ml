@@ -88,8 +88,10 @@ module Make
                          |> Array.to_list)
             | [] -> error (`wrong_request (`record_flowcell, 
                                            `value_not_found flowcell_name))
-            | l -> error (`layout_inconsistency (`Record "flowcell",
-                                                 `search_by_name_not_unique l)))
+            | l -> error (`layout_inconsistency
+                             (`Record "flowcell",
+                              `search_flowcell_by_name_not_unique
+                                (flowcell_name, l))))
       in
       let previous_assembly flowcell =
         wrap_pgocaml
@@ -110,7 +112,7 @@ module Make
                   (unsafe_cast idf : [ `can_get_result ] pointer)),
                 Layout.Record_sample_sheet.unsafe_cast idr))
             | (idf, None) :: _ ->
-              error (`layout_inconsistency (`function_assemble_sample_sheet,
+              error (`layout_inconsistency (`Function "assemble_sample_sheet",
                                             `successful_status_with_no_result idf))
             | _ -> return None)
       in

@@ -18,6 +18,7 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
       ]}.
       If [~force_new] is [true] the run does not check existing assemblies.
   *)
+
   val run :
     dbh:(string, bool) Batteries.Hashtbl.t Common.Layout.PGOCaml.t ->
     kind:Common.Layout.Enumeration_sample_sheet_kind.t ->
@@ -52,20 +53,18 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
              Common.Layout.File_system.pointer
          | `trees_to_unix_paths_should_return_one ]
      | `layout_inconsistency of
-         [> `File_system
-         | `Function of string
-         | `Record of string
-         | `function_assemble_sample_sheet ] *
+         [> `File_system | `Function of string | `Record of string ] *
            [> `add_did_not_return_one of string * int32 list
            | `insert_did_not_return_one_id of string * int32 list
-           | `search_by_name_not_unique of
-               (int32 * Common.Layout.PGOCaml.int32_array) list
+           | `search_flowcell_by_name_not_unique of
+               (string * (int32 * Common.Layout.PGOCaml.int32_array) list)
            | `select_did_not_return_one_tuple of string * int
            | `successful_status_with_no_result of int32 ]
      | `pg_exn of exn
      | `wrong_request of
          [> `record_flowcell ] * [> `value_not_found of string ] ])
       Common.Result_IO.monad
+
 end
 
 
