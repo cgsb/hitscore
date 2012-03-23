@@ -161,7 +161,7 @@ module Make
                   return ()
                 | l ->
                   let undetermined =
-                    print out "%s,%d,UndeterminedLane%d,,,,N,,,Lane%d\n"
+                    print out "%s,%d,UndeterminedLane%d,,Undetermined,,N,,,Lane%d\n"
                       flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
                     return () in
                   undetermined >>= fun () ->
