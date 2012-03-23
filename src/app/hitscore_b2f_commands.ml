@@ -1,11 +1,11 @@
 open Core.Std
 
-module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
+
+
+open Hitscore_app_util
 
 open Hitscore_threaded
 open Result_IO
-
-open Hitscore_app_util
 
 let get_or_make_sample_sheet ~dbh ~hsc ~kind ?force_new flowcell =
   Assemble_sample_sheet.run ~configuration:hsc ~kind ~dbh ?force_new flowcell
@@ -22,68 +22,6 @@ let get_or_make_sample_sheet ~dbh ~hsc ~kind ?force_new flowcell =
   | `previous_success (f, r) ->
     printf "Assemble_sample_sheet.run hit a previously ran assembly\n";
     return r
-
-
-let display_errors = function
-  | Ok _ -> ()
-  | Error e ->
-    begin match e with
-    | `barcode_not_found (i, p) ->
-      printf "ERROR: Barcode not found: %ld (%s)\n" i
-        (Layout.Enumeration_barcode_provider.to_string p)
-    | `fatal_error  `trees_to_unix_paths_should_return_one ->
-      printf "FATAL_ERROR: trees_to_unix_paths_should_return_one\n"
-    | `io_exn e ->
-      printf "IO-ERROR: %s\n" (Exn.to_string e)
-    | `layout_inconsistency (_, _) ->
-      printf "LAYOUT-INCONSISTENCY-ERROR!\n"
-    | `new_failure (_, _) ->
-      printf "NEW FAILURE\n"
-    | `pg_exn e ->
-      printf "PGOCaml-ERROR: %s\n" (Exn.to_string e)
-    | `wrong_request (`record_flowcell, `value_not_found s) ->
-      printf "WRONG-REQUEST: Record 'flowcell': value not found: %s\n" s
-    | `cant_find_hiseq_raw_for_flowcell flowcell ->
-      printf "Cannot find a HiSeq directory for that flowcell: %S\n" flowcell
-    | `found_more_than_one_hiseq_raw_for_flowcell (nb, flowcell) ->
-      printf "There are %d HiSeq directories for that flowcell: %S\n" nb flowcell
-    | `hiseq_dir_deleted ->
-      printf "INVALID-REQUEST: The HiSeq directory is reported 'deleted'\n"
-    | `cannot_recognize_file_type t ->
-      printf "LAYOUT-INCONSISTENCY-ERROR: Unknown file-type: %S\n" t
-    | `empty_sample_sheet_volume (v, s) ->
-      printf "LAYOUT-INCONSISTENCY-ERROR: Empty sample-sheet volume\n"
-    | `inconsistency_inode_not_found i32 ->
-      printf "LAYOUT-INCONSISTENCY-ERROR: Inode not found: %ld\n" i32
-    | `more_than_one_file_in_sample_sheet_volume (v,s,m) ->
-      printf "LAYOUT-INCONSISTENCY-ERROR: More than one file in \
-                sample-sheet volume:\n%s\n" (String.concat ~sep:"\n" m)
-    | `root_directory_not_configured ->
-      printf "INVALID-CONFIGURATION: Root directory not set.\n"
-    | `raw_data_path_not_configured ->
-      printf "INVALID-CONFIGURATION: Raw-data path not set.\n"
-    | `work_directory_not_configured ->
-      printf "INVALID-CONFIGURATION: Work directory not set.\n"
-    | `write_file_error (f,c,e) ->
-      printf "SYS-FILE-ERROR: Write file error: %s\n" (Exn.to_string e)
-    | `system_command_error (cmd, e) ->
-      printf "SYS-CMD-ERROR: Command: %S --> %s\n" cmd (Exn.to_string e)
-    | `status_parsing_error s ->
-      printf "LAYOUT-INCONSISTENCY-ERROR: Cannot parse function status: %s\n" s
-    | `wrong_status s ->
-      printf "INVALID-REQUEST: Function has wrong status: %s\n"
-        (Layout.Enumeration_process_status.to_string s)
-    | `not_started e ->
-      printf "INVALID-REQUEST: The function is NOT STARTED: %S.\n"
-        (Layout.Enumeration_process_status.to_string e);
-    | `assemble_sample_sheet_no_result ->
-      printf "LAYOUT-INCONSISTENCY: The sample-sheet assembly has no result\n"
-    | `there_is_more_than_unaligned l ->
-      printf "UNEXPECTED-LAYOUT: there is more than one unaligned directory\n";
-      List.iter l (printf " * %S\n")
-    | `fatal_error (`add_volume_did_not_create_a_tree_volume v) ->
-      printf "DATABASE-ERROR: add_volume_did_not_create_a_tree_volume!\n"
-    end
 
 let get_hiseq_raw ~dbh s =
   begin match String.split ~on:'_' (Filename.basename s) with

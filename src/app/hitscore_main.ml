@@ -2,10 +2,10 @@
 open Core.Std
 let (|>) x f = f x
 
-module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
-module Hitscore_db = Hitscore_threaded.Layout
 
 open Hitscore_app_util
+open Hitscore_threaded
+
 
 module Configuration_file = struct
 
@@ -348,9 +348,9 @@ module Dumps = struct
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       let dump =
-        match Hitscore_db.get_dump ~dbh with
+        match Layout.get_dump ~dbh with
         | Ok dump ->
-          Hitscore_db.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum
+          Layout.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum
         | Error (`layout_inconsistency 
                     (`file_system, `select_did_not_return_one_cache (tbl, l))) ->
           eprintf "get_dump detected a file system inconsistency: \n\
@@ -375,8 +375,8 @@ module Dumps = struct
     | Ok dbh ->
       let insert_result = 
         In_channel.with_file file ~f:(fun i ->
-          Sexplib.Sexp.input_sexp i |> Hitscore_db.dump_of_sexp |>
-              Hitscore_db.insert_dump ~dbh) in
+          Sexplib.Sexp.input_sexp i |> Layout.dump_of_sexp |>
+              Layout.insert_dump ~dbh) in
       begin match insert_result with 
       | Ok () -> eprintf "Load: Ok\n%!"
       | Error (`wrong_version (one, two)) ->
@@ -572,7 +572,7 @@ module Verify = struct
     begin match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
       let (>>>) x f = Result.ok_exn ~fail:(Failure f) x in
-      let vols = Hitscore_db.File_system.get_all ~dbh >>> "File_system.get_all" in
+      let vols = Layout.File_system.get_all ~dbh >>> "File_system.get_all" in
       List.iter vols ~f:(fun volume -> 
         let path =
           Hitscore_threaded.Common.path_of_volume ~dbh ~configuration:hsc
