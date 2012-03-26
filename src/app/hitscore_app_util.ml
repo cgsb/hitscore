@@ -145,7 +145,8 @@ let print_query_result query l =
       sprintf "(%s)"
         (String.concat ~sep:", " (List.map l2 (Option.value ~default:"—"))))))
     
-let pbs_related_command_line_options () = 
+let pbs_related_command_line_options
+    ?(default_nodes=1) ?(default_ppn=8) ?(default_wall_hours=12) () = 
   let user = ref (Sys.getenv "LOGNAME") in
   let queue = 
     let groups =
@@ -154,9 +155,9 @@ let pbs_related_command_line_options () =
     match List.find groups ((=) "cgsb") with
     | Some _ -> ref (Some "cgsb-s")
     | None -> ref None in
-  let nodes = ref 1 in
-  let ppn = ref 8 in
-  let wall_hours = ref 12 in
+  let nodes = ref default_nodes in
+  let ppn = ref default_ppn in
+  let wall_hours = ref default_wall_hours in
   let hitscore_command =
     ref (sprintf "%s %s %s" Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
   let options = [

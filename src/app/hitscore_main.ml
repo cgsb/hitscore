@@ -1356,7 +1356,7 @@ module Fastx_qs = struct
 
   let start_parse_cmdline usage_prefix args =
     let (user, queue, nodes, ppn, wall_hours, hitscore_command, pbs_options) =
-      pbs_related_command_line_options () in
+      pbs_related_command_line_options ~default_ppn:1 () in
     let from_b2f = ref None in
     let options = pbs_options @ [
       ("-from-b2f", Arg.Int (fun i -> from_b2f := Some i),
