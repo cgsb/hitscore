@@ -676,58 +676,105 @@ module Verify = struct
     check work_libraries "stock-library";
     ()
     
-  let wake_up ?(fix_it=false) hsc =
+  module Make_fixable_status_checker (Layout_function : sig
+    type 'a pointer = private {
+      id : int32;
+    }
+    val get_all_started : dbh:Layout.db_handle ->
+      ([ `can_complete ] pointer list, [> `pg_exn of exn ]) Flow.monad
+  end)
+    (Function_implementation: sig
+      val fail :
+        dbh:Layout.db_handle ->
+        ?reason:string ->
+        [> `can_complete ] Layout_function.pointer ->
+        ([ `can_nothing ] Layout_function.pointer,
+         [> `layout_inconsistency of
+             [>  `File_system | `Function of string | `Record of string ] *
+               [> `insert_did_not_return_one_id of string * int32 list ]
+         | `pg_exn of exn ])
+          Flow.monad
+          
+      val status :
+      dbh:Layout.db_handle ->
+      configuration:Configuration.local_configuration ->
+      'a Layout_function.pointer ->
+      ([ `not_started of Layout.Enumeration_process_status.t
+       | `running
+       | `started_but_not_running of [ `system_command_error of string * exn ] ],
+       [> `layout_inconsistency of
+           [>  `File_system | `Function of string | `Record of string ] *
+             [> `select_did_not_return_one_tuple of string * int ]
+       | `pg_exn of exn
+       | `work_directory_not_configured ]) Flow.monad
+    end) = struct
+
+      let check_and_fix ~dbh ~configuration ~fix_it () =
+        let open Layout_function in
+        let started =
+          match get_all_started ~dbh with
+          | Ok l -> l
+          | Error (`pg_exn e) -> 
+            failwithf "Layout_function.get_all_started: %S" (Exn.to_string e) ()
+        in
+        List.iter started ~f:(fun pointer ->
+          let status = 
+            Function_implementation.status ~dbh ~configuration pointer in
+          match status with
+          | Ok `running -> ()
+          | Ok (`started_but_not_running e) -> 
+            printf "The function %ld is STARTED BUT NOT RUNNING!!!\n" pointer.id;
+            if fix_it then (
+              printf "Fixing …\n";
+              Function_implementation.fail ~dbh pointer
+                ~reason:"checking_status_reported_started_but_not_running"
+              |! ignore)
+          | Ok (`not_started e) ->
+            printf "ERROR: The function %ld is NOT STARTED: %S.\n"
+              pointer.id
+              (Layout.Enumeration_process_status.to_string e);
+          | Error (`pg_exn e) -> 
+            printf "ERROR Function_implementation.status: %S\n" (Exn.to_string e) 
+          | Error (`status_parsing_error e) ->
+            printf "ERROR Function_implementation.status: status_parsing_error %S\n" e 
+          | Error (`work_directory_not_configured) ->
+            printf "ERROR Function_implementation.status: \
+               work_directory_not_configured\n" 
+          | Error _ ->
+            failwithf "Function_implementation.status.status ERROR" ()
+        )
+
+
+    end
+
+    
+  let wake_up ?(fix_it=false) configuration =
     let open Hitscore_threaded in
-    begin match db_connect hsc with
+    begin match db_connect configuration with
     | Ok dbh ->
       let count_fs_errors =
-        List.fold_left (check_file_system ~verbose:false hsc)
+        List.fold_left (check_file_system ~verbose:false configuration)
           ~init:0 ~f:(fun x -> function `info _ -> x | `error _ -> x + 1) in
       begin match count_fs_errors with
       | 0 -> printf "File-system: OK.\n"; 
       | n -> printf "File-system: %d errors.\n" n
       end;
       let () =
-        let open Layout.Function_bcl_to_fastq in
-        let started_b2fs =
-          match get_all_started ~dbh with
-          | Ok l -> l
-          | Error (`pg_exn e) -> 
-            failwithf "B2F.get_all_started: %S" (Exn.to_string e) ()
-        in
-        List.iter started_b2fs (fun bcl_to_fastq ->
-          let status = 
-            Bcl_to_fastq.status ~dbh ~configuration:hsc bcl_to_fastq in
-          match status with
-          | Ok `running -> ()
-          | Ok (`started_but_not_running e) -> 
-            printf "The function %ld is STARTED BUT NOT RUNNING!!!\n"
-              bcl_to_fastq.id;
-            if fix_it then (
-              printf "Fixing …\n";
-              Bcl_to_fastq.fail ~dbh bcl_to_fastq
-                ~reason:"checking_status_reported_started_but_not_running"
-              |! ignore)
-          | Ok (`not_started e) ->
-            printf "ERROR: The function %ld is NOT STARTED: %S.\n"
-              bcl_to_fastq.id
-              (Layout.Enumeration_process_status.to_string e);
-          | Error (`pg_exn e) -> 
-            printf "ERROR B2F.status: %S\n" (Exn.to_string e) 
-          | Error (`status_parsing_error e) ->
-            printf "ERROR B@f.status: status_parsing_error %S\n" e 
-          | Error (`work_directory_not_configured) ->
-            printf "ERROR B2F.status: work_directory_not_configured\n" 
-          | Error _ ->
-            failwithf "B2F.status ERROR" ()
-        )
+        let module Check_b2f =
+          Make_fixable_status_checker
+            (Layout.Function_bcl_to_fastq) (Bcl_to_fastq) in
+        Check_b2f.check_and_fix ~dbh ~configuration ~fix_it  ();
+        let module Check_fxqs =
+          Make_fixable_status_checker
+            (Layout.Function_fastx_quality_stats) (Fastx_quality_stats) in
+        Check_fxqs.check_and_fix ~dbh ~configuration ~fix_it  ();
       in
-      db_disconnect hsc dbh |! ignore
+      db_disconnect configuration dbh |! ignore
 
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
     end;
-    check_duplicates hsc;
+    check_duplicates configuration;
     Some ()
 
 
