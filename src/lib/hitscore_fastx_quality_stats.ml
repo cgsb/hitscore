@@ -62,7 +62,7 @@ module Make
       let after_start_work =
         let id = created.LFQS.id in
         let pbs = pbs_fun id in
-        let job_name = sprintf "fastx" in
+        let job_name = sprintf "hs_fxqs_%ld" id in
         LFQS.set_started ~dbh created >>= fun started ->
         Common.add_log ~dbh
           (sprintf "(started_fastx_quality_stats %ld)" id)
@@ -131,7 +131,7 @@ module Make
       Common.PBS.save_pbs_runtime_information pbs ~dbh ~configuration path_vol
       >>= fun () ->
       let move_m =
-        ksprintf system_command "if [ -f %s/* ]; then mv %s/* %s; fi" result_root result_root path_vol
+        ksprintf system_command "mv %s/* %s" result_root path_vol
         >>= fun () ->
         Access_rights.set_posix_acls ~dbh (`dir path_vol) ~configuration
       in
