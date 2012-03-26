@@ -1358,10 +1358,19 @@ module Fastx_qs = struct
     let (user, queue, nodes, ppn, wall_hours, hitscore_command, pbs_options) =
       pbs_related_command_line_options ~default_ppn:1 () in
     let from_b2f = ref None in
+    let option_Q = ref None in
+    let filter = ref [] in
     let options = pbs_options @ [
       ("-from-b2f", Arg.Int (fun i -> from_b2f := Some i),
        "<id>\n\tMake a link to the volume and luanch fastx on the \
                result of the bcl-to-fastq <id> ...");
+      ("-option-Q", Arg.Int (fun q -> option_Q := Some q),
+       "<q>\n\tUse <q> as the -Q option for fastx.");
+      ("-filter", Arg.String (fun s -> filter := s :: !filter),
+       "<filter>\n\t\
+        Add <filter> to the filters used by find, one can add as\n\t\
+        many filters as needed (understood as 'or'). If none are provided the \n\t\
+        default is like -filter '*.fastq' -filter '*.fastq.gz'.");
     ] in
     let anon_args = ref [] in
     let anon s = anon_args := s :: !anon_args in
@@ -1372,7 +1381,9 @@ module Fastx_qs = struct
     let cmdline = Array.of_list (usage_prefix :: args) in
     begin 
       try Arg.parse_argv cmdline options anon usage;
-          `go (List.rev !anon_args, !from_b2f,
+          let filter_names = if !filter = [] then None else Some !filter in
+          `go (List.rev !anon_args,
+               !from_b2f, Option.map ~f:Int32.of_int_exn !option_Q, filter_names,
                !user, !queue, !nodes, !ppn, !wall_hours, !hitscore_command)
       with
       | Arg.Bad b -> `bad b
@@ -1408,7 +1419,7 @@ module Fastx_qs = struct
           
   let start configuration prefix cl_args =
     begin match (start_parse_cmdline prefix cl_args) with
-    | `go (args, Some from_b2f,
+    | `go (args, Some from_b2f, option_Q, filter_names,
            user, queue, nodes, ppn, wall_hours, hitscore_command) ->
       with_database configuration (fun ~dbh ->
         Layout.Function_bcl_to_fastq.(
@@ -1429,7 +1440,7 @@ module Fastx_qs = struct
                 return (Layout.Record_generic_fastqs.unsafe_cast h))
             >>= fun generic_fastqs ->
             Fastx_quality_stats.start ~dbh ~configuration
-              generic_fastqs ?option_Q:None ?filter_names:None
+              generic_fastqs ?option_Q ?filter_names
               ?user ~nodes ~ppn ?queue ~wall_hours ~hitscore_command
             >>= fun pf ->
             printf "Evaluation %ld started!\n%!"
