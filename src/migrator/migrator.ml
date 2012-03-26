@@ -2,7 +2,8 @@
 open Core.Std
 let (|>) x f = f x
 
-module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
+module Hitscore_threaded =
+  Hitscore.Make(Sequme_flow_monad.Preemptive_threading_config)
 open Hitscore_threaded
 
 let v051_to_v06 file_in file_out =
@@ -10,7 +11,7 @@ let v051_to_v06 file_in file_out =
     In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
 
   let () =
-    let module V051M = V051.Make (Result_IO) in
+    let module V051M = V051.Make (Flow) in
     V051M.dump_of_sexp dump_v051 |! ignore in
 
   let dump_v06 =
@@ -30,14 +31,14 @@ let v051_to_v06 file_in file_out =
     parse (add_hs_runs dump_v051) in
   
   let () =
-    let module V06M = V06.Make (Result_IO) in
+    let module V06M = V06.Make (Flow) in
     try
       V06M.dump_of_sexp dump_v06 |! ignore
     with e ->
       printf "Could not reparse in V6: %s" (Exn.to_string e)
   in
   
-  let module V06M = V06.Make(Result_IO) in
+  let module V06M = V06.Make(Flow) in
   Out_channel.(with_file file_out ~f:(fun o ->
     output_string o (Sexplib.Sexp.to_string_hum dump_v06)));
   ()
@@ -53,8 +54,8 @@ let v06_to_v07 file_in file_out =
   let dump_v06 =
     In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
 
-  let module V06M = V06.Make (Result_IO) in
-  let module V07M = V07.Make (Result_IO) in
+  let module V06M = V06.Make (Flow) in
+  let module V07M = V07.Make (Flow) in
 
   let () =
     V06M.dump_of_sexp dump_v06 |! ignore in
@@ -122,7 +123,7 @@ let v06_to_v07 file_in file_out =
       printf "Could not reparse in V7: %s" (Exn.to_string e)
   in
   
-  let module V07M = V07.Make(Result_IO) in
+  let module V07M = V07.Make(Flow) in
   Out_channel.(with_file file_out ~f:(fun o ->
     output_string o (Sexplib.Sexp.to_string_hum dump_v07)));
   ()

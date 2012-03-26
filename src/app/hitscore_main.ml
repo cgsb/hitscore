@@ -1454,7 +1454,7 @@ module Fastx_qs = struct
     | `bad b ->
       eprintf "%s" b; Ok ()
     end
-    |! result_io_ok_or_fail
+    |! flow_ok_or_fail
 
 
   let register_success configuration id = 
@@ -1466,14 +1466,14 @@ module Fastx_qs = struct
       | `failure (o, e) ->
         printf "The Function failed: %s\n" (string_of_error e);
         exit 3)
-    |! result_io_ok_or_fail
+    |! flow_ok_or_fail
 
   let register_failure ?reason configuration id =
     with_database ~configuration ~f:(fun ~dbh ->
       let f = (Layout.Function_fastx_quality_stats.unsafe_cast id) in
       Fastx_quality_stats.fail ?reason ~dbh f
       >>= fun _ -> return ())
-    |! result_io_ok_or_fail
+    |! flow_ok_or_fail
 
   let check_status ?(fix_it=false) configuration id =
     with_database ~configuration ~f:(fun ~dbh ->
@@ -1496,14 +1496,14 @@ module Fastx_qs = struct
         printf "The function is NOT STARTED: %S.\n"
           (Layout.Enumeration_process_status.to_string e);
         return ())
-    |! result_io_ok_or_fail
+    |! flow_ok_or_fail
     
   let kill configuration id = 
     with_database ~configuration ~f:(fun ~dbh ->
       Fastx_quality_stats.kill ~dbh ~configuration 
         (Layout.Function_fastx_quality_stats.unsafe_cast id)
     >>= fun _ -> return ())
-    |! result_io_ok_or_fail
+    |! flow_ok_or_fail
 
         
 end

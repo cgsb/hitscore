@@ -22,8 +22,8 @@ make_module () {
     echo "module Info = struct let version = \"$version\" end" >> $name
     cat $tmp >> $name
     sed -i 's/: Hitscore_layout_interface.LAYOUT//' $name
-    sed -i 's/with module Result_IO = Result_IO//' $name
-    sed -i "s/with type 'a PGOCaml.monad = 'a Result_IO.IO.t//" $name
+    sed -i 's/with module Flow = Flow//' $name
+    sed -i "s/with type 'a PGOCaml.monad = 'a Flow.IO.t//" $name
     sed -i 's/PGSQL *(dbh)/failwith $/g' $name
     sed -i 's/\$?\?\([a-z_A-Z0-9]\+\)/" ^ (let _ = \1  in "") ^  "/g' $name
 

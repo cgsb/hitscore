@@ -123,7 +123,7 @@ let display_errors = function
   | Error e ->
     printf "%s" (string_of_error e)
 
-let result_io_ok_or_fail = function
+let flow_ok_or_fail = function
   | Ok o -> o
   | Error e ->
     failwithf "%s" (string_of_error e) ()

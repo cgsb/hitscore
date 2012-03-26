@@ -230,7 +230,7 @@ module OCaml_hiden_exception = struct
 
 end
 
-let ocaml_poly_result_io out left right =
+let ocaml_poly_flow out left right =
   line out "(%s, [> %s ]) Flow.monad" 
     left (String.concat ~sep:" | " right) 
 
@@ -267,7 +267,7 @@ let pgocaml_add_to_database_exn ~out ~on_not_one_id  ?(id="id")
   raw out ")\n\n";
   ()
 
-let pgocaml_to_result_io ?(fashion=`implementation) out ?transform_exceptions f =
+let pgocaml_to_flow ?(fashion=`implementation) out ?transform_exceptions f =
   match fashion with
   | `implementation ->
     line out "let _exn_version () =";
@@ -403,12 +403,12 @@ let ocaml_record_module ~out ~fashion name fields =
   );
   line out_ml "    %s :" pgocaml_db_handle_arg;
   line out_mli "    dbh:db_handle ->";
-  ocaml_poly_result_io out "pointer" [
+  ocaml_poly_flow out "pointer" [
     (OCaml_hiden_exception.poly_type_local [wrong_add_value]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_add_value;
   ] (fun out ->
     line out "  let now = Timestamp.(to_string (now ())) in";
@@ -429,9 +429,9 @@ let ocaml_record_module ~out ~fashion name fields =
   doc out "Get all the values of type [%s]." name;
   line out_mli "val get_all: dbh:db_handle ->";
   line out_ml "let get_all %s:" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "pointer list" ["`pg_exn of exn";];
+  ocaml_poly_flow out "pointer list" ["`pg_exn of exn";];
   line out_ml " =";
-  pgocaml_to_result_io out_ml (fun out ->
+  pgocaml_to_flow out_ml (fun out ->
     line out "get_all_exn ~dbh";
   );
 
@@ -464,12 +464,12 @@ let ocaml_record_module ~out ~fashion name fields =
   doc out "Get the contents of the record at [pointer].";
   line out_mli "val get: pointer -> dbh:db_handle ->";
   line out_ml "let get (pointer: pointer) %s:" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "t" [
+  ocaml_poly_flow out "t" [
     (OCaml_hiden_exception.poly_type_local [wrong_select_one]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_select_one;
   ] (fun out ->
     line out "get_value_exn ~dbh pointer";
@@ -526,12 +526,12 @@ let ocaml_record_module ~out ~fashion name fields =
   doc out "Load a value in the database ({b Unsafe!}).";
   line out_mli "val insert_value: dbh:db_handle -> t ->";
   line out_ml "let insert_value %s (v: t):" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "pointer" [
+  ocaml_poly_flow out "pointer" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_insert;
   ] (fun out ->
     line out "(insert_value_exn ~dbh v)";
@@ -594,12 +594,12 @@ let ocaml_function_module ~out ~fashion name args result =
   line out_ml  "    ?(recompute_penalty=0.)";
   line out_mli "    ?recompute_penalty: float -> dbh:db_handle ->";
   line out_ml "    %s :" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "[ `can_start | `can_complete ] pointer" [
+  ocaml_poly_flow out "[ `can_start | `can_complete ] pointer" [
     (OCaml_hiden_exception.poly_type_local [wrong_add]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_add;
   ] (fun out ->
     List.iter args (fun tv -> let_in_typed_value tv |> raw out "%s");
@@ -619,9 +619,9 @@ let ocaml_function_module ~out ~fashion name args result =
   line out_mli "val set_started: [> `can_start] pointer -> dbh:db_handle ->";
   line out_ml  "let set_started (p : [> `can_start] pointer) %s:" 
     pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "[`can_complete] pointer" ["`pg_exn of exn";];
+  ocaml_poly_flow out "[`can_complete] pointer" ["`pg_exn of exn";];
   line out_ml " =";
-  pgocaml_to_result_io out_ml (fun out ->
+  pgocaml_to_flow out_ml (fun out ->
     raw out "  let id = p.id in\n";
     let_now out;
     raw out "  let umm = PGSQL (dbh)\n";
@@ -638,9 +638,9 @@ let ocaml_function_module ~out ~fashion name args result =
     (ocaml_type (Record_name result));
   raw out_ml "let set_succeeded (p : [> `can_complete] pointer) \n\
                    \     ~result %s:\n" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "[ `can_get_result] pointer" ["`pg_exn of exn";];
+  ocaml_poly_flow out "[ `can_get_result] pointer" ["`pg_exn of exn";];
   line out_ml " =";
-  pgocaml_to_result_io out_ml (fun out ->
+  pgocaml_to_flow out_ml (fun out ->
     let_in_typed_value ("result", Record_name result) |> raw out "%s";
     raw out "  let id = p.id in\n";
     let_now out;
@@ -657,9 +657,9 @@ let ocaml_function_module ~out ~fashion name args result =
   line out_mli "val set_failed: [> `can_complete ] pointer -> dbh:db_handle ->";
   line out_ml "let set_failed \
            (p : [> `can_complete ] pointer) %s:" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "[ `can_nothing ] pointer" ["`pg_exn of exn";];
+  ocaml_poly_flow out "[ `can_nothing ] pointer" ["`pg_exn of exn";];
   line out_ml " =";
-  pgocaml_to_result_io out_ml (fun out ->
+  pgocaml_to_flow out_ml (fun out ->
     raw out "  let id = p.id in\n";
     let_now out;
     raw out "  let umm = PGSQL (dbh)\n";
@@ -700,12 +700,12 @@ let ocaml_function_module ~out ~fashion name args result =
   doc out "Get the contents of the evaluation [t].";
   line out_mli "val get: 'any pointer -> dbh:db_handle ->";
   line out_ml "let get (p: 'any pointer) %s : " pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "'any t" [
+  ocaml_poly_flow out "'any t" [
     (OCaml_hiden_exception.poly_type_local [wrong_select_one]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_select_one;
   ] (fun out ->
     line out "get_evaluation_exn ~dbh p";
@@ -714,7 +714,7 @@ let ocaml_function_module ~out ~fashion name args result =
   doc out "Get the status of an evaluation [t].";
   line out_mli "val get_status: 'a pointer ->  dbh:db_handle ->";
   line out_ml "let get_status pointer ~dbh ";
-  ocaml_poly_result_io out_mli "Enumeration_process_status.t" [
+  ocaml_poly_flow out_mli "Enumeration_process_status.t" [
     (OCaml_hiden_exception.poly_type_local [wrong_select_one]);
     "`pg_exn of exn";
   ];
@@ -740,9 +740,9 @@ let ocaml_function_module ~out ~fashion name args result =
       doc out "Get all the Function evaluations whose status is [%s]." polyvar;
       line out_mli "val get_all_%s: dbh:db_handle ->" suffix;
       line out_ml "let get_all_%s %s:" suffix pgocaml_db_handle_arg;
-      ocaml_poly_result_io out (sprintf "%s pointer list" phamtom) ["`pg_exn of exn"];
+      ocaml_poly_flow out (sprintf "%s pointer list" phamtom) ["`pg_exn of exn"];
       line out_ml " =";
-      pgocaml_to_result_io out_ml (fun out ->
+      pgocaml_to_flow out_ml (fun out ->
         line out "get_all_%s_exn ~dbh" suffix
       );
       
@@ -756,9 +756,9 @@ let ocaml_function_module ~out ~fashion name args result =
   doc out "Get all the [%s] functions." name;
   line out_mli "val get_all: dbh:db_handle ->";
   line out_ml "let get_all %s:" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "[`can_nothing] pointer list" [ "`pg_exn of exn"];
+  ocaml_poly_flow out "[`can_nothing] pointer list" [ "`pg_exn of exn"];
   line out_ml " =";
-  pgocaml_to_result_io out_ml (fun out ->
+  pgocaml_to_flow out_ml (fun out ->
     line out "get_all_exn ~dbh" 
   );
 
@@ -805,12 +805,12 @@ let ocaml_function_module ~out ~fashion name args result =
   line out_mli "val insert_evaluation: dbh:db_handle -> 'any t ->";
   line out_ml "let insert_evaluation %s (t: 'a t):"
     pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "[`can_nothing] pointer" [
+  ocaml_poly_flow out "[`can_nothing] pointer" [
     (OCaml_hiden_exception.poly_type_local [wrong_insert_cache]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert_cache;
   ] (fun out ->
     line out "insert_evaluation_exn ~dbh t";
@@ -892,9 +892,9 @@ let ocaml_toplevel_values_and_types ~out ~fashion dsl =
   doc out "Get all the values in the database.";
   line out_mli "val get_all_values: dbh:db_handle ->";
   line out_ml "let get_all_values %s:" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "value list" ["`pg_exn of exn";];
+  ocaml_poly_flow out "value list" ["`pg_exn of exn";];
   line out_ml " =";
-  pgocaml_to_result_io out_ml 
+  pgocaml_to_flow out_ml 
     ~transform_exceptions:
     (OCaml_hiden_exception.(List.map ~f:transform_global (all_gets ())))
     (fun out ->
@@ -904,9 +904,9 @@ let ocaml_toplevel_values_and_types ~out ~fashion dsl =
   doc out "Get all the evaluations in the database.";
   line out_mli "val get_all_evaluations: dbh:db_handle ->";
   line out_ml "let get_all_evaluations %s:" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "[`can_nothing] evaluation list" ["`pg_exn of exn";];
+  ocaml_poly_flow out "[`can_nothing] evaluation list" ["`pg_exn of exn";];
   line out_ml " =";
-  pgocaml_to_result_io out_ml 
+  pgocaml_to_flow out_ml 
     ~transform_exceptions:
     (OCaml_hiden_exception.(List.map ~f:transform_global (all_gets ())))
     (fun out ->
@@ -1008,12 +1008,12 @@ let ocaml_file_system_module ~fashion ~out dsl =
                  kind:Enumeration_volume_kind.t -> \
                 ?hr_tag: string -> \
                 files:tree list -> ";
-  ocaml_poly_result_io out "pointer" [
+  ocaml_poly_flow out "pointer" [
     (OCaml_hiden_exception.poly_type_local [wrong_insert]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert;
   ] (fun out ->
     line out "add_any_volume_exn ~dbh ~kind ~content:(Tree (hr_tag, files))"
@@ -1023,12 +1023,12 @@ let ocaml_file_system_module ~fashion ~out dsl =
   line out_ml "let add_link ~dbh ~(kind:Enumeration_volume_kind.t) pointer:"; 
   line out_mli "val add_link: dbh:db_handle -> \
                  kind:Enumeration_volume_kind.t -> pointer ->";
-  ocaml_poly_result_io out "pointer" [
+  ocaml_poly_flow out "pointer" [
     (OCaml_hiden_exception.poly_type_local [wrong_insert]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_insert;
   ] (fun out ->
     line out "add_any_volume_exn ~dbh ~kind ~content:(Link pointer)"
@@ -1059,9 +1059,9 @@ end
   doc out "Get all the volumes.";
   line out_ml "let get_all %s: " pgocaml_db_handle_arg;
   line out_mli "val get_all: dbh:db_handle ->";
-  ocaml_poly_result_io out "pointer list" ["`pg_exn of exn";];
+  ocaml_poly_flow out "pointer list" ["`pg_exn of exn";];
   line out_ml " =";
-  pgocaml_to_result_io out_ml (fun out ->
+  pgocaml_to_flow out_ml (fun out ->
     pgocaml_do_get_all_ids ~out ~id:"id" "g_volume";
   );
 
@@ -1093,12 +1093,12 @@ end
   line out_ml "let get_volume (pointer: pointer) %s:" 
     pgocaml_db_handle_arg;
   line out_mli "val get_volume: pointer -> dbh:db_handle ->";
-  ocaml_poly_result_io out "volume" [
+  ocaml_poly_flow out "volume" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_select]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_select;
   ] (fun out ->
     line out "get_volume_exn ~dbh pointer";
@@ -1130,12 +1130,12 @@ end
   doc out "Load a volume in the database ({b Unsafe!}) .";
   line out_ml "let insert_volume %s (volume: volume):" pgocaml_db_handle_arg;
   line out_mli "val insert_volume: dbh:db_handle -> volume ->";
-  ocaml_poly_result_io out "pointer" [
+  ocaml_poly_flow out "pointer" [
     (OCaml_hiden_exception.poly_type_local [wrong_cache_insert]);
     "`pg_exn of exn";
   ];
   line out_ml " =";
-  pgocaml_to_result_io out_ml ~transform_exceptions:[
+  pgocaml_to_flow out_ml ~transform_exceptions:[
     OCaml_hiden_exception.transform_local wrong_cache_insert;
   ] (fun out ->
     line out "insert_volume_exn ~dbh volume"
@@ -1151,10 +1151,10 @@ end
             not verify if there is a link to it).";
   line out_ml "let delete_volume %s id =" pgocaml_db_handle_arg;
   line out_mli "val delete_volume: dbh:db_handle -> int32 ->";
-  ocaml_poly_result_io out_mli "unit" [
+  ocaml_poly_flow out_mli "unit" [
     "`pg_exn of exn";
   ];
-  pgocaml_to_result_io out_ml ~transform_exceptions:[] (fun out ->
+  pgocaml_to_flow out_ml ~transform_exceptions:[] (fun out ->
     line out "  delete_volume_exn ~dbh id";
   );
   
@@ -1240,13 +1240,13 @@ let ocaml_dump_and_reload ~out ~fashion dsl =
   doc  out "Retrieve the whole data-base.";
   line out_mli "val get_dump: dbh:db_handle ->";
   line out_ml "let get_dump %s :" pgocaml_db_handle_arg;
-  ocaml_poly_result_io out "dump" [
+  ocaml_poly_flow out "dump" [
     (OCaml_hiden_exception.(poly_type_global (all_dumps ())));
     "`pg_exn of exn";
   ];
   line out_ml " =";
   
-  pgocaml_to_result_io out_ml
+  pgocaml_to_flow out_ml
     ~transform_exceptions:
     (OCaml_hiden_exception.(List.map ~f:transform_global (all_dumps ())))
     (fun out ->
@@ -1260,7 +1260,7 @@ let ocaml_dump_and_reload ~out ~fashion dsl =
                   ({b Unsafe!}).";
   line out_mli "val insert_dump: dbh:db_handle -> dump ->";
   line out_ml "let insert_dump %s dump :" pgocaml_db_handle_arg;
-    ocaml_poly_result_io out "unit" [
+    ocaml_poly_flow out "unit" [
     "`wrong_version of string * string";
     (OCaml_hiden_exception.(poly_type_global (all_loads ())));
     "`pg_exn of exn";
@@ -1271,7 +1271,7 @@ let ocaml_dump_and_reload ~out ~fashion dsl =
   line out_ml "    Flow.error (`wrong_version (dump.version, \
                           Hitscore_conf_values.version))";
   line out_ml "  ) else";
-  pgocaml_to_result_io out_ml 
+  pgocaml_to_flow out_ml 
     ~transform_exceptions:
     (OCaml_hiden_exception.(List.map ~f:transform_global (all_loads ())))
     (fun out -> 
@@ -1344,7 +1344,7 @@ let ocaml_search_module ~out ~fashion dsl =
         line out_mli "    %s ->" (ocaml_type t));
       line out_mli " (%s list, [> `pg_exn of exn]) Flow.monad"
         (ocaml_type record_type);
-      pgocaml_to_result_io out_ml ~transform_exceptions:[] (fun out ->
+      pgocaml_to_flow out_ml ~transform_exceptions:[] (fun out ->
         line out "  %s_exn ~dbh %s"
           fun_name (String.concat ~sep:" " (List.map fields (sprintf "%s")));
       );
