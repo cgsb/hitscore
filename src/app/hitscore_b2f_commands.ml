@@ -55,51 +55,22 @@ let get_hiseq_raw ~dbh s =
   end
 
 let start_parse_cmdline usage_prefix args =
-  let user = ref (Sys.getenv "LOGNAME") in
-  let queue = 
-    let groups =
-      System.command_to_string "groups" 
-      |! String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
-    match List.find groups ((=) "cgsb") with
-    | Some _ -> ref (Some "cgsb-s")
-    | None -> ref None in
-  let nodes = ref 1 in
-  let ppn = ref 8 in
+  let (user, queue, nodes, ppn, wall_hours, hitscore_command, pbs_options) =
+    pbs_related_command_line_options ~default_wall_hours:48 () in
   let sample_sheet_kind = ref `specific_barcodes in
   let make_command = ref "make -j8" in
-  let wall_hours, version, mismatch =
-    ref 12, ref `casava_182, ref `one in
-  let hitscore_command =
-    ref (sprintf "%s %s %s" 
-           Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
+  let version, mismatch = ref `casava_182, ref `one in
   let tiles = ref None in
   let force_new = ref false in
-  let options = [
+  let options = pbs_options @ [
     ( "-tiles", Arg.String (fun s -> tiles := Some s),
       "<regexp list>\n\tSet the --tiles option of CASAVA (copied verbatim).");
-    ( "-user", 
-      Arg.String (fun s -> user := Some s),
-      sprintf "<login>\n\tSet the user-name (%s)."
-        (Option.value_map ~default:"kind-of mandatory" !user
-           ~f:(sprintf "default value inferred: %s")));
-    ( "-queue", 
-      Arg.String (fun s -> queue := Some s),
-      sprintf "<name>\n\tSet the PBS-queue%s." 
-        (Option.value_map ~default:"" !queue 
-           ~f:(sprintf " (default value inferred: %s)")));
-    ( "-nodes-ppn", 
-      Arg.Tuple [ Arg.Set_int nodes; Arg.Set_int ppn],
-      sprintf "<n> <m>\n\tSet the number of nodes and processes per node \
-                  (default %d, %d)." !nodes !ppn);
     ( "-all-barcodes",
       Arg.Unit (fun () -> sample_sheet_kind := `all_barcodes),
       "\n\tUse/create an all-barcodes sample-sheet.");
     ( "-force-new-samplesheet",
       Arg.Unit (fun () -> force_new := true),
       "\n\tDo not check for existing sample-sheets (Default: false).");
-    ( "-wall-hours",
-      Arg.Set_int wall_hours,
-      sprintf "<hours>\n\tWalltime in hours (default: %d)." !wall_hours);
     ( "-casava-181",
       Arg.Unit (fun () -> version := `casava_181),
       "\n\tRun with old version of CASAVA: 1.8.1.");
@@ -107,10 +78,6 @@ let start_parse_cmdline usage_prefix args =
       Arg.Unit (fun s -> mismatch := `zero), "\n\tRun with mismatch 0.");
     ( "-mismatch-two",
       Arg.Unit (fun s -> mismatch := `two), "\n\tRun with mismatch 2.");
-    ( "-hitscore-command",
-      Arg.Set_string hitscore_command,
-      sprintf "<command>\n\tCommand-prefix to call to register success \
-                 or failure of the run (default: %S)." !hitscore_command);
     ( "-make",
       Arg.Set_string make_command,
       sprintf "<command>\n\tSet the 'make' command used by the PBS-script \
