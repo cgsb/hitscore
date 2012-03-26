@@ -1,8 +1,9 @@
 open Core.Std
   
-module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
+module Hitscore_threaded =
+  Hitscore.Make(Sequme.Flow_monad.Preemptive_threading_config)
 open Hitscore_threaded
-open Result_IO
+open Flow
 
 module System = struct
 

@@ -10,7 +10,7 @@ module Make
     open Common
 
     open Hitscore_std
-    open Result_IO
+    open Flow
 
     let illumina_barcodes = [
       1l, "ATCACG"; 2l, "CGATGT"; 3l, "TTAGGC"; 4l, "TGACCA"; 5l, "ACAGTG";

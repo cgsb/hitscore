@@ -5,7 +5,7 @@ open Core.Std
 open Hitscore_app_util
 
 open Hitscore_threaded
-open Result_IO
+open Flow
 
 let get_or_make_sample_sheet ~dbh ~hsc ~kind ?force_new flowcell =
   Assemble_sample_sheet.run ~configuration:hsc ~kind ~dbh ?force_new flowcell

@@ -630,7 +630,7 @@ module Verify = struct
 
   let check_duplicates configuration =
     let open Hitscore_threaded in
-    let open Result_IO in
+    let open Flow in
     let work_samples =
       with_database ~configuration ~f:(fun ~dbh ->
         Layout.Record_sample.(
@@ -738,7 +738,7 @@ module FS = struct
   let add_files_to_volume hsc vol files =
     failwith "Not implemented any more"
      (* 
-    let open Hitscore_threaded.Result_IO in
+    let open Hitscore_threaded.Flow in
     let volume_path = Hitscore_threaded.Configuration.path_of_volume_fun hsc |>
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
@@ -800,7 +800,7 @@ end
 
 module Flowcell = struct
   open Hitscore_threaded
-  open Result_IO
+  open Flow
 
   let check_lane_unused ~dbh lane = 
     let q_res =
@@ -1085,7 +1085,7 @@ module Query = struct
      fun dbh args ->
        let work =
          let open Hitscore_threaded in
-         let open Result_IO in
+         let open Flow in
          Layout.Record_flowcell.(
            get_all ~dbh
            >>= fun flowcells ->
@@ -1230,7 +1230,7 @@ module Prepare_delivery = struct
 
   let run_function configuration bb inv dir directory_tag =
     let open Hitscore_threaded in
-    let open Result_IO in
+    let open Flow in
     let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
     if not (Filename.is_absolute dir)
     then (eprintf "%s is not an absolute path" dir; failwith "STOP");
@@ -1305,7 +1305,7 @@ end
 module Intensities_deletion = struct
   let do_registration configuration dir =
     let open Hitscore_threaded in
-    let open Result_IO in
+    let open Flow in
     let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
     let work =
       with_database configuration (fun ~dbh ->
@@ -1329,7 +1329,7 @@ module Hiseq_run = struct
 
   let register configuration day_date fca fcb note =
     let open Hitscore_threaded in
-    let open Result_IO in
+    let open Flow in
     with_database configuration (fun ~dbh ->
       let flowcell id =
         if id = "_" then return None else
@@ -1391,7 +1391,7 @@ module Fastx_qs = struct
     end
 
   open Hitscore_threaded 
-  open Result_IO
+  open Flow
 
 
   let find_a_link ~dbh b2fu_dir =

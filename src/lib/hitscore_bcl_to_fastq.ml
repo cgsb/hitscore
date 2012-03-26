@@ -9,7 +9,7 @@ module Make
     open Common
 
     open Hitscore_std
-    open Result_IO
+    open Flow
 
     let pbs_fun =
       Common.PBS.make ~pbs_script_filename:"make_b2f.pbs" "b2f"

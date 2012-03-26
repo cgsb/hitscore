@@ -11,7 +11,7 @@ module Make
     open Common
 
     open Hitscore_std
-    open Result_IO
+    open Flow
 
     module LFQS = Layout.Function_fastx_quality_stats
       

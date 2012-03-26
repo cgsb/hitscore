@@ -12,7 +12,7 @@ module Make
   open Common
 
   open Hitscore_std
-  open Result_IO
+  open Flow
 
   let register ~dbh ~hiseq_raw =
     check_hiseq_raw_availability ~dbh ~hiseq_raw

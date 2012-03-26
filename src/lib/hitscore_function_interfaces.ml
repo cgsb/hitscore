@@ -63,7 +63,7 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
      | `pg_exn of exn
      | `wrong_request of
          [> `record_flowcell ] * [> `value_not_found of string ] ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
 end
 
@@ -151,7 +151,7 @@ start ~dbh ~configuration       (* common arguments *)
      | `pg_exn of exn
      | `raw_data_path_not_configured
      | `root_directory_not_configured ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
   (** Create the resulting [Layout.Record_bcl_to_fastq.t] and register
       the [bcl_to_fastq] evaluation as a success.
@@ -189,7 +189,7 @@ start ~dbh ~configuration       (* common arguments *)
      | `root_directory_not_configured
      | `system_command_error of string * exn
      | `work_directory_not_configured ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
@@ -202,7 +202,7 @@ start ~dbh ~configuration       (* common arguments *)
          [> `File_system | `Function of string | `Record of string ] *
            [> `insert_did_not_return_one_id of string * int32 list ]
      | `pg_exn of exn ])
-      Common.Result_IO.monad
+      Common.Flow.monad
       
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
@@ -219,7 +219,7 @@ start ~dbh ~configuration       (* common arguments *)
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
      | `work_directory_not_configured ])
-      Common.Result_IO.monad
+      Common.Flow.monad
       
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
@@ -235,7 +235,7 @@ start ~dbh ~configuration       (* common arguments *)
      | `pg_exn of exn
      | `system_command_error of string * exn
      | `work_directory_not_configured ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
 end
 
@@ -282,7 +282,7 @@ module type UNALIGNED_DELIVERY = sig
              | `system_command_error of string * exn
              | `root_directory_not_configured
              | `wrong_unaligned_volume of string Hitscore_std.List.t ])
-           Result_IO.monad
+           Flow.monad
 
 
 
@@ -311,7 +311,7 @@ module type DELETE_INTENSITIES = sig
                Common.Layout.Record_inaccessible_hiseq_raw.pointer
            | `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
 end
 
@@ -338,7 +338,7 @@ module type COERCE_B2F_UNALIGNED = sig
            | `insert_did_not_return_one_id of string * int32 list
            | `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
 end
 
@@ -371,7 +371,7 @@ module type FASTX_QUALITY_STATS = sig
      | `pg_exn of exn
      | `root_directory_not_configured
      | `system_command_error of string * exn ])
-      Common.Result_IO.monad
+      Common.Flow.monad
   
   (** Start *)
   val start :
@@ -399,7 +399,7 @@ module type FASTX_QUALITY_STATS = sig
      | `system_command_error of string * exn
      | `work_directory_not_configured
      | `write_file_error of string * string * exn ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
   val succeed :
     dbh:Common.Layout.db_handle ->
@@ -427,7 +427,7 @@ module type FASTX_QUALITY_STATS = sig
      | `root_directory_not_configured
      | `system_command_error of string * exn
      | `work_directory_not_configured ])
-      Common.Result_IO.monad
+      Common.Flow.monad
       
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
@@ -440,7 +440,7 @@ module type FASTX_QUALITY_STATS = sig
          [> `File_system | `Function of string | `Record of string ] *
            [> `insert_did_not_return_one_id of string * int32 list ]
      | `pg_exn of exn ])
-      Common.Result_IO.monad
+      Common.Flow.monad
       
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
@@ -457,7 +457,7 @@ module type FASTX_QUALITY_STATS = sig
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
      | `work_directory_not_configured ])
-      Common.Result_IO.monad
+      Common.Flow.monad
       
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
@@ -473,6 +473,6 @@ module type FASTX_QUALITY_STATS = sig
      | `pg_exn of exn
      | `system_command_error of string * exn
      | `work_directory_not_configured ])
-      Common.Result_IO.monad
+      Common.Flow.monad
 
 end

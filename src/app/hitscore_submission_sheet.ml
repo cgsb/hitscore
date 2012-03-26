@@ -1,8 +1,7 @@
 open Core.Std
 let (|>) x f = f x
 
-module Hitscore_threaded = Hitscore.Make(Hitscore.Preemptive_threading_config)
-
+open Hitscore_app_util
 open Hitscore_threaded 
 
 let find_contact ~dbh ~verbose first last email =

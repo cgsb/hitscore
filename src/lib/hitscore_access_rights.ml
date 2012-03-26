@@ -6,8 +6,8 @@ module type ACCESS_RIGHTS = sig
   (** Local definition of the configuration. *)
   module Configuration : Hitscore_interfaces.CONFIGURATION
 
-  (** Local definition of Result_IO.  *)
-  module Result_IO : Hitscore_interfaces.RESULT_IO
+  (** Local definition of Flow.  *)
+  module Flow : Sequme_flow_monad.FLOW_MONAD
 
   (** Local definition of Layout *)
   module Layout : Hitscore_layout_interface.LAYOUT
@@ -38,27 +38,27 @@ module type ACCESS_RIGHTS = sig
           [> `insert_did_not_return_one_id of string * int32 list
           | `select_did_not_return_one_tuple of string * int ]
            | `pg_exn of exn
-           | `system_command_error of string * exn ]) Result_IO.monad
+           | `system_command_error of string * exn ]) Flow.monad
 end
 
 module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
-  (Result_IO : Hitscore_interfaces.RESULT_IO)
+  (Flow : Sequme_flow_monad.FLOW_MONAD)
   (Layout: Hitscore_layout_interface.LAYOUT
-     with module Result_IO = Result_IO
-     with type 'a PGOCaml.monad = 'a Result_IO.IO.t):
+     with module Flow = Flow
+     with type 'a PGOCaml.monad = 'a Flow.IO.t):
   ACCESS_RIGHTS
   with module Configuration = Configuration
-  with module Result_IO = Result_IO
+  with module Flow = Flow
   with module Layout = Layout
 = struct
 
-    module Result_IO = Result_IO
+    module Flow = Flow
     module Configuration = Configuration
     module Layout = Layout
 
     open Hitscore_std
-    open Result_IO
+    open Flow
       
 
     let get_people role ~dbh =

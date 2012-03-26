@@ -12,7 +12,7 @@ module Make_unaligned_coercion
   open Common
 
   open Hitscore_std
-  open Result_IO
+  open Flow
 
   let run ~dbh ~configuration ~input =
     Layout.Record_bcl_to_fastq_unaligned.(

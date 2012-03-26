@@ -9,7 +9,7 @@ module Make
     module Common = Common
     open Common
     open Hitscore_std
-    open Result_IO
+    open Flow
 (*
     let volume_relative_paths ~dbh ~configuration vol_pointer =
       Layout.File_system.(

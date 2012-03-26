@@ -7,19 +7,19 @@ module type COMMON = sig
   (** Exported definition of the Configuration. *)
   module Configuration : Hitscore_interfaces.CONFIGURATION
 
-  (** Exported definition of Result_IO.  *)
-  module Result_IO : Hitscore_interfaces.RESULT_IO
+  (** Exported definition of Flow.  *)
+  module Flow : Sequme_flow_monad.FLOW_MONAD
 
   (** Exported definition of Layout. *)
   module Layout : Hitscore_layout_interface.LAYOUT
-    with module Result_IO = Result_IO
-    with type 'a PGOCaml.monad = 'a Result_IO.IO.t
+    with module Flow = Flow
+    with type 'a PGOCaml.monad = 'a Flow.IO.t
     (* This last one is used by Assemble_Sample_Sheet to call a PGSQL(dbh) *)
            
   (** Exported definition of Access_rights. *)
   module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
      with module Configuration = Configuration
-    with module Result_IO = Result_IO
+    with module Flow = Flow
     with module Layout = Layout
 
   (** Add a log to the database. *)
@@ -31,7 +31,7 @@ module type COMMON = sig
          [> `Record of string ] *
            [> `insert_did_not_return_one_id of string * int32 list ]
      | `pg_exn of exn ])
-      Result_IO.monad
+      Flow.monad
 
            
   (** Check that an HiSeq-raw directory (the database) record is usable. *) 
@@ -48,12 +48,12 @@ module type COMMON = sig
                Layout.Record_inaccessible_hiseq_raw.pointer
            | `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn ])
-      Result_IO.monad
+      Flow.monad
 
   (** Get the full path from an HiSeq directory name. *)
   val hiseq_raw_full_path:
     configuration:Configuration.local_configuration ->
-    string -> (string, [> `raw_data_path_not_configured]) Result_IO.monad
+    string -> (string, [> `raw_data_path_not_configured]) Flow.monad
     
   (** Convert a list of file-system trees to unix paths relative to a
       volume. *)
@@ -78,7 +78,7 @@ module type COMMON = sig
          [> `File_system ] *
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn ])
-      Result_IO.monad
+      Flow.monad
       
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
@@ -94,7 +94,7 @@ module type COMMON = sig
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
      | `root_directory_not_configured ])
-      Result_IO.monad
+      Flow.monad
 
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
@@ -110,7 +110,7 @@ module type COMMON = sig
            [> `select_did_not_return_one_tuple of string * int ]
      | `pg_exn of exn
      | `root_directory_not_configured ])
-      Result_IO.monad
+      Flow.monad
 
   module PBS: sig
 
@@ -125,23 +125,23 @@ module type COMMON = sig
     val work_path_for_job :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Result_IO.monad
+      (string, [> `work_directory_not_configured ]) Flow.monad
     val pbs_output_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Result_IO.monad
+      (string, [> `work_directory_not_configured ]) Flow.monad
     val pbs_runtime_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Result_IO.monad
+      (string, [> `work_directory_not_configured ]) Flow.monad
     val pbs_result_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Result_IO.monad
+      (string, [> `work_directory_not_configured ]) Flow.monad
     val pbs_script_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Result_IO.monad
+      (string, [> `work_directory_not_configured ]) Flow.monad
     val prepare_work_environment :
       t ->
       dbh:Access_rights.Layout.db_handle ->
@@ -154,7 +154,7 @@ module type COMMON = sig
        | `pg_exn of exn
        | `system_command_error of string * exn
        | `work_directory_not_configured ])
-        Result_IO.monad
+        Flow.monad
 
     val save_pbs_runtime_information :
       t ->
@@ -169,7 +169,7 @@ module type COMMON = sig
        | `pg_exn of exn
        | `system_command_error of string * exn
        | `work_directory_not_configured ])
-        Result_IO.monad
+        Flow.monad
 
     (** Create a PBS script. *)
     val pbs_script :
@@ -184,7 +184,7 @@ module type COMMON = sig
       on_command_failure:(string -> string) ->
       add_commands:(checked:(string -> unit) ->
                     non_checked:(string -> unit) -> 'a) ->
-      (string, [> `work_directory_not_configured ]) Result_IO.monad
+      (string, [> `work_directory_not_configured ]) Flow.monad
 
     (** Write a PBS script to a file, set the access rights, and qsub it. *)
     val qsub_pbs_script :
@@ -201,7 +201,7 @@ module type COMMON = sig
        | `system_command_error of string * exn
        | `work_directory_not_configured
        | `write_file_error of string * string * exn ])
-        Result_IO.monad
+        Flow.monad
         
     val qstat :
       t ->
@@ -210,7 +210,7 @@ module type COMMON = sig
        | `started_but_not_running of
            [> `system_command_error of string * exn ] ],
        [> `work_directory_not_configured ])
-        Result_IO.monad
+        Flow.monad
 
     val qdel :
       t ->
@@ -218,7 +218,7 @@ module type COMMON = sig
       (unit, 
        [> `system_command_error of string * exn
        | `work_directory_not_configured ])
-        Result_IO.monad
+        Flow.monad
 
   end
 
@@ -229,7 +229,7 @@ module type COMMON = sig
         id : int32;
       }
       val set_failed : [> `can_complete ] pointer -> dbh:Layout.db_handle ->
-        ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Result_IO.monad
+        ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Flow.monad
       val get_status :
         'a pointer ->
         dbh:Layout.db_handle ->
@@ -238,7 +238,7 @@ module type COMMON = sig
              [>  `File_system | `Function of string | `Record of string ] *
                [> `select_did_not_return_one_tuple of string * int ]
          | `pg_exn of exn ])
-          Layout.Result_IO.monad
+          Layout.Flow.monad
     end) ->
       functor (PBS_stuff : sig
         val pbs_fun : PBS.t_fun
@@ -257,7 +257,7 @@ module type COMMON = sig
            [>  `File_system | `Function of string | `Record of string ] *
              [> `insert_did_not_return_one_id of string * int32 list ]
        | `pg_exn of exn ])
-        Result_IO.monad
+        Flow.monad
         
     (** Get the status of the evaluation by checking its data-base
         status and it presence in the PBS queue. *)
@@ -272,7 +272,7 @@ module type COMMON = sig
            [>  `File_system | `Function of string | `Record of string ] *
              [> `select_did_not_return_one_tuple of string * int ]
        | `pg_exn of exn
-       | `work_directory_not_configured ]) Result_IO.monad
+       | `work_directory_not_configured ]) Flow.monad
 
     (** Kill the evaluation ([qdel]) and set it as failed. *)
     val kill :
@@ -288,7 +288,7 @@ module type COMMON = sig
        | `pg_exn of exn
        | `system_command_error of string * exn
        | `work_directory_not_configured ])
-        Result_IO.monad
+        Flow.monad
   end
 
 end
@@ -297,27 +297,27 @@ end
   
 module Make
   (Configuration : Hitscore_interfaces.CONFIGURATION)
-  (Result_IO : Hitscore_interfaces.RESULT_IO) 
+  (Flow : Sequme_flow_monad.FLOW_MONAD) 
   (Layout: Hitscore_layout_interface.LAYOUT
-     with module Result_IO = Result_IO
-     with type 'a PGOCaml.monad = 'a Result_IO.IO.t)
+     with module Flow = Flow
+     with type 'a PGOCaml.monad = 'a Flow.IO.t)
   (Access_rights : Hitscore_access_rights.ACCESS_RIGHTS 
-     with module Result_IO = Result_IO
+     with module Flow = Flow
      with module Configuration = Configuration
      with module Layout = Layout):
   COMMON
     with module Configuration = Configuration
-    with module Result_IO = Result_IO
+    with module Flow = Flow
     with module Layout = Layout
     with module Access_rights = Access_rights
 = struct
   module Configuration = Configuration
-  module Result_IO = Result_IO
+  module Flow = Flow
   module Access_rights = Access_rights
   module Layout = Layout
 
   open Hitscore_std
-  open Result_IO
+  open Flow
 
   let add_log ~dbh log = 
     Layout.Record_log.(
@@ -546,7 +546,7 @@ module Make
       id : int32;
     }
    val set_failed : [> `can_complete ] pointer -> dbh:Layout.db_handle ->
-     ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Result_IO.monad
+     ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Flow.monad
 
    val get_status :
      'a pointer ->
@@ -556,7 +556,7 @@ module Make
           [>  `File_system | `Function of string | `Record of string ] *
             [> `select_did_not_return_one_tuple of string * int ]
       | `pg_exn of exn ])
-       Layout.Result_IO.monad
+       Layout.Flow.monad
   end) (PBS_stuff : sig
     val pbs_fun : PBS.t_fun
     val name_in_log: string
