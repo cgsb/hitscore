@@ -9,6 +9,11 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
   open Common
 (**/**)
 
+
+  val illumina_barcodes: (int32 * string) list
+  val bioo_barcodes: (int32 * string) list
+
+  
   (** Run the whole function to assemble a sample-sheet. Example:
       {[
       run ~dbh ~kind:`specific_barcodes ~configuration "FC11IDXXX" >>= function
