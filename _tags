@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 542517c5dc6a2cb933fc101a19a85b6a)
+# DO NOT EDIT (digest: e1db54af3eafc0229152ca1dd891e052)
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
@@ -17,6 +17,19 @@
 <src/lib/*.ml{,i}>: pkg_pgocaml
 <src/lib/*.ml{,i}>: pkg_core
 <src/lib/*.ml{,i}>: pkg_biocaml
+# Executable test_hitscored
+<src/server/test_hitscored.{native,byte}>: use_hitscore
+<src/server/test_hitscored.{native,byte}>: use_hitscoregen
+<src/server/test_hitscored.{native,byte}>: pkg_threads
+<src/server/test_hitscored.{native,byte}>: pkg_sexplib.syntax
+<src/server/test_hitscored.{native,byte}>: pkg_sequme
+<src/server/test_hitscored.{native,byte}>: pkg_pgocaml.syntax
+<src/server/test_hitscored.{native,byte}>: pkg_pgocaml
+<src/server/test_hitscored.{native,byte}>: pkg_lwt.unix
+<src/server/test_hitscored.{native,byte}>: pkg_lwt.ssl
+<src/server/test_hitscored.{native,byte}>: pkg_lwt
+<src/server/test_hitscored.{native,byte}>: pkg_core
+<src/server/test_hitscored.{native,byte}>: pkg_biocaml
 # Executable hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscoregen
@@ -36,29 +49,31 @@
 <src/app/*.ml{,i}>: pkg_pgocaml
 <src/app/*.ml{,i}>: pkg_core
 <src/app/*.ml{,i}>: pkg_biocaml
-# Executable db_access_test
-<src/test/db_access.{native,byte}>: use_hitscore
-<src/test/db_access.{native,byte}>: use_hitscoregen
-<src/test/db_access.{native,byte}>: pkg_threads
-<src/test/db_access.{native,byte}>: pkg_sexplib.syntax
-<src/test/db_access.{native,byte}>: pkg_sequme
-<src/test/db_access.{native,byte}>: pkg_pgocaml.syntax
-<src/test/db_access.{native,byte}>: pkg_pgocaml
-<src/test/db_access.{native,byte}>: pkg_lwt.unix
-<src/test/db_access.{native,byte}>: pkg_lwt
-<src/test/db_access.{native,byte}>: pkg_core
-<src/test/db_access.{native,byte}>: pkg_biocaml
-<src/test/*.ml{,i}>: use_hitscore
-<src/test/*.ml{,i}>: use_hitscoregen
-<src/test/*.ml{,i}>: pkg_threads
-<src/test/*.ml{,i}>: pkg_sexplib.syntax
-<src/test/*.ml{,i}>: pkg_sequme
-<src/test/*.ml{,i}>: pkg_pgocaml.syntax
-<src/test/*.ml{,i}>: pkg_pgocaml
-<src/test/*.ml{,i}>: pkg_lwt.unix
-<src/test/*.ml{,i}>: pkg_lwt
-<src/test/*.ml{,i}>: pkg_core
-<src/test/*.ml{,i}>: pkg_biocaml
+# Executable hitscored
+<src/server/hitscored.{native,byte}>: use_hitscore
+<src/server/hitscored.{native,byte}>: use_hitscoregen
+<src/server/hitscored.{native,byte}>: pkg_threads
+<src/server/hitscored.{native,byte}>: pkg_sexplib.syntax
+<src/server/hitscored.{native,byte}>: pkg_sequme
+<src/server/hitscored.{native,byte}>: pkg_pgocaml.syntax
+<src/server/hitscored.{native,byte}>: pkg_pgocaml
+<src/server/hitscored.{native,byte}>: pkg_lwt.unix
+<src/server/hitscored.{native,byte}>: pkg_lwt.ssl
+<src/server/hitscored.{native,byte}>: pkg_lwt
+<src/server/hitscored.{native,byte}>: pkg_core
+<src/server/hitscored.{native,byte}>: pkg_biocaml
+<src/server/*.ml{,i}>: use_hitscore
+<src/server/*.ml{,i}>: use_hitscoregen
+<src/server/*.ml{,i}>: pkg_threads
+<src/server/*.ml{,i}>: pkg_sexplib.syntax
+<src/server/*.ml{,i}>: pkg_sequme
+<src/server/*.ml{,i}>: pkg_pgocaml.syntax
+<src/server/*.ml{,i}>: pkg_pgocaml
+<src/server/*.ml{,i}>: pkg_lwt.unix
+<src/server/*.ml{,i}>: pkg_lwt.ssl
+<src/server/*.ml{,i}>: pkg_lwt
+<src/server/*.ml{,i}>: pkg_core
+<src/server/*.ml{,i}>: pkg_biocaml
 # OASIS_STOP
 
 <src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o

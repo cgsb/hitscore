@@ -60,14 +60,25 @@ Executable hitscore
   CompiledObject: best
   Install: true
 
-Executable db_access_test
-  Path: src/test
-  MainIs: db_access.ml
+Executable hitscored
+  Path: src/server
+  MainIs: hitscored.ml
+  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl
   if flag(lwt)
     Build: true
   else
     Build: false
-  BuildDepends: threads, core, hitscore, lwt, lwt.unix
+  CompiledObject: best
+  Install: true
+  
+Executable test_hitscored
+  path: src/server
+  MainIs: test_hitscored.ml
+  if flag(lwt)
+    Build: true
+  else
+    Build: false
+  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl
   CompiledObject: best
   Install: false
 
