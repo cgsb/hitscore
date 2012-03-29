@@ -19,11 +19,11 @@ cat <<EOF > $file_to_use
 open Core.Std
 open Result
 let () = printf "--> Open Core.Std, Result\n"
-module HS = Hitscore.Make(Hitscore.Preemptive_threading_config)
+module HS = Hitscore.Make(Sequme_flow_monad.Preemptive_threading_config)
 let () = printf "--> Hiscore.Made -> HS\n"
 open HS
-open Result_IO
-let () = printf "--> Open HS, Result_IO\n"
+open Flow
+let () = printf "--> Open HS, Flow\n"
 
 let ok_exn a = ok_exn ~fail:(Failure "Not Ok") a
 let () = printf "--> ok_exn\n"
