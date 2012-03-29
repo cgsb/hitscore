@@ -1,11 +1,21 @@
 open Hitscored_std
   
-let main () =
+let syscmd fmt =
+  let f s =
+    dbg "SYSCMD: %s" s >>= fun () ->
+    system_command s in
+  ksprintf f fmt
+
+let main ~server_cert ?with_auth () =
   debug "Starting" >>= fun () ->
-  system_command "_build/src/server/hitscored &" >>= fun ()-> 
-  Flow_net.sleep 2. >>= fun () ->
+  syscmd "_build/src/server/hitscored %s %s &"
+    server_cert Option.(value_map ~default:"" ~f:fst with_auth)
+  >>= fun ()-> 
+  Flow_net.sleep 1. >>= fun () ->
   debug "Started server" >>= fun () ->
-  Flow_net.ssl_context ~verification_policy:`ok_self_signed `anonymous_client
+  Flow_net.ssl_client_context ~verification_policy:`ok_self_signed
+    Option.(value_map with_auth ~default:`anonymous
+              ~f:(fun (_, c) -> `with_pem_certificate c))
   >>= fun ssl_context ->
   let socket =
     Lwt_unix.(
@@ -21,9 +31,12 @@ let main () =
   >>= fun () -> 
   debug "Connected (unix)" >>= fun () ->
   Flow_net.ssl_connect socket ssl_context >>= fun socket ->
-  debug "Connected (ssl)" >>= fun () ->
+  debug "Connected (ssl), writing" >>= fun () ->
+  wrap_io Lwt_ssl.(write socket "hello from the test          " 0) 19
+  >>= fun (_:int) ->
   Flow_net.ssl_shutdown socket >>= fun () ->
   debug "Disconnected (ssl)" >>= fun () ->
+  Flow_net.sleep 2. >>= fun () ->
   return ()
 
 
@@ -31,7 +44,10 @@ let () =
   Ssl.init ();
   global_log_app_name := "TEST";
   let main_m =
-    double_bind (main ()) ~ok:return
+    let with_auth =
+      if Array.length Sys.argv = 4
+      then Some (Sys.argv.(2), Sys.argv.(3)) else None in
+    double_bind (main ~server_cert:Sys.argv.(1) ?with_auth ()) ~ok:return
       ~error:(fun e ->
         system_command "killall hitscored" >>= fun () ->
         error e) in

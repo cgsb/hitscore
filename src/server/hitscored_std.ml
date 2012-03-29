@@ -43,19 +43,19 @@ module Flow_net =  struct
   let sleep f =
     wrap_io Lwt_unix.sleep f
 
-  let ssl_context ?verification_policy c =
+  let ssl_client_context ?verification_policy c =
     let open Ssl in
-    let ctx, certificate =
+    let certificate =
       match c with
-      | `server (c, pk) -> (Server_context, Some (c, pk))
-      | `anonymous_client -> (Client_context, None)
-      | `client (c, pk) -> (Client_context, Some (c, pk))
+      | `anonymous -> None
+      | `with_pem_certificate c -> Some c
     in
     begin
       try
-        let c = create_context TLSv1 ctx in
-        Option.iter certificate (fun (cert, pk) ->
-          use_certificate c cert pk);
+        let c = create_context TLSv1 Client_context in
+        Option.iter certificate (fun (cert_pk) ->
+          use_certificate c cert_pk cert_pk
+        );
         set_cipher_list c "TLSv1";
         Option.iter verification_policy (function
         | `client_makes_sure -> 
@@ -66,6 +66,22 @@ module Flow_net =  struct
         return c
       with e -> error (`ssl_context_exn e)
     end
+      
+  let ssl_server_context ?with_client_authentication cert_key_file =
+    let open Ssl in
+    try
+      let c = create_context TLSv1 Server_context in
+      use_certificate c cert_key_file cert_key_file;
+      set_cipher_list c "TLSv1";
+      Option.iter with_client_authentication (function
+      | `with_CA_certificate ca_cert ->
+        set_verify c [ Verify_peer; Verify_fail_if_no_peer_cert ] None;
+        set_verify_depth c 99;
+        load_verify_locations c ca_cert "";
+      );
+      return c
+    with e -> error (`ssl_context_exn e)
+
       
   let server_socket ~port =
     let open Lwt_unix in
@@ -86,6 +102,8 @@ module Flow_net =  struct
 end
 
 let epr fmt = ksprintf (fun s -> prerr_string (format_message s)) (fmt ^^ "%!")
+  
+let dbg fmt = ksprintf debug fmt
   
 let print_error = function
   | `io_exn e ->
