@@ -1,21 +1,25 @@
 open Hitscored_std
 
+let dbg fmt = ksprintf debug fmt
   
 let main () =
   debug "Hello world!" >>= fun () ->
-  let ssl_context = Ssl.(create_context TLSv1 Server_context) in
-  let socket =
-    Lwt_unix.(
-      let fd = socket PF_INET SOCK_STREAM 6 in
-      bind fd (ADDR_INET (Unix.inet_addr_any, 2000));
-      listen fd 2000;
-      fd) in
+  Flow_net.ssl_context (`server ("cert.pem", "privkey-unsec.pem"))
+  >>= fun ssl_context ->
+  Flow_net.server_socket ~port:2000 >>= fun socket ->
   debug "Accepting (unix)" >>= fun () ->
-  wrap_io Lwt_unix.accept socket >>= fun accepted ->
-  debug "Accepted (unix)" >>= fun () ->
-  Flow_net.ssl_accept (fst accepted) ssl_context >>= fun ssl_accepted ->
-  debug "Accepted" >>= fun () ->
-  Pervasives.ignore socket;
+  wrap_io (Lwt_unix.accept_n socket) 10
+  >>= fun (accepted_list, potential_exn) ->
+  dbg "Accepted %d (unix)%s" (List.length accepted_list)
+    (Option.value_map ~default:"" potential_exn
+       ~f:(fun e -> sprintf ", Exn: %s" (Exn.to_string e)))
+  >>= fun () ->
+  of_list_sequential accepted_list (fun accepted ->
+    Flow_net.ssl_accept (fst accepted) ssl_context >>= fun ssl_accepted ->
+    debug "Accepted (SSL)" >>= fun () ->
+    Pervasives.ignore socket;
+    return ())
+  >>= fun (_ : unit list) ->
   return ()
 
 
@@ -24,9 +28,8 @@ let () =
   global_log_app_name := "SERVER";
   match Lwt_main.run (main ()) with
   | Ok () -> ()
-  | Error (`io_exn e) ->
-    eprintf "An I/O exn was not caught: %s -- Global: %s\n%!"
-      (Exn.to_string e) (Ssl.get_error_string ())
   | Error e ->
-    eprintf "There were uncaught errors given to Lwt_main.run\n%!"
-  
+    eprintf "%s: There were uncaught errors given to Lwt_main.run\n%!"
+      !global_log_app_name;
+    print_error e
+      

@@ -5,7 +5,8 @@ let main () =
   system_command "_build/src/server/hitscored &" >>= fun ()-> 
   Flow_net.sleep 2. >>= fun () ->
   debug "Started server" >>= fun () ->
-  let ssl_context = Ssl.(create_context TLSv1 Client_context) in
+  Flow_net.ssl_context ~verification_policy:`ok_self_signed `anonymous_client
+  >>= fun ssl_context ->
   let socket =
     Lwt_unix.(
       try
@@ -37,5 +38,7 @@ let () =
   match Lwt_main.run main_m with
   | Ok () -> ()
   | Error e ->
-    eprintf "There were uncaught errors given to Lwt_main.run\n%!"
+    eprintf "%s: There were uncaught errors given to Lwt_main.run\n%!"
+      !global_log_app_name;
+    print_error e
   
