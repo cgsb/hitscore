@@ -23,16 +23,16 @@
 # #####################################################################
 
 ## DN values
-COUNTRY="DE"
-PROVINCE="NO"
-CITY="NOWHERE"
-ORG="EXAMPLE.COM"
-ORGUNIT="FOOBAR"
-CN="CN"
-EMAIL="root@example.com"
+COUNTRY="US"
+PROVINCE="NY"
+CITY="New York"
+ORG="gencore.bio.nyu.edu"
+ORGUNIT="GENCORE"
+CN="GENCORE"
+EMAIL="bio.gencore@nyu.edu"
 
 ## where to store keys, certificates, and other OpenSSL related stuff
-[[ -z "${CERTSDIR}" ]] && CERTSDIR="${HOME}/certs"
+[[ -z "${CERTSDIR}" ]] && CERTSDIR="${PWD}/certs"
 
 ## configuration file (if does not exists, will automatically be generated)
 [[ -z "${SSLCONF}" ]] && SSLCONF="${CERTSDIR}/openssl.cnf"
@@ -46,8 +46,8 @@ DHSIZE="2048"
 ## validities (in days)
 [[ -z "${VALIDDEFAULT}" ]] && VALIDDEFAULT="3650"
 [[ -z "${VALIDCA}" ]]      && VALIDCA="${VALIDDEFAULT}"
-[[ -z "${VALIDCLIENT}" ]]  && VALIDCLIENT="365"
-[[ -z "${VALIDCRL}" ]]     && VALIDCRL="30"
+[[ -z "${VALIDCLIENT}" ]]  && VALIDCLIENT="3650"
+[[ -z "${VALIDCRL}" ]]     && VALIDCRL="3650"
 
 # #####################################################################
 # script code -- NO CHANGES BELOW THIS LINE!
