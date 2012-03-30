@@ -74,10 +74,14 @@ module Flow_net =  struct
       use_certificate c cert_key_file cert_key_file;
       set_cipher_list c "TLSv1";
       Option.iter with_client_authentication (function
-      | `with_CA_certificate ca_cert ->
+      | `CA_certificate ca_cert ->
         set_verify c [ Verify_peer; Verify_fail_if_no_peer_cert ] None;
         set_verify_depth c 99;
         load_verify_locations c ca_cert "";
+      | `CA_path ca_path ->
+        set_verify c [ Verify_peer; Verify_fail_if_no_peer_cert ] None;
+        set_verify_depth c 99;
+        load_verify_locations c "" ca_path;
       );
       return c
     with e -> error (`ssl_context_exn e)
@@ -99,6 +103,33 @@ module Flow_net =  struct
   let ssl_shutdown socket =
     wrap_io Lwt_ssl.ssl_shutdown socket
 
+  module M_ugly_ssl_get_certificate = struct
+    type ttt = Plain | SSL of Ssl.socket
+    type lwt_ssl_socket = Lwt_unix.file_descr * ttt
+
+    let get_certificate sslsock =
+      begin match snd (Obj.magic sslsock : lwt_ssl_socket) with
+      | Plain -> error (`not_an_ssl_socket)
+      | SSL s ->
+        Lwt.(
+          catch
+            (fun () ->
+              eprintf "Getting cert\n";
+              eprintf "get_verify_result: %d\n%!" (Ssl.get_verify_result s);
+              Lwt_preemptive.detach Ssl.get_certificate s
+              >>= fun cert ->
+              eprintf "get_issuer: %s\n%!" (Ssl.get_issuer cert);
+              return (Ok cert))
+            (function
+            | Ssl.Certificate_error ->
+              return (Error `ssl_certificate_error)
+            | e -> 
+              return (Error (`io_exn e))))
+      end
+  end
+  let ssl_get_certificate = M_ugly_ssl_get_certificate.get_certificate
+
+      
 end
 
 let epr fmt = ksprintf (fun s -> prerr_string (format_message s)) (fmt ^^ "%!")
@@ -117,3 +148,9 @@ let print_error = function
   | `system_command_error (c, e) ->
     epr "System command error:\n  cmd: %s\n  exn: %s\n"
       c (Exn.to_string e)
+  | `not_an_ssl_socket ->
+    epr "Got a plain socket when expecting an SSL one."
+  | `ssl_certificate_error ->
+    epr "Error while trying to get an SSL certificate (anonymous connection?):\n\
+         \  %s\n." (Ssl.get_error_string ()) 
+
