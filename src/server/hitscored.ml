@@ -1,28 +1,9 @@
 open Hitscored_std
 
-type ttt = Plain | SSL of Ssl.socket
-type lwt_ssl_socket = Lwt_unix.file_descr * ttt
-
-let print_user sslsock =
-  begin match snd (Obj.magic sslsock : lwt_ssl_socket) with
-  | Plain ->
-    dbg "PLAIN SOCKET ??????"
-  | SSL s ->
-    begin
-      try
-        let cert = Ssl.get_certificate s in
-        let user = Ssl.get_subject cert in
-        dbg "User: %s" user
-      with
-      | Ssl.Certificate_error ->
-        dbg "There is no user (anonymous)"
-    end
-  end
-
 let main ?ca_cert ~cert_key () =
   debug "Hello world!" >>= fun () ->
   let with_client_authentication =
-    Option.map ca_cert (fun c -> `with_CA_certificate c) in
+    Option.map ca_cert (fun c -> `CA_certificate c) in
   Flow_net.ssl_server_context ?with_client_authentication cert_key
   >>= fun ssl_context ->
   Flow_net.server_socket ~port:2000 >>= fun socket ->
@@ -36,7 +17,13 @@ let main ?ca_cert ~cert_key () =
   of_list_sequential accepted_list (fun accepted ->
     Flow_net.ssl_accept (fst accepted) ssl_context >>= fun ssl_accepted ->
     debug "Accepted (SSL)" >>= fun () ->
-    print_user ssl_accepted >>= fun () ->
+    of_option ca_cert (fun _ ->
+      Flow_net.ssl_get_certificate ssl_accepted
+      >>| Ssl.get_subject)
+    >>= fun subject ->
+    dbg "%s" (Option.value_map subject ~default:"Anonymous connection."
+                ~f:(sprintf "Subject-connected: %s"))
+    >>= fun () ->
     let inchan = Lwt_ssl.in_channel_of_descr ssl_accepted in
     dbg "Reading..." >>= fun () ->
     wrap_io Lwt_io.(read ~count:2048) inchan
