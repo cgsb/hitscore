@@ -1,6 +1,7 @@
 _build/
 _doc/
 _migrator/
+certs/
 src/script/*.exe
 hitscoredoc.docdir
 setup.data
