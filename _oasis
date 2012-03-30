@@ -63,7 +63,7 @@ Executable hitscore
 Executable hitscored
   Path: src/server
   MainIs: hitscored.ml
-  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl
+  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl, lwt.preemptive
   if flag(lwt)
     Build: true
   else
@@ -78,7 +78,7 @@ Executable test_hitscored
     Build: true
   else
     Build: false
-  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl
+  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.preemptive, lwt.ssl
   CompiledObject: best
   Install: false
 
