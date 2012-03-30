@@ -307,7 +307,8 @@ fn_server () {
     -nodes -new -extensions server \
     -keyout "${CERTSDIR}/${1}.key" -out "${CERTSDIR}/${1}.csr" && \
     openssl ca -batch -config "${SSLCONF}" -extensions server \
-    -out "${CERTSDIR}/${1}.crt" -in "${CERTSDIR}/${1}.csr"
+    -out "${CERTSDIR}/${1}.crt" -in "${CERTSDIR}/${1}.csr" && \
+    cat "${CERTSDIR}/${1}.crt" "${CERTSDIR}/${1}.key" > "${CERTSDIR}/${1}.crtkey"
   return "${?}"
 }
 
@@ -315,11 +316,12 @@ fn_client () {
   fn_requires "ca"
   fn_conflicts "${1}"
   fn_info "Generating client key/certificate for \`${1}' ..."
-  CN="${1}" openssl req -batch -config "${SSLCONF}" \
+  CN="${1}" openssl req -batch -nodes -config "${SSLCONF}" \
     -days "${VALIDCLIENT}" -new \
     -keyout "${CERTSDIR}/${1}.key" -out "${CERTSDIR}/${1}.csr" && \
     openssl ca -batch -config "${SSLCONF}" -days "${VALIDCLIENT}" \
-    -out "${CERTSDIR}/${1}.crt" -in "${CERTSDIR}/${1}.csr"
+    -out "${CERTSDIR}/${1}.crt" -in "${CERTSDIR}/${1}.csr" && \
+    cat "${CERTSDIR}/${1}.crt" "${CERTSDIR}/${1}.key" > "${CERTSDIR}/${1}.crtkey"
   return "${?}"
 }
 
