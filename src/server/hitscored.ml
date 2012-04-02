@@ -1,5 +1,8 @@
 open Hitscored_std
 
+
+
+    
 let main ?ca_cert ~cert_key () =
   debug "Hello world!" >>= fun () ->
   let with_client_authentication =
@@ -7,33 +10,31 @@ let main ?ca_cert ~cert_key () =
   Flow_net.ssl_server_context ?with_client_authentication cert_key
   >>= fun ssl_context ->
   Flow_net.server_socket ~port:2000 >>= fun socket ->
-  debug "Accepting (unix)" >>= fun () ->
-  wrap_io (Lwt_unix.accept_n socket) 10
-  >>= fun (accepted_list, potential_exn) ->
-  dbg "Accepted %d (unix)%s" (List.length accepted_list)
-    (Option.value_map ~default:"" potential_exn
-       ~f:(fun e -> sprintf ", Exn: %s" (Exn.to_string e)))
-  >>= fun () ->
-  of_list_sequential accepted_list (fun accepted ->
-    Flow_net.ssl_accept (fst accepted) ssl_context >>= fun ssl_accepted ->
-    debug "Accepted (SSL)" >>= fun () ->
-    of_option ca_cert (fun _ ->
-      Flow_net.ssl_get_certificate ssl_accepted
-      >>| Ssl.get_subject)
-    >>= fun subject ->
-    dbg "%s" (Option.value_map subject ~default:"Anonymous connection."
-                ~f:(sprintf "Subject-connected: %s"))
-    >>= fun () ->
-    let inchan = Lwt_ssl.in_channel_of_descr ssl_accepted in
-    dbg "Reading..." >>= fun () ->
-    wrap_io Lwt_io.(read ~count:2048) inchan
-    >>= fun stuff_read ->
-    dbg "Read: %S" stuff_read >>= fun () ->
-    return ())
-  >>= fun (_ : unit list) ->
-  dbg "This Is The End." >>= fun () ->
-  return ()
 
+  let check_client_certificate =
+    Option.map ca_cert (fun _ ->
+      fun c ->
+        dbg "check_client_certificate:\n  Issuer: %s\n  Subject: %s"
+          (Ssl.get_issuer c) (Ssl.get_subject c)
+      >>= fun () ->
+        return true)
+  in
+  Flow_net.ssl_accept_loop ?check_client_certificate ssl_context socket
+    (fun client_socket client_kind ->
+      begin match client_kind with
+      | `invalid_client `wrong_certificate ->
+        dbg "The client has a wrong certificate"
+      | `invalid_client (`expired_certificate _) ->
+        dbg "The client has an expired certificate"
+      | `anonymous_client
+      | `valid_client _ ->
+        let inchan = Lwt_ssl.in_channel_of_descr client_socket in
+        dbg "Reading..." >>= fun () ->
+        wrap_io Lwt_io.(read ~count:2048) inchan
+        >>= fun stuff_read ->
+        dbg "Read: %S" stuff_read >>= fun () ->
+        return ()
+      end)
 
 let () =
   Ssl.init ();
