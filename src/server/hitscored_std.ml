@@ -35,6 +35,8 @@ module Hitscore_lwt = Hitscore.Make(Lwt_config)
 include Hitscore_lwt
 include Flow
 
+let read_file file =
+  wrap_io Lwt_io.(fun () -> with_file ~mode:input file (fun i -> read i)) ()
 
 let epr fmt = ksprintf (fun s -> prerr_string (format_message s)) (fmt ^^ "%!")
   
@@ -60,6 +62,71 @@ let print_error = function
   | `wrong_CA_index_format exn ->
     epr "Error while parsing the CA index.txt:\n  Exn: %s\n"  (Exn.to_string exn)
 
+
+module Certificate_authority = struct
+
+
+  module String_map = Map.Make(String)
+
+
+  let parse_ASN1_UTCTIME_format_exn s =
+  (* YYMMDDHHMMSSZ e.g. 220328212233Z *)
+    if String.length s  <> 13
+    then failwithf "invalid_ASN1_date %s" s ()
+    else
+      try
+        let get2 i = Int.of_string (String.sub s i 2) in
+        let y = 2000 + (get2 0) in
+        let m = get2 2 |! Month.of_int_exn in
+        let d = get2 4 in
+        let hr = get2 6 in
+        let mn = get2 8 in
+        let sec = get2 10 in
+        Time.(of_date_ofday
+                Zone.utc Date.(create ~m ~y ~d) Ofday.(create ~hr ~min:mn ~sec ()))
+      with
+      | e -> failwithf "invalid_ASN1_date %s" s ()
+        
+  let common_name_of_subject subj =
+    List.find_map (String.split subj ~on:'/') (function
+    | s when String.prefix s 3 = "CN=" ->
+      begin match String.split ~on:'-' (String.drop_prefix s 3) with
+      | [ login; _ ] -> Some login
+      | _ -> None
+      end
+    | _ -> None)
+      
+  (* http://old.nabble.com/Format-of-index.txt-file-td21557292.html *)
+  let get_index ca_cert =
+    let ca_path = Filename.dirname ca_cert in
+    read_file Filename.(concat ca_path "index.txt")
+    >>| String.split ~on:'\n'
+    >>| List.map ~f:(String.split ~on:'\t')
+    >>= fun lines ->
+    let date = parse_ASN1_UTCTIME_format_exn in
+    (try
+       List.fold_left lines ~init:String_map.empty ~f:(fun ca_index line ->
+         begin match line with
+         | "V" :: exp_date :: "" :: serial :: _ :: name :: [] ->
+           String_map.add ~key:name ~data:(`valid (date exp_date, serial)) ca_index
+         | "R" :: exp_date :: rev_date :: serial :: _ :: name :: [] ->
+           String_map.add ~key:name ~data:(`revoked (date rev_date, serial)) ca_index
+         | "E" :: exp_date :: _ :: serial :: _ :: name :: [] ->
+           String_map.add ~key:name
+             ~data:(`expired (date exp_date, serial)) ca_index
+         | [] | [""] -> ca_index
+         | l ->
+           failwithf "get_CA_index:cannot_parse [%s]" (String.concat ~sep:", " l) ()
+         end)
+       |! return
+     with 
+     | e -> error (`wrong_CA_index_format e))
+
+  let find_name = String_map.find
+
+end
+
+      
 module Flow_net =  struct
 
   let ssl_accept socket ssl_context =
