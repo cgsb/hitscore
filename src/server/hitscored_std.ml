@@ -94,7 +94,7 @@ module Certificate_authority = struct
       with
       | e -> failwithf "invalid_ASN1_date %s" s ()
         
-  let common_name_of_subject subj =
+  let login_of_subject subj =
     List.find_map (String.split subj ~on:'/') (function
     | s when String.prefix s 3 = "CN=" ->
       begin match String.split ~on:'-' (String.drop_prefix s 3) with
@@ -102,6 +102,9 @@ module Certificate_authority = struct
       | _ -> None
       end
     | _ -> None)
+
+  let login_of_cert cert =
+    Ssl.get_subject cert |! login_of_subject
       
   (* http://old.nabble.com/Format-of-index.txt-file-td21557292.html *)
   let get_index ca_cert =

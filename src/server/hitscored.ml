@@ -16,7 +16,7 @@ let main ?ca_cert ~cert_key () =
       dbg "check_client_certificate:\n  Issuer: %s\n  Subject: %s"
         (Ssl.get_issuer c) (Ssl.get_subject c) >>= fun () ->
       let subj = (Ssl.get_subject c) in
-      let cn = Certificate_authority.common_name_of_subject subj in
+      let cn = Certificate_authority.login_of_subject subj in
       begin match Certificate_authority.find_name ca_index subj with
       | None -> return `certificate_not_found
       | Some (`valid (time, serial)) when Time.(time >. now ()) ->
@@ -51,8 +51,10 @@ let main ?ca_cert ~cert_key () =
           dbg "Got hello" >>= fun () ->
           Message.server_send ouchan (`hello `anonymous)
         end
-      | `valid_client _ ->
-        dbg "Reading..." >>= fun () ->
+      | `valid_client cert ->
+        let login = Certificate_authority.login_of_cert cert in
+        dbg "Reading... from %s" (Option.value ~default:"NOT-NAMED" login)
+        >>= fun () ->
         Message.recv_client inchan
         >>= fun msg ->
         begin match msg with
