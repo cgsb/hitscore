@@ -61,6 +61,13 @@ let print_error = function
          \  %s\n." (Ssl.get_error_string ()) 
   | `wrong_CA_index_format exn ->
     epr "Error while parsing the CA index.txt:\n  Exn: %s\n"  (Exn.to_string exn)
+  | `sexp_parsing_error e ->
+    epr "Error while parsing a S-Exp message:\n  Exn: %s\n" (Exn.to_string e)
+  | `bin_write_error e ->
+    epr "Error while writing a message:\n  Exn: %s\n" (Exn.to_string e)
+  | `bin_read_error e ->
+    epr "Error while reading a message:\n  Exn: %s\n" (Exn.to_string e)
+
 
 
 module Certificate_authority = struct
@@ -249,7 +256,7 @@ module Flow_net =  struct
         (Option.value_map ~default:"" potential_exn
            ~f:(fun e -> sprintf ", Exn: %s" (Exn.to_string e)))
       >>= fun () ->
-      let _ = accept_loop (c + 1) in
+      accept_loop (c + 1) |! Lwt.ignore_result;
       Lwt.(
         Lwt_list.map_p handle_one accepted_list
         >>= fun res_l ->
@@ -260,4 +267,56 @@ module Flow_net =  struct
     in
     accept_loop 0
 
+end
+
+
+module Message = struct
+
+  type client = [
+  | `hello
+  ] with sexp
+
+  type server = [
+  | `hello of [
+    | `authenticated of Layout.Enumeration_role.t list
+    | `anonymous ]
+  ] with sexp
+
+  let max_message_length = 10_000_000
+    
+  let bin_write_string oc =
+    wrap_io ~on_exn:(fun e -> `bin_write_error e)
+      Lwt.(fun s ->
+        Lwt_io.BE.write_int oc (String.length s) >>= fun () ->
+        Lwt_io.write oc s)
+
+  let bin_read_string ic =
+    wrap_io ~on_exn:(fun e -> `bin_read_error e)
+      Lwt.(fun () ->
+        Lwt_io.BE.read_int ic >>= fun c ->
+        Lwt_io.read ~count:(min c max_message_length) ic >>= fun s ->
+        if String.length s <> c then
+          fail (Failure (sprintf "wrong length + end of file: c:%d s:%d"
+                           c (String.length s)))
+        else
+          return s)
+      ()
+
+  let server_send oc m =
+    Sexp.to_string_hum (sexp_of_server m) |! bin_write_string oc
+        
+  let client_send oc m =
+    Sexp.to_string_hum (sexp_of_client m) |! bin_write_string oc
+
+  let recv_server ic =
+    bin_read_string ic >>= fun s ->
+    wrap_io ~on_exn:(fun e -> `sexp_parsing_error e)
+      (fun s -> Sexp.of_string s |! server_of_sexp |! Lwt.return) s
+    
+  let recv_client ic =
+    bin_read_string ic >>= fun s ->
+    wrap_io ~on_exn:(fun e -> `sexp_parsing_error e)
+      (fun s -> Sexp.of_string s |! client_of_sexp |! Lwt.return) s
+    
+      
 end

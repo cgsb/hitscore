@@ -63,7 +63,8 @@ Executable hitscore
 Executable hitscored
   Path: src/server
   MainIs: hitscored.ml
-  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl, lwt.preemptive
+  BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl, lwt.preemptive,
+                sexplib.syntax
   if flag(lwt)
     Build: true
   else

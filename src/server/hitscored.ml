@@ -31,6 +31,8 @@ let main ?ca_cert ~cert_key () =
 
   Flow_net.ssl_accept_loop ?check_client_certificate ssl_context socket
     (fun client_socket client_kind ->
+      let inchan = Lwt_ssl.in_channel_of_descr client_socket in
+      let ouchan = Lwt_ssl.out_channel_of_descr client_socket in
       begin match client_kind with
       | `invalid_client `wrong_certificate ->
         dbg "The client has a wrong certificate"
@@ -40,14 +42,24 @@ let main ?ca_cert ~cert_key () =
         dbg "The client has a revoked certificate"
       | `invalid_client (`certificate_not_found _) ->
         dbg "The client has a not-found certificate"
-      | `anonymous_client
-      | `valid_client _ ->
-        let inchan = Lwt_ssl.in_channel_of_descr client_socket in
+      | `anonymous_client ->
         dbg "Reading..." >>= fun () ->
-        wrap_io Lwt_io.(read ~count:2048) inchan
-        >>= fun stuff_read ->
-        dbg "Read: %S" stuff_read >>= fun () ->
-        return ()
+        Message.recv_client inchan
+        >>= fun msg ->
+        begin match msg with
+        | `hello ->
+          dbg "Got hello" >>= fun () ->
+          Message.server_send ouchan (`hello `anonymous)
+        end
+      | `valid_client _ ->
+        dbg "Reading..." >>= fun () ->
+        Message.recv_client inchan
+        >>= fun msg ->
+        begin match msg with
+        | `hello ->
+          dbg "Got hello" >>= fun () ->
+          Message.server_send ouchan (`hello (`authenticated []))
+        end
       end)
 
 let () =

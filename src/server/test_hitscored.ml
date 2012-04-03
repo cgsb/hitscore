@@ -31,9 +31,21 @@ let main ~server_cert ?with_auth () =
   >>= fun () -> 
   debug "Connected (unix)" >>= fun () ->
   Flow_net.ssl_connect socket ssl_context >>= fun socket ->
+  let inchan = Lwt_ssl.in_channel_of_descr  socket in
+  let ouchan = Lwt_ssl.out_channel_of_descr socket in
   debug "Connected (ssl), writing" >>= fun () ->
-  wrap_io Lwt_ssl.(write socket "hello from the test          " 0) 19
-  >>= fun (_:int) ->
+  Message.client_send ouchan `hello
+  >>= fun () ->
+  Message.recv_server inchan
+    >>= fun message ->
+  begin match message with
+  | `hello `anonymous ->
+    dbg "I'm anonymous"
+  | `hello (`authenticated roles) ->
+    dbg "I'm authenticated, roles: [%s]"
+      (List.map roles Layout.Enumeration_role.to_string |! String.concat ~sep:", ")
+  end
+  >>= fun () ->
   Flow_net.ssl_shutdown socket >>= fun () ->
   debug "Disconnected (ssl)" >>= fun () ->
   Flow_net.sleep 2. >>= fun () ->
