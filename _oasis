@@ -60,17 +60,6 @@ Executable hitscore
   CompiledObject: best
   Install: true
 
-Executable db_access_test
-  Path: src/test
-  MainIs: db_access.ml
-  if flag(lwt)
-    Build: true
-  else
-    Build: false
-  BuildDepends: threads, core, hitscore, lwt, lwt.unix
-  CompiledObject: best
-  Install: false
-
   
 Document hitscoredoc
   Title:      Documentation of the Hitscore library

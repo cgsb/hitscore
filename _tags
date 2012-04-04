@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 542517c5dc6a2cb933fc101a19a85b6a)
+# DO NOT EDIT (digest: f38aeded8c09c7ab0f2f2d90862476e0)
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
@@ -36,29 +36,6 @@
 <src/app/*.ml{,i}>: pkg_pgocaml
 <src/app/*.ml{,i}>: pkg_core
 <src/app/*.ml{,i}>: pkg_biocaml
-# Executable db_access_test
-<src/test/db_access.{native,byte}>: use_hitscore
-<src/test/db_access.{native,byte}>: use_hitscoregen
-<src/test/db_access.{native,byte}>: pkg_threads
-<src/test/db_access.{native,byte}>: pkg_sexplib.syntax
-<src/test/db_access.{native,byte}>: pkg_sequme
-<src/test/db_access.{native,byte}>: pkg_pgocaml.syntax
-<src/test/db_access.{native,byte}>: pkg_pgocaml
-<src/test/db_access.{native,byte}>: pkg_lwt.unix
-<src/test/db_access.{native,byte}>: pkg_lwt
-<src/test/db_access.{native,byte}>: pkg_core
-<src/test/db_access.{native,byte}>: pkg_biocaml
-<src/test/*.ml{,i}>: use_hitscore
-<src/test/*.ml{,i}>: use_hitscoregen
-<src/test/*.ml{,i}>: pkg_threads
-<src/test/*.ml{,i}>: pkg_sexplib.syntax
-<src/test/*.ml{,i}>: pkg_sequme
-<src/test/*.ml{,i}>: pkg_pgocaml.syntax
-<src/test/*.ml{,i}>: pkg_pgocaml
-<src/test/*.ml{,i}>: pkg_lwt.unix
-<src/test/*.ml{,i}>: pkg_lwt
-<src/test/*.ml{,i}>: pkg_core
-<src/test/*.ml{,i}>: pkg_biocaml
 # OASIS_STOP
 
 <src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o
