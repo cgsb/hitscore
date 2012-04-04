@@ -1,7 +1,7 @@
 
 OASISFormat: 0.2
 Name:        hitscore
-Version:     0.7-dev
+Version:     0.7
 Synopsis:    CGSB Core Library
 Authors:     Ashish Agarwal, Sebastien Mondet
 License:     PROP
