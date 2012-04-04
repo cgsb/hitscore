@@ -21,11 +21,20 @@ make_module () {
     echo 'let ($) f x = f x' > $name
     echo "module Info = struct let version = \"$version\" end" >> $name
     cat $tmp >> $name
-    sed -i 's/: Hitscore_layout_interface.LAYOUT//' $name
-    sed -i 's/with module Flow = Flow//' $name
-    sed -i "s/with type 'a PGOCaml.monad = 'a Flow.IO.t//" $name
-    sed -i 's/PGSQL *(dbh)/failwith $/g' $name
-    sed -i 's/\$?\?\([a-z_A-Z0-9]\+\)/" ^ (let _ = \1  in "") ^  "/g' $name
+    if [ "$version" = "0.7" ]; then
+        sed -i 's/: Hitscore_layout_interface.LAYOUT//' $name
+        sed -i 's/with module Flow = Flow//' $name
+        sed -i "s/with type 'a PGOCaml.monad = 'a Flow.IO.t//" $name
+        sed -i 's/PGSQL *(dbh)/failwith $/g' $name
+        sed -i 's/\$?\?\([a-z_A-Z0-9]\+\)/" ^ (let _ = \1  in "") ^  "/g' $name
+    else
+        sed -i 's/Hitscore_interfaces.RESULT_IO/Sequme_flow_monad.FLOW_MONAD/' $name
+        sed -i 's/: Hitscore_layout_interface.LAYOUT//' $name
+        sed -i 's/with module Result_IO = Result_IO//' $name
+        sed -i "s/with type 'a PGOCaml.monad = 'a Result_IO.IO.t//" $name
+        sed -i 's/PGSQL *(dbh)/failwith $/g' $name
+        sed -i 's/\$?\?\([a-z_A-Z0-9]\+\)/" ^ (let _ = \1  in "") ^  "/g' $name
+    fi
 
     $OCAMLFINDOPT -c $name
 }
@@ -37,7 +46,6 @@ if [ "$1" = "update" ]; then
                       -e 's/* \(.*\)/\1/'`
     make_module v07  0.7
     make_module v06  0.6
-    make_module v051 0.5.1
     git checkout $current_branch
     cd _migrator
     ln -sf ../src/migrator/migrator.ml
@@ -52,6 +60,6 @@ if [ "$1" = "-h" ]; then
 fi
 
 cd _migrator
-$OCAMLFINDOPT -linkpkg v07.cmx v051.cmx v06.cmx migrator.ml -o migrator
+$OCAMLFINDOPT -linkpkg v07.cmx v06.cmx migrator.ml -o migrator
 cd ..
 
