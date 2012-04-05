@@ -19,6 +19,7 @@
        (login           string option)
        (nickname        string option)
        (roles           role array)
+       (password_hash   string option)
        notable
        )
 
