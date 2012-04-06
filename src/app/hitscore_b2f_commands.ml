@@ -71,6 +71,9 @@ let start_parse_cmdline usage_prefix args =
     ( "-all-barcodes",
       Arg.Unit (fun () -> sample_sheet_kind := `all_barcodes),
       "\n\tUse/create an all-barcodes sample-sheet.");
+    ( "-no-demux",
+      Arg.Unit (fun () -> sample_sheet_kind := `no_demultiplexing),
+      "\n\tUse/create a 'no demultiplexing' sample-sheet.");
     ( "-force-new-samplesheet",
       Arg.Unit (fun () -> force_new := true),
       "\n\tDo not check for existing sample-sheets (Default: false).");
