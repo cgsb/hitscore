@@ -89,6 +89,6 @@ clean:
 fresh: clean uninstall
 
 # clean setup files, rebuilding may require additional tools
-distclean: fresh
+distclean: clean
 	ocaml setup.ml -distclean
 
