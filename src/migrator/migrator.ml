@@ -37,6 +37,10 @@ let v07_to_v08 file_in file_out =
         List [Atom "record_person";
               List (List.map persons (add_empty "password_hash"))]
           
+      | List [Atom "function_bcl_to_fastq"; List persons] ->
+        List [Atom "function_bcl_to_fastq";
+              List (List.map persons (add_empty "bases_mask"))]
+          
       | List l ->
         List (List.map ~f:parse l) in
     dump_v07
