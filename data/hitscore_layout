@@ -163,7 +163,7 @@
         (file sample_sheet_csv)
         notable)
         
-(enumeration sample_sheet_kind all_barcodes specific_barcodes)
+(enumeration sample_sheet_kind all_barcodes specific_barcodes no_demultiplexing)
 
 (function sample_sheet assemble_sample_sheet
           (kind sample_sheet_kind) ;; All barcodes or not

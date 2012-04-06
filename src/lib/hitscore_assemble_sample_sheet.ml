@@ -211,6 +211,10 @@ module Make
                   return ()
                 end
               end
+            | `no_demultiplexing ->
+              print out "%s,%d,UndeterminedLane%d,,Undetermined,,N,,,Lane%d\n"
+                flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
+              return ()
             end) 
           >>= fun (_: unit list) -> 
           return (`new_one { content = out_buf; kind; flowcell; flowcell_name })
