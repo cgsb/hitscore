@@ -36,7 +36,7 @@ if [ "$1" = "update" ]; then
     mkdir -p _migrator
     current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
                       -e 's/* \(.*\)/\1/'`
-    make_module v08  0.8-dev
+    make_module v08  0.8
     make_module v07  0.7
     git checkout $current_branch
     cd _migrator
