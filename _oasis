@@ -50,6 +50,7 @@ Library hitscore
           , Hitscore_unaligned_delivery
           , Hitscore_delete_intensities
           , Hitscore_common
+          , Hitscore_broker
           , Hitscore_generic_fastqs
           , Hitscore_fastx_quality_stats
 

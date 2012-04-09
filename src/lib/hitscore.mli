@@ -62,6 +62,9 @@ module Make (IO_configuration : Sequme_flow_monad.IO_CONFIGURATION) : sig
   module Fastx_quality_stats: Hitscore_function_interfaces.FASTX_QUALITY_STATS
     with module Common = Common
 
+  (** The Query/Data/Message Broker. *)
+  module Broker: Hitscore_broker.BROKER with module Common = Common
+
   (** Attempt to connect to the database. *)
   val db_connect : Configuration.local_configuration -> 
     (Layout.db_handle, [> `pg_exn of exn]) Flow.monad
