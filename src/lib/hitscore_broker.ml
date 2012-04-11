@@ -37,6 +37,19 @@ module type BROKER = sig
      [> `person_not_unique of string ])
       Common.Flow.monad
 
+  val modify_person :
+    t ->
+    dbh:Common.Layout.db_handle ->
+    person:Common.Layout.Record_person.t ->
+    (unit,
+     [> `layout_inconsistency of
+         [> `Record of string ] *
+           [> `insert_cache_did_not_return_one_id of
+               string * int32 list
+           | `insert_did_not_return_one_id of string * int32 list ]
+     | `pg_exn of exn ])
+      Common.Flow.monad
+      
 end
 
 module Make
@@ -77,5 +90,19 @@ module Make
       | [one] -> return (Some one)
       | more -> error (`person_not_unique identifier)
         
+    let modify_person t ~dbh ~person =
+      let open Layout.Record_person in
+      let pointer = unsafe_cast person.g_id in
+      delete_value ~dbh pointer >>= fun () ->
+      let new_person = { person with g_last_modified = Some (Time.now ()) } in
+      insert_value ~dbh new_person >>= fun new_pointer ->
+      ksprintf (Common.add_log ~dbh) "(modification record_person %ld)" person.g_id
+      >>= fun () ->
+      let record_person =
+        List.map t.current_dump.Layout.record_person ~f:(fun p ->
+          if p.g_id = person.g_id then new_person else p)
+      in
+      t.current_dump <- { t.current_dump with Layout.record_person };
+      return ()
         
   end
