@@ -72,5 +72,9 @@ if [ -f "$2" ]; then
   cat $2 >> $ocaml_init
 fi
 
-ledit ocaml -init $ocaml_init 
+if [ -t 1 ] ; then
+    ledit ocaml -init $ocaml_init 
+else
+    ocaml -init $ocaml_init 
+fi
 
