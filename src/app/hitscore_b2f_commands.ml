@@ -62,12 +62,18 @@ let start_parse_cmdline usage_prefix args =
   let version, mismatch = ref `casava_182, ref `one in
   let tiles = ref None in
   let force_new = ref false in
+  let bases_mask = ref None in
   let options = pbs_options @ [
     ( "-tiles", Arg.String (fun s -> tiles := Some s),
       "<regexp list>\n\tSet the --tiles option of CASAVA (copied verbatim).");
+    ( "-bases-mask", Arg.String (fun s -> bases_mask := Some s),
+      "<string>\n\tSet the --use-bases-mask option of CASAVA (copied verbatim).");
     ( "-all-barcodes",
       Arg.Unit (fun () -> sample_sheet_kind := `all_barcodes),
       "\n\tUse/create an all-barcodes sample-sheet.");
+    ( "-no-demux",
+      Arg.Unit (fun () -> sample_sheet_kind := `no_demultiplexing),
+      "\n\tUse/create a 'no demultiplexing' sample-sheet.");
     ( "-force-new-samplesheet",
       Arg.Unit (fun () -> force_new := true),
       "\n\tDo not check for existing sample-sheets (Default: false).");
@@ -96,7 +102,7 @@ let start_parse_cmdline usage_prefix args =
         `go (List.rev !anon_args, !sample_sheet_kind, !force_new,
              !user, !queue, !nodes, !ppn,
              !wall_hours, !version, !mismatch,
-             !hitscore_command, !make_command, !tiles)
+             !hitscore_command, !make_command, !tiles, !bases_mask)
     with
     | Arg.Bad b -> `bad b
     | Arg.Help h -> `help h
@@ -107,7 +113,7 @@ let start hsc prefix cl_args =
   begin match (start_parse_cmdline prefix cl_args) with
   | `go (args, kind, force_new, user, queue, nodes, ppn,
          wall_hours, version, mismatch, 
-         hitscore_command, make_command, tiles) ->
+         hitscore_command, make_command, tiles, bases_mask) ->
     db_connect hsc
     >>= fun dbh ->
     begin match args with
@@ -117,7 +123,7 @@ let start hsc prefix cl_args =
       get_or_make_sample_sheet ~dbh ~hsc ~kind ~force_new flowcell
       >>= fun sample_sheet ->
       Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
-        ~sample_sheet ~hiseq_dir ~hitscore_command
+        ~sample_sheet ~hiseq_dir ~hitscore_command ?bases_mask
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
       >>= fun started ->

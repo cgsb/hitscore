@@ -726,7 +726,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           run ~dbh
             ~fake:(fun x -> Layout.Record_person.unsafe_cast x)
             ~real:(fun dbh ->
-              Layout.Record_person.add_value ~dbh
+              Layout.Record_person.add_value ~dbh ?password_hash:None
                 ~email ~given_name ?middle_name ~family_name ~secondary_emails:[||]
                 ?nickname ?login ?print_name ~roles:[| `user |] ?note:None)
             ~log:(sprintf "(add_person %s)" email)

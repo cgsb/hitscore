@@ -18,6 +18,7 @@ module Make
         ~(sample_sheet: Layout.Record_sample_sheet.pointer)
         ~(hiseq_dir: Layout.Record_hiseq_raw.pointer)
         ?tiles
+        ?bases_mask
         ?(mismatch=`one)
         ?(version=`casava_182)
         ?(user="sm4431")
@@ -52,19 +53,21 @@ module Make
 
       Layout.Function_bcl_to_fastq.(
           add_evaluation ~dbh
-            ~raw_data:hiseq_dir ?tiles
+            ~raw_data:hiseq_dir ?tiles ?bases_mask
             ~availability ~mismatch:mismatch32 ~version:casava_version
             ~sample_sheet ~recomputable:true ~recompute_penalty:100.
           >>= fun b2f ->
           let log =
             sprintf "(create_bcl_to_fastq %ld (raw_data %ld) \
                         (availability %ld) (mismatch %ld) (version %s) \
-                        %s (sample_sheet %ld))"
+                        %s %s (sample_sheet %ld))"
               b2f.id
               hiseq_dir.Layout.Record_hiseq_raw.id
               availability.Layout.Record_inaccessible_hiseq_raw.id
               mismatch32 casava_version
               (Option.value_map ~default:"()" ~f:(sprintf "(tiles %S)") tiles)
+              (Option.value_map ~default:"()"
+                 ~f:(sprintf "(bases_mask %S)") bases_mask)
               sample_sheet.Layout.Record_sample_sheet.id in
           Layout.Record_log.add_value ~dbh ~log >>= fun _ ->
           set_started ~dbh b2f >>= fun b2f ->
@@ -90,8 +93,6 @@ module Make
             sprintf "%s register-failure %ld 'shell_command_failed %S'"
               hitscore_command id cmd)
           ~add_commands:(fun ~checked ~non_checked ->
-          (* ksprintf checked "echo $PBS_JOBID > %s/jobid_2" run_dir; *)
-          (* ksprintf checked "echo %S > %s/workdir" work_root_path run_dir; *)
             ksprintf checked ". /share/apps/casava/%s/intel/env.sh" casava_version;
             ksprintf checked "cd %s" unaligned;
             ksprintf checked "%s 1> %s 2> %s" 
@@ -106,15 +107,16 @@ module Make
         let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
         Common.PBS.prepare_work_environment ~dbh ~configuration pbs
         >>= fun () ->
-        (*cmd "mkdir -p %s" unaligned >>= fun () ->*)
         cmd ". /share/apps/casava/%s/intel/env.sh && \
                   configureBclToFastq.pl --fastq-cluster-count 800000000 \
-                    %s --input-dir %s \
+                    %s %s --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
                     --mismatches %ld"
           casava_version 
           (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
+          (Option.value_map ~default:""
+             ~f:(sprintf "--use-bases-mask %S") bases_mask)
           basecalls unaligned sample_sheet_path mismatch32
         >>= fun () ->
         Common.PBS.qsub_pbs_script ~dbh ~configuration pbs pbs_script

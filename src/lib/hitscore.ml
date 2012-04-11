@@ -38,6 +38,8 @@ module Make (IO_configuration : Sequme_flow_monad.IO_CONFIGURATION) = struct
   module Fastx_quality_stats =
     Hitscore_fastx_quality_stats.Make (Common)
 
+  module Broker = Hitscore_broker.Make(Common)
+
   let db_connect t =
     let open Configuration in
     match db_host t, db_port t, db_database t, db_username t, db_password t with

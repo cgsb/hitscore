@@ -113,6 +113,7 @@ start ~dbh ~configuration       (* common arguments *)
     sample_sheet:Common.Layout.Record_sample_sheet.pointer ->
     hiseq_dir:Common.Layout.Record_hiseq_raw.pointer ->
     ?tiles:string ->
+    ?bases_mask:string ->
     ?mismatch:[< `one | `two | `zero > `one ] ->
     ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
     ?user:string ->
