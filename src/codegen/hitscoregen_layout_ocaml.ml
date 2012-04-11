@@ -486,13 +486,23 @@ let ocaml_record_module ~out ~fashion name fields =
 
   doc out "{3 Low Level Access}";
   (* Delete a value *)
-  doc out "Deletes a values with its internal id.";
-  line out_mli "val _delete_value_by_id: dbh:db_handle -> pointer \
-                 -> unit PGOCaml.monad";
-  line out_ml "let _delete_value_by_id %s (p:pointer) =" pgocaml_db_handle_arg;
-  line out_ml "  let id = p.id in";
-  line out_ml "  PGSQL (dbh)";
-  line out_ml "    \"DELETE FROM %s WHERE g_id = $id\"\n" name;
+  hide out_ml (fun out ->
+    line out "let delete_value_exn %s (p:pointer) =" pgocaml_db_handle_arg;
+    line out "  let id = p.id in";
+    line out "  PGSQL (dbh)";
+    line out "    \"DELETE FROM %s WHERE g_id = $id\"\n" name;
+  );
+  doc out "Delete a value.";
+  line out_mli "val delete_value: dbh:db_handle -> pointer ->";
+  line out_ml "let delete_value %s (p: pointer):" pgocaml_db_handle_arg;
+  ocaml_poly_flow out "unit" [
+    "`pg_exn of exn";
+  ];
+  line out_ml " =";
+  pgocaml_to_flow out_ml ~transform_exceptions:[
+  ] (fun out ->
+    line out "(delete_value_exn ~dbh p)";
+  );
 
 
   let wrong_cache_insert = 
