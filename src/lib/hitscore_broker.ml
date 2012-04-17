@@ -80,16 +80,32 @@ module Make
     open Hitscore_std
     open Flow
 
+    type lane = {
+      lane_t: Layout.Record_lane.t;
+      lane_index: int; (* Lane index form 1 to 8 *)
+    }
+    type filtered_flowcell = {
+      ff_t: Layout.Record_flowcell.t;
+      ff_id: string;
+      ff_lanes: lane list;
+      ff_runs: Layout.Record_hiseq_run.t list;
+    }
+    type person_affairs = {
+      pa_flowcells: filtered_flowcell list;
+    }
+
     type t = {
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
       mutable current_dump: Layout.dump;
       mutable last_reload: Time.t;
+      mutable person_affairs_cache: (int32 * person_affairs * string) list;
     }
 
     let create ~dbh ~configuration () =
       Layout.get_dump dbh >>= fun current_dump ->
       let layout = Layout.Meta.layout () in
-      return { last_reload = Time.now (); layout; current_dump }
+      return { last_reload = Time.now (); layout;
+               current_dump; person_affairs_cache = [] }
         
     let reload t ~dbh ~configuration =
       Layout.get_dump dbh >>= fun current_dump ->
@@ -124,21 +140,7 @@ module Make
       return ()
         
 
-    type lane = {
-      lane_t: Layout.Record_lane.t;
-      lane_index: int; (* Lane index form 1 to 8 *)
-    }
-    type filtered_flowcell = {
-      ff_t: Layout.Record_flowcell.t;
-      ff_id: string;
-      ff_lanes: lane list;
-      ff_runs: Layout.Record_hiseq_run.t list;
-    }
-    type person_affairs = {
-      pa_flowcells: filtered_flowcell list;
-    }
-
-    let person_affairs t ~person =
+    let compute_person_affairs t ~person =
       let module LP = Layout.Record_person in
       let module LFC = Layout.Record_flowcell in
       let module LL = Layout.Record_lane in
@@ -172,5 +174,38 @@ module Make
       in
       {pa_flowcells = flowcells}
         
+    let person_affairs_hash_depencencies t ~person =
+      Digest.string (Marshal.to_string
+                        (person,
+                         t.current_dump.Layout.record_flowcell,
+                         t.current_dump.Layout.record_lane,
+                         t.current_dump.Layout.record_hiseq_run) [])
+
+    let person_affairs t ~person =
+      let module LRP = Layout.Record_person in
+      let is_person = fun (p,_,_) -> p = person.LRP.g_id in
+      eprintf "cache: %d items\n" (List.length t.person_affairs_cache);
+      begin match List.find t.person_affairs_cache is_person with
+      | None ->
+        eprintf "cache: first compute new for %ld\n%!" person.LRP.g_id;
+        let to_cache = compute_person_affairs t ~person in
+        t.person_affairs_cache <-
+          (person.LRP.g_id, to_cache, person_affairs_hash_depencencies t ~person)
+          :: t.person_affairs_cache;
+        to_cache
+      | Some (p, from_cache, hash) when
+          hash = person_affairs_hash_depencencies t ~person ->
+        eprintf "cache: from cache for %ld (hash: %s)\n%!" person.LRP.g_id hash;
+        from_cache
+      | Some (p, from_cache, hash) ->
+        let to_cache = compute_person_affairs t ~person in
+        eprintf "cache: compute new for %ld\n%!" person.LRP.g_id;
+        t.person_affairs_cache <-
+          (person.LRP.g_id, to_cache, person_affairs_hash_depencencies t ~person)
+          :: (List.filter t.person_affairs_cache ~f:(fun p -> not (is_person p)));
+        to_cache
+      end
+
+
 
   end
