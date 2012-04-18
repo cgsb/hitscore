@@ -94,6 +94,41 @@ module Make
     open Hitscore_std
     open Flow
 
+    module Cache = struct
+      type ('input, 'output) t = {
+        key: 'input -> int32;
+        compute: 'input -> 'output;
+        hash_dependencies: 'input -> 'output -> string;
+        mutable content: (int32 * 'input * 'output * string) list;
+      }
+      let empty ~key ~compute ~hash_dependencies =
+        {key; compute; hash_dependencies; content = []}
+     
+      let get t metakey =
+        match List.find t.content (fun (k, _, _, _) -> k = t.key metakey) with
+        | None ->
+          let new_content = t.compute metakey in
+          let new_hash = t.hash_dependencies metakey new_content in
+          let new_key = t.key metakey in
+          t.content <- (new_key, metakey, new_content, new_hash) :: t.content;
+          eprintf "cache: new content for %ld (hash: %s)\n%!" new_key new_hash;
+          new_content
+        | Some (k, i, o, h) when h = t.hash_dependencies i o ->
+          eprintf "cache: from cache for %ld (hash: %s)\n%!" k h;
+          o
+        | Some (k, i, o, h) ->
+          let new_content = t.compute metakey in
+          let new_hash = t.hash_dependencies metakey new_content in
+          let new_key = t.key metakey in
+          eprintf "cache: recompute cache for %ld (hash: %s)\n%!" k h;
+          t.content <- (new_key, metakey, new_content, new_hash)
+          :: List.filter t.content ~f:(fun (k, _, _, _) -> k <> t.key metakey);
+          new_content
+          
+    end
+
+    module Person = Layout.Record_person
+    
     type lane = {
       lane_t: Layout.Record_lane.t;
       lane_index: int; (* Lane index form 1 to 8 *)
