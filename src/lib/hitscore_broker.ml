@@ -52,35 +52,37 @@ module type BROKER = sig
      | `pg_exn of exn ])
       Common.Flow.monad
       
-  type lane = {
-    lane_t: Layout.Record_lane.t;
-    lane_index: int; (* Lane index form 1 to 8 *)
-  }
-  type filtered_flowcell = {
-    ff_t: Layout.Record_flowcell.t;
-    ff_id: string;
-    ff_lanes: lane list;
-    ff_runs: Layout.Record_hiseq_run.t list;
-  }
-  type person_affairs = {
-    pa_flowcells: filtered_flowcell list;
-  }
+    type lane = {
+      lane_t: Layout.Record_lane.t;
+      lane_index: int; (* Lane index form 1 to 8 *)
+      lane_libraries: (int32 * string option * string) list;
+    }
+    type filtered_flowcell = {
+      ff_t: Layout.Record_flowcell.t;
+      ff_id: string;
+      ff_lanes: lane list;
+      ff_runs: Layout.Record_hiseq_run.t list;
+    }
+    type person_affairs = {
+      pa_flowcells: filtered_flowcell list;
+    }
+
+    type submission_info = {
+      si_input: Layout.Record_input_library.t;
+      si_flowcell: Layout.Record_flowcell.t;
+      si_lane: Layout.Record_lane.t * int;
+    }
+    type library_info = {
+      li_stock: Layout.Record_stock_library.t;
+      li_submissions: submission_info list;
+    }
+    type library_input_spec =
+    [ `id of int32 | `qualified_name of string option * string ]
+
 
   val person_affairs: t -> person:Layout.Record_person.t -> person_affairs
 
-  type submission_info = {
-    si_input: Layout.Record_input_library.t;
-    si_flowcell: Layout.Record_flowcell.t;
-    si_lane: lane;
-  }
-  type library_info = {
-    li_stock: Layout.Record_stock_library.t;
-    li_submissions: submission_info list;
-  }
-
-  val library_info: t ->
-    [ `id of int32 | `qualified_name of string option * string] ->
-    library_info option
+  val library_info: t -> library_input_spec -> library_info option
 
 end
 
@@ -127,11 +129,11 @@ module Make
           
     end
 
-    module Person = Layout.Record_person
     
     type lane = {
       lane_t: Layout.Record_lane.t;
       lane_index: int; (* Lane index form 1 to 8 *)
+      lane_libraries: (int32 * string option * string) list;
     }
     type filtered_flowcell = {
       ff_t: Layout.Record_flowcell.t;
@@ -146,7 +148,7 @@ module Make
     type submission_info = {
       si_input: Layout.Record_input_library.t;
       si_flowcell: Layout.Record_flowcell.t;
-      si_lane: lane;
+      si_lane: Layout.Record_lane.t * int;
     }
     type library_info = {
       li_stock: Layout.Record_stock_library.t;
@@ -155,6 +157,7 @@ module Make
     type library_input_spec =
     [ `id of int32 | `qualified_name of string option * string ]
 
+    module Person = Layout.Record_person
     type t = {
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
       mutable current_dump: Layout.dump;
@@ -164,24 +167,43 @@ module Make
         (library_input_spec, library_info option) Cache.t option;
     }
 
+    module SL = Layout.Record_stock_library
+    module IL = Layout.Record_input_library
+    module L  = Layout.Record_lane
+    module FC = Layout.Record_flowcell
+    module P = Layout.Record_person
+
     let compute_person_affairs t person =
-      let module LP = Layout.Record_person in
-      let module LFC = Layout.Record_flowcell in
-      let module LL = Layout.Record_lane in
       let flowcells =
         List.filter_map t.current_dump.Layout.record_flowcell
           (fun fc ->
-            let {LFC. g_id; serial_name; lanes} = fc in
-            let p_id = LP.unsafe_cast person.LP.g_id in
+            let {FC. g_id; serial_name; lanes} = fc in
+            let p_id = P.unsafe_cast person.P.g_id in
             let lanes_of_flowcell =
               List.filter_map t.current_dump.Layout.record_lane
-                (fun t ->
-                  let t_pointer = LL.unsafe_cast t.LL.g_id in
+                (fun lane ->
+                  let t_pointer = L.unsafe_cast lane.L.g_id in
                   match Array.findi lanes ~f:((=) t_pointer) with
                   | Some array_index ->
-                    if Array.exists t.LL.contacts ~f:((=) p_id)
-                    then Some { lane_t = t; lane_index = array_index + 1}
-                    else None
+                    if Array.exists lane.L.contacts ~f:((=) p_id)
+                    then (
+                      let lane_libraries =
+                        List.filter_map (Array.to_list lane.L.libraries) (fun ilp ->
+                          List.find_map t.current_dump.Layout.record_input_library
+                            (fun il ->
+                              if il.IL.g_id = ilp.IL.id
+                              then (List.find_map
+                                      t.current_dump.Layout.record_stock_library
+                                      (fun sl ->
+                                        if sl.SL.g_id = il.IL.library.SL.id
+                                        then Some (sl.SL.g_id,
+                                                   sl.SL.project,
+                                                   sl.SL.name)
+                                        else None))
+                              else None)) in
+                      Some { lane_t = lane;
+                             lane_index = array_index + 1; lane_libraries}
+                    ) else None
                   | None -> None)
             in
             match lanes_of_flowcell with
@@ -189,7 +211,7 @@ module Make
             | l ->
               let ff_runs =
                 let open Layout.Record_hiseq_run in
-                let flowcell_pointer = LFC.unsafe_cast g_id in
+                let flowcell_pointer = FC.unsafe_cast g_id in
                 List.filter t.current_dump.Layout.record_hiseq_run ~f:(fun hs ->
                   hs.flowcell_a = Some flowcell_pointer
                    || hs.flowcell_b = Some flowcell_pointer)
@@ -201,6 +223,8 @@ module Make
     let person_affairs_hash_depencencies t person affairs =
       Digest.string (Marshal.to_string
                         (person,
+                         t.current_dump.Layout.record_input_library,
+                         t.current_dump.Layout.record_stock_library,
                          t.current_dump.Layout.record_flowcell,
                          t.current_dump.Layout.record_lane,
                          t.current_dump.Layout.record_hiseq_run) [])
@@ -260,10 +284,6 @@ module Make
                          t.current_dump.Layout.record_stock_library) [])
       
     let compute_library_info t library =
-      let module SL = Layout.Record_stock_library in
-      let module IL = Layout.Record_input_library in
-      let module L  = Layout.Record_lane in
-      let module FC = Layout.Record_flowcell in
       Option.map (find_stock_library t library) (fun lib ->
         let lib_pointer = SL.unsafe_cast lib.SL.g_id in
         let li_submissions =
@@ -281,7 +301,7 @@ module Make
                   >>= fun index ->
                   return (fc, index))
                 >>= fun (si_flowcell, array_index) ->
-                return { lane_t; lane_index = array_index + 1}
+                return (lane_t, array_index + 1)
                 >>= fun si_lane ->
                 return { si_lane; si_flowcell; si_input = il } 
               ) else None)
