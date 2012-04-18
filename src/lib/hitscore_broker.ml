@@ -68,6 +68,20 @@ module type BROKER = sig
 
   val person_affairs: t -> person:Layout.Record_person.t -> person_affairs
 
+  type submission_info = {
+    si_input: Layout.Record_input_library.t;
+    si_flowcell: Layout.Record_flowcell.t;
+    si_lane: lane;
+  }
+  type library_info = {
+    li_stock: Layout.Record_stock_library.t;
+    li_submissions: submission_info list;
+  }
+
+  val library_info: t ->
+    [ `id of int32 | `qualified_name of string option * string] ->
+    library_info option
+
 end
 
 module Make
@@ -207,5 +221,55 @@ module Make
       end
 
 
+    type submission_info = {
+      si_input: Layout.Record_input_library.t;
+      si_flowcell: Layout.Record_flowcell.t;
+      si_lane: lane;
+    }
+    type library_info = {
+      li_stock: Layout.Record_stock_library.t;
+      li_submissions: submission_info list;
+    }
 
+    let find_stock_library t lib =
+      let open Layout.Record_stock_library in
+      match lib with
+      | `id x ->
+        List.find t.current_dump.Layout.record_stock_library
+          (fun l -> l.g_id = x)
+      | `qualified_name (p, n) ->
+        List.find t.current_dump.Layout.record_stock_library
+          (fun l -> l.project = p && l.name = n)
+      
+    let compute_library_info t library =
+      let module SL = Layout.Record_stock_library in
+      let module IL = Layout.Record_input_library in
+      let module L  = Layout.Record_lane in
+      let module FC = Layout.Record_flowcell in
+      Option.map (find_stock_library t library) (fun lib ->
+        let lib_pointer = SL.unsafe_cast lib.SL.g_id in
+        let li_submissions =
+          List.filter_map t.current_dump.Layout.record_input_library
+            (fun il ->
+              if il.IL.library = lib_pointer
+              then (
+                let open Option in
+                List.find t.current_dump.Layout.record_lane (fun lan ->
+                  Array.exists lan.L.libraries
+                    (fun l -> l.IL.id = il.IL.g_id))
+                >>= fun lane_t ->
+                List.find_map t.current_dump.Layout.record_flowcell (fun fc ->
+                  Array.findi fc.FC.lanes ~f:(fun l -> l.L.id = lane_t.L.g_id)
+                  >>= fun index ->
+                  return (fc, index))
+                >>= fun (si_flowcell, array_index) ->
+                return { lane_t; lane_index = array_index + 1}
+                >>= fun si_lane ->
+                return { si_lane; si_flowcell; si_input = il } 
+              ) else None)
+        in
+        { li_stock = lib; li_submissions })
+        
+    let library_info t library = compute_library_info t library
+      
   end
