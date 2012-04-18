@@ -96,10 +96,10 @@ module Make
 
     module Cache = struct
       type ('input, 'output) t = {
-        key: 'input -> int32;
+        key: 'input -> int;
         compute: 'input -> 'output;
         hash_dependencies: 'input -> 'output -> string;
-        mutable content: (int32 * 'input * 'output * string) list;
+        mutable content: (int * 'input * 'output * string) list;
       }
       let empty ~key ~compute ~hash_dependencies =
         {key; compute; hash_dependencies; content = []}
@@ -111,16 +111,16 @@ module Make
           let new_hash = t.hash_dependencies metakey new_content in
           let new_key = t.key metakey in
           t.content <- (new_key, metakey, new_content, new_hash) :: t.content;
-          eprintf "cache: new content for %ld (hash: %s)\n%!" new_key new_hash;
+          eprintf "cache: new content for %d (hash: %s)\n%!" new_key new_hash;
           new_content
         | Some (k, i, o, h) when h = t.hash_dependencies i o ->
-          eprintf "cache: from cache for %ld (hash: %s)\n%!" k h;
+          eprintf "cache: from cache for %d (hash: %s)\n%!" k h;
           o
         | Some (k, i, o, h) ->
           let new_content = t.compute metakey in
           let new_hash = t.hash_dependencies metakey new_content in
           let new_key = t.key metakey in
-          eprintf "cache: recompute cache for %ld (hash: %s)\n%!" k h;
+          eprintf "cache: recompute cache for %d (hash: %s)\n%!" k h;
           t.content <- (new_key, metakey, new_content, new_hash)
           :: List.filter t.content ~f:(fun (k, _, _, _) -> k <> t.key metakey);
           new_content
@@ -143,11 +143,25 @@ module Make
       pa_flowcells: filtered_flowcell list;
     }
 
+    type submission_info = {
+      si_input: Layout.Record_input_library.t;
+      si_flowcell: Layout.Record_flowcell.t;
+      si_lane: lane;
+    }
+    type library_info = {
+      li_stock: Layout.Record_stock_library.t;
+      li_submissions: submission_info list;
+    }
+    type library_input_spec =
+    [ `id of int32 | `qualified_name of string option * string ]
+
     type t = {
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
       mutable current_dump: Layout.dump;
       mutable last_reload: Time.t;
       mutable person_affairs_cache: (Person.t, person_affairs) Cache.t option;
+      mutable library_info_cache:
+        (library_input_spec, library_info option) Cache.t option;
     }
 
     let compute_person_affairs t person =
@@ -194,19 +208,6 @@ module Make
     let person_affairs t ~person =
       Cache.get (Option.value_exn t.person_affairs_cache) person
 
-    let create ~dbh ~configuration () =
-      Layout.get_dump dbh >>= fun current_dump ->
-      let layout = Layout.Meta.layout () in
-      let t_non_init =
-        { last_reload = Time.now (); layout;
-          current_dump;
-          person_affairs_cache = None } in
-      t_non_init.person_affairs_cache <-
-        Some (Cache.empty
-                ~key:(fun p -> p.Layout.Record_person.g_id)
-                ~compute:(compute_person_affairs t_non_init)
-                ~hash_dependencies:(person_affairs_hash_depencencies t_non_init));
-      return t_non_init
         
     let reload t ~dbh ~configuration =
       Layout.get_dump dbh >>= fun current_dump ->
@@ -241,16 +242,6 @@ module Make
       return ()
         
 
-    type submission_info = {
-      si_input: Layout.Record_input_library.t;
-      si_flowcell: Layout.Record_flowcell.t;
-      si_lane: lane;
-    }
-    type library_info = {
-      li_stock: Layout.Record_stock_library.t;
-      li_submissions: submission_info list;
-    }
-
     let find_stock_library t lib =
       let open Layout.Record_stock_library in
       match lib with
@@ -260,6 +251,13 @@ module Make
       | `qualified_name (p, n) ->
         List.find t.current_dump.Layout.record_stock_library
           (fun l -> l.project = p && l.name = n)
+      
+    let hash_deps_of_library_info t spec info =
+      Digest.string (Marshal.to_string
+                        (t.current_dump.Layout.record_flowcell,
+                         t.current_dump.Layout.record_lane,
+                         t.current_dump.Layout.record_input_library,
+                         t.current_dump.Layout.record_stock_library) [])
       
     let compute_library_info t library =
       let module SL = Layout.Record_stock_library in
@@ -290,6 +288,28 @@ module Make
         in
         { li_stock = lib; li_submissions })
         
-    let library_info t library = compute_library_info t library
+    let library_info t library =
+      Cache.get (Option.value_exn t.library_info_cache) library
       
+    let create ~dbh ~configuration () =
+      Layout.get_dump dbh >>= fun current_dump ->
+      let layout = Layout.Meta.layout () in
+      let t_non_init =
+        { last_reload = Time.now (); layout;
+          current_dump;
+          person_affairs_cache = None;
+          library_info_cache = None;
+        } in
+      t_non_init.person_affairs_cache <-
+        Some (Cache.empty
+                ~key:(fun p -> Hashtbl.hash p.Person.g_id)
+                ~compute:(compute_person_affairs t_non_init)
+                ~hash_dependencies:(person_affairs_hash_depencencies t_non_init));
+      t_non_init.library_info_cache <-
+        Some (Cache.empty
+                ~key:(fun s -> Hashtbl.hash s)
+                ~compute:(compute_library_info t_non_init)
+                ~hash_dependencies:(person_affairs_hash_depencencies t_non_init));
+      return t_non_init
+
   end
