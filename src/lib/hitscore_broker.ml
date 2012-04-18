@@ -147,49 +147,10 @@ module Make
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
       mutable current_dump: Layout.dump;
       mutable last_reload: Time.t;
-      mutable person_affairs_cache: (int32 * person_affairs * string) list;
+      mutable person_affairs_cache: (Person.t, person_affairs) Cache.t option;
     }
 
-    let create ~dbh ~configuration () =
-      Layout.get_dump dbh >>= fun current_dump ->
-      let layout = Layout.Meta.layout () in
-      return { last_reload = Time.now (); layout;
-               current_dump; person_affairs_cache = [] }
-        
-    let reload t ~dbh ~configuration =
-      Layout.get_dump dbh >>= fun current_dump ->
-      t.current_dump <- current_dump;
-      t.last_reload <- Time.now ();
-      return ()
-
-    let find_person t ~identifier =
-      let l =
-      List.find_all t.current_dump.Layout.record_person
-        ~f:(fun {Layout.Record_person.login; email; secondary_emails} ->
-          login = Some identifier || email = identifier
-          || Array.exists secondary_emails ~f:((=) identifier)) in
-      match l with
-      | [] -> return None
-      | [one] -> return (Some one)
-      | more -> error (`person_not_unique identifier)
-        
-    let modify_person t ~dbh ~person =
-      let open Layout.Record_person in
-      let pointer = unsafe_cast person.g_id in
-      delete_value ~dbh pointer >>= fun () ->
-      let new_person = { person with g_last_modified = Some (Time.now ()) } in
-      insert_value ~dbh new_person >>= fun new_pointer ->
-      ksprintf (Common.add_log ~dbh) "(modification record_person %ld)" person.g_id
-      >>= fun () ->
-      let record_person =
-        List.map t.current_dump.Layout.record_person ~f:(fun p ->
-          if p.g_id = person.g_id then new_person else p)
-      in
-      t.current_dump <- { t.current_dump with Layout.record_person };
-      return ()
-        
-
-    let compute_person_affairs t ~person =
+    let compute_person_affairs t person =
       let module LP = Layout.Record_person in
       let module LFC = Layout.Record_flowcell in
       let module LL = Layout.Record_lane in
@@ -223,7 +184,7 @@ module Make
       in
       {pa_flowcells = flowcells}
         
-    let person_affairs_hash_depencencies t ~person =
+    let person_affairs_hash_depencencies t person affairs =
       Digest.string (Marshal.to_string
                         (person,
                          t.current_dump.Layout.record_flowcell,
@@ -231,30 +192,54 @@ module Make
                          t.current_dump.Layout.record_hiseq_run) [])
 
     let person_affairs t ~person =
-      let module LRP = Layout.Record_person in
-      let is_person = fun (p,_,_) -> p = person.LRP.g_id in
-      eprintf "cache: %d items\n" (List.length t.person_affairs_cache);
-      begin match List.find t.person_affairs_cache is_person with
-      | None ->
-        eprintf "cache: first compute new for %ld\n%!" person.LRP.g_id;
-        let to_cache = compute_person_affairs t ~person in
-        t.person_affairs_cache <-
-          (person.LRP.g_id, to_cache, person_affairs_hash_depencencies t ~person)
-          :: t.person_affairs_cache;
-        to_cache
-      | Some (p, from_cache, hash) when
-          hash = person_affairs_hash_depencencies t ~person ->
-        eprintf "cache: from cache for %ld (hash: %s)\n%!" person.LRP.g_id hash;
-        from_cache
-      | Some (p, from_cache, hash) ->
-        let to_cache = compute_person_affairs t ~person in
-        eprintf "cache: compute new for %ld\n%!" person.LRP.g_id;
-        t.person_affairs_cache <-
-          (person.LRP.g_id, to_cache, person_affairs_hash_depencencies t ~person)
-          :: (List.filter t.person_affairs_cache ~f:(fun p -> not (is_person p)));
-        to_cache
-      end
+      Cache.get (Option.value_exn t.person_affairs_cache) person
 
+    let create ~dbh ~configuration () =
+      Layout.get_dump dbh >>= fun current_dump ->
+      let layout = Layout.Meta.layout () in
+      let t_non_init =
+        { last_reload = Time.now (); layout;
+          current_dump;
+          person_affairs_cache = None } in
+      t_non_init.person_affairs_cache <-
+        Some (Cache.empty
+                ~key:(fun p -> p.Layout.Record_person.g_id)
+                ~compute:(compute_person_affairs t_non_init)
+                ~hash_dependencies:(person_affairs_hash_depencencies t_non_init));
+      return t_non_init
+        
+    let reload t ~dbh ~configuration =
+      Layout.get_dump dbh >>= fun current_dump ->
+      t.current_dump <- current_dump;
+      t.last_reload <- Time.now ();
+      return ()
+
+    let find_person t ~identifier =
+      let l =
+      List.find_all t.current_dump.Layout.record_person
+        ~f:(fun {Layout.Record_person.login; email; secondary_emails} ->
+          login = Some identifier || email = identifier
+          || Array.exists secondary_emails ~f:((=) identifier)) in
+      match l with
+      | [] -> return None
+      | [one] -> return (Some one)
+      | more -> error (`person_not_unique identifier)
+        
+    let modify_person t ~dbh ~person =
+      let open Layout.Record_person in
+      let pointer = unsafe_cast person.g_id in
+      delete_value ~dbh pointer >>= fun () ->
+      let new_person = { person with g_last_modified = Some (Time.now ()) } in
+      insert_value ~dbh new_person >>= fun new_pointer ->
+      ksprintf (Common.add_log ~dbh) "(modification record_person %ld)" person.g_id
+      >>= fun () ->
+      let record_person =
+        List.map t.current_dump.Layout.record_person ~f:(fun p ->
+          if p.g_id = person.g_id then new_person else p)
+      in
+      t.current_dump <- { t.current_dump with Layout.record_person };
+      return ()
+        
 
     type submission_info = {
       si_input: Layout.Record_input_library.t;
