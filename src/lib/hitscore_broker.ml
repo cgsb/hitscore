@@ -8,13 +8,14 @@ module type BROKER = sig
   open Common
 (**/**)
 
-  type t
+  type 'a t
 
   val create:
+    ?mutex:((unit -> (unit, 'a) Common.Flow.monad) * (unit -> unit)) ->
     dbh:Common.Layout.db_handle ->
     configuration:Configuration.local_configuration ->
     unit ->
-    (t,
+    ('a t,
      [> `layout_inconsistency of
          [> `File_system | `Function of string | `Record of string ] *
            [> `select_did_not_return_one_tuple of string * int ]
@@ -22,36 +23,36 @@ module type BROKER = sig
       Common.Flow.monad
 
   val reload :
-    t ->
+    ([> `layout_inconsistency of
+        [> `File_system | `Function of string | `Record of string ] *
+          [> `select_did_not_return_one_tuple of string * int ]
+     | `pg_exn of exn ]
+        as 'a)
+           t ->
     dbh:Common.Layout.db_handle ->
     configuration:Configuration.local_configuration ->
-    (unit,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
+    (unit, 'a) Common.Flow.monad
 
   val find_person :
-    t ->
+    'a t ->
     identifier:string ->
     (Common.Layout.Record_person.t option,
      [> `person_not_unique of string ])
       Common.Flow.monad
 
   val modify_person :
-    t ->
+    ([> `layout_inconsistency of
+        [> `Record of string ] *
+          [> `insert_cache_did_not_return_one_id of
+              string * int32 list
+          | `insert_did_not_return_one_id of string * int32 list ]
+     | `pg_exn of exn ]
+        as 'a)
+           t ->
     dbh:Common.Layout.db_handle ->
     person:Common.Layout.Record_person.t ->
-    (unit,
-     [> `layout_inconsistency of
-         [> `Record of string ] *
-           [> `insert_cache_did_not_return_one_id of
-               string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
-      
+    (unit, 'a) Common.Flow.monad
+ 
     type lane = {
       lane_t: Layout.Record_lane.t;
       lane_index: int; (* Lane index form 1 to 8 *)
@@ -80,9 +81,9 @@ module type BROKER = sig
     [ `id of int32 | `qualified_name of string option * string ]
 
 
-  val person_affairs: t -> person:Layout.Record_person.t -> person_affairs
+  val person_affairs: 'a t -> person:Layout.Record_person.t -> person_affairs
 
-  val library_info: t -> library_input_spec -> library_info option
+  val library_info: 'a t -> library_input_spec -> library_info option
 
 end
 
@@ -166,15 +167,25 @@ module Make
     [ `id of int32 | `qualified_name of string option * string ]
 
     module Person = Layout.Record_person
-    type t = {
+    type 'a t = {
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
       mutable current_dump: Layout.dump;
       mutable last_reload: Time.t;
       mutable person_affairs_cache: (Person.t, person_affairs) Cache.t option;
       mutable library_info_cache:
         (library_input_spec, library_info option) Cache.t option;
+      mutex: ((unit -> (unit, 'a) monad) * (unit -> unit)) option;
     }
 
+    let lock_mutex t =
+      match t.mutex with
+      | Some (l, _) -> l ()
+      | None -> return ()
+    let unlock_mutex t =
+      match t.mutex with
+      | Some (_, u) -> u ()
+      | None -> ()
+        
     module SL = Layout.Record_stock_library
     module IL = Layout.Record_input_library
     module L  = Layout.Record_lane
@@ -242,9 +253,11 @@ module Make
 
         
     let reload t ~dbh ~configuration =
+      lock_mutex t >>= fun () ->
       Layout.get_dump dbh >>= fun current_dump ->
       t.current_dump <- current_dump;
       t.last_reload <- Time.now ();
+      unlock_mutex t;
       return ()
 
     let find_person t ~identifier =
@@ -261,6 +274,7 @@ module Make
     let modify_person t ~dbh ~person =
       let open Layout.Record_person in
       let pointer = unsafe_cast person.g_id in
+      lock_mutex t >>= fun () ->
       delete_value ~dbh pointer >>= fun () ->
       let new_person = { person with g_last_modified = Some (Time.now ()) } in
       insert_value ~dbh new_person >>= fun new_pointer ->
@@ -271,6 +285,7 @@ module Make
           if p.g_id = person.g_id then new_person else p)
       in
       t.current_dump <- { t.current_dump with Layout.record_person };
+      unlock_mutex t;
       return ()
         
 
@@ -319,7 +334,7 @@ module Make
     let library_info t library =
       Cache.get (Option.value_exn t.library_info_cache) library
       
-    let create ~dbh ~configuration () =
+    let create ?mutex ~dbh ~configuration () =
       Layout.get_dump dbh >>= fun current_dump ->
       let layout = Layout.Meta.layout () in
       let t_non_init =
@@ -327,6 +342,7 @@ module Make
           current_dump;
           person_affairs_cache = None;
           library_info_cache = None;
+          mutex;
         } in
       t_non_init.person_affairs_cache <-
         Some (Cache.empty
