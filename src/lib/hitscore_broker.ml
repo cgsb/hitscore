@@ -124,7 +124,7 @@ module Make
           t.content <- (item ~key ~input:metakey ~output ~hash) :: t.content;
           eprintf "cache: new content for %d (hash: %s)\n%!" key hash;
           output
-        | Some i when i.hash = t.hash_dependencies i.input i.output ->
+        | Some i when i.hash = t.hash_dependencies metakey i.output ->
           eprintf "cache: from cache for %d (hash: %s)\n%!" i.key i.hash;
           i.output
         | Some i ->
