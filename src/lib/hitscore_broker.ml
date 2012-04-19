@@ -97,35 +97,43 @@ module Make
     open Flow
 
     module Cache = struct
+      type ('input, 'output) cache_item = {
+        key: int;
+        input: 'input;
+        output: 'output;
+        hash: string;
+      } 
+      let item ~key ~input ~output ~hash =
+        {key; input; output; hash;}
       type ('input, 'output) t = {
-        key: 'input -> int;
+        make_key: 'input -> int;
         compute: 'input -> 'output;
         hash_dependencies: 'input -> 'output -> string;
-        mutable content: (int * 'input * 'output * string) list;
+        mutable content: ('input, 'output) cache_item list;
       }
-      let empty ~key ~compute ~hash_dependencies =
-        {key; compute; hash_dependencies; content = []}
+      let empty ~make_key ~compute ~hash_dependencies =
+        {make_key; compute; hash_dependencies; content = []}
      
       let get t metakey =
-        match List.find t.content (fun (k, _, _, _) -> k = t.key metakey) with
+        match List.find t.content (fun i -> i.key = t.make_key metakey) with
         | None ->
-          let new_content = t.compute metakey in
-          let new_hash = t.hash_dependencies metakey new_content in
-          let new_key = t.key metakey in
-          t.content <- (new_key, metakey, new_content, new_hash) :: t.content;
-          eprintf "cache: new content for %d (hash: %s)\n%!" new_key new_hash;
-          new_content
-        | Some (k, i, o, h) when h = t.hash_dependencies i o ->
-          eprintf "cache: from cache for %d (hash: %s)\n%!" k h;
-          o
-        | Some (k, i, o, h) ->
-          let new_content = t.compute metakey in
-          let new_hash = t.hash_dependencies metakey new_content in
-          let new_key = t.key metakey in
-          eprintf "cache: recompute cache for %d (hash: %s)\n%!" k h;
-          t.content <- (new_key, metakey, new_content, new_hash)
-          :: List.filter t.content ~f:(fun (k, _, _, _) -> k <> t.key metakey);
-          new_content
+          let output = t.compute metakey in
+          let hash = t.hash_dependencies metakey output in
+          let key = t.make_key metakey in
+          t.content <- (item ~key ~input:metakey ~output ~hash) :: t.content;
+          eprintf "cache: new content for %d (hash: %s)\n%!" key hash;
+          output
+        | Some i when i.hash = t.hash_dependencies i.input i.output ->
+          eprintf "cache: from cache for %d (hash: %s)\n%!" i.key i.hash;
+          i.output
+        | Some i ->
+          let output = t.compute metakey in
+          let hash = t.hash_dependencies metakey output in
+          let key = t.make_key metakey in
+          eprintf "cache: recompute cache for %d (hash: %s)\n%!" i.key i.hash;
+          t.content <- item ~key ~input:metakey ~output ~hash
+          :: List.filter t.content ~f:(fun i -> i.key <> t.make_key metakey);
+          output
           
     end
 
@@ -322,12 +330,12 @@ module Make
         } in
       t_non_init.person_affairs_cache <-
         Some (Cache.empty
-                ~key:(fun p -> Hashtbl.hash p.Person.g_id)
+                ~make_key:(fun p -> Hashtbl.hash p.Person.g_id)
                 ~compute:(compute_person_affairs t_non_init)
                 ~hash_dependencies:(person_affairs_hash_depencencies t_non_init));
       t_non_init.library_info_cache <-
         Some (Cache.empty
-                ~key:(fun s -> Hashtbl.hash s)
+                ~make_key:(fun s -> Hashtbl.hash s)
                 ~compute:(compute_library_info t_non_init)
                 ~hash_dependencies:(person_affairs_hash_depencencies t_non_init));
       return t_non_init
