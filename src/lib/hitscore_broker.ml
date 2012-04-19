@@ -191,6 +191,7 @@ module Make
     module L  = Layout.Record_lane
     module FC = Layout.Record_flowcell
     module P = Layout.Record_person
+    module HSRun = Layout.Record_hiseq_run
 
     let compute_person_affairs t person =
       let flowcells =
@@ -237,7 +238,12 @@ module Make
               in
               Some  {ff_t = fc; ff_id = serial_name; ff_lanes = l; ff_runs})
       in
-      {pa_flowcells = flowcells}
+      let cmp fca fcb =
+        let latest_date fc =
+          List.fold_left fc.ff_runs ~init:0.
+            ~f:(fun c {HSRun.date; _} -> max c (Time.to_float date)) in
+        compare (latest_date fcb) (latest_date fca)  in
+      {pa_flowcells = List.sort ~cmp flowcells}
         
     let person_affairs_hash_depencencies t person affairs =
       Digest.string (Marshal.to_string
