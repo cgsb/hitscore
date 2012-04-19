@@ -65,7 +65,8 @@ module type BROKER = sig
       ff_runs: Layout.Record_hiseq_run.t list;
     }
     type person_affairs = {
-      pa_flowcells: filtered_flowcell list;
+      pa_person_t : Common.Layout.Record_person.t;
+      pa_flowcells : filtered_flowcell list;
     }
 
     type submission_info = {
@@ -81,7 +82,7 @@ module type BROKER = sig
     [ `id of int32 | `qualified_name of string option * string ]
 
 
-  val person_affairs: 'a t -> person:Layout.Record_person.t -> person_affairs
+  val person_affairs: 'a t -> person:int32 -> person_affairs option
 
   val library_info: 'a t -> library_input_spec -> library_info option
 
@@ -151,6 +152,7 @@ module Make
       ff_runs: Layout.Record_hiseq_run.t list;
     }
     type person_affairs = {
+      pa_person_t: Layout.Record_person.t;
       pa_flowcells: filtered_flowcell list;
     }
 
@@ -171,7 +173,7 @@ module Make
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
       mutable current_dump: Layout.dump;
       mutable last_reload: Time.t;
-      mutable person_affairs_cache: (Person.t, person_affairs) Cache.t option;
+      mutable person_affairs_cache: (int32, person_affairs option) Cache.t option;
       mutable library_info_cache:
         (library_input_spec, library_info option) Cache.t option;
       mutex: ((unit -> (unit, 'a) monad) * (unit -> unit)) option;
@@ -193,19 +195,19 @@ module Make
     module P = Layout.Record_person
     module HSRun = Layout.Record_hiseq_run
 
-    let compute_person_affairs t person =
-      let flowcells =
+    let compute_person_affairs t person_id =
+      let flowcells () =
         List.filter_map t.current_dump.Layout.record_flowcell
           (fun fc ->
             let {FC. g_id; serial_name; lanes} = fc in
-            let p_id = P.unsafe_cast person.P.g_id in
+            let person_pointer = P.unsafe_cast person_id in
             let lanes_of_flowcell =
               List.filter_map t.current_dump.Layout.record_lane
                 (fun lane ->
                   let t_pointer = L.unsafe_cast lane.L.g_id in
                   match Array.findi lanes ~f:((=) t_pointer) with
                   | Some array_index ->
-                    if Array.exists lane.L.contacts ~f:((=) p_id)
+                    if Array.exists lane.L.contacts ~f:((=) person_pointer)
                     then (
                       let lane_libraries =
                         List.filter_map (Array.to_list lane.L.libraries) (fun ilp ->
@@ -238,16 +240,20 @@ module Make
               in
               Some  {ff_t = fc; ff_id = serial_name; ff_lanes = l; ff_runs})
       in
-      let cmp fca fcb =
-        let latest_date fc =
-          List.fold_left fc.ff_runs ~init:0.
+      let person_t_opt =
+        List.find t.current_dump.Layout.record_person
+          (fun p -> p.P.g_id = person_id) in
+      Option.map person_t_opt (fun pa_person_t ->
+        let cmp fca fcb =
+          let latest_date fc =
+            List.fold_left fc.ff_runs ~init:0.
             ~f:(fun c {HSRun.date; _} -> max c (Time.to_float date)) in
-        compare (latest_date fcb) (latest_date fca)  in
-      {pa_flowcells = List.sort ~cmp flowcells}
+          compare (latest_date fcb) (latest_date fca)  in
+        {pa_person_t; pa_flowcells = List.sort ~cmp (flowcells ())})
         
     let person_affairs_hash_depencencies t person affairs =
       Digest.string (Marshal.to_string
-                        (person,
+                        (t.current_dump.Layout.record_person,
                          t.current_dump.Layout.record_input_library,
                          t.current_dump.Layout.record_stock_library,
                          t.current_dump.Layout.record_flowcell,
@@ -352,7 +358,7 @@ module Make
         } in
       t_non_init.person_affairs_cache <-
         Some (Cache.empty
-                ~make_key:(fun p -> Hashtbl.hash p.Person.g_id)
+                ~make_key:(fun p -> Hashtbl.hash p)
                 ~compute:(compute_person_affairs t_non_init)
                 ~hash_dependencies:(person_affairs_hash_depencencies t_non_init));
       t_non_init.library_info_cache <-
