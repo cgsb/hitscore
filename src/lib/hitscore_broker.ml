@@ -100,13 +100,19 @@ module Make
 
     module Cache = struct
       type ('input, 'output) cache_item = {
-        key: int;
-        input: 'input;
-        output: 'output;
-        hash: string;
+        mutable key: int;
+        mutable input: 'input;
+        mutable output: 'output;
+        mutable hash: string;
+        mutable last_mutation: Time.t;
       } 
       let item ~key ~input ~output ~hash =
-        {key; input; output; hash;}
+        {key; input; output; hash; last_mutation = Time.now ()}
+      let mutate_item ci ~output ~hash =
+        ci.output <- output;
+        ci.hash <- hash;
+        ci.last_mutation <- Time.now ()
+
       type ('input, 'output) t = {
         make_key: 'input -> int;
         compute: 'input -> 'output;
@@ -116,7 +122,7 @@ module Make
       let empty ~make_key ~compute ~hash_dependencies =
         {make_key; compute; hash_dependencies; content = []}
      
-      let get t metakey =
+      let get t ~last_change metakey =
         match List.find t.content (fun i -> i.key = t.make_key metakey) with
         | None ->
           let output = t.compute metakey in
@@ -125,16 +131,18 @@ module Make
           t.content <- (item ~key ~input:metakey ~output ~hash) :: t.content;
           eprintf "cache: new content for %d (hash: %s)\n%!" key hash;
           output
+        | Some i when i.last_mutation > last_change ->
+          eprintf "cache: from cache for %d (%.3f > %.3f)\n%!" i.key
+            (Time.to_float i.last_mutation) (Time.to_float last_change);
+          i.output
         | Some i when i.hash = t.hash_dependencies metakey i.output ->
           eprintf "cache: from cache for %d (hash: %s)\n%!" i.key i.hash;
           i.output
         | Some i ->
           let output = t.compute metakey in
           let hash = t.hash_dependencies metakey output in
-          let key = t.make_key metakey in
+          mutate_item i ~output ~hash;
           eprintf "cache: recompute cache for %d (hash: %s)\n%!" i.key i.hash;
-          t.content <- item ~key ~input:metakey ~output ~hash
-          :: List.filter t.content ~f:(fun i -> i.key <> t.make_key metakey);
           output
           
     end
@@ -172,7 +180,7 @@ module Make
     type 'a t = {
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
       mutable current_dump: Layout.dump;
-      mutable last_reload: Time.t;
+      mutable last_change: Time.t;
       mutable person_affairs_cache: (int32, person_affairs option) Cache.t option;
       mutable library_info_cache:
         (library_input_spec, library_info option) Cache.t option;
@@ -261,14 +269,15 @@ module Make
                          t.current_dump.Layout.record_hiseq_run) [])
 
     let person_affairs t ~person =
-      Cache.get (Option.value_exn t.person_affairs_cache) person
+      Cache.get ~last_change:t.last_change
+        (Option.value_exn t.person_affairs_cache) person
 
         
     let reload t ~dbh ~configuration =
       lock_mutex t >>= fun () ->
       Layout.get_dump dbh >>= fun current_dump ->
       t.current_dump <- current_dump;
-      t.last_reload <- Time.now ();
+      t.last_change <- Time.now ();
       unlock_mutex t;
       return ()
 
@@ -297,6 +306,7 @@ module Make
           if p.g_id = person.g_id then new_person else p)
       in
       t.current_dump <- { t.current_dump with Layout.record_person };
+      t.last_change <- Time.now ();
       unlock_mutex t;
       return ()
         
@@ -344,13 +354,14 @@ module Make
         { li_stock = lib; li_submissions })
         
     let library_info t library =
-      Cache.get (Option.value_exn t.library_info_cache) library
+      Cache.get ~last_change:t.last_change
+        (Option.value_exn t.library_info_cache) library
       
     let create ?mutex ~dbh ~configuration () =
       Layout.get_dump dbh >>= fun current_dump ->
       let layout = Layout.Meta.layout () in
       let t_non_init =
-        { last_reload = Time.now (); layout;
+        { last_change = Time.now (); layout;
           current_dump;
           person_affairs_cache = None;
           library_info_cache = None;
