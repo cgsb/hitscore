@@ -82,9 +82,11 @@ module type BROKER = sig
     [ `id of int32 | `qualified_name of string option * string ]
 
 
-  val person_affairs: 'a t -> person:int32 -> person_affairs option
+  val person_affairs: 'a t -> person:int32 ->
+    (person_affairs, [> `person_not_found of int32 ]) Common.Flow.monad
 
-  val library_info: 'a t -> library_input_spec -> library_info option
+  val library_info: 'a t -> library_input_spec -> 
+    (library_info, [> `library_not_found of library_input_spec ]) Common.Flow.monad
 
 end
 
@@ -271,7 +273,9 @@ module Make
     let person_affairs t ~person =
       Cache.get ~last_change:t.last_change
         (Option.value_exn t.person_affairs_cache) person
-
+      |! (function
+        | None -> error (`person_not_found person)
+        | Some s -> return s)
         
     let reload t ~dbh ~configuration =
       lock_mutex t >>= fun () ->
@@ -356,6 +360,9 @@ module Make
     let library_info t library =
       Cache.get ~last_change:t.last_change
         (Option.value_exn t.library_info_cache) library
+      |! (function
+        | None -> error (`library_not_found library)
+        | Some s -> return s)
       
     let create ?mutex ~dbh ~configuration () =
       Layout.get_dump dbh >>= fun current_dump ->
