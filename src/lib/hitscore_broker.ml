@@ -214,6 +214,7 @@ module Make
     module Person = Layout.Record_person
     type 'a t = {
       layout: Hitscoregen_layout_dsl.dsl_runtime_description;
+      configuration: Configuration.local_configuration;
       mutable current_dump: Layout.dump;
       mutable last_change: Time.t;
       mutable person_affairs_cache: (int32, person_affairs option) Cache.t option;
@@ -484,6 +485,7 @@ module Make
       let t_non_init =
         { last_change = Time.now (); layout;
           current_dump;
+          configuration;
           person_affairs_cache = None;
           library_info_cache = None;
           delivered_demultiplexings_cache = None;
