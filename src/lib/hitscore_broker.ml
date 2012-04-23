@@ -58,6 +58,7 @@ module type BROKER = sig
       ddmux_b2fu: Layout.Record_bcl_to_fastq_unaligned.t;
       ddmux_b2fu_vol: Layout.File_system.volume; 
       ddmux_b2fu_path: string;
+      ddmux_summary_path: string;
       ddmux_deliveries:
         ([`can_nothing] Layout.Function_prepare_unaligned_delivery.t
          * Layout.Record_client_fastqs_dir.t) list;
@@ -174,6 +175,7 @@ module Make
       ddmux_b2fu: Layout.Record_bcl_to_fastq_unaligned.t;
       ddmux_b2fu_vol: Layout.File_system.volume; 
       ddmux_b2fu_path: string;
+      ddmux_summary_path: string;
       ddmux_deliveries:
         ([`can_nothing] Layout.Function_prepare_unaligned_delivery.t
          * Layout.Record_client_fastqs_dir.t) list;
@@ -288,11 +290,17 @@ module Make
               | _ -> None
               end
               >>= fun ddmux_b2fu_path ->
+              return (Filename.concat ddmux_b2fu_path
+                        (sprintf "Unaligned/Basecall_Stats_%s/%s"
+                           hrw.HSRaw.flowcell_name
+                           "Flowcell_demux_summary.xml"))
+              >>= fun ddmux_summary_path ->
               return {
                 ddmux_b2f = b2f;
                 ddmux_b2fu = b2fu;
                 ddmux_b2fu_vol;
                 ddmux_b2fu_path;
+                ddmux_summary_path;
                 ddmux_deliveries =
                   List.filter_map
                     t.current_dump.Layout.function_prepare_unaligned_delivery
