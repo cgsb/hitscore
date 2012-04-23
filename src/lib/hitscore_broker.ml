@@ -68,6 +68,7 @@ module type BROKER = sig
       lane_t: Layout.Record_lane.t;
       lane_index: int; (* Lane index form 1 to 8 *)
       lane_libraries: library_in_lane list;
+      lane_invoices: Layout.Record_invoicing.t list;
     }
     type hiseq_run = {
       hr_t: Layout.Record_hiseq_run.t;
@@ -181,6 +182,7 @@ module Make
       lane_t: Layout.Record_lane.t;
       lane_index: int; (* Lane index form 1 to 8 *)
       lane_libraries: library_in_lane list;
+      lane_invoices: Layout.Record_invoicing.t list;
     }
     type hiseq_run = {
       hr_t: Layout.Record_hiseq_run.t;
@@ -327,7 +329,12 @@ module Make
                         List.filter_map (Array.to_list lane.L.libraries)
                           (fun il_pointer ->
                             library_in_lane t ~il_pointer ~flowcell:fc) in
-                      Some { lane_t = lane;
+                      let lane_invoices =
+                        List.filter t.current_dump.Layout.record_invoicing
+                          ~f:(fun i ->
+                            Array.exists i.Layout.Record_invoicing.lanes
+                              ~f:(fun l -> l.L.id = lane.L.g_id)) in
+                      Some { lane_t = lane; lane_invoices;
                              lane_index = array_index + 1; lane_libraries}
                     ) else None
                   | None -> None)
