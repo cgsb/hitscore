@@ -56,6 +56,8 @@ module type BROKER = sig
     type delivered_demultiplexing = {
       ddmux_b2f: [`can_nothing] Layout.Function_bcl_to_fastq.t;
       ddmux_b2fu: Layout.Record_bcl_to_fastq_unaligned.t;
+      ddmux_b2fu_vol: Layout.File_system.volume; 
+      ddmux_b2fu_path: string;
       ddmux_deliveries:
         ([`can_nothing] Layout.Function_prepare_unaligned_delivery.t
          * Layout.Record_client_fastqs_dir.t) list;
@@ -170,6 +172,8 @@ module Make
     type delivered_demultiplexing = {
       ddmux_b2f: [`can_nothing] Layout.Function_bcl_to_fastq.t;
       ddmux_b2fu: Layout.Record_bcl_to_fastq_unaligned.t;
+      ddmux_b2fu_vol: Layout.File_system.volume; 
+      ddmux_b2fu_path: string;
       ddmux_deliveries:
         ([`can_nothing] Layout.Function_prepare_unaligned_delivery.t
          * Layout.Record_client_fastqs_dir.t) list;
@@ -245,6 +249,7 @@ module Make
     module PUD = Layout.Function_prepare_unaligned_delivery
     module B2FU = Layout.Record_bcl_to_fastq_unaligned
     module CFD = Layout.Record_client_fastqs_dir
+    module FS = Layout.File_system
 
       
     let delivered_demultiplexings_hash_depencencies t hiseq_runs dds =
@@ -255,7 +260,8 @@ module Make
                          t.current_dump.Layout.function_bcl_to_fastq,
                          t.current_dump.Layout.record_bcl_to_fastq_unaligned,
                          t.current_dump.Layout.function_prepare_unaligned_delivery,
-                         t.current_dump.Layout.record_client_fastqs_dir) [])
+                         t.current_dump.Layout.record_client_fastqs_dir,
+                         t.current_dump.Layout.file_system) [])
     let compute_delivered_demultiplexings t hiseq_runs =
       let open Option in
       List.map hiseq_runs.hr_raws (fun hrw ->
@@ -268,9 +274,25 @@ module Make
               List.find t.current_dump.Layout.record_bcl_to_fastq_unaligned
                 (fun b2fu -> Some B2FU.(unsafe_cast b2fu.g_id) = b2f.B2F.g_result)
               >>= fun b2fu ->
+              List.find t.current_dump.Layout.file_system
+                (fun vol -> vol.FS.volume_pointer = b2fu.B2FU.directory)
+              >>= fun ddmux_b2fu_vol ->
+              Configuration.path_of_volume_fun t.configuration
+              >>= fun path_fun ->
+              let { FS.volume_pointer = { FS.id }; volume_kind; volume_content } =
+                ddmux_b2fu_vol in
+              begin match volume_content with
+              | FS.Tree (hr_tag, trees) ->
+                let vol = volume_unix_directory ~id ~kind:volume_kind ?hr_tag in 
+                return (path_fun vol)
+              | _ -> None
+              end
+              >>= fun ddmux_b2fu_path ->
               return {
                 ddmux_b2f = b2f;
                 ddmux_b2fu = b2fu;
+                ddmux_b2fu_vol;
+                ddmux_b2fu_path;
                 ddmux_deliveries =
                   List.filter_map
                     t.current_dump.Layout.function_prepare_unaligned_delivery
