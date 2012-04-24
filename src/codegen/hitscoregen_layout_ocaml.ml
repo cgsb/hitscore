@@ -306,7 +306,7 @@ let ocaml_start_module ~out ~name = function
 
 let ocaml_sexped_type ~out ~name ?(privated=false) ?param ~(fashion:fashion) value = 
   match fashion with
-  | `implementation -> 
+  | `implementation | `types -> 
     line out "type %s%s = %s with sexp"
       (Option.value_map param ~default:"" ~f:(sprintf "%s "))
       name value
@@ -322,17 +322,13 @@ let ocaml_sexped_type ~out ~name ?(privated=false) ?param ~(fashion:fashion) val
     line out "val sexp_of_%s:%s %s -> Sexplib.Sexp.t" name
       (Option.value_map param ~default:"" ~f:(fun s -> sprintf " %s -> %s" s s))
       name;
-  | `types -> (* TODO *)
     ()
 
 let ocaml_enumeration_module ~fashion ~out name fields =
   ocaml_start_module ~out ~name:(sprintf "Enumeration_%s" name) fashion;
   
   doc out "The type of {i %s} items." name;
-  raw
-    (ocaml_sexped_type ~out ~name:"t" ~fashion)
-    "[%s]"
-    (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
+  raw (ocaml_sexped_type ~out ~name:"t" ~fashion) "Types.%s" name;
 
   doc out "Convert to a string.";
   line_mli ~fashion out "val to_string: t -> string";
@@ -1378,13 +1374,18 @@ let toplevel_generic_types ~fashion out =
                 | `can_get_result\n]\n";
   end;
   ()
-
-let file_system_section ~(fashion: fashion) out dsl = 
-
+    
+let filesystem_kinds_and_types dsl =
   let volume_kinds = 
     (List.filter_map dsl.nodes 
        (function | Volume (n, _) -> Some n | _ -> None)) in
   let file_types =  ["blob"; "directory"; "opaque"] in
+  (volume_kinds, file_types)
+
+let file_system_section ~(fashion: fashion) out dsl = 
+
+  let (volume_kinds, file_types) = filesystem_kinds_and_types dsl in
+
 
   doc out "\n {3 Virtual File System in The Data-base }\n\n ";
   doc out "Volume `kinds' are defined by the DSL.";
@@ -1453,6 +1454,24 @@ let ocaml_interface dsl output_string =
       let () = use_new_string_and_sexp_formats ()
     end";
   toplevel_generic_types ~fashion out;
+  doc out "\n {3 Types for Records and Functions of The Layout}\n\n ";
+  let (volume_kinds, file_types) = filesystem_kinds_and_types dsl in
+
+  let all_nodes =
+    Enumeration ("volume_kind", volume_kinds)
+    :: Enumeration ("file_type", file_types)
+    :: dsl.nodes in
+  List.iter all_nodes (function
+  | Enumeration (name, fields) ->
+    doc out "The type of {i %s} items." name;
+    raw
+      (ocaml_sexped_type ~out ~name ~fashion)
+      "[%s]"
+      (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
+  | Record (name, fields) -> ()
+  | Function (name, args, result) -> ()
+  | Volume (_, _) -> ()
+  );
   line out "end";
   
   let fashion = `interface in
