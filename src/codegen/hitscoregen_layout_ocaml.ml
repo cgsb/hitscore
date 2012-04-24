@@ -2,7 +2,7 @@ open Core.Std
 let (|>) x f = f x
 
 
-type fashion = [`implementation|`interface]
+type fashion = [`implementation|`interface|`types]
 
 module Psql = Hitscoregen_psql
 module Sx = Sexplib.Sexp
@@ -127,11 +127,11 @@ let debug out metafmt fmt =
 let line_mli ~fashion out fmt =
   match fashion with
   | `interface -> line out fmt
-  | `implementation -> line ignore fmt
+  | `implementation | `types -> line ignore fmt
 
 let line_ml ~fashion out fmt =
   match fashion with
-  | `interface -> line ignore fmt
+  | `interface | `types -> line ignore fmt
   | `implementation -> line out fmt
 
 let hide ?(fashion:fashion=`implementation) out (f: (string -> unit) -> unit) =
@@ -150,7 +150,7 @@ let hide ?(fashion:fashion=`implementation) out (f: (string -> unit) -> unit) =
       raw tmpout "\n(** {4 End: Hidden} *)\n\n";
     printtmp out;
     ()
-  | `interface -> ()
+  | `interface | `types -> ()
 
 module OCaml_hiden_exception = struct 
   type t = {
@@ -170,7 +170,7 @@ module OCaml_hiden_exception = struct
     _all_exceptions := ohe :: !_all_exceptions;
     ohe
       
-  let define ?fashion t out = 
+  let define ?(fashion:fashion option) t out = 
     hide ?fashion out (fun out ->
       line out "exception Local_exn_%s of %s" 
         t.name (String.concat ~sep:" * " t.types);
@@ -282,7 +282,7 @@ let pgocaml_to_flow ?(fashion=`implementation) out ?transform_exceptions f =
                     (match e with %s | `pg_exn e -> `pg_exn e))"
         (String.concat ~sep:"\n   | " l);
     end
-  | `interface -> ()
+  | `interface | `types -> ()
 
 let pgocaml_insert_in_db_with_id_exn
     ~out ~on_not_one_id ?id name all_db_fields values =
@@ -302,8 +302,9 @@ let pgocaml_insert_in_db_with_id_exn
 let ocaml_start_module ~out ~name = function
   | `implementation -> raw out "module %s = struct\n" name
   | `interface -> raw out "module %s : sig\n" name
+  | `types -> ()
 
-let ocaml_sexped_type ~out ~name ?(privated=false) ?param ~fashion value = 
+let ocaml_sexped_type ~out ~name ?(privated=false) ?param ~(fashion:fashion) value = 
   match fashion with
   | `implementation -> 
     line out "type %s%s = %s with sexp"
@@ -321,6 +322,7 @@ let ocaml_sexped_type ~out ~name ?(privated=false) ?param ~fashion value =
     line out "val sexp_of_%s:%s %s -> Sexplib.Sexp.t" name
       (Option.value_map param ~default:"" ~f:(fun s -> sprintf " %s -> %s" s s))
       name;
+  | `types -> (* TODO *)
     ()
 
 let ocaml_enumeration_module ~fashion ~out name fields =
@@ -353,11 +355,11 @@ let ocaml_enumeration_module ~fashion ~out name fields =
   line out "\n\nend (* %s *)\n" name;
   ()
 
-let ocaml_record_module ~out ~fashion name fields = 
+let ocaml_record_module ~out ~(fashion: fashion) name fields = 
   let out_ml = 
-    match fashion with | `implementation -> out | `interface -> ignore in
+    match fashion with | `implementation -> out | `interface | `types -> ignore in
   let out_mli = 
-    match fashion with | `implementation -> ignore | `interface -> out in
+    match fashion with | `implementation | `types -> ignore | `interface -> out in
 
   ocaml_start_module ~out ~name:(sprintf "Record_%s" name) fashion;
 
@@ -552,9 +554,9 @@ let ocaml_record_module ~out ~fashion name fields =
 
 let ocaml_function_module ~out ~fashion name args result =
   let out_ml = 
-    match fashion with | `implementation -> out | `interface -> ignore in
+    match fashion with | `implementation -> out | `interface | `types -> ignore in
   let out_mli = 
-    match fashion with | `implementation -> ignore | `interface -> out in
+    match fashion with | `implementation -> ignore | `interface | `types -> out in
 
   ocaml_start_module ~out ~name:(sprintf "Function_%s" name) fashion;
 
@@ -835,10 +837,10 @@ let ocaml_toplevel_values_and_types ~out ~fashion dsl =
   let out_ml = 
     match fashion with
     | `implementation -> out
-    | `interface -> ignore in
+    | `interface | `types -> ignore in
   let out_mli = 
     match fashion with
-    | `implementation -> ignore
+    | `implementation | `types -> ignore
     | `interface -> out in
 
   doc out "{3 Top-level Queries On The Data-base }";
@@ -930,12 +932,10 @@ let ocaml_file_system_module ~fashion ~out dsl =
 
   let out_ml = 
     match fashion with
-    | `implementation -> out
-    | `interface -> ignore in
+    | `implementation -> out | `interface | `types -> ignore in
   let out_mli = 
     match fashion with
-    | `implementation -> ignore
-    | `interface -> out in
+    | `implementation | `types -> ignore | `interface -> out in
 
   let id_field = "g_id", Int in
   let volume_fields = [
@@ -1176,10 +1176,10 @@ let ocaml_dump_and_reload ~out ~fashion dsl =
   let out_ml = 
     match fashion with
     | `implementation -> out
-    | `interface -> ignore in
+    | `interface | `types -> ignore in
   let out_mli = 
     match fashion with
-    | `implementation -> ignore
+    | `implementation | `types -> ignore
     | `interface -> out in
   
   let tmp_type_buffer = Buffer.create 42 in
@@ -1366,12 +1366,17 @@ let ocaml_search_module ~out ~fashion dsl =
 
 
 let toplevel_generic_types ~fashion out =
-  doc out "PG'OCaml's connection handle.";
-  raw out "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
-  doc out "Access rights on [Function_*.{t,cache}].";
-  raw out "type function_capabilities= [\n\
+  begin match fashion with
+  | `interface | `implementation ->
+    doc out "PG'OCaml's connection handle.";
+    raw out "type db_handle = (string, bool) Hashtbl.t PGOCaml.t\n\n";
+    line out "type function_capabilities = Types.function_capabilities"
+  | `types ->
+    doc out "Access rights on [Function_*.{t,cache}].";
+    raw out "type function_capabilities= [\n\
                 \  | `can_nothing\n  | `can_start\n  | `can_complete\n\
                 | `can_get_result\n]\n";
+  end;
   ()
 
 let file_system_section ~(fashion: fashion) out dsl = 
@@ -1440,12 +1445,22 @@ let ocaml_interface dsl output_string =
 
   let out = output_string in
   
+  let fashion = `types in
+  doc out "Autogenerated module.";
+  line out "module Types = struct";
+  line out "module Timestamp = struct 
+      include Core.Std.Time
+      let () = use_new_string_and_sexp_formats ()
+    end";
+  toplevel_generic_types ~fashion out;
+  line out "end";
+  
   let fashion = `interface in
   doc out "Autogenerated module.";
   line out "module type LAYOUT = sig";
+  line out "open Types";
   line out "module Flow : Sequme_flow_monad.FLOW_MONAD";
   line out "module PGOCaml: PGOCaml_generic.PGOCAML_GENERIC ";
-  line out "module Timestamp: sig type t = Core.Std.Time.t end";
   toplevel_generic_types ~fashion out;
   file_system_section ~fashion out dsl;
   functions_and_records ~fashion dsl ~out;
@@ -1464,10 +1479,11 @@ let ocaml_code ?(with_interface=true) raw_dsl dsl output_string =
   doc out "To make the DB-accesses thread-agnostic we need an \
         \"Outside word model\".";
   raw out "\
+open Hitscore_layout_interface
 module Make \
 (Flow : Sequme_flow_monad.FLOW_MONAD)";
   if with_interface then (
-    line out ": Hitscore_layout_interface.LAYOUT\n";
+    line out ": LAYOUT\n";
     line out "  with module Flow = Flow\n";
     line out "  with type 'a PGOCaml.monad = 'a Flow.IO.t";
   );
@@ -1475,10 +1491,7 @@ module Make \
  = struct\n\
   module PGOCaml = PGOCaml_generic.Make(Flow.IO)
   module Flow = Flow
-module Timestamp = struct 
-  include Core.Std.Time
-  let () = use_new_string_and_sexp_formats ()
- end
+  open Types
 ";
 
   let fashion = `implementation in
