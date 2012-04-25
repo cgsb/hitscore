@@ -117,11 +117,13 @@ let string_of_error = function
     sprintf "cannot_recognize_fastq_format of %s" file
   | `file_path_not_in_volume (file, v) ->
     sprintf "file_path_not_in_volume (%s, %ld)" file v.Layout.File_system.id
+  | `duplicated_barcode s ->
+    sprintf "Duplicated barcode: %S" s
 
 let display_errors = function
   | Ok _ -> ()
   | Error e ->
-    printf "%s" (string_of_error e)
+    printf "ERROR:\n  %s\n" (string_of_error e)
 
 let flow_ok_or_fail = function
   | Ok o -> o

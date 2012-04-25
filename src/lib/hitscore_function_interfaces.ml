@@ -65,6 +65,7 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
                (string * (int32 * Common.Layout.PGOCaml.int32_array) list)
            | `select_did_not_return_one_tuple of string * int
            | `successful_status_with_no_result of int32 ]
+     | `duplicated_barcode of string
      | `pg_exn of exn
      | `wrong_request of
          [> `record_flowcell ] * [> `value_not_found of string ] ])

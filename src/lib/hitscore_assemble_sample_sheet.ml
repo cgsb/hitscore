@@ -160,11 +160,17 @@ module Make
                     flowcell_name (lane_idx + 1) name (lane_idx + 1);
                   return ()
                 | l ->
-                  let undetermined =
-                    print out "%s,%d,UndeterminedLane%d,,Undetermined,,N,,,Lane%d\n"
-                      flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
-                    return () in
-                  undetermined >>= fun () ->
+                  print out "%s,%d,UndeterminedLane%d,,Undetermined,,N,,,Lane%d\n"
+                    flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
+                  let potential_dup =
+                    List.find_a_dup 
+                      (List.map l (fun s -> Array.to_list (snd s)) |! List.flatten)
+                      ~compare in
+                  begin match potential_dup with
+                  | Some b -> error (`duplicated_barcode b)
+                  | None -> return ()
+                  end
+                  >>= fun () ->
                   of_list_sequential l ~f:(fun (name, bars) -> 
                     Array.iter bars ~f:(fun b ->
                       print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
