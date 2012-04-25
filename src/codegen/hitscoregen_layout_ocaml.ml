@@ -1410,6 +1410,89 @@ let functions_and_records ~fashion ~out dsl =
     | Volume (_, _) -> ()
   )
 
+let ocaml_classy_module ~out ~fashion dsl =
+  let out_ml = 
+    match fashion with
+    | `implementation -> out
+    | `interface -> ignore in
+  let out_mli = 
+    match fashion with
+    | `implementation -> ignore
+    | `interface -> out in
+
+  let new_method name typ body =
+    line out_mli "method %s : %s" name typ;
+    line out_ml "method %s = %s" name body
+  in
+
+  doc out "Classy Access to the Layout";
+  (* ocaml_start_module ~out ~name:"Classy" fashion; *)
+
+    line out_mli "class volume: File_system.volume -> object";
+    line out_ml "class volume fsvolume = object(self)";
+    line out_ml "val volume_pointer = fsvolume.File_system.volume_pointer";
+    line out_ml "val volume_kind    = fsvolume.File_system.volume_kind   ";
+    line out_ml "val volume_content = fsvolume.File_system.volume_content";
+    new_method "g_id" "int32" "volume_pointer.File_system.id";
+    new_method "volume_pointer" "File_system.pointer" "volume_pointer";
+    new_method "volume_kind" "Enumeration_volume_kind.t" "volume_kind";
+    new_method "volume_content" "File_system.volume_content" "volume_content";
+    line out "end";
+
+  List.iter dsl.nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out_mli "class %s: Record_%s.t -> object" name name;
+    line out_ml "class %s t = object (self)" name;
+    List.iter (record_standard_fields @ fields) ~f:(fun (s, t) ->
+      line out_ml "val %s: %s = t.Record_%s.%s" s (ocaml_type t) name s;
+      new_method s (ocaml_type t) s;
+    );
+    line out "end";
+
+  | Function (name, args, result) ->
+    line out_mli "class %s: 'a Function_%s.t -> object" name name;
+    line out_ml "class %s t = object (self)" name;
+    List.iter (function_standard_fields result @ args) ~f:(fun (s, t) ->
+      line out_ml "val %s: %s = t.Function_%s.%s" s (ocaml_type t) name s;
+      new_method s (ocaml_type t) s;
+    );
+    line out "end";
+
+  | Volume (name, toplevel) -> ()
+  );
+
+  line out_mli "class ['a] collection: 'a list -> object";
+  line out_ml "class ['a] collection (l : 'a list) = object (self)";
+  line out "constraint 'a = < g_id : int32; .. >";
+  new_method "find" "('a -> bool) -> 'a list"
+    "fun f -> Core.Std.List.filter l ~f";
+  new_method "get32" "int32 -> 'a"
+    "fun i32 -> Core.Std.List.find_exn l ~f:(fun x -> x#g_id = i32)";
+  line out "end";
+
+  line out_ml "class layout dump = object (self)";
+  line out_mli "class layout:  dump -> object";
+  line out_ml "val file_system = \
+     new collection (list_map dump.file_system (new volume))";
+  new_method "file_system" "volume collection" "file_system";
+  List.iter dsl.nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out_ml "val %s = new collection (list_map dump.record_%s (new %s))"
+      name name name;
+    new_method name (sprintf "%s collection" name) (sprintf "%s" name);
+  | Function (name, args, result) ->
+    new_method name (sprintf "[`can_nothing] Function_%s.t list" name)
+      (sprintf "dump.function_%s" name);
+  | Volume (name, toplevel) -> ()
+  );
+  line out "end";
+  
+  (* line out "end (\* Classy *\)"; *)
+  ()
+
+  
 let ocaml_meta_module ~out ~fashion ?raw_dsl dsl =
 
   let out_ml = 
@@ -1504,6 +1587,12 @@ let ocaml_interface dsl output_string =
   ocaml_meta_module ~out ~fashion dsl;
   line out "end";
 
+  line out "module type CLASSY = sig";
+  line out "module Layout: LAYOUT";
+  line out "open Layout";
+  line out "open Types";
+  ocaml_classy_module ~out ~fashion dsl;
+  line out "end";
   
   ()
 
@@ -1567,5 +1656,15 @@ let pg_map am f = pg_bind am (fun x -> pg_return (f x))\n\n\
   ocaml_meta_module ~out ~fashion ~raw_dsl dsl;
 
   line out "end (* Make *)";
+
+  line out "module Make_classy (Layout : LAYOUT) = struct";
+  line out "let list_map l f = Core.Std.List.map ~f l";
+  line out "module Layout = Layout";
+  line out "open Layout";
+  line out "open Types";
+  ocaml_classy_module ~out ~fashion dsl;
+  line out "end (* Make_classy *)";
+  
+  
   ()
 

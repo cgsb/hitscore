@@ -6,6 +6,7 @@ module Make (IO_configuration : Sequme_flow_monad.IO_CONFIGURATION) = struct
   module Flow = Sequme_flow_monad.Make(IO_configuration)
 
   module Layout = Hitscore_db_access.Make(Flow)
+  module Classy_layout = Hitscore_db_access.Make_classy(Layout)
 
   module Configuration = Hitscore_configuration
 

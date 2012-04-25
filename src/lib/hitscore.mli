@@ -15,6 +15,10 @@ module Make (IO_configuration : Sequme_flow_monad.IO_CONFIGURATION) : sig
     with module Flow = Flow
     with type 'a PGOCaml.monad = 'a Flow.IO.t
 
+  (**  *)
+  module Classy_layout: Hitscore_layout_interface.CLASSY
+    with module Layout = Layout
+
   (** The configuration information. *)
   module Configuration: Hitscore_interfaces.CONFIGURATION
 
