@@ -1427,15 +1427,23 @@ let ocaml_classy_module ~out ~fashion dsl =
 
   doc out "Classy Access to the Layout";
   (* ocaml_start_module ~out ~name:"Classy" fashion; *)
+  line out_ml "open Core.Std";
 
   line out_mli "class ['a] collection: 'a list -> object";
   line out_ml "class ['a] collection (l : 'a list) = object (self)";
   line out "constraint 'a = < g_id : int32; .. >";
-  new_method "find" "('a -> bool) -> 'a option" "fun f -> Core.Std.List.find l ~f";
-  new_method "find_all" "('a -> bool) -> 'a list" "fun f -> Core.Std.List.filter l ~f";
+  new_method "find" "('a -> bool) -> 'a option" "fun f -> List.find l ~f";
+  new_method "find_all" "('a -> bool) -> 'a list" "fun f -> List.filter l ~f";
   new_method "get32_exn" "int32 -> 'a"
-    "fun i32 -> Core.Std.List.find_exn l ~f:(fun x -> x#g_id = i32)";
+    "fun i32 -> List.find_exn l ~f:(fun x -> x#g_id = i32)";
   new_method "all"  "'a list" "l";
+  line out "end";
+
+  line out_mli "class ['a] pointer: int32 -> 'a collection -> object";
+  line out_ml "class ['a] pointer id (col : 'a collection) = object (self)";
+  line out "constraint 'a = < g_id : int32; .. >";
+  new_method "id" "int32" "id";
+  new_method "get_exn" "'a" "col#get32_exn id";
   line out "end";
 
     line out_mli "class volume: File_system.volume -> layout -> object";
@@ -1455,8 +1463,49 @@ let ocaml_classy_module ~out ~fashion dsl =
     line out_mli " %s: Record_%s.t -> layout -> object" name name;
     line out_ml " %s t (layout: layout) = object (self)" name;
     List.iter (record_standard_fields @ fields) ~f:(fun (s, t) ->
-      line out_ml "val %s: %s = t.Record_%s.%s" s (ocaml_type t) name s;
-      new_method s (ocaml_type t) s;
+      let rec parse_type = function
+        | Identifier | Bool | Timestamp | Int | Real             
+        | Enumeration_name _ | String      ->
+          line out_ml "val %s: %s = t.Record_%s.%s" s (ocaml_type t) name s;
+          new_method s (ocaml_type t) s;
+        | Function_name s -> failwith "funcpointer"
+        | Record_name r ->
+          let typ = sprintf "%s pointer" r in
+          line out_ml "val %s: %s =" s typ;
+          line out_ml "   new pointer t.Record_%s.%s.Record_%s.id layout#%s"
+            name s r r;
+          new_method s typ s;
+        | Option (Record_name r) ->
+          let typ = sprintf "%s pointer option" r in
+          line out_ml "val %s: %s =" s typ;
+          line out_ml "   Option.map t.Record_%s.%s (fun p -> \
+                              new pointer p.Record_%s.id layout#%s)"
+            name s r r;
+          new_method s typ s;
+        | Array (Record_name r) ->
+          let typ = sprintf "%s pointer list" r in
+          line out_ml "val %s: %s =" s typ;
+          line out_ml "   Array.to_list (Array.map t.Record_%s.%s ~f:(fun p -> \
+                              new pointer p.Record_%s.id layout#%s))"
+            name s r r;
+          new_method s typ s;
+        | Volume_name v ->
+          let typ = sprintf "volume pointer" in
+          line out_ml "val %s: %s =" s typ;
+          line out_ml "   new pointer t.Record_%s.%s.File_system.id layout#file_system"
+            name s;
+          new_method s typ s;
+        | Option (Volume_name v) ->
+          let typ = sprintf "volume pointer option" in
+          line out_ml "val %s: %s =" s typ;
+          line out_ml "   Option.map t.Record_%s.%s (fun p -> \
+                              new pointer p.File_system.id layout#file_system)"
+            name s;
+          new_method s typ s;
+        | Option t -> (parse_type  t)
+        | Array t  -> (parse_type  t)
+      in
+      parse_type t;
     );
     line out "end and";
 
@@ -1475,7 +1524,7 @@ let ocaml_classy_module ~out ~fashion dsl =
   let delayed_collection_method name dump class_name =
     line out_ml "val mutable %s = None" name;
     line out_ml "method private _%s = \
-                new collection (list_map dump.%s (fun t -> new %s t (self :> layout)))"
+                new collection (List.map dump.%s (fun t -> new %s t (self :> layout)))"
       name dump class_name;
     new_method name (sprintf "%s collection" class_name)
       (sprintf "match %s with Some s -> s
