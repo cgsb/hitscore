@@ -1428,40 +1428,6 @@ let ocaml_classy_module ~out ~fashion dsl =
   doc out "Classy Access to the Layout";
   (* ocaml_start_module ~out ~name:"Classy" fashion; *)
 
-    line out_mli "class volume: File_system.volume -> object";
-    line out_ml "class volume fsvolume = object(self)";
-    line out_ml "val volume_pointer = fsvolume.File_system.volume_pointer";
-    line out_ml "val volume_kind    = fsvolume.File_system.volume_kind   ";
-    line out_ml "val volume_content = fsvolume.File_system.volume_content";
-    new_method "g_id" "int32" "volume_pointer.File_system.id";
-    new_method "volume_pointer" "File_system.pointer" "volume_pointer";
-    new_method "volume_kind" "Enumeration_volume_kind.t" "volume_kind";
-    new_method "volume_content" "File_system.volume_content" "volume_content";
-    line out "end";
-
-  List.iter dsl.nodes (function
-  | Enumeration (name, fields) -> ()
-  | Record (name, fields) ->
-    line out_mli "class %s: Record_%s.t -> object" name name;
-    line out_ml "class %s t = object (self)" name;
-    List.iter (record_standard_fields @ fields) ~f:(fun (s, t) ->
-      line out_ml "val %s: %s = t.Record_%s.%s" s (ocaml_type t) name s;
-      new_method s (ocaml_type t) s;
-    );
-    line out "end";
-
-  | Function (name, args, result) ->
-    line out_mli "class %s: 'a Function_%s.t -> object" name name;
-    line out_ml "class %s t = object (self)" name;
-    List.iter (function_standard_fields result @ args) ~f:(fun (s, t) ->
-      line out_ml "val %s: %s = t.Function_%s.%s" s (ocaml_type t) name s;
-      new_method s (ocaml_type t) s;
-    );
-    line out "end";
-
-  | Volume (name, toplevel) -> ()
-  );
-
   line out_mli "class ['a] collection: 'a list -> object";
   line out_ml "class ['a] collection (l : 'a list) = object (self)";
   line out "constraint 'a = < g_id : int32; .. >";
@@ -1471,20 +1437,60 @@ let ocaml_classy_module ~out ~fashion dsl =
     "fun i32 -> Core.Std.List.find_exn l ~f:(fun x -> x#g_id = i32)";
   line out "end";
 
-  line out_ml "class layout dump = object (self)";
-  line out_mli "class layout:  dump -> object";
-  line out_ml "val file_system = \
-     new collection (list_map dump.file_system (new volume))";
-  new_method "file_system" "volume collection" "file_system";
+    line out_mli "class volume: File_system.volume -> layout -> object";
+    line out_ml "class volume fsvolume (layout: layout) = object(self)";
+    line out_ml "val volume_pointer = fsvolume.File_system.volume_pointer";
+    line out_ml "val volume_kind    = fsvolume.File_system.volume_kind   ";
+    line out_ml "val volume_content = fsvolume.File_system.volume_content";
+    new_method "g_id" "int32" "volume_pointer.File_system.id";
+    new_method "volume_pointer" "File_system.pointer" "volume_pointer";
+    new_method "volume_kind" "Enumeration_volume_kind.t" "volume_kind";
+    new_method "volume_content" "File_system.volume_content" "volume_content";
+    line out "end and";
+
   List.iter dsl.nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
-    line out_ml "val %s = new collection (list_map dump.record_%s (new %s))"
-      name name name;
-    new_method name (sprintf "%s collection" name) (sprintf "%s" name);
+    line out_mli " %s: Record_%s.t -> layout -> object" name name;
+    line out_ml " %s t (layout: layout) = object (self)" name;
+    List.iter (record_standard_fields @ fields) ~f:(fun (s, t) ->
+      line out_ml "val %s: %s = t.Record_%s.%s" s (ocaml_type t) name s;
+      new_method s (ocaml_type t) s;
+    );
+    line out "end and";
+
   | Function (name, args, result) ->
-    new_method name (sprintf "[`can_nothing] Function_%s.t list" name)
-      (sprintf "dump.function_%s" name);
+    line out_mli " %s: [`can_nothing] Function_%s.t -> layout -> object" name name;
+    line out_ml " %s t (layout: layout) = object (self)" name;
+    List.iter (function_standard_fields result @ args) ~f:(fun (s, t) ->
+      line out_ml "val %s: %s = t.Function_%s.%s" s (ocaml_type t) name s;
+      new_method s (ocaml_type t) s;
+    );
+    line out "end and";
+
+  | Volume (name, toplevel) -> ()
+  );
+
+  let delayed_collection_method name dump class_name =
+    line out_ml "val mutable %s = None" name;
+    line out_ml "method private _%s = \
+                new collection (list_map dump.%s (fun t -> new %s t (self :> layout)))"
+      name dump class_name;
+    new_method name (sprintf "%s collection" class_name)
+      (sprintf "match %s with Some s -> s
+               | None -> let s = self#_%s in %s <- Some s; s"
+         name name name)
+  in
+    
+  line out_ml " layout dump = object (self)";
+  line out_mli " layout:  dump -> object";
+  delayed_collection_method "file_system" "file_system" "volume";
+  List.iter dsl.nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    delayed_collection_method name ("record_" ^ name) name;
+  | Function (name, args, result) ->
+    delayed_collection_method name ("function_" ^ name) name;
   | Volume (name, toplevel) -> ()
   );
   line out "end";
