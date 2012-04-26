@@ -1431,10 +1431,11 @@ let ocaml_classy_module ~out ~fashion dsl =
   line out_mli "class ['a] collection: 'a list -> object";
   line out_ml "class ['a] collection (l : 'a list) = object (self)";
   line out "constraint 'a = < g_id : int32; .. >";
-  new_method "find" "('a -> bool) -> 'a list"
-    "fun f -> Core.Std.List.filter l ~f";
-  new_method "get32" "int32 -> 'a"
+  new_method "find" "('a -> bool) -> 'a option" "fun f -> Core.Std.List.find l ~f";
+  new_method "find_all" "('a -> bool) -> 'a list" "fun f -> Core.Std.List.filter l ~f";
+  new_method "get32_exn" "int32 -> 'a"
     "fun i32 -> Core.Std.List.find_exn l ~f:(fun x -> x#g_id = i32)";
+  new_method "all"  "'a list" "l";
   line out "end";
 
     line out_mli "class volume: File_system.volume -> layout -> object";
