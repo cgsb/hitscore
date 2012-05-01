@@ -5,23 +5,30 @@ module Hitscore_threaded =
 open Hitscore_threaded
 open Flow
 
+let result_ok_exn ?(fail=Failure "Not Ok") = function
+  | Ok o -> o
+  | Error _ -> raise fail
+    
 module System = struct
-
-  let command_exn s = 
-    let status = Unix.system s in
-    if not (Unix.Process_status.is_ok status) then
-      ksprintf failwith "System.command_exn: %s" 
-        (Unix.Process_status.to_string_hum status)
-    else
-      ()
-
-  let command s =
-    let status = Unix.system s in
+  exception Wrong_status of [ `Exit_non_zero of int | `Signal of Signal.t ]
+  let command_exn s =
+    begin match Unix.system s with
+    | Ok () -> ()
+    | Error e -> raise (Wrong_status e)
+    end
+  let command s = 
+    begin match Unix.system s with
+    | Ok () -> Ok ()
+    | Error status ->
+      Error (`sys_error (`command (s, status)))
+    end
+  (*
     if (Unix.Process_status.is_ok status) then
       Ok ()
     else
       Error (`sys_error (`command (s, status)))
 
+*)
   let command_to_string s =
     Unix.open_process_in s |! In_channel.input_all
         

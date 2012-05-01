@@ -1611,7 +1611,7 @@ let ocaml_interface dsl output_string =
   line out "end = struct";
   line out "module Timestamp = struct 
       include Core.Std.Time
-      let () = use_new_string_and_sexp_formats ()
+      let () = write_new_string_and_sexp_formats__read_both ()
     end";
   toplevel_generic_types ~fashion out;
   doc out "\n {3 Types for Records and Functions of The Layout}\n\n ";
@@ -1692,7 +1692,7 @@ let list_map l f = Core.Std.List.map ~f l\n\n\
 let list_iter l f = Core.Std.List.iter ~f l\n\n\
 let list_find l f = Core.Std.List.find ~f l\n\n\
 let list_append l = Core.Std.List.append l\n\n\
-let list_flatten (l : 'a list list) : 'a list = Core.Std.List.flatten l\n\n\
+let list_flatten (l : 'a list list) : 'a list = Core.Std.List.concat l\n\n\
 let fold_left = Core.Std.List.fold_left\n\n\
 let array_to_list a = Core.Std.Array.to_list a\n\n\
 let list_to_array l = Core.Std.Array.of_list l\n\n\

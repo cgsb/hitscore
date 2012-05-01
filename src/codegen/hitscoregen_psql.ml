@@ -61,7 +61,7 @@ let clear_db_postgres db output_string =
       
 let verify db output_string =
   List.iter db (fun table ->
-    begin match List.find_all table.fields 
+    begin match List.filter table.fields 
         ~f:(fun (_, t, _) -> t = Identifier) with
         | [ one ] -> ()
         | [] ->

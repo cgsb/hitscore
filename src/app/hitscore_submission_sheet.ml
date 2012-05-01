@@ -60,10 +60,11 @@ let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S"))
 
 
 let find_section sanitized section =
-  Array.findi sanitized (function
+  Array.findi sanitized (fun _ -> function
   | s :: _ when s = section -> true
-  | _ -> false) |>
-      Option.value_exn_message (sprintf "Can't the find %S section." section)
+  | _ -> false)
+  |! Option.value_exn_message (sprintf "Can't the find %S section." section)
+  |! fst
 
 let list_of_filteri f =
   let rl = ref [] in
@@ -251,7 +252,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     let pools =
       let sections =
         Array.mapi sanitized ~f:(fun i a -> (i, a)) |> Array.to_list |>
-            List.find_all ~f:(function
+            List.filter ~f:(function
             | (_, head :: _) when String.is_prefix ~prefix:"Pool" head -> true
             | _ -> false) |>
                 List.map ~f:(fun (i, a) -> i)
@@ -463,7 +464,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               | Some s ->
                 String.split ~on:',' s 
                 |! List.map ~f:String.strip
-                |! List.find_all ~f:((<>) "") 
+                |! List.filter ~f:((<>) "") 
                 |! List.filter_map ~f:int32
             in
             let custom_barcode_sequence =
@@ -624,7 +625,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         List.dedup assoc_sample_org ~compare |> List.sort ~cmp:compare in
       if l1 <> l2 then
         List.iter l2 (fun (s, h) ->
-          match List.find_all l1 ~f:(fun (x, _) -> x = s) with
+          match List.filter l1 ~f:(fun (x, _) -> x = s) with
           | [ one ] -> ()
           | [] -> failwith "should nt be there"
           | more ->
@@ -1009,7 +1010,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       end;
       Pervasives.ignore (bioanalyzer, agarose_gel);
       stock := (libname, project, 
-                stock_lib |! Result.ok_exn ~fail:(Failure "no stock lib!")) :: !stock;
+                stock_lib |! result_ok_exn ~fail:(Failure "no stock lib!")) :: !stock;
       ());
 
     let lanes = List.map pools (function
@@ -1020,7 +1021,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             let the_lib, concentration, note, key_values =
               if libname = "PhiX" then
                 Layout.Search.record_stock_library_by_name ~dbh "PhiX_v3" 
-                |! Result.ok_exn ~fail:(Failure "Can't find PhiX_v3 !!!")
+                |! result_ok_exn ~fail:(Failure "Can't find PhiX_v3 !!!")
                 |! fun lib ->
                   (List.hd_exn lib, None, None, [])
               else

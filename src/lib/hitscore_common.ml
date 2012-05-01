@@ -348,7 +348,7 @@ module Make
           printf "Last inaccessible_hiseq_raw: %ld on %s\n"
             h.Layout.Record_inaccessible_hiseq_raw.id
             (Time.to_string ts);
-          return (h, List.map whole trd3 |! List.flatten))
+          return (h, List.map whole trd3 |! List.concat))
       >>= fun (last_avail, all_deleted) ->
       if List.exists all_deleted ((=) hiseq_raw) then
         error `hiseq_dir_deleted

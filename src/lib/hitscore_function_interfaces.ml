@@ -261,36 +261,35 @@ module type UNALIGNED_DELIVERY = sig
       directory name (the default begin the data of the current day; and
       [~destination] is a directory path. *)
   val run :
-    dbh:Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
+    dbh:Common.Layout.db_handle ->
+    configuration:Common.Configuration.local_configuration ->
     ?directory_tag:string ->
-    bcl_to_fastq:'a Layout.Function_bcl_to_fastq.pointer ->
-    invoice:Layout.Record_invoicing.pointer ->
+    bcl_to_fastq:'a Common.Layout.Function_bcl_to_fastq.pointer ->
+    invoice:Common.Layout.Record_invoicing.pointer ->
     destination:string ->
     ([ `can_get_result ]
-        Layout.Function_prepare_unaligned_delivery.pointer,
-            [> `bcl_to_fastq_not_succeeded of
-                 'a Layout.Function_bcl_to_fastq.pointer *
-                 Layout.Enumeration_process_status.t
-             | `cannot_recognize_file_type of string
-             | `inconsistency_inode_not_found of int32
-             | `io_exn of exn
-             | `layout_inconsistency of
-                 [> `File_system | `Record of string | `Function of string ] *
-                 [> `insert_did_not_return_one_id of string * int32 list
-                  | `select_did_not_return_one_tuple of string * int ]
-             | `not_single_flowcell of
-                 (string * int Hitscore_std.List.t) Hitscore_std.List.t
-             | `partially_found_lanes of
-                 int32 * string *
-                 Layout.Record_lane.pointer Hitscore_std.Array.container *
-                 int option list
-             | `pg_exn of exn
-             | `system_command_error of string * exn
-             | `root_directory_not_configured
-             | `wrong_unaligned_volume of string Hitscore_std.List.t ])
-           Flow.monad
-
+        Common.Layout.Function_prepare_unaligned_delivery.pointer,
+     [> `bcl_to_fastq_not_succeeded of
+         'a Common.Layout.Function_bcl_to_fastq.pointer *
+           Common.Layout.Enumeration_process_status.t
+     | `cannot_recognize_file_type of string
+     | `inconsistency_inode_not_found of int32
+     | `io_exn of exn
+     | `layout_inconsistency of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `insert_did_not_return_one_id of string * int32 list
+           | `select_did_not_return_one_tuple of string * int ]
+     | `not_single_flowcell of
+         (string * int Hitscore_std.List.t) Hitscore_std.List.t
+     | `partially_found_lanes of
+         int32 * string *
+           Common.Layout.Record_lane.pointer Hitscore_std.Array.t *
+           (int * Common.Layout.Record_lane.pointer) option list
+     | `pg_exn of exn
+     | `root_directory_not_configured
+     | `system_command_error of string * exn
+     | `wrong_unaligned_volume of string list ])
+      Common.Flow.t
 
 
 end
@@ -385,8 +384,7 @@ module type FASTX_QUALITY_STATS = sig
     dbh:Common.Layout.db_handle ->
     configuration:Common.Configuration.local_configuration ->
     ?option_Q:int32 ->
-    ?filter_names:Hitscore_std.String.sexpable
-      Hitscore_std.List.sexpable ->
+    ?filter_names:string list ->
     ?user:string ->
     ?wall_hours:int ->
     ?nodes:int ->

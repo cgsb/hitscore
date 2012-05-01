@@ -289,7 +289,7 @@ let info hsc id_or_dir =
         return (Filename.concat unaligned (sprintf "Basecall_Stats_%s" fcid))
       in
       display_errors work;
-      let udir = Result.ok_exn work in
+      let udir = result_ok_exn work in
       begin match Configuration.path_of_volume_fun hsc with
       | Some f -> f udir
       | None -> failwith "Root directory not configured"

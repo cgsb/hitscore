@@ -48,7 +48,7 @@ module Configuration_file = struct
     let open Hitscore_threaded.Configuration in
     List.iter (profile_names profiles) (fun n ->
       printf "** Configuration %S:\n" n;
-      print_config (use_profile profiles n |! Result.ok_exn ~fail:Not_found));
+      print_config (use_profile profiles n |! result_ok_exn ~fail:Not_found));
     printf "** Environment:\n";
     print_env ();
     ()
@@ -571,7 +571,7 @@ module Verify = struct
       ksprintf f fmt in
     begin match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
-      let (>>>) x f = Result.ok_exn ~fail:(Failure f) x in
+      let (>>>) x f = result_ok_exn ~fail:(Failure f) x in
       let vols = Layout.File_system.get_all ~dbh >>> "File_system.get_all" in
       List.iter vols ~f:(fun volume -> 
         let path =
@@ -660,7 +660,7 @@ module Verify = struct
       | Ok l ->
         List.iter (List.sort ~cmp:compare l) (fun (name, project) ->
         (* printf "%s . %s\n" (Option.value ~default:"" project) name; *)
-          let all = (List.find_all l ~f:(fun (n, p) -> n = name && p <> project)) in
+          let all = (List.filter l ~f:(fun (n, p) -> n = name && p <> project)) in
           match all with
           | []  -> ()
           | more ->
@@ -1150,7 +1150,7 @@ module Query = struct
                          get ~dbh library >>= fun {name; _} ->
                          return (serial_name, i + 1, name))))))))
          >>= fun ll ->
-         return (List.iter (List.flatten (List.flatten ll)) (fun (s, i, n) ->
+         return (List.iter (List.concat (List.concat ll)) (fun (s, i, n) ->
            printf "%S,%d,%s\n" s i n
          )) in
        ignore work
@@ -1328,7 +1328,7 @@ module Prepare_delivery = struct
           (Array.to_list invoice_lanes 
            |! List.map ~f:(fun il -> il.Layout.Record_lane.id |! sprintf "%ld")
            |! String.concat ~sep:", ")
-          (List.map (List.filter_opt find_lanes) ~f:(sprintf "%d") 
+          (List.map (List.filter_opt find_lanes) ~f:(fun (i, _) -> sprintf "%d" i) 
            |! String.concat ~sep:", ") 
       | `not_single_flowcell [] ->
         out "Did not find any matching flowcell\n"
@@ -1393,7 +1393,7 @@ module Hiseq_run = struct
       Layout.Record_hiseq_run.add_value
         ~dbh ~date:(Time.of_string (day_date ^ " 10:00"))
         ?flowcell_a ?flowcell_b ?note)
-    |! Result.ok_exn ~fail:(Failure "adding the hiseq_run went wrong")
+    |! result_ok_exn ~fail:(Failure "adding the hiseq_run went wrong")
     |! Pervasives.ignore
 
 
@@ -1571,7 +1571,7 @@ let short_help indent =
            indent indent desc))
 
 let find_command cmd = 
-  List.find !commands (fun (names, _, _, _) -> List.mem cmd ~set:names)
+  List.find !commands (fun (names, _, _, _) -> List.exists names ((=) cmd))
 
 let () =
   define_command 

@@ -188,18 +188,18 @@ let parse_sexp sexp =
     match entry with
     | (Sx.Atom "subrecord") :: (Sx.Atom name) :: l ->
       sanitize name;
-      let fields = List.map ~f:parse_field l |> List.flatten in
+      let fields = List.map ~f:parse_field l |> List.concat in
       subrecord_macros := (name, fields) :: !subrecord_macros;
       None
     | (Sx.Atom "record") :: (Sx.Atom name) :: l ->
       sanitize name;
-      let fields = List.map ~f:parse_field l |> List.flatten in
+      let fields = List.map ~f:parse_field l |> List.concat in
       existing_types := Record_name name :: !existing_types;
       Some (Record (name, fields))
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
       sanitize name;
       sanitize lout;
-      let fields = List.map ~f:parse_field lin |> List.flatten in
+      let fields = List.map ~f:parse_field lin |> List.concat in
       begin match check_type lout with
       | Record_name r -> ()
       | t -> 
@@ -356,7 +356,7 @@ let to_db dsl =
         [ { Psql.name; Psql.fields } ]
       | Enumeration _ -> []
       | Volume (_, _) -> []
-    ) |> List.flatten
+    ) |> List.concat
   in
   filesystem @ nodes
 

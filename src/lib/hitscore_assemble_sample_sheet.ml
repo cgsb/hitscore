@@ -164,7 +164,7 @@ module Make
                     flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
                   let potential_dup =
                     List.find_a_dup 
-                      (List.map l (fun s -> Array.to_list (snd s)) |! List.flatten)
+                      (List.map l (fun s -> Array.to_list (snd s)) |! List.concat)
                       ~compare in
                   begin match potential_dup with
                   | Some b -> error (`duplicated_barcode b)

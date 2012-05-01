@@ -315,7 +315,7 @@ module Make
                         return (fpud, cfd))
                       else None)})
             else None))
-        |! List.flatten
+        |! List.concat
 
     let delivered_demultiplexings t hs_run =
       Cache.get ~last_change:t.last_change
@@ -352,8 +352,8 @@ module Make
               List.filter_map t.current_dump.Layout.record_lane
                 (fun lane ->
                   let t_pointer = L.unsafe_cast lane.L.g_id in
-                  match Array.findi lanes ~f:((=) t_pointer) with
-                  | Some array_index ->
+                  match Array.findi lanes ~f:(fun _ -> (=) t_pointer) with
+                  | Some (array_index,_) ->
                     if Array.exists lane.L.contacts ~f:((=) person_pointer)
                     then (
                       let lane_libraries =
@@ -432,7 +432,7 @@ module Make
 
     let find_person t ~identifier =
       let l =
-      List.find_all t.current_dump.Layout.record_person
+      List.filter t.current_dump.Layout.record_person
         ~f:(fun {Layout.Record_person.login; email; secondary_emails} ->
           login = Some identifier || email = identifier
           || Array.exists secondary_emails ~f:((=) identifier)) in
@@ -491,8 +491,8 @@ module Make
                     (fun l -> l.IL.id = il.IL.g_id))
                 >>= fun lane_t ->
                 List.find_map t.current_dump.Layout.record_flowcell (fun fc ->
-                  Array.findi fc.FC.lanes ~f:(fun l -> l.L.id = lane_t.L.g_id)
-                  >>= fun index ->
+                  Array.findi fc.FC.lanes ~f:(fun _ l -> l.L.id = lane_t.L.g_id)
+                  >>= fun (index, _) ->
                   return (fc, index))
                 >>= fun (si_flowcell, array_index) ->
                 return (lane_t, array_index + 1)

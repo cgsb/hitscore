@@ -61,7 +61,8 @@ module Make
         of_list_sequential flowcells ~f:(fun p ->
           get ~dbh p >>= fun {g_id; serial_name; lanes; } ->
           let find_lanes =
-            Array.map invoice_lanes ~f:(fun l -> Array.findi ~f:((=) l) lanes) 
+            Array.map invoice_lanes ~f:(fun l ->
+              Array.findi ~f:(fun _ -> (=) l) lanes) 
             |! Array.to_list in
           if List.for_all find_lanes ~f:((=) None) then
             return None
@@ -69,7 +70,8 @@ module Make
             error (`partially_found_lanes (g_id, serial_name,
                                            invoice_lanes, find_lanes))
           else
-            return (Some (serial_name, List.filter_opt find_lanes))))
+            return (Some (serial_name,
+                          List.filter_opt find_lanes |! List.map ~f:fst))))
       >>| List.filter_opt >>= function
       | [ (flowcell_name, lanes_idxs) ]->
         debug "%s wants lanes: %s of %s\n" pi_name 
@@ -81,7 +83,7 @@ module Make
             of_list_sequential (Array.to_list contacts) ~f:(fun cp ->
               Layout.Record_person.(get ~dbh cp >>| fun c -> c.login)))
           >>| List.filter_opt)
-        >>| List.flatten >>| List.dedup
+        >>| List.concat >>| List.dedup
         >>= fun logins ->
         debug "logins: %s\n" (String.concat ~sep:", " logins) >>= fun () ->
         let links_dir =
