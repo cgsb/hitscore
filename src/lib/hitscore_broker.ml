@@ -22,6 +22,8 @@ module type BROKER = sig
      | `pg_exn of exn ])
       Common.Flow.monad
 
+  val current_dump: 'a t -> Layout.dump
+    
   val reload :
     ([> `layout_inconsistency of
         [> `File_system | `Function of string | `Record of string ] *
@@ -539,4 +541,5 @@ module Make
                 (delivered_demultiplexings_hash_depencencies t_non_init));
       return t_non_init
 
+    let current_dump t = t.current_dump
   end
