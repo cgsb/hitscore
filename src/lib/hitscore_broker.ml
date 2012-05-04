@@ -450,7 +450,8 @@ module Make
       delete_value ~dbh pointer >>= fun () ->
       let new_person = { person with g_last_modified = Some (Time.now ()) } in
       insert_value ~dbh new_person >>= fun new_pointer ->
-      ksprintf (Common.add_log ~dbh) "(modification record_person %ld)" person.g_id
+      ksprintf (Common.add_log ~dbh) "(modification record_person %ld %s)"
+        person.g_id (sexp_of_t person |! Sexp.to_string_hum)
       >>= fun () ->
       let record_person =
         List.map t.current_dump.Layout.record_person ~f:(fun p ->
