@@ -25,7 +25,9 @@ open HS
 open Flow
 let () = printf "--> Open HS, Flow\n"
 
-let ok_exn a = ok_exn ~fail:(Failure "Not Ok") a
+let ok_exn = function
+  | Ok o -> o
+  | Error e -> failwithf "not ok" ()
 let () = printf "--> ok_exn\n"
 
 let default_config () =
