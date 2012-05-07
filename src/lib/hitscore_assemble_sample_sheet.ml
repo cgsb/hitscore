@@ -85,7 +85,7 @@ module Make
               return (Layout.Record_flowcell.unsafe_cast id,
                       Array.mapi array_of_ids 
                         ~f:(fun i id -> i, Layout.Record_lane.unsafe_cast id)
-                         |> Array.to_list)
+                         |! Array.to_list)
             | [] -> error (`wrong_request (`record_flowcell, 
                                            `value_not_found flowcell_name))
             | l -> error (`layout_inconsistency
