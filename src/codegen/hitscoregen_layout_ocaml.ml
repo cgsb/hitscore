@@ -159,6 +159,18 @@ let ocaml_module raw_dsl dsl output_string =
     line out "  >>| Sql_query.single_id_of_result";
     line out "  >>= (function Some id -> return {id} | \n\
              \       None -> error (`Layout (`Record %S, `wrong_add_value)))" name;
+
+    line out "let get ~dbh pointer =";
+    line out "  let work_m =";
+    line out "  let query = Sql_query.get_value_sexp ~record_name:%S pointer.id in"
+      name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
+    line out "  >>= fun r -> of_result (Sql_query.parse_value r)";
+    line out "  in\n  double_bind work_m";
+    line out "    ~ok:return";
+    line out "    ~error:(fun e -> error (`Layout (`Record %S, e)))" name;
+    
     line out "end"
   | Function (name, args, result) -> ()
   | Volume (_, _) -> ()

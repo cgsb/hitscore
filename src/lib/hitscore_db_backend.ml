@@ -60,6 +60,27 @@ module Sql_query = struct
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
     | _ -> None
 
+  let get_value_sexp ~record_name id =
+    let str_type = escape_sql record_name in
+    sprintf "SELECT * FROM record WHERE type = '%s' AND id = %d" str_type id
+
+  let should_be_single = function
+    | [one] -> Ok one
+    | more -> Error (`result_not_unique more)
+      
+  let parse_value sol =
+    match sol with
+    | [ Some i; Some t; Some creat; Some last; Some sexp ] ->
+      Result.(
+        try_with (fun () -> Int.of_string i) >>= fun id ->
+        try_with (fun () -> Timestamp.of_string creat) >>= fun created ->
+        try_with (fun () -> Timestamp.of_string last) >>= fun last_modified ->
+        try_with (fun () -> Sexp.of_string sexp) >>= fun sexped ->
+        return (id, t, created, last_modified, sexped))
+      |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
+    | _ -> Error (`parse_value_error (sol, Failure "Wrong format"))
+
+
 end
   
 module Make (Flow: Sequme_flow_monad.FLOW_MONAD) = struct
