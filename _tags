@@ -1,41 +1,54 @@
 # OASIS_START
-# DO NOT EDIT (digest: f38aeded8c09c7ab0f2f2d90862476e0)
+# DO NOT EDIT (digest: 77c103111e1d9016fa11f03b4f9bb786)
+# Ignore VCS directories, you can use the same kind of rule outside 
+# OASIS_START/STOP if you want to exclude directories that contains 
+# useless stuff for the build process
+<**/.svn>: -traverse
+<**/.svn>: not_hygienic
+".bzr": -traverse
+".bzr": not_hygienic
+".hg": -traverse
+".hg": not_hygienic
+".git": -traverse
+".git": not_hygienic
+"_darcs": -traverse
+"_darcs": not_hygienic
+# Library hitscoregen
+"src/codegen/hitscoregen.cmxs": use_hitscoregen
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
-# Library hitscoregen
-"src/codegen": include
 <src/codegen/*.ml{,i}>: pkg_threads
 <src/codegen/*.ml{,i}>: pkg_core
 # Library hitscore
-"src/lib": include
+"src/lib/hitscore.cmxs": use_hitscore
 <src/lib/*.ml{,i}>: use_hitscoregen
 <src/lib/*.ml{,i}>: pkg_threads
-<src/lib/*.ml{,i}>: pkg_sexplib.syntax
-<src/lib/*.ml{,i}>: pkg_sequme
-<src/lib/*.ml{,i}>: pkg_pgocaml.syntax
-<src/lib/*.ml{,i}>: pkg_pgocaml
 <src/lib/*.ml{,i}>: pkg_core
+<src/lib/*.ml{,i}>: pkg_pgocaml
+<src/lib/*.ml{,i}>: pkg_pgocaml.syntax
+<src/lib/*.ml{,i}>: pkg_sexplib.syntax
 <src/lib/*.ml{,i}>: pkg_biocaml
+<src/lib/*.ml{,i}>: pkg_sequme
 # Executable hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscoregen
 <src/app/hitscore_main.{native,byte}>: pkg_threads
-<src/app/hitscore_main.{native,byte}>: pkg_sexplib.syntax
-<src/app/hitscore_main.{native,byte}>: pkg_sequme
-<src/app/hitscore_main.{native,byte}>: pkg_pgocaml.syntax
-<src/app/hitscore_main.{native,byte}>: pkg_pgocaml
 <src/app/hitscore_main.{native,byte}>: pkg_core
+<src/app/hitscore_main.{native,byte}>: pkg_pgocaml
+<src/app/hitscore_main.{native,byte}>: pkg_pgocaml.syntax
+<src/app/hitscore_main.{native,byte}>: pkg_sexplib.syntax
 <src/app/hitscore_main.{native,byte}>: pkg_biocaml
+<src/app/hitscore_main.{native,byte}>: pkg_sequme
 <src/app/*.ml{,i}>: use_hitscore
 <src/app/*.ml{,i}>: use_hitscoregen
 <src/app/*.ml{,i}>: pkg_threads
-<src/app/*.ml{,i}>: pkg_sexplib.syntax
-<src/app/*.ml{,i}>: pkg_sequme
-<src/app/*.ml{,i}>: pkg_pgocaml.syntax
-<src/app/*.ml{,i}>: pkg_pgocaml
 <src/app/*.ml{,i}>: pkg_core
+<src/app/*.ml{,i}>: pkg_pgocaml
+<src/app/*.ml{,i}>: pkg_pgocaml.syntax
+<src/app/*.ml{,i}>: pkg_sexplib.syntax
 <src/app/*.ml{,i}>: pkg_biocaml
+<src/app/*.ml{,i}>: pkg_sequme
 # OASIS_STOP
 
 <src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o
