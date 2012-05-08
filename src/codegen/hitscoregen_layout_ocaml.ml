@@ -31,7 +31,7 @@ let rec ocaml_type = function
   | Option t -> sprintf "%s option" (ocaml_type t)
   | Array t -> sprintf "%s array" (ocaml_type t)
   | Function_name s -> sprintf "Function_%s.pointer" s
-  | Enumeration_name s -> sprintf "Enumeration.%s" s
+  | Enumeration_name s -> sprintf "Enumeration_%s.t" s
   (* | Record_name "g_volume" -> sprintf "pointer" *)
   | Record_name s -> sprintf "Record_%s.pointer" s
   | Volume_name s -> sprintf "File_system.pointer"
@@ -55,9 +55,9 @@ let ocaml_file_system_module out =
     doc out "The specification of file-trees.";
     line out "type tree = %s with sexp"
       (String.concat ~sep:"\n" [
-        "  | File of string * Enumeration.file_type";
-        "  | Directory of string * Enumeration.file_type * tree list";
-        "  | Opaque of string * Enumeration.file_type";]);
+        "  | File of string * Enumeration_file_type.t";
+        "  | Directory of string * Enumeration_file_type.t * tree list";
+        "  | Opaque of string * Enumeration_file_type.t";]);
 
     doc out "The volume content is …";
     line out "type volume_content = \n\
@@ -66,9 +66,132 @@ let ocaml_file_system_module out =
   
     doc out "A volume is then …";
     line out "type volume = %s"
-      "{ volume_pointer: pointer; volume_kind: Enumeration.volume_kind;
+      "{ volume_pointer: pointer; volume_kind: Enumeration_volume_kind.t;
        \  volume_content: volume_content; } with sexp";
     ()
+
+let ocaml_record_access_module ~out name fields =
+  line out "module Record_%s = struct" name;
+  line out "  include Record_%s" name;
+
+  line out "let add_value";
+  List.iter fields (function
+  | (n, Option t) -> line out "   ?(%s:%s option)" n (ocaml_type t);
+  | (n, t) -> line out "   ~(%s:%s)" n (ocaml_type t);
+  );
+  line out " ~dbh =\n   let v = { ";
+  List.iter fields (function (n, _) -> raw out "%s; " n);
+  line out "} in";
+  line out "  let query = Sql_query.add_value_sexp ~record_name:%S \
+                   (Record_%s.sexp_of_value v) in" name name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>| Sql_query.single_id_of_result";
+  line out "  >>= (function Some id -> return {id} | \n\
+             \       None -> error (`Layout (`Record %S, `wrong_add_value)))" name;
+
+  line out "let value_of_result r = ";
+  line out "  let open Sql_query in";
+  line out "  try Ok {g_id = r.r_id; g_created = r.r_created; \n\
+      \  g_last_modified = r.r_last_modified; g_value = value_of_sexp r.r_sexp } \
+      \  with e -> Error (`parse_sexp_error (r.r_sexp, e))";
+
+  line out "let get ~dbh pointer =";
+  line out "  let work_m =";
+  line out "  let query = Sql_query.get_value_sexp ~record_name:%S pointer.id in"
+    name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
+  line out "  >>= fun r -> of_result (Sql_query.parse_value r)";
+  line out "  >>= fun r -> of_result (value_of_result r)";
+  line out "  in\n  double_bind work_m";
+  line out "    ~ok:return";
+  line out "    ~error:(fun e -> error (`Layout (`Record %S, e)))" name;
+  
+  line out "let get_all ~dbh =";
+  line out "  let query = Sql_query.get_all_values_sexp ~record_name:%S in" name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>= fun results ->";
+  line out "  of_list_sequential results ~f:(fun row ->";
+  line out "    of_result Result.(Sql_query.parse_value row >>= value_of_result))";
+
+  line out "let delete_value_unsafe ~dbh v =";
+  line out "  let query = Sql_query.delete_value_sexp \
+                            ~record_name:%S v.g_id in" name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>= fun _ -> return ()";
+
+  line out "end";
+
+  ()
+
+let ocaml_function_access_module ~out name result_type args =
+  line out "module Function_%s = struct" name;
+  line out "  include Function_%s" name;
+
+  line out "let add_evaluation";
+  line out "    ?(recomputable=false)";
+  line out "    ?(recompute_penalty=0.)";
+  List.iter args (function
+  | (n, Option t) -> line out "   ?(%s:%s option)" n (ocaml_type t);
+  | (n, t) -> line out "   ~(%s:%s)" n (ocaml_type t);
+  );
+  line out " ~dbh =\n   let v = { ";
+  List.iter args (function (n, _) -> raw out "%s; " n);
+  line out "} in";
+  line out "  let query = Sql_query.add_evaluation_sexp ~function_name:%S \
+                   ~recomputable ~recompute_penalty \
+                   ~status:(Enumeration_process_status.to_string `Inserted) \
+                   (sexp_of_evaluation v) in" name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>| Sql_query.single_id_of_result";
+  line out "  >>= (function Some id -> return {id} | \n\
+             \       None -> error (`Layout (`Function %S, `wrong_add_value)))" name;
+  
+  line out "let evaluation_of_result r = ";
+  line out "  let open Sql_query in";
+  line out "  try Ok \
+    {g_id                = r.f_id;
+     g_result            = Option.map ~f:Record_%s.unsafe_cast r.f_result;
+     g_recomputable      = r.f_recomputable;
+     g_recompute_penalty = r.f_recompute_penalty;
+     g_inserted          = r.f_inserted;
+     g_started           = r.f_started;
+     g_completed         = r.f_completed;
+     g_status            = r.f_status;
+     g_evaluation   = evaluation_of_sexp r.f_sexp } \
+     with e -> Error (`parse_sexp_error (r.f_sexp, e))" result_type;
+
+  line out "let get ~dbh pointer =";
+  line out "  let work_m =";
+  line out "  let query = Sql_query.get_evaluation_sexp \
+                ~function_name:%S pointer.id in" name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
+  line out "  >>= fun r -> of_result (Sql_query.parse_evaluation r)";
+  line out "  >>= fun r -> of_result (evaluation_of_result r)";
+  line out "  in\n  double_bind work_m";
+  line out "    ~ok:return";
+  line out "    ~error:(fun e -> error (`Layout (`Function %S, e)))" name;
+  
+  
+  line out "let get_all ~dbh =";
+  line out " let query = Sql_query.get_all_evaluations_sexp \
+      ~function_name:%S in" name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>= fun results ->";
+  line out "  of_list_sequential results ~f:(fun row ->";
+  line out "    of_result Result.(Sql_query.parse_evaluation row >>= \
+                 evaluation_of_result))";
+
+  line out "let delete_value_unsafe ~dbh v =";
+  line out "  let query = Sql_query.delete_evaluation_sexp \
+                            ~function_name:%S v.g_id in" name;
+  line out "  Backend.query ~dbh query";
+  line out "  >>= fun _ -> return ()";
+
+  line out "end";
+  
+  ()
 
 let ocaml_module raw_dsl dsl output_string =
   let out = output_string in
@@ -82,18 +205,28 @@ let ocaml_module raw_dsl dsl output_string =
     :: Enumeration ("file_type", file_types)
     :: dsl.nodes in
 
-  doc out "Enumeration types module";
-  line out "module Enumeration = struct";
+  doc out "Enumeration types modules";
   List.iter all_nodes (function
   | Enumeration (name, fields) ->
+    line out "module Enumeration_%s = struct" name;
     doc out "The type of {i %s} items." name;
-    line out "type %s = [%s] with sexp" name
-      (List.map fields (sprintf "`%s") |> String.concat ~sep:" | ");
-  | Record (name, fields) -> ()
-  | Function (name, args, result) -> ()
-  | Volume (_, _) -> ()
+    line out "type t = [%s] with sexp"
+      (List.map fields (sprintf "`%s") |! String.concat ~sep:" | ");
+    
+    line out "let to_string : t -> string = function\n| %s\n" 
+      (List.map fields (fun s -> sprintf "`%s -> \"%s\"" s s) |!
+          String.concat ~sep:"\n| ");
+    line out "let of_string_exn: string -> t = function\n| %s\n" 
+      (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |!
+          String.concat ~sep:"\n| ");
+    line out "| s -> raise (Failure %S)"
+      (sprintf "Enumeration_%s.of_string" name);
+    
+    line out "let of_string s = try Core.Std.Ok (of_string_exn s) \
+                          with e -> Core.Std.Error s";
+    line out "end";
+  | _ -> ()
   );
-  line out "end";
   doc out "File-system types module";
   line out "module File_system = struct";
   ocaml_file_system_module out;
@@ -127,6 +260,7 @@ let ocaml_module raw_dsl dsl output_string =
          ~f:(fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
     line out "let pointer v = { id = v.g_id} ";
+    line out "let unsafe_cast id = { id }";
     line out "end";
   | Function (name, args, result) ->
     line out "module Function_%s = struct" name;
@@ -159,55 +293,9 @@ let ocaml_module raw_dsl dsl output_string =
   List.iter all_nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
-    line out "module Record_%s = struct" name;
-    line out "  include Record_%s" name;
-    line out "let add_value";
-    List.iter fields (function
-    | (n, Option t) -> line out "   ?(%s:%s option)" n (ocaml_type t);
-    | (n, t) -> line out "   ~(%s:%s)" n (ocaml_type t);
-    );
-    line out " ~dbh =\n   let v = { ";
-    List.iter fields (function (n, _) -> raw out "%s; " n);
-    line out "} in";
-    line out "  let query = Sql_query.add_value_sexp ~record_name:%S \
-                   (Record_%s.sexp_of_value v) in" name name;
-    line out "  Backend.query ~dbh query";
-    line out "  >>| Sql_query.single_id_of_result";
-    line out "  >>= (function Some id -> return {id} | \n\
-             \       None -> error (`Layout (`Record %S, `wrong_add_value)))" name;
-
-    line out "let value_of_result r = ";
-    line out "  let open Sql_query in";
-    line out "  {g_id = r.r_id; g_created = r.r_created; \n\
-      \  g_last_modified = r.r_last_modified; g_value = value_of_sexp r.r_sexp }";
-
-    line out "let get ~dbh pointer =";
-    line out "  let work_m =";
-    line out "  let query = Sql_query.get_value_sexp ~record_name:%S pointer.id in"
-      name;
-    line out "  Backend.query ~dbh query";
-    line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
-    line out "  >>= fun r -> of_result (Sql_query.parse_value r)";
-    line out "  in\n  double_bind work_m";
-    line out "    ~ok:(fun e -> return (value_of_result e))";
-    line out "    ~error:(fun e -> error (`Layout (`Record %S, e)))" name;
-    
-    line out "let get_all ~dbh =";
-    line out "  let query = Sql_query.get_all_values_sexp ~record_name:%S in" name;
-    line out "  Backend.query ~dbh query";
-    line out "  >>= fun results ->";
-    line out "  of_list_sequential results ~f:(fun row ->";
-    line out "    of_result (Sql_query.parse_value row) >>| value_of_result)";
-
-    line out "let delete_value_unsafe ~dbh v =";
-    line out "  let query = Sql_query.delete_value_sexp \
-                            ~record_name:%S v.g_id in" name;
-    line out "  Backend.query ~dbh query";
-    line out "  >>= fun _ -> return ()";
-
-    line out "end";
-
-  | Function (name, args, result) -> ()
+    ocaml_record_access_module ~out name fields
+  | Function (name, args, result) ->
+    ocaml_function_access_module ~out name result args
   | Volume (_, _) -> ()
   );
   line out "end";

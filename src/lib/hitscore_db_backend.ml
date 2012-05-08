@@ -10,7 +10,24 @@ end
 module Sql_query = struct
   type t = string
   type result = string option list list
-    
+
+  type status = [ `Failed | `Inserted | `Started | `Succeeded ] 
+  let status_to_string : status -> string = function
+    | `Started -> "Started"
+    | `Inserted -> "Inserted"
+    | `Failed -> "Failed"
+    | `Succeeded -> "Succeeded"
+
+  let status_of_string_exn: string -> status = function
+    | "Started" -> `Started
+    | "Inserted" -> `Inserted
+    | "Failed" -> `Failed
+    | "Succeeded" -> `Succeeded
+    | s -> raise (Failure "Sql_query.status_of_string_exn")
+
+  let status_of_string s =
+    try Core.Std.Ok (status_of_string_exn s) with e -> Core.Std.Error s
+
   type record_value =
     { r_id: int;
       r_type: string;
@@ -18,6 +35,18 @@ module Sql_query = struct
       r_last_modified: Timestamp.t;
       r_sexp: Sexp.t }
       
+  type function_evaluation =
+    {f_id:int;
+     f_type: string;
+     f_result: int option;
+     f_recomputable: bool;
+     f_recompute_penalty: float;
+     f_inserted: Timestamp.t;
+     f_started: Timestamp.t option;
+     f_completed: Timestamp.t option;
+     f_status: status;
+     f_sexp: Sexp.t; }
+
   let escape_sql = 
     String.Escaping.escape ~escapeworthy:['\''] ~escape_char:'\''
     |! Staged.unstage
@@ -63,6 +92,18 @@ module Sql_query = struct
     sprintf "INSERT INTO record (type, created, last_modified, sexp)\n\
       \ VALUES ('%s', '%s', '%s', '%s') RETURNING id" str_type now now str_sexp
 
+  let add_evaluation_sexp
+      ~function_name ~recomputable ~recompute_penalty ~status sexp : t =
+    let now = Timestamp.(to_string (now ()))  |! escape_sql in
+    let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
+    let str_type = escape_sql function_name in
+    let status_str = escape_sql status in
+    sprintf "INSERT INTO function \
+      \ (type, recomputable, recompute_penalty, inserted, status, sexp)\n\
+      \ VALUES ('%s', %b, %f, '%s', '%s', '%s') RETURNING id"
+      str_type recomputable recompute_penalty now status_str str_sexp
+    
+      
   let single_id_of_result = function
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
     | _ -> None
@@ -70,6 +111,10 @@ module Sql_query = struct
   let get_value_sexp ~record_name id =
     let str_type = escape_sql record_name in
     sprintf "SELECT * FROM record WHERE type = '%s' AND id = %d" str_type id
+
+  let get_evaluation_sexp ~function_name id =
+    let str_type = escape_sql function_name in
+    sprintf "SELECT * FROM function WHERE type = '%s' AND id = %d" str_type id
 
   let should_be_single = function
     | [one] -> Ok one
@@ -87,13 +132,45 @@ module Sql_query = struct
       |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
     | _ -> Error (`parse_value_error (sol, Failure "Wrong format"))
 
+  let parse_evaluation sol =
+    match sol with
+    | [ Some id; Some typ; result_opt;
+        Some recomputable; Some recompute_penalty;
+        Some inserted; started_opt; completed_opt;
+        Some status; Some sexp ] ->
+      Result.(
+        try_with (fun () -> Int.of_string id) >>= fun f_id ->
+        return typ >>= fun f_type ->
+        try_with (fun () -> Option.map ~f:Int.of_string result_opt)
+                            >>= fun f_result ->
+        try_with (fun () -> Bool.of_string recomputable) >>= fun f_recomputable ->
+        try_with (fun () -> Float.of_string recompute_penalty)
+                            >>= fun f_recompute_penalty ->
+        try_with (fun () -> Timestamp.of_string inserted) >>= fun f_inserted ->
+        try_with (fun () -> Option.map ~f:Timestamp.of_string started_opt)
+                            >>= fun f_started ->
+        try_with (fun () -> Option.map ~f:Timestamp.of_string completed_opt)
+                            >>= fun f_completed ->
+        try_with (fun () -> status_of_string_exn status) >>= fun f_status ->
+        try_with (fun () -> Sexp.of_string sexp) >>= fun f_sexp ->
+        return {f_id; f_type; f_result; f_recomputable; f_recompute_penalty;
+                f_inserted; f_started; f_completed; f_status; f_sexp; })
+      |! Result.map_error ~f:(fun e -> `parse_evaluation_error (sol, e))
+    | _ -> Error (`parse_evaluation_error (sol, Failure "Wrong format"))
+
   let get_all_values_sexp ~record_name =
     let str_type = escape_sql record_name in
     sprintf "SELECT * FROM record WHERE type = '%s'" str_type
+  let get_all_evaluations_sexp ~function_name =
+    let str_type = escape_sql function_name in
+    sprintf "SELECT * FROM function WHERE type = '%s'" str_type
 
   let delete_value_sexp ~record_name id =
     let str_type = escape_sql record_name in
     sprintf "DELETE FROM record WHERE type = '%s' AND id = %d" str_type id
+  let delete_evaluation_sexp ~function_name id =
+    let str_type = escape_sql function_name in
+    sprintf "DELETE FROM function WHERE type = '%s' AND id = %d" str_type id
 
 
 
