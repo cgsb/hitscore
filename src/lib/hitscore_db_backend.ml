@@ -91,6 +91,11 @@ module Sql_query = struct
     let str_type = escape_sql record_name in
     sprintf "SELECT * FROM record WHERE type = '%s'" str_type
 
+  let delete_value_sexp ~record_name id =
+    let str_type = escape_sql record_name in
+    sprintf "DELETE FROM record WHERE type = '%s' AND id = %d" str_type id
+
+
 
 end
   

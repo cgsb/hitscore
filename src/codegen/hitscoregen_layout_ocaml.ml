@@ -126,6 +126,7 @@ let ocaml_module raw_dsl dsl output_string =
       (List.map record_standard_fields
          ~f:(fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
+    line out "let pointer v = { id = v.g_id} ";
     line out "end";
   | Function (name, args, result) ->
     line out "module Function_%s = struct" name;
@@ -137,6 +138,7 @@ let ocaml_module raw_dsl dsl output_string =
       (List.map (function_standard_fields result)
          ~f:(fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
+    line out "let pointer v = { id = v.g_id} ";
     line out "end";
   | Volume (_, _) -> ()
   );
@@ -197,7 +199,14 @@ let ocaml_module raw_dsl dsl output_string =
     line out "  of_list_sequential results ~f:(fun row ->";
     line out "    of_result (Sql_query.parse_value row) >>| value_of_result)";
 
-    line out "end"
+    line out "let delete_value_unsafe ~dbh v =";
+    line out "  let query = Sql_query.delete_value_sexp \
+                            ~record_name:%S v.g_id in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+
+    line out "end";
+
   | Function (name, args, result) -> ()
   | Volume (_, _) -> ()
   );
