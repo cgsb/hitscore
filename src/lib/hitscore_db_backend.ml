@@ -57,20 +57,38 @@ module Sql_query = struct
     String.Escaping.escape ~escapeworthy:['\''] ~escape_char:'\''
     |! Staged.unstage
 
+  let wipe_out: t list = [
+    "drop table record;";
+    "drop table function;";
+    "drop table volume";
+    "drop sequence id_sequence;";
+  ]
+        
+  let create_sequence: t =
+    "CREATE SEQUENCE id_sequence"
+  let id_type =
+    "integer DEFAULT nextval('id_sequence') PRIMARY KEY NOT NULL" 
+  let check_sequence : t = "select last_value from id_sequence"
+  let update_sequence : t =
+    "select setval('id_sequence', \
+     (select greatest (record.id, function.id, volume.id) \
+      from record,volume,function))"
+
   let create_record: t =
-    "CREATE TABLE record (\n\
-      \  id serial PRIMARY KEY NOT NULL,\n\
+    sprintf
+      "CREATE TABLE record (\n\
+      \  id %s ,\n\
       \  type text NOT NULL,\n\
       \  created text NOT NULL,\n\
       \  last_modified text NOT NULL,\n\
-      \  sexp text NOT NULL)"
+      \  sexp text NOT NULL)" id_type
   let check_record: t =
     "SELECT (id, type, created, last_modified, sexp)\
      FROM record WHERE id = 0"
 
   let create_function: t =
-    "CREATE TABLE function (\n\
-      \  id serial PRIMARY KEY NOT NULL,\n\
+    sprintf "CREATE TABLE function (\n\
+      \  id %s,\n\
       \  type text NOT NULL,\n\
       \  result integer,\n\
       \  recomputable bool NOT NULL,\n\
@@ -79,15 +97,15 @@ module Sql_query = struct
       \  started text,\n\
       \  completed text,\n\
       \  status text NOT NULL,\n\
-      \  sexp text NOT NULL)"
+      \  sexp text NOT NULL)" id_type
   let check_function: t =
     "SELECT * FROM function WHERE id = 0"
 
   let create_volume: t =
-    "CREATE TABLE volume (\n\
-      \  id serial PRIMARY KEY NOT NULL,\n\
+    sprintf "CREATE TABLE volume (\n\
+      \  id %s,\n\
       \  kind text NOT NULL,\n\
-      \  sexp text NOT NULL)"    
+      \  sexp text NOT NULL)"  id_type
   let check_volume: t =
     "SELECT (id, kind, sexp) FROM volume WHERE id = 0"
         
@@ -115,6 +133,16 @@ module Sql_query = struct
     sprintf "INSERT INTO volume (kind, sexp)\n\
       \ VALUES ('%s','%s') RETURNING id" str_type str_sexp
       
+  let insert_value v : t =
+    let id            = v.r_id in
+    let typ           = v.r_type |! escape_sql in
+    let created       = Timestamp.to_string v.r_created   |! escape_sql     in
+    let last_modified = Timestamp.to_string v.r_last_modified |! escape_sql in
+    let sexp          = Sexp.to_string v.r_sexp |! escape_sql in
+    sprintf "INSERT INTO record (id, type, created, last_modified, sexp)\n\
+      \ VALUES (%d, '%s', '%s', '%s', '%s') RETURNING id"
+      id typ created last_modified sexp
+
   let single_id_of_result = function
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
     | _ -> None
@@ -277,8 +305,20 @@ module Make (Flow: Sequme_flow_monad.FLOW_MONAD) = struct
         logf dbh "QUERY: %S : ERROR: %s" query (Exn.to_string e);
         error (`db_backend_error (`query (query, e))))
         
+  let wipe_out ~dbh =
+    of_list_sequential Sql_query.wipe_out (fun q ->
+      bind_on_error (query ~dbh q) (fun e -> return []))
+    >>= fun _ ->
+    return ()
 
   let check_db ~(dbh: db_handle) =
+    double_bind (query ~dbh Sql_query.check_sequence)
+      ~error:(fun e ->
+        logf dbh "SEQUENCE FAILS → CREATING …\n%!";
+        reconnect ~dbh >>= fun dbh ->
+        query ~dbh Sql_query.create_sequence)
+      ~ok:return
+    >>= fun _ ->
     double_bind (query ~dbh Sql_query.check_record)
       ~error:(fun e ->
         logf dbh "TABLE 'record' FAILS → CREATING …\n%!";
