@@ -47,6 +47,12 @@ module Sql_query = struct
      f_status: status;
      f_sexp: Sexp.t; }
 
+  type volume = {
+    v_id: int;
+    v_kind: string;
+    v_sexp: Sexp.t;
+  }
+      
   let escape_sql = 
     String.Escaping.escape ~escapeworthy:['\''] ~escape_char:'\''
     |! Staged.unstage
@@ -103,6 +109,11 @@ module Sql_query = struct
       \ VALUES ('%s', %b, %f, '%s', '%s', '%s') RETURNING id"
       str_type recomputable recompute_penalty now status_str str_sexp
     
+  let add_volume_sexp ~kind sexp : t =
+    let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
+    let str_type = escape_sql kind in
+    sprintf "INSERT INTO volume (kind, sexp)\n\
+      \ VALUES ('%s','%s') RETURNING id" str_type str_sexp
       
   let single_id_of_result = function
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
@@ -115,6 +126,9 @@ module Sql_query = struct
   let get_evaluation_sexp ~function_name id =
     let str_type = escape_sql function_name in
     sprintf "SELECT * FROM function WHERE type = '%s' AND id = %d" str_type id
+
+  let get_volume_sexp id =
+    sprintf "SELECT * FROM volume WHERE id = %d" id
 
   let should_be_single = function
     | [one] -> Ok one
@@ -158,12 +172,25 @@ module Sql_query = struct
       |! Result.map_error ~f:(fun e -> `parse_evaluation_error (sol, e))
     | _ -> Error (`parse_evaluation_error (sol, Failure "Wrong format"))
 
+  let parse_volume sol =
+    match sol with
+    | [ Some i; Some k; Some sexp ] ->
+      Result.(
+        try_with (fun () -> Int.of_string i) >>= fun v_id ->
+        try_with (fun () -> Sexp.of_string sexp) >>= fun v_sexp ->
+        return {v_id; v_kind = k; v_sexp})
+      |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
+    | _ -> Error (`parse_volume_error (sol, Failure "Wrong format"))
+
   let get_all_values_sexp ~record_name =
     let str_type = escape_sql record_name in
     sprintf "SELECT * FROM record WHERE type = '%s'" str_type
   let get_all_evaluations_sexp ~function_name =
     let str_type = escape_sql function_name in
     sprintf "SELECT * FROM function WHERE type = '%s'" str_type
+  let get_all_volumes_sexp ~kind =
+    let str_type = escape_sql kind in
+    sprintf "SELECT * FROM volume WHERE kind = '%s'" str_type
 
   let delete_value_sexp ~record_name id =
     let str_type = escape_sql record_name in
@@ -171,6 +198,8 @@ module Sql_query = struct
   let delete_evaluation_sexp ~function_name id =
     let str_type = escape_sql function_name in
     sprintf "DELETE FROM function WHERE type = '%s' AND id = %d" str_type id
+  let delete_volume_sexp id =
+    sprintf "DELETE FROM volume WHERE id = %d" id
 
 
 
