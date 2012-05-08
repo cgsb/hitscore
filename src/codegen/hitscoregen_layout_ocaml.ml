@@ -99,6 +99,21 @@ let ocaml_module raw_dsl dsl output_string =
   ocaml_file_system_module out;
   line out "end";
   
+  let record_standard_fields = [
+    ("g_id", Identifier);
+    ("g_created", Timestamp);
+    ("g_last_modified", Timestamp);
+  ] in
+  let function_standard_fields result = [
+    ("g_id"                , Identifier);
+    ("g_result"            , Option (Record_name result));
+    ("g_recomputable"      , Bool);
+    ("g_recompute_penalty" , Real);
+    ("g_inserted"          , Timestamp);
+    ("g_started"           , Option Timestamp);
+    ("g_completed"         , Option Timestamp);
+    ("g_status"            , Enumeration_name "process_status");
+  ] in
   List.iter all_nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
@@ -160,6 +175,11 @@ let ocaml_module raw_dsl dsl output_string =
     line out "  >>= (function Some id -> return {id} | \n\
              \       None -> error (`Layout (`Record %S, `wrong_add_value)))" name;
 
+    line out "let value_of_result r = ";
+    line out "  let open Sql_query in";
+    line out "  {g_id = r.r_id; g_created = r.r_created; \n\
+      \  g_last_modified = r.r_last_modified; g_value = value_of_sexp r.r_sexp }";
+
     line out "let get ~dbh pointer =";
     line out "  let work_m =";
     line out "  let query = Sql_query.get_value_sexp ~record_name:%S pointer.id in"
@@ -168,7 +188,7 @@ let ocaml_module raw_dsl dsl output_string =
     line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
     line out "  >>= fun r -> of_result (Sql_query.parse_value r)";
     line out "  in\n  double_bind work_m";
-    line out "    ~ok:return";
+    line out "    ~ok:(fun e -> return (value_of_result e))";
     line out "    ~error:(fun e -> error (`Layout (`Record %S, e)))" name;
     
     line out "end"

@@ -11,6 +11,13 @@ module Sql_query = struct
   type t = string
   type result = string option list list
     
+  type record_value =
+    { r_id: int;
+      r_type: string;
+      r_created: Timestamp.t;
+      r_last_modified: Timestamp.t;
+      r_sexp: Sexp.t }
+      
   let escape_sql = 
     String.Escaping.escape ~escapeworthy:['\''] ~escape_char:'\''
     |! Staged.unstage
@@ -72,11 +79,11 @@ module Sql_query = struct
     match sol with
     | [ Some i; Some t; Some creat; Some last; Some sexp ] ->
       Result.(
-        try_with (fun () -> Int.of_string i) >>= fun id ->
-        try_with (fun () -> Timestamp.of_string creat) >>= fun created ->
-        try_with (fun () -> Timestamp.of_string last) >>= fun last_modified ->
-        try_with (fun () -> Sexp.of_string sexp) >>= fun sexped ->
-        return (id, t, created, last_modified, sexped))
+        try_with (fun () -> Int.of_string i) >>= fun r_id ->
+        try_with (fun () -> Timestamp.of_string creat) >>= fun r_created ->
+        try_with (fun () -> Timestamp.of_string last) >>= fun r_last_modified ->
+        try_with (fun () -> Sexp.of_string sexp) >>= fun r_sexp ->
+        return {r_id; r_type = t; r_created; r_last_modified; r_sexp})
       |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
     | _ -> Error (`parse_value_error (sol, Failure "Wrong format"))
 
