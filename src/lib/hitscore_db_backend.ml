@@ -87,6 +87,10 @@ module Sql_query = struct
       |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
     | _ -> Error (`parse_value_error (sol, Failure "Wrong format"))
 
+  let get_all_values_sexp ~record_name =
+    let str_type = escape_sql record_name in
+    sprintf "SELECT * FROM record WHERE type = '%s'" str_type
+
 
 end
   

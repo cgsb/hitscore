@@ -164,8 +164,7 @@ let ocaml_module raw_dsl dsl output_string =
     | (n, Option t) -> line out "   ?(%s:%s option)" n (ocaml_type t);
     | (n, t) -> line out "   ~(%s:%s)" n (ocaml_type t);
     );
-    line out " ~dbh =\n\
-      \  let v = { Record_%s." name;
+    line out " ~dbh =\n   let v = { ";
     List.iter fields (function (n, _) -> raw out "%s; " n);
     line out "} in";
     line out "  let query = Sql_query.add_value_sexp ~record_name:%S \
@@ -191,6 +190,13 @@ let ocaml_module raw_dsl dsl output_string =
     line out "    ~ok:(fun e -> return (value_of_result e))";
     line out "    ~error:(fun e -> error (`Layout (`Record %S, e)))" name;
     
+    line out "let get_all ~dbh =";
+    line out "  let query = Sql_query.get_all_values_sexp ~record_name:%S in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun results ->";
+    line out "  of_list_sequential results ~f:(fun row ->";
+    line out "    of_result (Sql_query.parse_value row) >>| value_of_result)";
+
     line out "end"
   | Function (name, args, result) -> ()
   | Volume (_, _) -> ()
