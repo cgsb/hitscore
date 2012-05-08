@@ -188,9 +188,7 @@ module Sql_query = struct
   let get_all_evaluations_sexp ~function_name =
     let str_type = escape_sql function_name in
     sprintf "SELECT * FROM function WHERE type = '%s'" str_type
-  let get_all_volumes_sexp ~kind =
-    let str_type = escape_sql kind in
-    sprintf "SELECT * FROM volume WHERE kind = '%s'" str_type
+  let get_all_volumes_sexp () = "SELECT * FROM volume"
 
   let delete_value_sexp ~record_name id =
     let str_type = escape_sql record_name in

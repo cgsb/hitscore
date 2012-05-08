@@ -271,10 +271,9 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  >>= fun r -> of_result (Sql_query.parse_volume r)";
     line out "  >>= fun r -> of_result (volume_of_result r)";
   );
-  line out "let get_all ~dbh kind =";
+  line out "let get_all ~dbh =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
-    line out "let str_kind = Enumeration_volume_kind.to_string kind in";
-    line out "  let query = Sql_query.get_all_volumes_sexp ~kind:str_kind in";
+    line out "  let query = Sql_query.get_all_volumes_sexp () in";
     line out "  Backend.query ~dbh query";
     line out "  >>= fun results ->";
     line out "  of_list_sequential results ~f:(fun row ->";
