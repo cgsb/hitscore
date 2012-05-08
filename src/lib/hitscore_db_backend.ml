@@ -140,9 +140,31 @@ module Sql_query = struct
     let last_modified = Timestamp.to_string v.r_last_modified |! escape_sql in
     let sexp          = Sexp.to_string v.r_sexp |! escape_sql in
     sprintf "INSERT INTO record (id, type, created, last_modified, sexp)\n\
-      \ VALUES (%d, '%s', '%s', '%s', '%s') RETURNING id"
+      \ VALUES (%d, '%s', '%s', '%s', '%s')"
       id typ created last_modified sexp
 
+  let insert_evaluation v : t =
+     let id = v.f_id in
+     let typ = v.f_type |! escape_sql in
+     let result = match v.f_result with None -> "null" | Some s -> Int.to_string s in
+     let recomputable = v.f_recomputable in
+     let recompute_penalty = v.f_recompute_penalty in
+     let inserted = Timestamp.to_string v.f_inserted |! escape_sql in
+     let started =
+       Option.map v.f_started Timestamp.to_string |! Option.map ~f:escape_sql in
+     let completed =
+       Option.map v.f_completed Timestamp.to_string |! Option.map ~f:escape_sql in
+     let status = v.f_status |! status_to_string |! escape_sql in
+     let sexp = v.f_sexp |! Sexp.to_string_hum |! escape_sql in
+     sprintf "INSERT INTO function \
+        (id , type , result , recomputable , recompute_penalty ,
+        inserted , started , completed , status , sexp)
+        VALUES (%d, '%s', %s, %b, %f, '%s', %s, %s, '%s', '%s') "
+       id typ result recomputable recompute_penalty inserted 
+       (Option.value_map started ~default:"NULL" ~f:(sprintf "'%s'"))
+       (Option.value_map completed ~default:"NULL" ~f:(sprintf "'%s'"))
+       status sexp 
+     
   let single_id_of_result = function
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
     | _ -> None
@@ -175,6 +197,10 @@ module Sql_query = struct
     | _ -> Error (`parse_value_error (sol, Failure "Wrong format"))
 
   let parse_evaluation sol =
+    let parse_bool = function
+      | "f" | "false" | "False" | "FALSE" -> false
+      | "t" | "true" | "True" | "TRUE" -> true
+      | s -> failwithf "parse_bool: %S" s () in
     match sol with
     | [ Some id; Some typ; result_opt;
         Some recomputable; Some recompute_penalty;
@@ -185,7 +211,7 @@ module Sql_query = struct
         return typ >>= fun f_type ->
         try_with (fun () -> Option.map ~f:Int.of_string result_opt)
                             >>= fun f_result ->
-        try_with (fun () -> Bool.of_string recomputable) >>= fun f_recomputable ->
+        try_with (fun () -> parse_bool recomputable) >>= fun f_recomputable ->
         try_with (fun () -> Float.of_string recompute_penalty)
                             >>= fun f_recompute_penalty ->
         try_with (fun () -> Timestamp.of_string inserted) >>= fun f_inserted ->

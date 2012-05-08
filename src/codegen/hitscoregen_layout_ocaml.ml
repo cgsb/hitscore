@@ -205,7 +205,7 @@ let ocaml_function_access_module ~out name result_type args =
              \       None -> error `wrong_add_value)";
   );
   
-  line out "let evaluation_of_result r = ";
+  line out "let of_evaluation r = ";
   line out "  let open Sql_query in";
   line out "  try Ok \
     {g_id                = r.f_id;
@@ -219,6 +219,21 @@ let ocaml_function_access_module ~out name result_type args =
      g_evaluation   = evaluation_of_sexp r.f_sexp } \
      with e -> Error (`parse_sexp_error (r.f_sexp, e))" result_type;
 
+  line out "let to_evaluation t =";
+  line out "  {Sql_query. ";
+  line out "  f_id = t.g_id;";
+  line out "  f_type = %S;" name;
+  line out "  f_result = Option.map t.g_result (fun x -> x.Record_%s.id); "
+    result_type;
+  line out "  f_recomputable = t.g_recomputable; ";
+  line out "  f_recompute_penalty = t.g_recompute_penalty; ";
+  line out "  f_inserted = t.g_inserted; ";
+  line out "  f_started = t.g_started; ";
+  line out "  f_completed = t.g_completed; ";
+  line out "  f_status = t.g_status; ";
+  line out "  f_sexp = sexp_of_evaluation t.g_evaluation; ";
+  line out "  }";
+
   line out "let get ~dbh pointer =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.get_evaluation_sexp \
@@ -226,7 +241,7 @@ let ocaml_function_access_module ~out name result_type args =
     line out "  Backend.query ~dbh query";
     line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
     line out "  >>= fun r -> of_result (Sql_query.parse_evaluation r)";
-    line out "  >>= fun r -> of_result (evaluation_of_result r)";
+    line out "  >>= fun r -> of_result (of_evaluation r)";
   );
   
   line out "let get_all ~dbh =";
@@ -237,15 +252,24 @@ let ocaml_function_access_module ~out name result_type args =
     line out "  >>= fun results ->";
     line out "  of_list_sequential results ~f:(fun row ->";
     line out "    of_result Result.(Sql_query.parse_evaluation row >>= \
-                 evaluation_of_result))";
+                 of_evaluation))";
   );
 
-  line out "let delete_value_unsafe ~dbh v =";
+  line out "let delete_evaluation_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.delete_evaluation_sexp \
                             ~function_name:%S v.g_id in" name;
     line out "  Backend.query ~dbh query";
     line out "  >>= fun _ -> return ()";
+  );
+
+  line out "let insert_evaluation_unsafe ~dbh v =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.insert_evaluation (to_evaluation v) in";
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ ->";
+    line out "  Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
+    line out "  return ()";
   );
 
   line out "end";
