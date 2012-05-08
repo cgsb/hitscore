@@ -122,11 +122,20 @@ let ocaml_record_access_module ~out name fields =
              \       None -> error (`wrong_add_value))";
   );
 
-  line out "let value_of_result r = ";
+  line out "let of_value r = ";
   line out "  let open Sql_query in";
   line out "  try Ok {g_id = r.r_id; g_created = r.r_created; \n\
-      \  g_last_modified = r.r_last_modified; g_value = value_of_sexp r.r_sexp } \
+      \  g_last_modified = r.r_last_modified; g_value = value_of_sexp r.r_sexp }\n\
       \  with e -> Error (`parse_sexp_error (r.r_sexp, e))";
+
+  line out "let to_value t = ";
+  line out "  {Sql_query. ";
+  line out "    r_id = t.g_id;";
+  line out "    r_type = %S;" name;
+  line out "    r_created = t.g_created;";
+  line out "    r_last_modified = t.g_last_modified;";
+  line out "    r_sexp = sexp_of_value t.g_value; ";
+  line out "  }";
 
   line out "let get ~dbh pointer =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
@@ -135,7 +144,7 @@ let ocaml_record_access_module ~out name fields =
     line out "  Backend.query ~dbh query";
     line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
     line out "  >>= fun r -> of_result (Sql_query.parse_value r)";
-    line out "  >>= fun r -> of_result (value_of_result r)";
+    line out "  >>= fun r -> of_result (of_value r)";
   );
   
   line out "let get_all ~dbh =";
@@ -144,7 +153,7 @@ let ocaml_record_access_module ~out name fields =
     line out "  Backend.query ~dbh query";
     line out "  >>= fun results ->";
     line out "  of_list_sequential results ~f:(fun row ->";
-    line out "    of_result Result.(Sql_query.parse_value row >>= value_of_result))";
+    line out "    of_result Result.(Sql_query.parse_value row >>= of_value))";
   );
 
   line out "let delete_value_unsafe ~dbh v =";
@@ -155,6 +164,16 @@ let ocaml_record_access_module ~out name fields =
     line out "  >>= fun _ -> return ()";
   );
 
+  line out "let insert_value_unsafe ~dbh v =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.insert_value (to_value v) in";
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ ->";
+    line out "  Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
+    line out "  return ()";
+  );
+
+  
   line out "end";
 
   ()
