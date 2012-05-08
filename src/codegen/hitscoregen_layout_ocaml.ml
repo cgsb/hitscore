@@ -45,30 +45,42 @@ let filesystem_kinds_and_types dsl =
   let file_types =  ["blob"; "directory"; "opaque"] in
   (volume_kinds, file_types)
 
-let ocaml_file_system_module out =
-    doc out "The [pointer] represents a handle to a volume in the DB.";
-    line out "type pointer = { id : int } with sexp";
+let ocaml_file_system_module out dsl =
+  doc out "The [pointer] represents a handle to a volume in the DB.";
+  line out "type pointer = { id : int } with sexp";
 
-    doc out "Unsafely create a volume.";
-    line out "let unsafe_cast id = { id }";
+  doc out "Unsafely create a volume.";
+  line out "let unsafe_cast id = { id }";
 
-    doc out "The specification of file-trees.";
-    line out "type tree = %s with sexp"
-      (String.concat ~sep:"\n" [
-        "  | File of string * Enumeration_file_type.t";
-        "  | Directory of string * Enumeration_file_type.t * tree list";
-        "  | Opaque of string * Enumeration_file_type.t";]);
+  doc out "The specification of file-trees.";
+  line out "type tree = %s with sexp"
+    (String.concat ~sep:"\n" [
+      "  | File of string * Enumeration_file_type.t";
+      "  | Directory of string * Enumeration_file_type.t * tree list";
+      "  | Opaque of string * Enumeration_file_type.t";]);
 
-    doc out "The volume content is …";
-    line out "type volume_content = \n\
+  doc out "The volume content is …";
+  line out "type volume_content = \n\
       \  | Link of pointer
       \  | Tree of string option * tree list  with sexp";
   
-    doc out "A volume is then …";
-    line out "type volume = %s"
-      "{ volume_pointer: pointer; volume_kind: Enumeration_volume_kind.t;
+  doc out "A volume is then …";
+  line out "type volume = %s"
+    "{ volume_pointer: pointer; volume_kind: Enumeration_volume_kind.t;
        \  volume_content: volume_content; } with sexp";
-    ()
+  doc out "Get the toplevel directory corresponding to a volume-kind.";
+  line out " let toplevel_of_kind = function";
+  List.iter dsl.nodes (function
+  | Volume (n, t) -> line out "    | `%s -> %S" n t
+  | _ -> ());
+  
+  doc out "Get the volume-kind corresponding to a toplevel directory name.";
+  line out " let kind_of_toplevel = function";
+  List.iter dsl.nodes (function
+  | Volume (n, t) -> line out "    | %S -> Ok `%s" t n
+  | _ -> ());
+  line out "    | s -> Error (`toplevel_not_found s)";
+  ()
 
 let ocaml_encapsulate_layout_errors out ~error_location f =
   line out "let work_m =";
@@ -248,7 +260,7 @@ let ocaml_module raw_dsl dsl output_string =
   );
   doc out "File-system types module";
   line out "module File_system = struct";
-  ocaml_file_system_module out;
+  ocaml_file_system_module out dsl;
   line out "end";
   
   let record_standard_fields = [
