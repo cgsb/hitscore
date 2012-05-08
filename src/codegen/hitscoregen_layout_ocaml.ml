@@ -70,9 +70,19 @@ let ocaml_file_system_module out =
        \  volume_content: volume_content; } with sexp";
     ()
 
+let ocaml_encapsulate_layout_errors out ~error_location f =
+  line out "let work_m =";
+  f out;
+  line out "in";
+  line out "bind_on_error work_m (fun e -> \
+              error (`Layout (%s, e)))" error_location;
+  ()
+      
 let ocaml_record_access_module ~out name fields =
   line out "module Record_%s = struct" name;
   line out "  include Record_%s" name;
+
+  let error_location = sprintf "`Record %S" name in
 
   line out "let add_value";
   List.iter fields (function
@@ -82,12 +92,14 @@ let ocaml_record_access_module ~out name fields =
   line out " ~dbh =\n   let v = { ";
   List.iter fields (function (n, _) -> raw out "%s; " n);
   line out "} in";
-  line out "  let query = Sql_query.add_value_sexp ~record_name:%S \
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.add_value_sexp ~record_name:%S \
                    (Record_%s.sexp_of_value v) in" name name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>| Sql_query.single_id_of_result";
-  line out "  >>= (function Some id -> return {id} | \n\
-             \       None -> error (`Layout (`Record %S, `wrong_add_value)))" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>| Sql_query.single_id_of_result";
+    line out "  >>= (function Some id -> return {id} | \n\
+             \       None -> error (`wrong_add_value))";
+  );
 
   line out "let value_of_result r = ";
   line out "  let open Sql_query in";
@@ -96,29 +108,31 @@ let ocaml_record_access_module ~out name fields =
       \  with e -> Error (`parse_sexp_error (r.r_sexp, e))";
 
   line out "let get ~dbh pointer =";
-  line out "  let work_m =";
-  line out "  let query = Sql_query.get_value_sexp ~record_name:%S pointer.id in"
-    name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
-  line out "  >>= fun r -> of_result (Sql_query.parse_value r)";
-  line out "  >>= fun r -> of_result (value_of_result r)";
-  line out "  in\n  double_bind work_m";
-  line out "    ~ok:return";
-  line out "    ~error:(fun e -> error (`Layout (`Record %S, e)))" name;
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.get_value_sexp ~record_name:%S pointer.id in"
+      name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
+    line out "  >>= fun r -> of_result (Sql_query.parse_value r)";
+    line out "  >>= fun r -> of_result (value_of_result r)";
+  );
   
   line out "let get_all ~dbh =";
-  line out "  let query = Sql_query.get_all_values_sexp ~record_name:%S in" name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>= fun results ->";
-  line out "  of_list_sequential results ~f:(fun row ->";
-  line out "    of_result Result.(Sql_query.parse_value row >>= value_of_result))";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.get_all_values_sexp ~record_name:%S in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun results ->";
+    line out "  of_list_sequential results ~f:(fun row ->";
+    line out "    of_result Result.(Sql_query.parse_value row >>= value_of_result))";
+  );
 
   line out "let delete_value_unsafe ~dbh v =";
-  line out "  let query = Sql_query.delete_value_sexp \
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.delete_value_sexp \
                             ~record_name:%S v.g_id in" name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>= fun _ -> return ()";
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+  );
 
   line out "end";
 
@@ -127,6 +141,8 @@ let ocaml_record_access_module ~out name fields =
 let ocaml_function_access_module ~out name result_type args =
   line out "module Function_%s = struct" name;
   line out "  include Function_%s" name;
+
+  let error_location = sprintf "`Function %S" name in
 
   line out "let add_evaluation";
   line out "    ?(recomputable=false)";
@@ -138,14 +154,16 @@ let ocaml_function_access_module ~out name result_type args =
   line out " ~dbh =\n   let v = { ";
   List.iter args (function (n, _) -> raw out "%s; " n);
   line out "} in";
-  line out "  let query = Sql_query.add_evaluation_sexp ~function_name:%S \
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.add_evaluation_sexp ~function_name:%S \
                    ~recomputable ~recompute_penalty \
                    ~status:(Enumeration_process_status.to_string `Inserted) \
                    (sexp_of_evaluation v) in" name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>| Sql_query.single_id_of_result";
-  line out "  >>= (function Some id -> return {id} | \n\
-             \       None -> error (`Layout (`Function %S, `wrong_add_value)))" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>| Sql_query.single_id_of_result";
+    line out "  >>= (function Some id -> return {id} | \n\
+             \       None -> error `wrong_add_value)";
+  );
   
   line out "let evaluation_of_result r = ";
   line out "  let open Sql_query in";
@@ -162,32 +180,33 @@ let ocaml_function_access_module ~out name result_type args =
      with e -> Error (`parse_sexp_error (r.f_sexp, e))" result_type;
 
   line out "let get ~dbh pointer =";
-  line out "  let work_m =";
-  line out "  let query = Sql_query.get_evaluation_sexp \
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.get_evaluation_sexp \
                 ~function_name:%S pointer.id in" name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
-  line out "  >>= fun r -> of_result (Sql_query.parse_evaluation r)";
-  line out "  >>= fun r -> of_result (evaluation_of_result r)";
-  line out "  in\n  double_bind work_m";
-  line out "    ~ok:return";
-  line out "    ~error:(fun e -> error (`Layout (`Function %S, e)))" name;
-  
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
+    line out "  >>= fun r -> of_result (Sql_query.parse_evaluation r)";
+    line out "  >>= fun r -> of_result (evaluation_of_result r)";
+  );
   
   line out "let get_all ~dbh =";
-  line out " let query = Sql_query.get_all_evaluations_sexp \
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out " let query = Sql_query.get_all_evaluations_sexp \
       ~function_name:%S in" name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>= fun results ->";
-  line out "  of_list_sequential results ~f:(fun row ->";
-  line out "    of_result Result.(Sql_query.parse_evaluation row >>= \
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun results ->";
+    line out "  of_list_sequential results ~f:(fun row ->";
+    line out "    of_result Result.(Sql_query.parse_evaluation row >>= \
                  evaluation_of_result))";
+  );
 
   line out "let delete_value_unsafe ~dbh v =";
-  line out "  let query = Sql_query.delete_evaluation_sexp \
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.delete_evaluation_sexp \
                             ~function_name:%S v.g_id in" name;
-  line out "  Backend.query ~dbh query";
-  line out "  >>= fun _ -> return ()";
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+  );
 
   line out "end";
   
