@@ -59,6 +59,12 @@ let configuration =
    in
    hitscore_config
 let () = printf "--> configuration\n"
+
+module DB = Hitscore_db_backend.Make(Flow);;
+module Access = Hitscore_db_access.Test.Make_access (Flow) (DB);;
+let () = printf "--> DB and Access\n"
+
+let () = printf "END INIT\n\n"
 EOF
 
 ocaml_init=/tmp/ocaml_init_hs.ml
