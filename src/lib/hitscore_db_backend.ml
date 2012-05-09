@@ -193,6 +193,25 @@ module Sql_query = struct
     let str_type = escape_sql record_name in
     sprintf "UPDATE record SET last_modified = '%s', sexp = '%s' \
              WHERE id = %d AND type = '%s'" now str_sexp id str_type
+  let set_evaluation_started ~function_name id =
+    let now = Timestamp.(to_string (now ()))  |! escape_sql in
+    let str_type = escape_sql function_name in
+    sprintf "UPDATE function SET started = '%s', status = '%s' \
+             WHERE id = %d AND type = '%s'"
+      now (status_to_string `Started) id str_type
+  let set_evaluation_failed ~function_name id =
+    let now = Timestamp.(to_string (now ()))  |! escape_sql in
+    let str_type = escape_sql function_name in
+    sprintf "UPDATE function SET completed = '%s', status = '%s' \
+             WHERE id = %d AND type = '%s'"
+      now (status_to_string `Failed) id str_type
+  let set_evaluation_succeeded ~function_name id result =
+    let now = Timestamp.(to_string (now ()))  |! escape_sql in
+    let str_type = escape_sql function_name in
+    sprintf "UPDATE function SET completed = '%s', status = '%s', result = %d \
+             WHERE id = %d AND type = '%s'"
+      now (status_to_string `Succeeded) result id str_type
+    
       
   let should_be_single = function
     | [one] -> Ok one

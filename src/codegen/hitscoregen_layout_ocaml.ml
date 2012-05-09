@@ -264,6 +264,28 @@ let ocaml_function_access_module ~out name result_type args =
                  of_evaluation))";
   );
 
+  line out "let set_started ~dbh p =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.set_evaluation_started \
+                            ~function_name:%S p.id in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+  );
+  line out "let set_failed ~dbh p =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.set_evaluation_failed \
+                            ~function_name:%S p.id in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+  );
+  line out "let set_succeeded ~dbh ~result p =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.set_evaluation_succeeded \
+                            ~function_name:%S p.id result.Record_%s.id in"
+      name result_type;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+  );
   
   line out "let delete_evaluation_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
