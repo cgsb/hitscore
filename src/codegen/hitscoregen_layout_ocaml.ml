@@ -513,8 +513,9 @@ end";
     line out "  end";
   | Function (name, args, result) ->
     (* function element  *)
-    line out "and %s_element layout t = let dbh = layout#_dbh in object " name;
+    line out "and %s_element layout t = let dbh = layout#_dbh in object(self)" name;
     let modname = sprintf "Function_%s" name in
+    line out "val mutable t = t";
     List.iter (function_standard_fields result) (fun (n, t) ->
       line out "  method %s = %s" n
         (ocaml_object_transform_field modname (sprintf "t.%s" n) t);
@@ -523,6 +524,19 @@ end";
       line out "  method %s = %s" n
         (ocaml_object_transform_field modname (sprintf "t.g_evaluation.%s" n) t);
     );
+    line out "  method re_get = \n\
+                  Function_%s.(get ~dbh (pointer t)) >>= fun new_t -> \n\
+                  t <- new_t; return ()" name;
+    line out "  method set_started = \n\
+                  Function_%s.(set_started ~dbh (pointer t)) >>= fun () -> \n\
+                  self#re_get" name;
+    line out "  method set_failed = \n\
+                  Function_%s.(set_failed ~dbh (pointer t)) >>= fun () -> \n\
+                  self#re_get" name;
+    line out "  method set_succeeded result = \n\
+                  Function_%s.(set_succeeded ~result ~dbh (pointer t)) \n\
+                  >>= fun () -> \n\
+                  self#re_get" name;
     line out "  end";
     (* function collection  *)
     line out "and %s layout = let dbh = layout#_dbh in object " name;
