@@ -186,6 +186,14 @@ module Sql_query = struct
   let get_volume_sexp id =
     sprintf "SELECT * FROM volume WHERE id = %d" id
 
+
+  let update_value_sexp ~record_name id sexp =
+    let now = Timestamp.(to_string (now ()))  |! escape_sql in
+    let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
+    let str_type = escape_sql record_name in
+    sprintf "UPDATE record SET last_modified = '%s', sexp = '%s' \
+             WHERE id = %d AND type = '%s'" now str_sexp id str_type
+      
   let should_be_single = function
     | [one] -> Ok one
     | more -> Error (`result_not_unique more)

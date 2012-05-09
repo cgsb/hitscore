@@ -156,6 +156,15 @@ let ocaml_record_access_module ~out name fields =
     line out "    of_result Result.(Sql_query.parse_value row >>= of_value))";
   );
 
+  doc out "Update the 'value' (one {b should not} modify the [g_*] fields.";
+  line out "let update ~dbh t =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.update_value_sexp \
+                            ~record_name:%S t.g_id (sexp_of_value t.g_value) in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+  );
+
   line out "let delete_value_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.delete_value_sexp \
@@ -255,6 +264,7 @@ let ocaml_function_access_module ~out name result_type args =
                  of_evaluation))";
   );
 
+  
   line out "let delete_evaluation_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.delete_evaluation_sexp \
