@@ -295,7 +295,7 @@ let ocaml_file_system_access_module ~out dsl =
 
   line out "let add_tree_volume ~kind ?hr_tag ~files ~dbh =";
   line out "  add_volume ~kind ~dbh ~content:(Tree (hr_tag, files))";
-  line out "let add_link_volume ~kind ~dbh pointer =";
+  line out "let add_link_volume ~kind ~dbh ~pointer =";
   line out "  add_volume ~kind ~dbh ~content:(Link pointer)";
 
   
@@ -344,6 +344,157 @@ let ocaml_file_system_access_module ~out dsl =
   );
   line out "end"
 
+let ocaml_classy_access ~out dsl =
+  (*
+  line out "module Make_classy \
+    (Flow: Sequme_flow_monad.FLOW_MONAD)
+    (Backend : module type of Hitscore_db_backend.Make(Flow))
+     = struct";
+  *)
+  let make_pointer_object p t =
+    sprintf "object
+             method pointer = %s
+             method get = layout#%s#get %s
+             end" p t p in
+  let ocaml_object_transform_field modname field = function
+    | Record_name s ->
+      make_pointer_object (sprintf "%s.(%s)" modname field) s
+    | Option (Record_name s) ->
+      sprintf "Option.map %s.(%s) ~f:(fun p -> %s)" modname field
+        (make_pointer_object "p" s)
+    | Array (Record_name s) ->
+      sprintf "Array.map %s.(%s) ~f:(fun p -> %s)" modname field
+        (make_pointer_object "p" s)
+    | Volume_name s ->
+      make_pointer_object 
+        (sprintf "%s.(%s)" modname field) "file_system"
+    | Option (Volume_name s) ->
+      sprintf "Option.map %s.(%s) ~f:(fun p -> %s)" modname field
+        (make_pointer_object "p" "file_system")
+    | Array (Volume_name s) ->
+      sprintf "Array.map %s.(%s) ~f:(fun p -> %s)" modname field
+        (make_pointer_object "p" "file_system")
+
+    | _ -> sprintf "%s.(%s)" modname field
+(*
+  | Array t -> sprintf "%s array" (ocaml_type t)
+  | Function_name s -> sprintf "Function_%s.pointer" s
+  | Enumeration_name s -> sprintf "Enumeration_%s.t" s
+  (* | Record_name "g_volume" -> sprintf "pointer" *)
+  | Record_name s -> sprintf "Record_%s.pointer" s
+  | Volume_name s -> sprintf "File_system.pointer" *)
+    in
+  let get_like_easy_methods modname eltname =
+    line out "\
+      method all =
+        (%s.get_all ~dbh)
+        >>| List.map ~f:(%s layout)
+      method get p =
+        %s.get ~dbh p >>| %s layout
+      method get_unsafe p = 
+        %s.(get ~dbh (unsafe_cast p)) >>| %s layout"
+      modname eltname modname eltname modname eltname;
+  in
+
+  let add_method ?(method_name="add") add_function fields name =
+    line out "  method %s " method_name;
+    List.iter fields (function
+    | (n, Option t) -> line out "   ?%s" n
+    | (n, t) -> line out "   ~%s" n
+    );
+    line out "    () =";
+    line out "    %s ~dbh " add_function;
+    List.iter fields (function
+    | (n, Option t) -> line out "   ?%s" n
+    | (n, t) -> line out "   ~%s" n
+    );
+    line out "    >>= fun p ->";
+    line out "    return (object method pointer = p method get = layout#%s#get end)"
+      name;
+  in
+  line out "type hidden_for_ocamldoc = unit";
+  line out "let classy (dbh : Backend.db_handle) = ( () : hidden_for_ocamldoc )";
+
+  line out "(**/**)";
+  line out "let rec classy (dbh : Backend.db_handle) =";
+  line out "  object (self_layout)";
+  line out "  method _dbh = dbh";
+  List.iter dsl.nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out "  method %s = %s self_layout" name name
+  | Function (name, args, result) ->
+    line out "  method %s = %s self_layout" name name
+  | Volume (_, _) -> ()
+  );
+  line out "  method file_system = file_system self_layout";
+  line out "  end";
+  line out "and volume layout t = object";
+  line out "  method g_id = t.File_system.g_id";
+  line out "  method g_kind = t.File_system.g_kind";
+  line out "  method g_content = t.File_system.g_content";
+  line out "  end";
+  line out "and file_system layout = let dbh = layout#_dbh in object";
+  get_like_easy_methods "File_system" "volume";
+  (* Using type 'Int' is a hack, add_method only cares about options: *)
+  add_method ~method_name:"add_volume"
+    "File_system.add_volume " ["kind", Int; "content", Int] "file_system";
+  add_method ~method_name:"add_tree_volume"
+    "File_system.add_tree_volume "
+    ["kind", Int; "hr_tag", Option String; "files", Int]
+    "file_system";
+  add_method ~method_name:"add_link_volume"
+    "File_system.add_link_volume "
+    ["kind", Int; "pointer", Int]
+    "file_system";
+  
+  line out "  end";
+  List.iter dsl.nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    (* record element  *)
+    line out "and %s_element layout t = object " name;
+    List.iter record_standard_fields (fun (n, t) ->
+      line out "  method %s = t.Record_%s.%s" n name n;
+    );
+    List.iter fields (fun (n, t) ->
+      line out "  method %s = %s" n
+        (ocaml_object_transform_field
+           (sprintf "Record_%s" name) (sprintf "t.g_value.%s" n) t);
+    );
+    line out "  end";
+    (* record collection *)
+    line out "and %s layout = let dbh = layout#_dbh in object " name;
+    get_like_easy_methods (sprintf "Record_%s" name) (sprintf "%s_element" name);
+    add_method (sprintf "Record_%s.add_value" name) fields name;
+    line out "  end";
+  | Function (name, args, result) ->
+    (* function element  *)
+    line out "and %s_element layout t = object " name;
+    let modname = sprintf "Function_%s" name in
+    List.iter (function_standard_fields result) (fun (n, t) ->
+      line out "  method %s = %s" n
+        (ocaml_object_transform_field modname (sprintf "t.%s" n) t);
+    );
+    List.iter args (fun (n, t) ->
+      line out "  method %s = %s" n
+        (ocaml_object_transform_field modname (sprintf "t.g_evaluation.%s" n) t);
+    );
+    line out "  end";
+    (* function collection  *)
+    line out "and %s layout = let dbh = layout#_dbh in object " name;
+    get_like_easy_methods modname (sprintf "%s_element" name);
+    let add_args =
+      ("recomputable", Option Bool) :: ("recompute_penalty", Option Real) :: args in
+    add_method (sprintf "Function_%s.add_evaluation" name) add_args name;
+    line out "  end";
+  | Volume (_, _) -> ()
+  );
+
+  line out "(**/**)";
+  
+  ()
+  (* line out "end" *)
 
 let ocaml_meta_module ~out ~raw_dsl dsl =
   doc out "{3 Meta-Information On the Layout}";
@@ -444,6 +595,7 @@ let ocaml_module raw_dsl dsl output_string =
          ~f:(fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
     line out "let pointer v = { id = v.g_id} ";
+    line out "let unsafe_cast id = { id }";
     line out "end";
   | Volume (_, _) -> ()
   );
@@ -527,9 +679,10 @@ let ocaml_module raw_dsl dsl output_string =
     line out "    return ()\n  )"
   );
 
+  ocaml_classy_access ~out dsl;
+
   
   line out "end";
-
 
   ocaml_meta_module ~out dsl ~raw_dsl;
   ()
