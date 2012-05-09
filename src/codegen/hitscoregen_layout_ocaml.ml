@@ -383,29 +383,38 @@ let ocaml_classy_access ~out dsl =
     (Backend : module type of Hitscore_db_backend.Make(Flow))
      = struct";
   *)
-  let make_pointer_object p t =
-    sprintf "object
-             method pointer = %s
-             method get = layout#%s#get %s
-             end" p t p in
+  line out "
+class ['pointer, 'pointed, 'error ] pointer
+  (layout_get: 'pointer -> ('pointed, 'error) Flow.monad)
+  (id: 'pointer -> int)
+  (p: 'pointer) =
+object
+  method id = id p
+  method pointer = p
+  method get = layout_get p
+end";
+  let make_pointer_object p t modname =
+    sprintf "new pointer layout#%s#get (fun p -> p.%s.id) %s" t modname p
+  in
   let ocaml_object_transform_field modname field = function
     | Record_name s ->
       make_pointer_object (sprintf "%s.(%s)" modname field) s
+        (sprintf "Record_%s" s)
     | Option (Record_name s) ->
       sprintf "Option.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" s)
+        (make_pointer_object "p" s (sprintf "Record_%s" s))
     | Array (Record_name s) ->
       sprintf "Array.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" s)
+        (make_pointer_object "p" s (sprintf "Record_%s" s))
     | Volume_name s ->
       make_pointer_object 
-        (sprintf "%s.(%s)" modname field) "file_system"
+        (sprintf "%s.(%s)" modname field) "file_system" "File_system"
     | Option (Volume_name s) ->
       sprintf "Option.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" "file_system")
+        (make_pointer_object "p" "file_system" "File_system")
     | Array (Volume_name s) ->
       sprintf "Array.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" "file_system")
+        (make_pointer_object "p" "file_system" "File_system")
 
     | _ -> sprintf "%s.(%s)" modname field
 (*
@@ -428,7 +437,7 @@ let ocaml_classy_access ~out dsl =
       modname eltname modname eltname modname eltname;
   in
 
-  let add_method ?(method_name="add") add_function fields name =
+  let add_method ?(method_name="add") add_function fields name modname =
     line out "  method %s " method_name;
     List.iter fields (function
     | (n, Option t) -> line out "   ?%s" n
@@ -440,9 +449,9 @@ let ocaml_classy_access ~out dsl =
     | (n, Option t) -> line out "   ?%s" n
     | (n, t) -> line out "   ~%s" n
     );
-    line out "    >>= fun p ->";
-    line out "    return (object method pointer = p method get = layout#%s#get end)"
-      name;
+    line out "    >>= fun (p: %s.pointer) ->" modname;
+    line out "    return (%s)"
+      (make_pointer_object "p" name modname)
   in
   line out "type hidden_for_ocamldoc = unit";
   line out "let classy (dbh : Backend.db_handle) = ( () : hidden_for_ocamldoc )";
@@ -470,15 +479,16 @@ let ocaml_classy_access ~out dsl =
   get_like_easy_methods "File_system" "volume";
   (* Using type 'Int' is a hack, add_method only cares about options: *)
   add_method ~method_name:"add_volume"
-    "File_system.add_volume " ["kind", Int; "content", Int] "file_system";
+    "File_system.add_volume " ["kind", Int; "content", Int]
+    "file_system" "File_system";
   add_method ~method_name:"add_tree_volume"
     "File_system.add_tree_volume "
     ["kind", Int; "hr_tag", Option String; "files", Int]
-    "file_system";
+    "file_system" "File_system";
   add_method ~method_name:"add_link_volume"
     "File_system.add_link_volume "
     ["kind", Int; "pointer", Int]
-    "file_system";
+    "file_system" "File_system";
   
   line out "  end";
   List.iter dsl.nodes (function
@@ -497,12 +507,13 @@ let ocaml_classy_access ~out dsl =
     line out "  end";
     (* record collection *)
     line out "and %s layout = let dbh = layout#_dbh in object " name;
-    get_like_easy_methods (sprintf "Record_%s" name) (sprintf "%s_element" name);
-    add_method (sprintf "Record_%s.add_value" name) fields name;
+    let modname = (sprintf "Record_%s" name) in
+    get_like_easy_methods modname (sprintf "%s_element" name);
+    add_method (sprintf "Record_%s.add_value" name) fields name modname;
     line out "  end";
   | Function (name, args, result) ->
     (* function element  *)
-    line out "and %s_element layout t = object " name;
+    line out "and %s_element layout t = let dbh = layout#_dbh in object " name;
     let modname = sprintf "Function_%s" name in
     List.iter (function_standard_fields result) (fun (n, t) ->
       line out "  method %s = %s" n
@@ -518,7 +529,7 @@ let ocaml_classy_access ~out dsl =
     get_like_easy_methods modname (sprintf "%s_element" name);
     let add_args =
       ("recomputable", Option Bool) :: ("recompute_penalty", Option Real) :: args in
-    add_method (sprintf "Function_%s.add_evaluation" name) add_args name;
+    add_method (sprintf "Function_%s.add_evaluation" name) add_args name modname;
     line out "  end";
   | Volume (_, _) -> ()
   );
