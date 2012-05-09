@@ -165,6 +165,12 @@ module Sql_query = struct
        (Option.value_map completed ~default:"NULL" ~f:(sprintf "'%s'"))
        status sexp 
      
+  let insert_volume v : t =
+    let str_sexp = Sexp.to_string_hum v.v_sexp |! escape_sql in
+    let str_type = escape_sql v.v_kind in
+    sprintf "INSERT INTO volume (id, kind, sexp)\n\
+      \ VALUES (%d, '%s','%s')" v.v_id str_type str_sexp
+
   let single_id_of_result = function
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
     | _ -> None

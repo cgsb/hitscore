@@ -299,12 +299,15 @@ let ocaml_file_system_access_module ~out dsl =
   line out "  add_volume ~kind ~dbh ~content:(Link pointer)";
 
   
-  line out "let volume_of_result r = ";
+  line out "let of_volume r = ";
   line out "  let open Sql_query in";
   line out "  try Ok {g_id = r.v_id; \
       \   g_kind = Enumeration_volume_kind.of_string_exn r.v_kind; \n\
       \   g_content = content_of_sexp r.v_sexp } \
       \  with e -> Error (`parse_sexp_error (r.v_sexp, e))";
+  line out "let to_volume t = {Sql_query. v_id = t.g_id; ";
+  line out "    v_kind = Enumeration_volume_kind.to_string t.g_kind;";
+  line out "    v_sexp = sexp_of_content t.g_content } ";
 
   line out "let get ~dbh pointer =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
@@ -312,7 +315,7 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  Backend.query ~dbh query";
     line out "  >>= fun r -> of_result (Sql_query.should_be_single r)";
     line out "  >>= fun r -> of_result (Sql_query.parse_volume r)";
-    line out "  >>= fun r -> of_result (volume_of_result r)";
+    line out "  >>= fun r -> of_result (of_volume r)";
   );
   line out "let get_all ~dbh =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
@@ -321,7 +324,7 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  >>= fun results ->";
     line out "  of_list_sequential results ~f:(fun row ->";
     line out "    of_result Result.(Sql_query.parse_volume row \
-                    >>= volume_of_result))";
+                    >>= of_volume))";
   );
 
   line out "let delete_volume_unsafe ~dbh v =";
@@ -329,6 +332,15 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  let query = Sql_query.delete_volume_sexp v.g_id in";
     line out "  Backend.query ~dbh query";
     line out "  >>= fun _ -> return ()";
+  );
+
+  line out "let insert_volume_unsafe ~dbh v =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.insert_volume (to_volume v) in";
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ ->";
+    line out "  Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
+    line out "  return ()";
   );
   line out "end"
 
