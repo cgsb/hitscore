@@ -377,12 +377,6 @@ let ocaml_file_system_access_module ~out dsl =
   line out "end"
 
 let ocaml_classy_access ~out dsl =
-  (*
-  line out "module Make_classy \
-    (Flow: Sequme_flow_monad.FLOW_MONAD)
-    (Backend : module type of Hitscore_db_backend.Make(Flow))
-     = struct";
-  *)
   line out "
 class ['pointer, 'pointed, 'error ] pointer
   (layout_get: 'pointer -> ('pointed, 'error) Flow.monad)
@@ -417,14 +411,7 @@ end";
         (make_pointer_object "p" "file_system" "File_system")
 
     | _ -> sprintf "%s.(%s)" modname field
-(*
-  | Array t -> sprintf "%s array" (ocaml_type t)
-  | Function_name s -> sprintf "Function_%s.pointer" s
-  | Enumeration_name s -> sprintf "Enumeration_%s.t" s
-  (* | Record_name "g_volume" -> sprintf "pointer" *)
-  | Record_name s -> sprintf "Record_%s.pointer" s
-  | Volume_name s -> sprintf "File_system.pointer" *)
-    in
+  in
   let get_like_easy_methods modname eltname =
     line out "\
       method all =
@@ -551,7 +538,6 @@ end";
   line out "(**/**)";
   
   ()
-  (* line out "end" *)
 
 let ocaml_meta_module ~out ~raw_dsl dsl =
   doc out "{3 Meta-Information On the Layout}";
