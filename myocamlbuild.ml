@@ -27,6 +27,16 @@ rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_layout_interface.ml"
   end
 ;;
 
+rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_layout.ml"
+  ~prod:"src/lib/hitscore_layout.ml"
+  ~deps:["data/hitscore_layout"; hitscoregen_cmd]
+  begin
+    fun env build ->
+      Cmd (S [hitscoregen; A "codegen-ocaml"; P (env "data/hitscore_layout");
+              P (env "src/lib/hitscore_layout.ml")])
+  end
+;;
+
 
 (* OASIS_START *)
 (* DO NOT EDIT (digest: ec5ed6c8cae1f21509c25561f3c86e00) *)

@@ -37,6 +37,13 @@ let () =
       Hitscoregen_layout_ocaml.ocaml_code 
         raw_dsl (parse_str raw_dsl) (output_string o)))
       
+  | exec :: "codegen-ocaml" :: in_file :: out_file :: [] ->
+    let raw_dsl =
+      In_channel.(with_file in_file ~f:(fun i -> (input_all i))) in
+    Out_channel.(with_file out_file ~f:(fun o -> 
+      Hitscoregen_layout_ocaml.ocaml_module 
+        raw_dsl (parse_str raw_dsl) (output_string o)))
+      
   | exec :: "codegen-itf" :: in_file :: out_file :: [] ->
     let dsl =
       In_channel.(with_file in_file ~f:(fun i -> parse_str (input_all i))) in

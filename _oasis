@@ -37,6 +37,7 @@ Library hitscore
   Modules: Hitscore
           , Hitscore_std
           , Hitscore_interfaces
+          , Hitscore_layout
           , Hitscore_layout_interface
           , Hitscore_db_access
           , Hitscore_db_backend
