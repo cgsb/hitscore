@@ -1,54 +1,41 @@
 (** Container-module to make it easier to pass arguments to functors. *)
 
+include Hitscore_std
+include Hitscore_layout
+include Hitscore_access_rights
+include Hitscore_db_backend
   
+
 (** Container-module to make it easier to pass arguments to functors. *)
 module type COMMON = sig
 
-  (** Exported definition of the Configuration. *)
-  module Configuration : Hitscore_interfaces.CONFIGURATION
-
-  (** Exported definition of Flow.  *)
-  module Flow : Sequme_flow_monad.FLOW_MONAD
-
-  (** Exported definition of Layout. *)
-  module Layout : Hitscore_layout_interface.LAYOUT
-    with module Flow = Flow
-    with type 'a PGOCaml.monad = 'a Flow.IO.t
-    (* This last one is used by Assemble_Sample_Sheet to call a PGSQL(dbh) *)
-           
-  (** Exported definition of Access_rights. *)
-  module Access_rights : Hitscore_access_rights.ACCESS_RIGHTS
-     with module Configuration = Configuration
-    with module Flow = Flow
-    with module Layout = Layout
-
   (** Add a log to the database. *)
-  val add_log:
-    dbh:Layout.db_handle ->
+  val add_log :
+    dbh:Backend.db_handle ->
     string ->
     (unit,
-     [> `layout_inconsistency of
+     [> `Layout of
          [> `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ])
-      Flow.monad
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `wrong_add_value ] ])
+      Flow.t
 
            
   (** Check that an HiSeq-raw directory (the database) record is usable. *) 
   val check_hiseq_raw_availability :
-    dbh:Layout.db_handle ->
+    dbh:Backend.db_handle ->
     hiseq_raw:Layout.Record_hiseq_raw.pointer ->
     (Layout.Record_inaccessible_hiseq_raw.pointer *
        Layout.Record_hiseq_raw.pointer Hitscore_std.List.t,
-     [> `hiseq_dir_deleted
-     | `layout_inconsistency of
-         [>  `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `no_last_modified_timestamp of
-               Layout.Record_inaccessible_hiseq_raw.pointer
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Flow.monad
+     [> `Layout of
+         [> `Record of string ] *
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `wrong_add_value ]
+     | `hiseq_dir_deleted ]) Flow.monad
 
   (** Get the full path from an HiSeq directory name. *)
   val hiseq_raw_full_path:
@@ -64,58 +51,66 @@ module type COMMON = sig
       like ["vol/0000042_HumanReadable"]). *)
   val volume_unix_directory:
     ?hr_tag: string ->
-    id:int32 ->
+    id:int ->
     kind:Layout.Enumeration_volume_kind.t ->
     string
       
   (** Get the trees of a volume pointer (follows virtual symbolic links). *)
-  val trees_of_volume:
-    dbh:Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
+  val trees_of_volume :
+    dbh:Backend.db_handle ->
+    configuration:'a ->
     Layout.File_system.pointer ->
     (Layout.File_system.tree list,
-     [> `layout_inconsistency of
+     [> `Layout of
          [> `File_system ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Flow.monad
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `parse_volume_error of string option list * exn
+           | `result_not_unique of Backend.result ] ])
+      Flow.t
       
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
-  val path_of_volume:
+  val path_of_volume :
     configuration:Configuration.local_configuration ->
-    dbh:Layout.db_handle ->
+    dbh:Backend.db_handle ->
     Layout.File_system.pointer ->
     (string,
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [>  `File_system ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
+     [> `Layout of
+         [> `File_system ] *
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `parse_volume_error of string option list * exn
+           | `result_not_unique of Backend.result ]
      | `root_directory_not_configured ])
-      Flow.monad
+      Flow.t
 
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
-  val all_paths_of_volume:
+  val all_paths_of_volume :
     configuration:Configuration.local_configuration ->
-    dbh:Layout.db_handle ->
+    dbh:Backend.db_handle ->
     Layout.File_system.pointer ->
-    (string list,
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
+    (string Hitscore_std.List.t,
+     [> `Layout of
          [> `File_system ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `parse_volume_error of string option list * exn
+           | `result_not_unique of Backend.result ]
      | `root_directory_not_configured ])
-      Flow.monad
+      Flow.t
 
   module PBS: sig
 
     type t
-    type t_fun = int32 -> t
+    type t_fun = int -> t
 
     (** [make "B2F"] Creates a PBS management environment where the
         run/work directories are tagged with ["B2F"]. *)
@@ -144,32 +139,36 @@ module type COMMON = sig
       (string, [> `work_directory_not_configured ]) Flow.monad
     val prepare_work_environment :
       t ->
-      dbh:Access_rights.Layout.db_handle ->
+      dbh:Backend.db_handle ->
       configuration:Configuration.local_configuration ->
       (unit,
-       [> `layout_inconsistency of
-           [>  `File_system | `Function of string | `Record of string ] *
-             [> `insert_did_not_return_one_id of string * int32 list
-             | `select_did_not_return_one_tuple of string * int ]
-       | `pg_exn of exn
+       [> `Layout of
+           [> `Record of string ] *
+             [> `db_backend_error of
+                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+             | `parse_value_error of string option list * exn
+             | `wrong_add_value ]
        | `system_command_error of string * exn
        | `work_directory_not_configured ])
-        Flow.monad
+        Flow.t
 
     val save_pbs_runtime_information :
       t ->
-      dbh:Access_rights.Layout.db_handle ->
+      dbh:Backend.db_handle ->
       configuration:Configuration.local_configuration ->
       string ->
       (unit,
-       [> `layout_inconsistency of
-           [>  `File_system | `Function of string | `Record of string ] *
-             [> `insert_did_not_return_one_id of string * int32 list
-             | `select_did_not_return_one_tuple of string * int ]
-       | `pg_exn of exn
+       [> `Layout of
+           [> `Record of string ] *
+             [> `db_backend_error of
+                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+             | `parse_value_error of string option list * exn
+             | `wrong_add_value ]
        | `system_command_error of string * exn
        | `work_directory_not_configured ])
-        Flow.monad
+        Flow.t
 
     (** Create a PBS script. *)
     val pbs_script :
@@ -189,19 +188,20 @@ module type COMMON = sig
     (** Write a PBS script to a file, set the access rights, and qsub it. *)
     val qsub_pbs_script :
       t ->
-      dbh:Access_rights.Layout.db_handle ->
+      dbh:Backend.db_handle ->
       configuration:Configuration.local_configuration ->
       string ->
       (unit,
-       [> `layout_inconsistency of
-           [>  `File_system | `Function of string | `Record of string ] *
-             [> `insert_did_not_return_one_id of string * int32 list
-             | `select_did_not_return_one_tuple of string * int ]
-       | `pg_exn of exn
+       [> `Layout of
+           [> `Record of string ] *
+             [> `db_backend_error of
+                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+             | `parse_value_error of string option list * exn
+             | `wrong_add_value ]
        | `system_command_error of string * exn
        | `work_directory_not_configured
-       | `write_file_error of string * string * exn ])
-        Flow.monad
+       | `write_file_error of string * string * exn ]) Flow.monad
         
     val qstat :
       t ->
@@ -225,127 +225,119 @@ module type COMMON = sig
 
   module Make_pbs_function:
     functor (Layout_function : sig
-      type 'a pointer = private {
-        id : int32;
-      }
-      val set_failed : [> `can_complete ] pointer -> dbh:Layout.db_handle ->
-        ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Flow.monad
+      type pointer = { id : int; }
+      val set_failed :
+        dbh:Hitscore_db_backend.Backend.db_handle ->
+        pointer ->
+        (unit,
+         [> `Layout of
+             [> `Function of string ] *
+               [> `db_backend_error of
+                   [> `query of Hitscore_db_backend.Sql_query.t * exn ] ] ])
+          Hitscore_std.monad
       val get_status :
-        'a pointer ->
-        dbh:Layout.db_handle ->
+        pointer ->
+        dbh:Hitscore_db_backend.Backend.db_handle ->
         (Layout.Enumeration_process_status.t,
-         [> `layout_inconsistency of
-             [>  `File_system | `Function of string | `Record of string ] *
-               [> `select_did_not_return_one_tuple of string * int ]
-         | `pg_exn of exn ])
-          Layout.Flow.monad
+         [> `Layout of
+             [> `Function of string ] *
+               [> `db_backend_error of
+                   [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+               | `parse_evaluation_error of
+                   string Hitscore_std.Option.t list * exn
+               | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+               | `result_not_unique of
+                   Hitscore_db_backend.Backend.result ] ])
+          Flow.monad
+      val pbs_fun : PBS.t_fun
+      val name_in_log: string
     end) ->
-      functor (PBS_stuff : sig
-        val pbs_fun : PBS.t_fun
-        val name_in_log: string
-      end) ->
   sig
     
-  (** Register the evaluation as failed with a optional reason to add
-      to the [log] (record). *)
+    (** Register the evaluation as failed with a optional reason to add
+        to the [log] (record). *)
     val fail :
-      dbh:Layout.db_handle ->
+      dbh:Hitscore_db_backend.Backend.db_handle ->
       ?reason:string ->
-      [> `can_complete ] Layout_function.pointer ->
-      ([ `can_nothing ] Layout_function.pointer,
-       [> `layout_inconsistency of
-           [>  `File_system | `Function of string | `Record of string ] *
-             [> `insert_did_not_return_one_id of string * int32 list ]
-       | `pg_exn of exn ])
+      Layout_function.pointer ->
+      (Layout_function.pointer,
+       [> `Layout of
+           [> `Function of string | `Record of string ] *
+             [> `db_backend_error of
+                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+             | `wrong_add_value ] ])
         Flow.monad
         
     (** Get the status of the evaluation by checking its data-base
         status and it presence in the PBS queue. *)
     val status :
-      dbh:Layout.db_handle ->
+      dbh:Hitscore_db_backend.Backend.db_handle ->
       configuration:Configuration.local_configuration ->
-      'a Layout_function.pointer ->
-      ([ `not_started of Layout.Enumeration_process_status.t
+      Layout_function.pointer ->
+      ([> `not_started of Layout.Enumeration_process_status.t
        | `running
-       | `started_but_not_running of [ `system_command_error of string * exn ] ],
-       [> `layout_inconsistency of
-           [>  `File_system | `Function of string | `Record of string ] *
-             [> `select_did_not_return_one_tuple of string * int ]
-       | `pg_exn of exn
+       | `started_but_not_running of
+           [> `system_command_error of string * exn ] ],
+       [> `Layout of
+           [> `Function of string ] *
+             [> `db_backend_error of
+                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+             | `parse_evaluation_error of
+                 string Hitscore_std.Option.t list * exn
+             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+             | `result_not_unique of
+                 Hitscore_db_backend.Backend.result ]
        | `work_directory_not_configured ]) Flow.monad
 
     (** Kill the evaluation ([qdel]) and set it as failed. *)
     val kill :
-      dbh:Layout.db_handle ->
+      dbh:Backend.db_handle ->
       configuration:Configuration.local_configuration ->
-      [> `can_complete ] Layout_function.pointer ->
-      ([ `can_nothing ] Layout_function.pointer,
-       [> `layout_inconsistency of
-           [>  `File_system | `Function of string | `Record of string ] *
-             [> `insert_did_not_return_one_id of string * int32 list
-             | `select_did_not_return_one_tuple of string * int ]
-       | `not_started of Layout.Enumeration_process_status.t
-       | `pg_exn of exn
-       | `system_command_error of string * exn
-       | `work_directory_not_configured ])
+      Layout_function.pointer ->
+      (Layout_function.pointer,
+       [> `Layout of
+           [> `Function of string | `Record of string ] *
+             [> `db_backend_error of
+                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+             | `parse_evaluation_error of
+                 string Hitscore_std.Option.t list * exn
+             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+             | `result_not_unique of
+                 Hitscore_db_backend.Backend.result
+             | `wrong_add_value ]
+               | `not_started of Layout.Enumeration_process_status.t
+               | `system_command_error of string * exn
+               | `work_directory_not_configured ])
         Flow.monad
   end
 
 end
 
 
-  
-module Make
-  (Configuration : Hitscore_interfaces.CONFIGURATION)
-  (Flow : Sequme_flow_monad.FLOW_MONAD) 
-  (Layout: Hitscore_layout_interface.LAYOUT
-     with module Flow = Flow
-     with type 'a PGOCaml.monad = 'a Flow.IO.t)
-  (Access_rights : Hitscore_access_rights.ACCESS_RIGHTS 
-     with module Flow = Flow
-     with module Configuration = Configuration
-     with module Layout = Layout):
-  COMMON
-    with module Configuration = Configuration
-    with module Flow = Flow
-    with module Layout = Layout
-    with module Access_rights = Access_rights
-= struct
-  module Configuration = Configuration
-  module Flow = Flow
-  module Access_rights = Access_rights
-  module Layout = Layout
-
-  open Hitscore_std
-  open Flow
+module Common : COMMON = struct
 
   let add_log ~dbh log = 
-    Layout.Record_log.(
-      add_value ~dbh ~log >>= fun (_: pointer) ->
+    Access.Log.(
+      add_value ~dbh ~log >>= fun _ ->
       return ())
 
   let check_hiseq_raw_availability ~dbh ~hiseq_raw =
     Layout.Record_inaccessible_hiseq_raw.(
-      get_all ~dbh >>= fun all ->
-      of_list_sequential all ~f:(fun p ->
-        get ~dbh p >>= fun {g_last_modified; deleted; _} ->
-        begin match g_last_modified with
-        | Some t -> return (p, t, Array.to_list deleted)
-        | None -> error (`layout_inconsistency 
-                            (`Record "inaccessible_hiseq_raw",
-                             `no_last_modified_timestamp p))
-        end)
+      Access.Inaccessible_hiseq_raw.get_all ~dbh >>= fun all ->
+      of_list_sequential all ~f:(fun t ->
+        let p = pointer t in
+        return (p, t.g_last_modified, Array.to_list t.g_value.deleted))
       >>| List.sort ~cmp:(fun a b -> compare (snd3 b) (snd3 a))
       >>=
         (function
         | [] ->
           printf "There were no inaccessible_hiseq_raw => \
                        creating the empty one.\n";
-          Layout.Record_inaccessible_hiseq_raw.add_value ~dbh ~deleted:[| |]
+          Access.Inaccessible_hiseq_raw.add_value ~dbh ~deleted:[| |]
           >>= fun pointer ->
           return (pointer, [])
         | (h, ts, l) :: t as whole-> 
-          printf "Last inaccessible_hiseq_raw: %ld on %s\n"
+          printf "Last inaccessible_hiseq_raw: %d on %s\n"
             h.Layout.Record_inaccessible_hiseq_raw.id
             (Time.to_string ts);
           return (h, List.map whole trd3 |! List.concat))
@@ -373,24 +365,24 @@ module Make
       
   let volume_unix_directory ?hr_tag ~id ~kind =
     let toplevel = Layout.File_system.toplevel_of_kind kind in
-    sprintf "%s/%09ld%s" toplevel id
+    sprintf "%s/%09d%s" toplevel id
       (Option.value_map ~default:"" hr_tag ~f:((^) "_"))
 
   let rec trees_of_volume ~dbh ~configuration volume_pointer =
     Layout.File_system.(
-      get_volume ~dbh volume_pointer >>= fun {volume_content} ->
-      match volume_content with
+      Access.Volume.get ~dbh volume_pointer >>= fun {g_content} ->
+      match g_content with
       | Link p -> trees_of_volume ~dbh ~configuration p
       | Tree (_, t) -> return t)
 
 
   let rec path_of_volume ~configuration ~dbh volume_pointer =
     let open Layout.File_system in
-    get_volume ~dbh volume_pointer
-    >>= fun { volume_pointer = { id }; volume_kind; volume_content } ->
-    match volume_content with
+    Access.Volume.get ~dbh volume_pointer
+    >>= fun { g_id = id; g_kind; g_content } ->
+    match g_content with
     | Tree (hr_tag, trees) ->
-      let vol = volume_unix_directory ~id ~kind:volume_kind ?hr_tag in
+      let vol = volume_unix_directory ~id ~kind:g_kind ?hr_tag in
       begin match Configuration.path_of_volume_fun configuration with
       | Some vol_path ->
         return (vol_path vol)
@@ -402,12 +394,12 @@ module Make
 
   let rec all_paths_of_volume ~configuration ~dbh volume_pointer =
     let open Layout.File_system in
-    get_volume ~dbh volume_pointer
-    >>= fun { volume_pointer = { id }; volume_kind; volume_content } ->
-    match volume_content with
+    Access.Volume.get ~dbh volume_pointer
+    >>= fun { g_id = id; g_kind; g_content } ->
+    match g_content with
     | Tree (hr_tag, trees) ->
       let relative_paths = trees_to_unix_relative_paths trees in
-      let vol = volume_unix_directory ~id ~kind:volume_kind ?hr_tag in
+      let vol = volume_unix_directory ~id ~kind:g_kind ?hr_tag in
       begin match Configuration.path_of_volume_fun configuration with
       | Some vol_path ->
         return (List.map relative_paths (Filename.concat (vol_path vol)))
@@ -421,11 +413,11 @@ module Make
 
     type t = {
       tag : string;
-      id : int32;
+      id : int;
       pbs_script_filename: string;
       pbs_save_directory: string;
     }
-    type t_fun = int32 -> t
+    type t_fun = int -> t
       
     let make ?(pbs_save_directory="_pbs_run")
         ?(pbs_script_filename="script.pbs") tag =
@@ -437,7 +429,7 @@ module Make
       | None -> error `work_directory_not_configured
       end
       >>= fun work_path ->
-      return Filename.(concat work_path (sprintf "%s_%ld" t.tag t.id))
+      return Filename.(concat work_path (sprintf "%s_%d" t.tag t.id))
 
     let pbs_output_path t ~configuration  =
       work_path_for_job t ~configuration  >>= fun wp ->
@@ -454,7 +446,7 @@ module Make
     let pbs_script_path t ~configuration  =
       work_path_for_job t ~configuration  >>= fun wp ->
       return Filename.(concat wp t.pbs_script_filename)
-      
+        
     let prepare_work_environment t ~dbh ~configuration  =
       work_path_for_job t ~configuration  >>= fun wp ->
       pbs_output_path   t ~configuration  >>= fun op ->
@@ -468,7 +460,7 @@ module Make
       Access_rights.set_posix_acls ~dbh (`dir op) ~configuration >>= fun () ->
       Access_rights.set_posix_acls ~dbh (`dir rp) ~configuration >>= fun () ->
       Access_rights.set_posix_acls ~dbh (`dir sp) ~configuration
-      
+        
     let save_pbs_runtime_information t ~dbh ~configuration dest =
       pbs_output_path   t ~configuration  >>= fun op ->
       pbs_runtime_path  t ~configuration  >>= fun rp ->
@@ -479,7 +471,7 @@ module Make
       Access_rights.set_posix_acls ~dbh (`dir dest_path) ~configuration
 
 
-      
+        
     let pbs_script t ~configuration 
         ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
         ~on_command_failure ~add_commands =
@@ -521,7 +513,7 @@ module Make
       Access_rights.set_posix_acls ~dbh ~configuration (`file pbs_script_path)
       >>= fun () ->
       ksprintf system_command "qsub %s > %s/jobid" pbs_script_path run_path
-      
+        
     let qstat t ~configuration =
       pbs_runtime_path t ~configuration >>= fun run_path ->
       ksprintf system_command "cat %s/jobid && qstat `cat %s/jobid`" 
@@ -537,48 +529,56 @@ module Make
       ksprintf system_command "cat %s/jobid && qdel `cat %s/jobid`" 
         run_path run_path
 
-          
+        
   end
 
 
   module Make_pbs_function (Layout_function : sig
-    type 'a pointer = private {
-      id : int32;
-    }
-   val set_failed : [> `can_complete ] pointer -> dbh:Layout.db_handle ->
-     ([ `can_nothing ] pointer, [> `pg_exn of exn ]) Flow.monad
-
-   val get_status :
-     'a pointer ->
-     dbh:Layout.db_handle ->
-     (Layout.Enumeration_process_status.t,
-      [> `layout_inconsistency of
-          [>  `File_system | `Function of string | `Record of string ] *
-            [> `select_did_not_return_one_tuple of string * int ]
-      | `pg_exn of exn ])
-       Layout.Flow.monad
-  end) (PBS_stuff : sig
+    type pointer = { id : int; }
+      val set_failed :
+        dbh:Hitscore_db_backend.Backend.db_handle ->
+        pointer ->
+        (unit,
+         [> `Layout of
+             [> `Function of string ] *
+               [> `db_backend_error of
+                   [> `query of Hitscore_db_backend.Sql_query.t * exn ] ] ])
+          Hitscore_std.monad
+      val get_status :
+        pointer ->
+        dbh:Hitscore_db_backend.Backend.db_handle ->
+        (Layout.Enumeration_process_status.t,
+         [> `Layout of
+             [> `Function of string ] *
+               [> `db_backend_error of
+                   [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+               | `parse_evaluation_error of
+                   string Hitscore_std.Option.t list * exn
+               | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+               | `result_not_unique of
+                   Hitscore_db_backend.Backend.result ] ])
+          Flow.monad
     val pbs_fun : PBS.t_fun
     val name_in_log: string
   end) = struct
 
     let fail ~dbh ?reason f =
       Layout_function.set_failed ~dbh f
-      >>= fun failed ->
-      Layout.Record_log.add_value ~dbh
-        ~log:(sprintf "(set_%s_failed %ld%s)" PBS_stuff.name_in_log
-                failed.Layout_function.id
+      >>= fun () ->
+      Access.Log.add_value ~dbh
+        ~log:(sprintf "(set_%s_failed %d%s)" Layout_function.name_in_log
+                f.Layout_function.id
                 (Option.value_map ~default:"" reason
                    ~f:(sprintf " (reason %S)")))
       >>= fun _ ->
-      return failed
+      return f
 
     let status ~dbh ~configuration pointer = 
       Layout_function.(
         get_status ~dbh pointer  
         >>= function
         | `Started ->
-          PBS.qstat (PBS_stuff.pbs_fun pointer.Layout_function.id) ~configuration
+          PBS.qstat (Layout_function.pbs_fun pointer.Layout_function.id) ~configuration
         | s -> return (`not_started s))
 
     let kill ~dbh ~configuration  f = 
@@ -586,7 +586,7 @@ module Make
         get_status ~dbh f 
         >>= function
         | `Started ->
-          PBS.qdel (PBS_stuff.pbs_fun f.id) ~configuration >>= fun () ->
+          PBS.qdel (Layout_function.pbs_fun f.id) ~configuration >>= fun () ->
           fail ~dbh ~reason:"killed" f
         | s -> error (`not_started s))
 

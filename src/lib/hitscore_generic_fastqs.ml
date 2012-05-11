@@ -1,39 +1,32 @@
 
+open Hitscore_common
+open Common
 
 
-module Make_unaligned_coercion
-  (Common: Hitscore_common.COMMON):
+module Unaligned_coercion:
   Hitscore_function_interfaces.COERCE_B2F_UNALIGNED
-  with module Common = Common
-
+    
   = struct
 
-  module Common = Common
-  open Common
-
-  open Hitscore_std
-  open Flow
-
   let run ~dbh ~configuration ~input =
-    Layout.Record_bcl_to_fastq_unaligned.(
-      get ~dbh input >>= fun {directory} -> return directory)
-    >>= fun unaligned_pointer ->
-    Layout.Function_coerce_b2f_unaligned.(
-      add_evaluation ~dbh ~input ~recomputable:true ~recompute_penalty:0.1
-      >>= fun inserted ->
-      set_started ~dbh inserted >>= fun started ->
-      let post_insert_work =
-        Layout.File_system.(
-          add_link ~dbh ~kind:`generic_fastqs_dir unaligned_pointer
-          >>= fun vol_pointer ->
-          Layout.Record_generic_fastqs.add_value ~dbh ~directory:vol_pointer
-          >>= fun result ->
-          set_succeeded ~dbh ~result started)
-      in
-      double_bind post_insert_work ~ok:return
-        ~error:(fun e ->
-          set_failed ~dbh started >>= fun _ ->
-          error e))
+    let layout = Classy.make dbh in
+    layout#bcl_to_fastq_unaligned#get input
+    >>= fun b2fu ->
+    layout#coerce_b2f_unaligned#add
+      ~input ~recomputable:true ~recompute_penalty:0.1 ()
+    >>= fun inserted ->
+    inserted#get >>= fun inserted ->
+    inserted#set_started >>= fun () ->
+    let post_insert_work =
+      layout#file_system#add_link_volume 
+        ~kind:`generic_fastqs_dir ~pointer:b2fu#directory#pointer ()
+      >>= fun vol ->
+      layout#generic_fastqs#add ~directory:vol#pointer ()
+      >>= fun res ->
+      inserted#set_succeeded res#pointer
+    in
+    double_bind post_insert_work ~ok:return
+      ~error:(fun e -> inserted#set_failed >>= fun () -> error e)
 
     
   end

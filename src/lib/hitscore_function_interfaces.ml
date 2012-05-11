@@ -1,18 +1,12 @@
 (** The interfaces of the function-implementations.  *)
 
+open Hitscore_common
 
 (** The sample-sheet assembly function. *)
 module type ASSEMBLE_SAMPLE_SHEET = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
-
-
-  val illumina_barcodes: (int32 * string) list
-  val bioo_barcodes: (int32 * string) list
-
+  val illumina_barcodes : (int * string) list
+  val bioo_barcodes : (int * string) list
   
   (** Run the whole function to assemble a sample-sheet. Example:
       {[
@@ -25,62 +19,62 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
   *)
 
   val run :
-    dbh:(string, bool) Batteries.Hashtbl.t Common.Layout.PGOCaml.t ->
-    kind:Common.Layout.Enumeration_sample_sheet_kind.t ->
-    configuration:Common.Configuration.local_configuration ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    kind:Hitscore_common.Layout.Enumeration_sample_sheet_kind.t ->
+    configuration:Hitscore_common.Configuration.local_configuration ->
     ?force_new:bool ->
     ?note:string ->
     string ->
     ([> `new_failure of
-        [ `can_nothing ]
-          Common.Layout.Function_assemble_sample_sheet.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
+        Hitscore_common.Layout.Function_assemble_sample_sheet.pointer *
+          [> `Layout of
+              [> `Record of string ] *
+                [> `db_backend_error of
+                    [> `query of
+                        Hitscore_db_backend.Sql_query.t * exn ]
+                | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                | `parse_value_error of string option list * exn
+                | `wrong_add_value ]
           | `root_directory_not_configured
           | `system_command_error of string * exn
           | `write_file_error of string * string * exn ]
      | `new_success of
-         [ `can_get_result ]
-           Common.Layout.Function_assemble_sample_sheet.pointer
+         Hitscore_common.Layout.Function_assemble_sample_sheet.pointer
      | `previous_success of
-         [ `can_get_result ]
-           Common.Layout.Function_assemble_sample_sheet.pointer *
-           Common.Layout.Record_sample_sheet.pointer ],
-     [> `barcode_not_found of
-         int32 * Common.Layout.Enumeration_barcode_provider.t
-     | `fatal_error of
-         [> `add_volume_did_not_create_a_tree_volume of
-             Common.Layout.File_system.pointer
-         | `trees_to_unix_paths_should_return_one ]
-     | `layout_inconsistency of
+         Hitscore_common.Layout.Function_assemble_sample_sheet.pointer *
+           Hitscore_common.Layout.Record_sample_sheet.pointer ],
+     [> `Layout of
          [> `File_system | `Function of string | `Record of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `search_flowcell_by_name_not_unique of
-               (string * (int32 * Common.Layout.PGOCaml.int32_array) list)
-           | `select_did_not_return_one_tuple of string * int
-           | `successful_status_with_no_result of int32 ]
-     | `duplicated_barcode of string
-     | `pg_exn of exn
-     | `wrong_request of
-         [> `record_flowcell ] * [> `value_not_found of string ] ])
-      Common.Flow.monad
-
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_evaluation_error of
+               string Hitscore_std.Option.t list * exn
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `parse_volume_error of string option list * exn
+           | `result_not_unique of
+               Hitscore_db_backend.Backend.result
+           | `wrong_add_value ]
+     | `barcode_not_found of
+         int *
+           Hitscore_common.Layout.Enumeration_barcode_provider.t
+               | `duplicated_barcode of string
+               | `fatal_error of
+                   [> `add_volume_did_not_create_a_tree_volume of
+                        Hitscore_common.Layout.File_system.pointer
+                    | `trees_to_unix_paths_should_return_one ]
+               | `layout_inconsistency of
+                   [> `Function of string | `Record of string ] *
+                   [> `search_flowcell_by_name_not_unique of string * int
+                    | `successful_status_with_no_result of int ]
+               | `wrong_request of
+                   [> `record_flowcell ] * [> `value_not_found of string ] ])
+      Flow.monad
 end
 
 
 (** The module to run CASAVA's demultiplexer.  *)
 module type BCL_TO_FASTQ = sig
-
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
 
            
   (** Start the demultiplexer. Example:
@@ -108,57 +102,59 @@ start ~dbh ~configuration       (* common arguments *)
      monad are other other errors (before starting the function, or
      while setting it as failed -- unlikely).
 *)
-  val start :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    sample_sheet:Common.Layout.Record_sample_sheet.pointer ->
-    hiseq_dir:Common.Layout.Record_hiseq_raw.pointer ->
-    ?tiles:string ->
-    ?bases_mask:string ->
-    ?mismatch:[< `one | `two | `zero > `one ] ->
-    ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
-    ?user:string ->
-    ?wall_hours:int ->
-    ?nodes:int ->
-    ?ppn:int ->
-    ?queue:string ->
-    ?hitscore_command:string ->
-    ?make_command:string ->
-    string ->
-    ([> `failure of
-        [ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
-          | `system_command_error of string * exn
-          | `work_directory_not_configured
-          | `write_file_error of string * string * exn ]
-     | `success of
-         [ `can_complete ]
-           Common.Layout.Function_bcl_to_fastq.pointer ],
-     [> `cannot_recognize_file_type of string
-     | `empty_sample_sheet_volume of
-         Common.Layout.File_system.pointer *
-           Common.Layout.Record_sample_sheet.pointer
-     | `hiseq_dir_deleted
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `no_last_modified_timestamp of
-               Common.Layout.Record_inaccessible_hiseq_raw.pointer
-           | `select_did_not_return_one_tuple of string * int ]
-     | `more_than_one_file_in_sample_sheet_volume of
-         Common.Layout.File_system.pointer *
-           Common.Layout.Record_sample_sheet.pointer * string list
-     | `pg_exn of exn
-     | `raw_data_path_not_configured
-     | `root_directory_not_configured ])
-      Common.Flow.monad
+           val start :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             sample_sheet:Hitscore_common.Layout.Record_sample_sheet.pointer ->
+             hiseq_dir:Hitscore_common.Layout.Record_hiseq_raw.pointer ->
+             ?tiles:string ->
+             ?bases_mask:string ->
+             ?mismatch:[< `one | `two | `zero > `one ] ->
+             ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
+             ?user:string ->
+             ?wall_hours:int ->
+             ?nodes:int ->
+             ?ppn:int ->
+             ?queue:string ->
+             ?hitscore_command:string ->
+             ?make_command:string ->
+             string ->
+             ([> `failure of
+                   Hitscore_common.Layout.Function_bcl_to_fastq.pointer *
+                   [> `Layout of
+                        [> `Record of string ] *
+                        [> `db_backend_error of
+                             [> `query of
+                                  Hitscore_db_backend.Sql_query.t * exn ]
+                         | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                         | `parse_value_error of string option list * exn
+                         | `wrong_add_value ]
+                    | `system_command_error of string * exn
+                    | `work_directory_not_configured
+                    | `write_file_error of string * string * exn ]
+               | `success of
+                   Hitscore_common.Layout.Function_bcl_to_fastq.pointer ],
+              [> `Layout of
+                   [> `File_system | `Function of string | `Record of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `parse_value_error of string option list * exn
+                    | `parse_volume_error of string option list * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result
+                    | `wrong_add_value ]
+               | `empty_sample_sheet_volume of
+                   Hitscore_common.Layout.File_system.pointer *
+                   Hitscore_common.Layout.Record_sample_sheet.pointer
+               | `hiseq_dir_deleted
+               | `more_than_one_file_in_sample_sheet_volume of
+                   Hitscore_common.Layout.File_system.pointer *
+                   Hitscore_common.Layout.Record_sample_sheet.pointer *
+                   string Hitscore_common.List.t
+               | `raw_data_path_not_configured
+               | `root_directory_not_configured ])
+             Hitscore_common.t
 
   (** Create the resulting [Layout.Record_bcl_to_fastq.t] and register
       the [bcl_to_fastq] evaluation as a success.
@@ -167,82 +163,99 @@ start ~dbh ~configuration       (* common arguments *)
       [hitscore <profile> register-success] which itself should be called
       only at the end of the PBS script generated by the {!start} function.
   *)
-  val succeed :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    bcl_to_fastq:[> `can_complete ]
-      Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([> `failure of
-        [ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
-          | `system_command_error of string * exn ]
-     | `success of
-         [ `can_get_result ]
-           Common.Layout.Function_bcl_to_fastq.pointer ],
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `root_directory_not_configured
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
+           val succeed :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             bcl_to_fastq:Hitscore_common.Layout.Function_bcl_to_fastq.pointer ->
+             ([> `failure of
+                   Hitscore_common.Layout.Function_bcl_to_fastq.pointer *
+                   [> `Layout of
+                        [> `Record of string ] *
+                        [> `db_backend_error of
+                             [> `query of
+                                  Hitscore_db_backend.Sql_query.t * exn ]
+                         | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                         | `parse_value_error of string option list * exn
+                         | `wrong_add_value ]
+                    | `system_command_error of string * exn ]
+               | `success of
+                   Hitscore_common.Layout.Function_bcl_to_fastq.pointer ],
+              [> `Layout of
+                   [> `File_system | `Function of string | `Record of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_evaluation_error of
+                        string Hitscore_std.Option.t list * exn
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `parse_value_error of string option list * exn
+                    | `parse_volume_error of string option list * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result
+                    | `wrong_add_value ]
+               | `root_directory_not_configured
+               | `system_command_error of string * exn
+               | `work_directory_not_configured ])
+             Hitscore_common.t
 
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
-  val fail :
-    dbh:Common.Layout.db_handle ->
-    ?reason:string ->
-    [> `can_complete ] Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
-      
+           val fail :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             ?reason:string ->
+             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+             (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
+              [> `Layout of
+                  [> `Function of string | `Record of string ] *
+                    [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `wrong_add_value ] ])
+               Hitscore_common.t
+
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
-  val status :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    'a Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([ `not_started of Common.Layout.Enumeration_process_status.t
-     | `running
-     | `started_but_not_running of
-         [ `system_command_error of string * exn ] ],
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
-      
+           val status :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+             ([> `not_started of
+                   Hitscore_common.Layout.Enumeration_process_status.t
+               | `running
+               | `started_but_not_running of
+                   [> `system_command_error of string * exn ] ],
+              [> `Layout of
+                   [> `Function of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_evaluation_error of
+                        string Hitscore_std.Option.t list * exn
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result ]
+               | `work_directory_not_configured ])
+             Hitscore_common.t
+
+               
   (** Kill the evaluation ([qdel]) and set it as failed. *)
-  val kill :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    [> `can_complete ] Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `not_started of Common.Layout.Enumeration_process_status.t
-     | `pg_exn of exn
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
+           val kill :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+             (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
+              [> `Layout of
+                   [> `Function of string | `Record of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_evaluation_error of
+                        string Hitscore_std.Option.t list * exn
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result
+                    | `wrong_add_value ]
+               | `not_started of
+                   Hitscore_common.Layout.Enumeration_process_status.t
+               | `system_command_error of string * exn
+               | `work_directory_not_configured ])
+             Hitscore_common.t
 
 end
 
@@ -250,10 +263,6 @@ end
 Layout}.  *)
 module type UNALIGNED_DELIVERY = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
 
   (** Do the actual preparation of the delivery. We pass the
       [~bcl_to_fastq] function for practical reasons (it the id used
@@ -261,35 +270,37 @@ module type UNALIGNED_DELIVERY = sig
       directory name (the default begin the data of the current day; and
       [~destination] is a directory path. *)
   val run :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Hitscore_common.Configuration.local_configuration ->
     ?directory_tag:string ->
-    bcl_to_fastq:'a Common.Layout.Function_bcl_to_fastq.pointer ->
-    invoice:Common.Layout.Record_invoicing.pointer ->
+    bcl_to_fastq:Hitscore_common.Layout.Function_bcl_to_fastq.pointer ->
+    invoice:Hitscore_common.Layout.Record_invoicing.pointer ->
     destination:string ->
-    ([ `can_get_result ]
-        Common.Layout.Function_prepare_unaligned_delivery.pointer,
-     [> `bcl_to_fastq_not_succeeded of
-         'a Common.Layout.Function_bcl_to_fastq.pointer *
-           Common.Layout.Enumeration_process_status.t
-     | `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `io_exn of exn
-     | `layout_inconsistency of
+    (unit,
+     [> `Layout of
          [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_evaluation_error of
+               string Hitscore_std.Option.t list * exn
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `parse_volume_error of string option list * exn
+           | `result_not_unique of
+               Hitscore_db_backend.Backend.result
+           | `wrong_add_value ]
+     | `bcl_to_fastq_not_succeeded of
+         Hitscore_common.Layout.Function_bcl_to_fastq.pointer *
+           Hitscore_common.Layout.Enumeration_process_status.t
+     | `io_exn of exn
      | `not_single_flowcell of
-         (string * int Hitscore_std.List.t) Hitscore_std.List.t
-     | `partially_found_lanes of
-         int32 * string *
-           Common.Layout.Record_lane.pointer Hitscore_std.Array.t *
-           (int * Common.Layout.Record_lane.pointer) option list
-     | `pg_exn of exn
+         (string * int Hitscore_common.List.t)
+           Hitscore_common.List.t
+     | `partially_found_lanes of int * string
      | `root_directory_not_configured
      | `system_command_error of string * exn
-     | `wrong_unaligned_volume of string list ])
-      Common.Flow.t
+     | `wrong_unaligned_volume of string Hitscore_common.List.t ])
+      Flow.monad
 
 
 end
@@ -297,27 +308,23 @@ end
 (** Deletion of intensity files. *)
 module type DELETE_INTENSITIES = sig
     
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
-
   (** Register a successful deletion of intensity files and create the
       new Hiseq_raw record. *)
   val register :
-    dbh:Common.Layout.db_handle ->
-    hiseq_raw:Common.Layout.Record_hiseq_raw.pointer ->
-    ([ `can_get_result ]
-        Common.Layout.Function_delete_intensities.pointer,
-     [> `hiseq_dir_deleted
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `no_last_modified_timestamp of
-               Common.Layout.Record_inaccessible_hiseq_raw.pointer
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    hiseq_raw:Hitscore_common.Layout.Record_hiseq_raw.pointer ->
+    (Hitscore_common.Layout.Function_delete_intensities.pointer,
+     [> `Layout of
+         [> `Function of string | `Record of string ] *
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `result_not_unique of
+               Hitscore_db_backend.Backend.result
+           | `wrong_add_value ]
+     | `hiseq_dir_deleted ])
+      Hitscore_common.t
 
 end
 
@@ -325,159 +332,179 @@ end
 (** The module to create “untyped” fastq directories.  *)
 module type COERCE_B2F_UNALIGNED = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
-
   
-  (** Start *)
   val run :
-    dbh:Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
-    input:Layout.Record_bcl_to_fastq_unaligned.pointer ->
-    ([ `can_get_result ]
-        Common.Layout.Function_coerce_b2f_unaligned.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Record of string | `Function of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
-
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:'a ->
+    input:Hitscore_common.Layout.Record_bcl_to_fastq_unaligned.pointer ->
+    (unit,
+     [> `Layout of
+         [> `File_system | `Function of string | `Record of string ] *
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_evaluation_error of
+               string Hitscore_std.Option.t list * exn
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `result_not_unique of
+               Hitscore_db_backend.Backend.result
+           | `wrong_add_value ] ])
+      Hitscore_common.t
 end
 
 
 (** The function to run fastx on a given set of fastq files.  *)
 module type FASTX_QUALITY_STATS = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
 
   (** Call fastx_quality_stats the “right” way. *)
-  val call_fastx :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    volume:Common.Layout.File_system.pointer ->
-    option_Q:int ->
-    Hitscore_std.String.t ->
-    string ->
-    (unit,
-     [> `cannot_recognize_file_type of string
-     | `cannot_recognize_fastq_format of string
-     | `file_path_not_in_volume of
-         Hitscore_std.String.t * Common.Layout.File_system.pointer
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `root_directory_not_configured
-     | `system_command_error of string * exn ])
-      Common.Flow.monad
+           val call_fastx :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             volume:Hitscore_common.Layout.File_system.pointer ->
+             option_Q:int ->
+             Hitscore_common.String.t ->
+             string ->
+             (unit,
+              [> `Layout of
+                   [> `File_system ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `parse_value_error of string option list * exn
+                    | `parse_volume_error of string option list * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result ]
+               | `cannot_recognize_fastq_format of Hitscore_common.String.t
+               | `file_path_not_in_volume of
+                   Hitscore_common.String.t *
+                   Hitscore_common.Layout.File_system.pointer
+               | `root_directory_not_configured
+               | `system_command_error of string * exn ])
+             Hitscore_common.t
   
   (** Start *)
-  val start :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    ?option_Q:int32 ->
-    ?filter_names:string list ->
-    ?user:string ->
-    ?wall_hours:int ->
-    ?nodes:int ->
-    ?ppn:int ->
-    ?queue:string ->
-    ?hitscore_command:string ->
-    Common.Layout.Record_generic_fastqs.pointer ->
-    ([ `can_complete ] Layout.Function_fastx_quality_stats.pointer,
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `root_directory_not_configured
-     | `system_command_error of string * exn
-     | `work_directory_not_configured
-     | `write_file_error of string * string * exn ])
-      Common.Flow.monad
+           val start :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             ?option_Q:int ->
+             ?filter_names:Hitscore_common.String.t Hitscore_common.List.t ->
+             ?user:string ->
+             ?wall_hours:int ->
+             ?nodes:int ->
+             ?ppn:int ->
+             ?queue:string ->
+             ?hitscore_command:string ->
+             Hitscore_common.Layout.Record_generic_fastqs.pointer ->
+             (Hitscore_common.Layout.Function_fastx_quality_stats.pointer,
+              [> `Layout of
+                   [> `File_system | `Function of string | `Record of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `parse_value_error of string option list * exn
+                    | `parse_volume_error of string option list * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result
+                    | `wrong_add_value ]
+               | `root_directory_not_configured
+               | `system_command_error of string * exn
+               | `work_directory_not_configured
+               | `write_file_error of string * string * exn ])
+             Hitscore_common.t
 
-  val succeed :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    [> `can_complete ] Layout.Function_fastx_quality_stats.pointer ->
-    ([> `failure of
-        [ `can_nothing ] Layout.Function_fastx_quality_stats.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
-          | `system_command_error of string * exn ]
-     | `success of [ `can_get_result ] Layout.Function_fastx_quality_stats.pointer ],
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `root_directory_not_configured
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
+
+           val succeed :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             Hitscore_common.Layout.Function_fastx_quality_stats.pointer ->
+             ([> `failure of
+                   Hitscore_common.Layout.Function_fastx_quality_stats.pointer *
+                   [> `Layout of
+                        [> `Record of string ] *
+                        [> `db_backend_error of
+                             [> `query of
+                                  Hitscore_db_backend.Sql_query.t * exn ]
+                         | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                         | `parse_value_error of string option list * exn
+                         | `wrong_add_value ]
+                    | `system_command_error of string * exn ]
+               | `success of
+                   Hitscore_common.Layout.Function_fastx_quality_stats.pointer ],
+              [> `Layout of
+                   [> `File_system | `Function of string | `Record of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_evaluation_error of
+                        string Hitscore_std.Option.t list * exn
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `parse_value_error of string option list * exn
+                    | `parse_volume_error of string option list * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result
+                    | `wrong_add_value ]
+               | `root_directory_not_configured
+               | `system_command_error of string * exn
+               | `work_directory_not_configured ])
+             Hitscore_common.t
       
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
-  val fail :
-    dbh:Common.Layout.db_handle ->
-    ?reason:string ->
-    [> `can_complete ] Common.Layout.Function_fastx_quality_stats.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_fastx_quality_stats.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
+           val fail :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             ?reason:string ->
+             Hitscore_layout.Layout.Function_fastx_quality_stats.pointer ->
+             (Hitscore_layout.Layout.Function_fastx_quality_stats.pointer,
+              [> `Layout of
+                   [> `Function of string | `Record of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `wrong_add_value ] ])
+             Hitscore_common.t
       
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
-  val status :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    'a Common.Layout.Function_fastx_quality_stats.pointer ->
-    ([ `not_started of Common.Layout.Enumeration_process_status.t
-     | `running
-     | `started_but_not_running of
-         [ `system_command_error of string * exn ] ],
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
+           val status :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             Hitscore_layout.Layout.Function_fastx_quality_stats.pointer ->
+             ([> `not_started of
+                   Hitscore_common.Layout.Enumeration_process_status.t
+               | `running
+               | `started_but_not_running of
+                   [> `system_command_error of string * exn ] ],
+              [> `Layout of
+                   [> `Function of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_evaluation_error of
+                        string Hitscore_std.Option.t list * exn
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result ]
+               | `work_directory_not_configured ])
+             Hitscore_common.t
       
   (** Kill the evaluation ([qdel]) and set it as failed. *)
-  val kill :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    [> `can_complete ] Common.Layout.Function_fastx_quality_stats.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_fastx_quality_stats.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `not_started of Common.Layout.Enumeration_process_status.t
-     | `pg_exn of exn
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
+           val kill :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Hitscore_common.Configuration.local_configuration ->
+             Hitscore_layout.Layout.Function_fastx_quality_stats.pointer ->
+             (Hitscore_layout.Layout.Function_fastx_quality_stats.pointer,
+              [> `Layout of
+                   [> `Function of string | `Record of string ] *
+                   [> `db_backend_error of
+                        [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+                    | `parse_evaluation_error of
+                        string Hitscore_std.Option.t list * exn
+                    | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+                    | `result_not_unique of
+                        Hitscore_db_backend.Backend.result
+                    | `wrong_add_value ]
+               | `not_started of
+                   Hitscore_common.Layout.Enumeration_process_status.t
+               | `system_command_error of string * exn
+               | `work_directory_not_configured ])
+             Hitscore_common.t
 
 end

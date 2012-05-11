@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 77c103111e1d9016fa11f03b4f9bb786)
+# DO NOT EDIT (digest: 2d4cabbaa4ce2eb02b82e4bba374ba69)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -30,6 +30,7 @@
 <src/lib/*.ml{,i}>: pkg_sexplib.syntax
 <src/lib/*.ml{,i}>: pkg_biocaml
 <src/lib/*.ml{,i}>: pkg_sequme
+<src/lib/*.ml{,i}>: pkg_lwt
 # Executable hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscoregen
@@ -40,6 +41,7 @@
 <src/app/hitscore_main.{native,byte}>: pkg_sexplib.syntax
 <src/app/hitscore_main.{native,byte}>: pkg_biocaml
 <src/app/hitscore_main.{native,byte}>: pkg_sequme
+<src/app/hitscore_main.{native,byte}>: pkg_lwt
 <src/app/*.ml{,i}>: use_hitscore
 <src/app/*.ml{,i}>: use_hitscoregen
 <src/app/*.ml{,i}>: pkg_threads
@@ -49,6 +51,7 @@
 <src/app/*.ml{,i}>: pkg_sexplib.syntax
 <src/app/*.ml{,i}>: pkg_biocaml
 <src/app/*.ml{,i}>: pkg_sequme
+<src/app/*.ml{,i}>: pkg_lwt
 # OASIS_STOP
 
 <src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o

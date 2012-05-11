@@ -290,12 +290,57 @@ module Sql_query = struct
 
 end
   
-module Make (Flow: Sequme_flow_monad.FLOW_MONAD) = struct
 
-  module PG = PGOCaml_generic.Make(Flow.IO)
-    (* with type 'a monad = 'a Flow.IO.t *)
-  module Flow = Flow
-  open Flow
+module type BACKEND = sig
+  type db_handle
+  type error = [
+  | `exn of exn
+  | `connection of exn
+  | `disconnection of exn
+  | `query of (string * exn)
+  ]
+  type result = string option list list
+
+  val connect :
+    ?host:string ->
+    ?port:int ->
+    ?database:string ->
+    ?user:string ->
+    ?password:string ->
+    ?log:(string -> unit) ->
+    unit ->
+    (db_handle,
+     [> `db_backend_error of [> error ] ]) Flow.monad
+
+  val disconnect :
+    dbh:db_handle ->
+    (unit, [> `db_backend_error of [> `disconnection of exn ] ])
+      Flow.monad
+  val reconnect :
+    dbh:db_handle ->
+    (db_handle,
+     [> `db_backend_error of
+         [> `connection of exn | `disconnection of exn ] ])
+      Flow.t
+
+  val query :
+    dbh:db_handle ->
+    Sql_query.t ->
+    (result,
+     [> `db_backend_error of [> `query of Sql_query.t * exn ] ]) Flow.monad
+  val wipe_out : dbh:db_handle -> (unit, 'a) Flow.t
+  val check_db :
+    dbh:db_handle ->
+    (unit,
+     [> `db_backend_error of
+         [> `connection of exn
+         | `disconnection of exn
+         | `query of Sql_query.t * exn ] ])
+      Flow.t
+      
+end
+  
+module Backend : BACKEND = struct
     
   type db_handle = {
     mutable connection: (string, bool) Hashtbl.t PG.t;

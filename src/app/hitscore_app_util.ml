@@ -1,8 +1,6 @@
 open Core.Std
   
-module Hitscore_threaded =
-  Hitscore.Make(Sequme.Flow_monad.Preemptive_threading_config)
-open Hitscore_threaded
+open Hitscore
 open Flow
 
 let result_ok_exn ?(fail=Failure "Not Ok") = function

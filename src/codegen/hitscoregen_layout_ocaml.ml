@@ -81,6 +81,7 @@ let ocaml_file_system_module out dsl =
   | _ -> ());
   line out "    | s -> Error (`toplevel_not_found s)";
 
+  line out "let pointer t = {id = t.g_id}";
 
   doc out "Module for constructing file trees less painfully.";
   line out "module Tree = struct";
@@ -100,15 +101,15 @@ let ocaml_encapsulate_layout_errors out ~error_location f =
   ()
       
 let ocaml_record_access_module ~out name fields =
-  line out "module Record_%s = struct" name;
-  line out "  include Record_%s" name;
+  line out "module %s = struct" (String.capitalize name);
+  line out "  open Record_%s" name;
 
   let error_location = sprintf "`Record %S" name in
 
   line out "let add_value";
   List.iter fields (function
-  | (n, Option t) -> line out "   ?(%s:%s option)" n (ocaml_type t);
-  | (n, t) -> line out "   ~(%s:%s)" n (ocaml_type t);
+  | (n, Option t) -> line out "   ?%s" n;
+  | (n, t) -> line out "   ~%s" n;
   );
   line out " ~dbh =\n   let v = { ";
   List.iter fields (function (n, _) -> raw out "%s; " n);
@@ -188,8 +189,8 @@ let ocaml_record_access_module ~out name fields =
   ()
 
 let ocaml_function_access_module ~out name result_type args =
-  line out "module Function_%s = struct" name;
-  line out "  include Function_%s" name;
+  line out "module %s = struct" (String.capitalize name);
+  line out "  open Function_%s" name;
 
   let error_location = sprintf "`Function %S" name in
 
@@ -197,8 +198,8 @@ let ocaml_function_access_module ~out name result_type args =
   line out "    ?(recomputable=false)";
   line out "    ?(recompute_penalty=0.)";
   List.iter args (function
-  | (n, Option t) -> line out "   ?(%s:%s option)" n (ocaml_type t);
-  | (n, t) -> line out "   ~(%s:%s)" n (ocaml_type t);
+  | (n, Option t) -> line out "   ?%s" n;
+  | (n, t) -> line out "   ~%s" n;
   );
   line out " ~dbh =\n   let v = { ";
   List.iter args (function (n, _) -> raw out "%s; " n);
@@ -309,8 +310,8 @@ let ocaml_function_access_module ~out name result_type args =
   ()
 
 let ocaml_file_system_access_module ~out dsl =
-  line out "module File_system = struct";
-  line out "  include File_system";
+  line out "module Volume = struct";
+  line out "  open File_system";
 
   let error_location = "`File_system" in
 
@@ -412,7 +413,7 @@ end";
 
     | _ -> sprintf "%s.(%s)" modname field
   in
-  let get_like_easy_methods modname eltname =
+  let get_like_easy_methods modname eltname types_module =
     line out "\
       method all =
         (%s.get_all ~dbh)
@@ -420,8 +421,8 @@ end";
       method get p =
         %s.get ~dbh p >>| %s layout
       method get_unsafe p = 
-        %s.(get ~dbh (unsafe_cast p)) >>| %s layout"
-      modname eltname modname eltname modname eltname;
+        %s.(get ~dbh (%s.unsafe_cast p)) >>| %s layout"
+      modname eltname modname eltname modname types_module eltname;
   in
 
   let add_method ?(method_name="add") add_function fields name modname =
@@ -436,7 +437,7 @@ end";
     | (n, Option t) -> line out "   ?%s" n
     | (n, t) -> line out "   ~%s" n
     );
-    line out "    >>= fun (p: %s.pointer) ->" modname;
+    line out "    >>= fun p ->";
     line out "    return (%s)"
       (make_pointer_object "p" name modname)
   in
@@ -444,7 +445,7 @@ end";
   line out "let classy (dbh : Backend.db_handle) = ( () : hidden_for_ocamldoc )";
 
   line out "(**/**)";
-  line out "let rec classy (dbh : Backend.db_handle) =";
+  line out "let rec make (dbh : Backend.db_handle) =";
   line out "  object (self_layout)";
   line out "  method _dbh = dbh";
   List.iter dsl.nodes (function
@@ -461,19 +462,20 @@ end";
   line out "  method g_id = t.File_system.g_id";
   line out "  method g_kind = t.File_system.g_kind";
   line out "  method g_content = t.File_system.g_content";
+  line out "  method g_pointer = File_system.(pointer t)";
   line out "  end";
   line out "and file_system layout = let dbh = layout#_dbh in object";
-  get_like_easy_methods "File_system" "volume";
+  get_like_easy_methods "Volume" "volume" "File_system";
   (* Using type 'Int' is a hack, add_method only cares about options: *)
   add_method ~method_name:"add_volume"
-    "File_system.add_volume " ["kind", Int; "content", Int]
+    "Volume.add_volume " ["kind", Int; "content", Int]
     "file_system" "File_system";
   add_method ~method_name:"add_tree_volume"
-    "File_system.add_tree_volume "
+    "Volume.add_tree_volume "
     ["kind", Int; "hr_tag", Option String; "files", Int]
     "file_system" "File_system";
   add_method ~method_name:"add_link_volume"
-    "File_system.add_link_volume "
+    "Volume.add_link_volume "
     ["kind", Int; "pointer", Int]
     "file_system" "File_system";
   
@@ -483,6 +485,7 @@ end";
   | Record (name, fields) ->
     (* record element  *)
     line out "and %s_element layout t = object " name;
+    line out "  method g_pointer = Record_%s.(pointer t)" name;
     List.iter record_standard_fields (fun (n, t) ->
       line out "  method %s = t.Record_%s.%s" n name n;
     );
@@ -494,43 +497,47 @@ end";
     line out "  end";
     (* record collection *)
     line out "and %s layout = let dbh = layout#_dbh in object " name;
-    let modname = (sprintf "Record_%s" name) in
-    get_like_easy_methods modname (sprintf "%s_element" name);
-    add_method (sprintf "Record_%s.add_value" name) fields name modname;
+    let modname = sprintf "%s" (String.capitalize name) in
+    get_like_easy_methods modname (sprintf "%s_element" name)
+      (sprintf "Record_%s" name);
+    add_method (sprintf "%s.add_value" modname) fields
+      name (sprintf "Record_%s" name);
     line out "  end";
   | Function (name, args, result) ->
     (* function element  *)
     line out "and %s_element layout t = let dbh = layout#_dbh in object(self)" name;
-    let modname = sprintf "Function_%s" name in
+    let modname = sprintf "%s" (String.capitalize name) in
+    let types_module = sprintf "Function_%s" name in
     line out "val mutable t = t";
+    line out "  method g_pointer = Function_%s.(pointer t)" name;
     List.iter (function_standard_fields result) (fun (n, t) ->
       line out "  method %s = %s" n
-        (ocaml_object_transform_field modname (sprintf "t.%s" n) t);
+        (ocaml_object_transform_field types_module (sprintf "t.%s" n) t);
     );
     List.iter args (fun (n, t) ->
       line out "  method %s = %s" n
-        (ocaml_object_transform_field modname (sprintf "t.g_evaluation.%s" n) t);
+        (ocaml_object_transform_field types_module (sprintf "t.g_evaluation.%s" n) t);
     );
     line out "  method re_get = \n\
-                  Function_%s.(get ~dbh (pointer t)) >>= fun new_t -> \n\
-                  t <- new_t; return ()" name;
+                  %s.(get ~dbh (%s.pointer t)) >>= fun new_t -> \n\
+                  t <- new_t; return ()" modname types_module;
     line out "  method set_started = \n\
-                  Function_%s.(set_started ~dbh (pointer t)) >>= fun () -> \n\
-                  self#re_get" name;
+                  %s.(set_started ~dbh (%s.pointer t)) >>= fun () -> \n\
+                  self#re_get" modname types_module;
     line out "  method set_failed = \n\
-                  Function_%s.(set_failed ~dbh (pointer t)) >>= fun () -> \n\
-                  self#re_get" name;
+                  %s.(set_failed ~dbh (%s.pointer t)) >>= fun () -> \n\
+                  self#re_get" modname types_module;
     line out "  method set_succeeded result = \n\
-                  Function_%s.(set_succeeded ~result ~dbh (pointer t)) \n\
+                  %s.(set_succeeded ~result ~dbh (%s.pointer t)) \n\
                   >>= fun () -> \n\
-                  self#re_get" name;
+                  self#re_get" modname types_module;
     line out "  end";
     (* function collection  *)
     line out "and %s layout = let dbh = layout#_dbh in object " name;
-    get_like_easy_methods modname (sprintf "%s_element" name);
+    get_like_easy_methods modname (sprintf "%s_element" name) types_module;
     let add_args =
       ("recomputable", Option Bool) :: ("recompute_penalty", Option Real) :: args in
-    add_method (sprintf "Function_%s.add_evaluation" name) add_args name modname;
+    add_method (sprintf "%s.add_evaluation" modname) add_args name types_module;
     line out "  end";
   | Volume (_, _) -> ()
   );
@@ -563,6 +570,8 @@ let ocaml_module raw_dsl dsl output_string =
   doc out "Autogenerated Layout module.";
   line out "open Hitscore_std";
   line out "open Hitscore_db_backend";
+
+  line out "module Layout = struct ";
 
   let (volume_kinds, file_types) = filesystem_kinds_and_types dsl in
   let all_nodes =
@@ -655,20 +664,16 @@ let ocaml_module raw_dsl dsl output_string =
   | Volume (_, _) -> ()
   );
   line out "} with sexp";
-  
-  (*
-  let record_db_reprsentation_fields =
-    let standard = List.map record_standard_fields fst |! List.tl_exn in
-    standard @ ["g_sexp"] in
-  *)
+
+  line out "end";
+  line out "open Layout";
   
   doc out "Queries manipulating the stuff in the layout";
-  line out "module Make_access \
-    (Flow: Sequme_flow_monad.FLOW_MONAD)
-    (Backend : module type of Hitscore_db_backend.Make(Flow))
-    = struct";
+  line out "module Access = struct";
 
-  line out "open Flow";
+  (* line out "module Backend = Hitscore_db_backend.Make(Flow)"; *)
+
+  (* line out "open Flow"; *)
   ocaml_file_system_access_module ~out dsl;
   List.iter all_nodes (function
   | Enumeration (name, fields) -> ()
@@ -682,15 +687,15 @@ let ocaml_module raw_dsl dsl output_string =
 
   line out "let get_dump ~dbh =";
   line out "  let version = Hitscore_conf_values.version in";
-  line out "  File_system.get_all ~dbh >>= fun file_system ->";
+  line out "  Volume.get_all ~dbh >>= fun file_system ->";
   let names = ref [] in
   List.iter all_nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
-    line out "  Record_%s.get_all ~dbh >>= fun %s ->" name name;
+    line out "  %s.get_all ~dbh >>= fun %s ->" (String.capitalize name) name;
     names := name :: !names;
   | Function (name, args, result) ->
-    line out "  Function_%s.get_all ~dbh >>= fun %s ->" name name;
+    line out "  %s.get_all ~dbh >>= fun %s ->" (String.capitalize name) name;
     names := name :: !names;
   | Volume (_, _) -> ()
   );
@@ -708,24 +713,35 @@ let ocaml_module raw_dsl dsl output_string =
     | Enumeration (name, fields) -> ()
     | Record (name, fields) ->
       line out "    of_list_sequential dump.%s \
-                  (Record_%s.insert_value_unsafe ~dbh)" name name;
+                  (%s.insert_value_unsafe ~dbh)" name (String.capitalize name);
       line out "    >>= fun (_: unit list) ->";
     | Function (name, args, result) ->
       line out "    of_list_sequential dump.%s \
-                      (Function_%s.insert_evaluation_unsafe ~dbh)" name name;
+                      (%s.insert_evaluation_unsafe ~dbh)"
+        name (String.capitalize name);
       line out "    >>= fun (_: unit list) ->";
     | Volume (_, _) -> ()
     );
     line out "    of_list_sequential dump.file_system \
-                  (File_system.insert_volume_unsafe ~dbh)";
+                  (Volume.insert_volume_unsafe ~dbh)";
     line out "    >>= fun (_: unit list) ->";
     line out "    return ()\n  )"
   );
 
-  ocaml_classy_access ~out dsl;
 
-  
   line out "end";
+
+ (* 
+  line out "module Make_classy \
+    (Flow: Sequme_flow_monad.FLOW_MONAD)
+    (Backend: Hitscore_db_backend.BACKEND with module Flow = Flow)
+    = struct"; *)
+  line out "module Classy = struct";
+  line out "open Access";
+  line out "open Flow";
+  ocaml_classy_access ~out dsl;
+  line out "end";
+
 
   ocaml_meta_module ~out dsl ~raw_dsl;
   ()

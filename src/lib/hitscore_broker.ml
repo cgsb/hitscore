@@ -1,127 +1,124 @@
+open Hitscore_common
+module Broker_types = struct
+    
+  type delivered_demultiplexing = {
+    ddmux_b2f:  Layout.Function_bcl_to_fastq.t;
+    ddmux_b2fu: Layout.Record_bcl_to_fastq_unaligned.t;
+    ddmux_b2fu_vol: Layout.File_system.t; 
+    ddmux_b2fu_path: string;
+    ddmux_summary_path: string;
+    ddmux_deliveries:
+      ( Layout.Function_prepare_unaligned_delivery.t
+       * Layout.Record_client_fastqs_dir.t) list;
+  }
+  type library_in_lane = {
+    lil_stock: Layout.Record_stock_library.t;
+    lil_input: Layout.Record_input_library.t;
+  }
+  type lane = {
+    lane_t: Layout.Record_lane.t;
+    lane_index: int; (* Lane index form 1 to 8 *)
+    lane_libraries: library_in_lane list;
+    lane_invoices: Layout.Record_invoicing.t list;
+  }
+  type hiseq_run = {
+    hr_t: Layout.Record_hiseq_run.t;
+    hr_raws: Layout.Record_hiseq_raw.t list;
+  }
+  type filtered_flowcell = {
+    ff_t: Layout.Record_flowcell.t;
+    ff_id: string;
+    ff_lanes: lane list;
+    ff_runs: hiseq_run list;
+  }
+  type person_affairs = {
+    pa_person_t : Layout.Record_person.t;
+    pa_flowcells : filtered_flowcell list;
+  }
 
-
+  type submission_info = {
+    si_input: Layout.Record_input_library.t;
+    si_flowcell: Layout.Record_flowcell.t;
+    si_lane: Layout.Record_lane.t * int;
+  }
+  type library_info = {
+    li_stock: Layout.Record_stock_library.t;
+    li_submissions: submission_info list;
+  }
+  type library_input_spec =
+  [ `id of int | `qualified_name of string option * string ]
+end
+open Broker_types
+  
 module type BROKER = sig
-
-
-  (**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
 
   type 'a t
 
-  val create:
-    ?mutex:((unit -> (unit, 'a) Common.Flow.monad) * (unit -> unit)) ->
-    dbh:Common.Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
+  val create :
+    ?mutex:(unit -> (unit, 'a) Hitscore_common.monad) * (unit -> unit) ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Hitscore_common.Configuration.local_configuration ->
     unit ->
     ('a t,
-     [> `layout_inconsistency of
+     [> `Layout of
          [> `File_system | `Function of string | `Record of string ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
+           [> `db_backend_error of
+               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+           | `parse_evaluation_error of
+               string Hitscore_std.Option.t list * exn
+           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+           | `parse_value_error of string option list * exn
+           | `parse_volume_error of string option list * exn ] ])
+      Flow.monad
 
   val current_dump: 'a t -> Layout.dump
     
   val reload :
-    ([> `layout_inconsistency of
+    ([> `Layout of
         [> `File_system | `Function of string | `Record of string ] *
-          [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ]
+          [> `db_backend_error of
+              [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+          | `parse_evaluation_error of
+              string Hitscore_std.Option.t list * exn
+          | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+          | `parse_value_error of string option list * exn
+          | `parse_volume_error of string option list * exn ] ]
         as 'a)
-           t ->
-    dbh:Common.Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
-    (unit, 'a) Common.Flow.monad
+             t ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:'b -> (unit, 'a) Flow.monad
 
   val find_person :
     'a t ->
     identifier:string ->
-    (Common.Layout.Record_person.t option,
+    (Layout.Record_person.t option,
      [> `person_not_unique of string ])
-      Common.Flow.monad
+      Flow.monad
 
   val modify_person :
-    ([> `layout_inconsistency of
+    ([> `Layout of
         [> `Record of string ] *
-          [> `insert_cache_did_not_return_one_id of
-              string * int32 list
-          | `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ]
+          [> `db_backend_error of
+              [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+          | `wrong_add_value ] ]
         as 'a)
-           t ->
-    dbh:Common.Layout.db_handle ->
-    person:Common.Layout.Record_person.t ->
-    (unit, 'a) Common.Flow.monad
+             t ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    person:Hitscore_common.Layout.Record_person.t ->
+    (unit, 'a) Flow.monad
  
-    type delivered_demultiplexing = {
-      ddmux_b2f: [`can_nothing] Layout.Function_bcl_to_fastq.t;
-      ddmux_b2fu: Layout.Record_bcl_to_fastq_unaligned.t;
-      ddmux_b2fu_vol: Layout.File_system.volume; 
-      ddmux_b2fu_path: string;
-      ddmux_summary_path: string;
-      ddmux_deliveries:
-        ([`can_nothing] Layout.Function_prepare_unaligned_delivery.t
-         * Layout.Record_client_fastqs_dir.t) list;
-    }
-    type library_in_lane = {
-      lil_stock: Layout.Record_stock_library.t;
-      lil_input: Layout.Record_input_library.t;
-    }
-    type lane = {
-      lane_t: Layout.Record_lane.t;
-      lane_index: int; (* Lane index form 1 to 8 *)
-      lane_libraries: library_in_lane list;
-      lane_invoices: Layout.Record_invoicing.t list;
-    }
-    type hiseq_run = {
-      hr_t: Layout.Record_hiseq_run.t;
-      hr_raws: Layout.Record_hiseq_raw.t list;
-    }
-    type filtered_flowcell = {
-      ff_t: Layout.Record_flowcell.t;
-      ff_id: string;
-      ff_lanes: lane list;
-      ff_runs: hiseq_run list;
-    }
-    type person_affairs = {
-      pa_person_t : Common.Layout.Record_person.t;
-      pa_flowcells : filtered_flowcell list;
-    }
 
-    type submission_info = {
-      si_input: Layout.Record_input_library.t;
-      si_flowcell: Layout.Record_flowcell.t;
-      si_lane: Layout.Record_lane.t * int;
-    }
-    type library_info = {
-      li_stock: Layout.Record_stock_library.t;
-      li_submissions: submission_info list;
-    }
-    type library_input_spec =
-    [ `id of int32 | `qualified_name of string option * string ]
-
-
-  val person_affairs: 'a t -> person:int32 ->
-    (person_affairs, [> `person_not_found of int32 ]) Common.Flow.monad
+  val person_affairs: 'a t -> person:int ->
+    (person_affairs, [> `person_not_found of int ]) Flow.monad
 
   val library_info: 'a t -> library_input_spec -> 
-    (library_info, [> `library_not_found of library_input_spec ]) Common.Flow.monad
+    (library_info, [> `library_not_found of library_input_spec ]) Flow.monad
 
   val delivered_demultiplexings: 'a t -> hiseq_run ->
-    (delivered_demultiplexing list, 'b) Common.Flow.monad
+    (delivered_demultiplexing list, 'b) Flow.monad
 end
 
-module Make
-  (Common: Hitscore_common.COMMON):
-  BROKER with module Common = Common = struct
-
-    module Common = Common
-    open Common
-
-    open Hitscore_std
-    open Flow
+module Broker : BROKER = struct
 
     module Cache = struct
       type ('input, 'output) cache_item = {
@@ -172,52 +169,6 @@ module Make
           
     end
 
-    type delivered_demultiplexing = {
-      ddmux_b2f: [`can_nothing] Layout.Function_bcl_to_fastq.t;
-      ddmux_b2fu: Layout.Record_bcl_to_fastq_unaligned.t;
-      ddmux_b2fu_vol: Layout.File_system.volume; 
-      ddmux_b2fu_path: string;
-      ddmux_summary_path: string;
-      ddmux_deliveries:
-        ([`can_nothing] Layout.Function_prepare_unaligned_delivery.t
-         * Layout.Record_client_fastqs_dir.t) list;
-    }
-    type library_in_lane = {
-      lil_stock: Layout.Record_stock_library.t;
-      lil_input: Layout.Record_input_library.t;
-    }
-    type lane = {
-      lane_t: Layout.Record_lane.t;
-      lane_index: int; (* Lane index form 1 to 8 *)
-      lane_libraries: library_in_lane list;
-      lane_invoices: Layout.Record_invoicing.t list;
-    }
-    type hiseq_run = {
-      hr_t: Layout.Record_hiseq_run.t;
-      hr_raws: Layout.Record_hiseq_raw.t list;
-    }
-    type filtered_flowcell = {
-      ff_t: Layout.Record_flowcell.t;
-      ff_id: string;
-      ff_lanes: lane list;
-      ff_runs: hiseq_run list;
-    }
-    type person_affairs = {
-      pa_person_t: Layout.Record_person.t;
-      pa_flowcells: filtered_flowcell list;
-    }
-
-    type submission_info = {
-      si_input: Layout.Record_input_library.t;
-      si_flowcell: Layout.Record_flowcell.t;
-      si_lane: Layout.Record_lane.t * int;
-    }
-    type library_info = {
-      li_stock: Layout.Record_stock_library.t;
-      li_submissions: submission_info list;
-    }
-    type library_input_spec =
-    [ `id of int32 | `qualified_name of string option * string ]
 
     module Person = Layout.Record_person
     type 'a t = {
@@ -225,7 +176,7 @@ module Make
       configuration: Configuration.local_configuration;
       mutable current_dump: Layout.dump;
       mutable last_change: Time.t;
-      mutable person_affairs_cache: (int32, person_affairs option) Cache.t option;
+      mutable person_affairs_cache: (int, person_affairs option) Cache.t option;
       mutable library_info_cache:
         (library_input_spec, library_info option) Cache.t option;
       mutable delivered_demultiplexings_cache:
@@ -258,43 +209,42 @@ module Make
       
     let delivered_demultiplexings_hash_depencencies t hiseq_runs dds =
       Digest.string (Marshal.to_string
-                        (t.current_dump.Layout.record_hiseq_run,
-                         t.current_dump.Layout.record_hiseq_raw,
-                         t.current_dump.Layout.record_inaccessible_hiseq_raw,
-                         t.current_dump.Layout.function_bcl_to_fastq,
-                         t.current_dump.Layout.record_bcl_to_fastq_unaligned,
-                         t.current_dump.Layout.function_prepare_unaligned_delivery,
-                         t.current_dump.Layout.record_client_fastqs_dir,
+                        (t.current_dump.Layout.hiseq_run,
+                         t.current_dump.Layout.hiseq_raw,
+                         t.current_dump.Layout.inaccessible_hiseq_raw,
+                         t.current_dump.Layout.bcl_to_fastq,
+                         t.current_dump.Layout.bcl_to_fastq_unaligned,
+                         t.current_dump.Layout.prepare_unaligned_delivery,
+                         t.current_dump.Layout.client_fastqs_dir,
                          t.current_dump.Layout.file_system) [])
     let compute_delivered_demultiplexings t hiseq_runs =
       let open Option in
       List.map hiseq_runs.hr_raws (fun hrw ->
-        List.filter_map t.current_dump.Layout.function_bcl_to_fastq
+        List.filter_map t.current_dump.Layout.bcl_to_fastq
           ~f:(fun b2f ->
             if b2f.B2F.g_status = `Succeeded
-            && b2f.B2F.tiles = None
-            && b2f.B2F.raw_data.HSRaw.id = hrw.HSRaw.g_id
+            && b2f.B2F.g_evaluation.B2F.tiles = None
+            && b2f.B2F.g_evaluation.B2F.raw_data.HSRaw.id = hrw.HSRaw.g_id
             then (
-              List.find t.current_dump.Layout.record_bcl_to_fastq_unaligned
+              List.find t.current_dump.Layout.bcl_to_fastq_unaligned
                 (fun b2fu -> Some B2FU.(unsafe_cast b2fu.g_id) = b2f.B2F.g_result)
               >>= fun b2fu ->
               List.find t.current_dump.Layout.file_system
-                (fun vol -> vol.FS.volume_pointer = b2fu.B2FU.directory)
+                (fun vol -> FS.(pointer vol) = B2FU.(b2fu.g_value.directory))
               >>= fun ddmux_b2fu_vol ->
               Configuration.path_of_volume_fun t.configuration
               >>= fun path_fun ->
-              let { FS.volume_pointer = { FS.id }; volume_kind; volume_content } =
-                ddmux_b2fu_vol in
-              begin match volume_content with
+              let { FS.g_id = id ; g_kind; g_content } = ddmux_b2fu_vol in
+              begin match g_content with
               | FS.Tree (hr_tag, trees) ->
-                let vol = volume_unix_directory ~id ~kind:volume_kind ?hr_tag in 
+                let vol = Common.volume_unix_directory ~id ~kind:g_kind ?hr_tag in 
                 return (path_fun vol)
               | _ -> None
               end
               >>= fun ddmux_b2fu_path ->
               return (Filename.concat ddmux_b2fu_path
                         (sprintf "Unaligned/Basecall_Stats_%s/%s"
-                           hrw.HSRaw.flowcell_name
+                           HSRaw.(hrw.g_value.flowcell_name)
                            "Flowcell_demux_summary.xml"))
               >>= fun ddmux_summary_path ->
               return {
@@ -305,12 +255,12 @@ module Make
                 ddmux_summary_path;
                 ddmux_deliveries =
                   List.filter_map
-                    t.current_dump.Layout.function_prepare_unaligned_delivery
+                    t.current_dump.Layout.prepare_unaligned_delivery
                     (fun fpud ->
                       if fpud.PUD.g_status = `Succeeded
-                      && fpud.PUD.unaligned.B2FU.id = b2fu.B2FU.g_id
+                      && fpud.PUD.g_evaluation.PUD.unaligned.B2FU.id = b2fu.B2FU.g_id
                       then (
-                        List.find t.current_dump.Layout.record_client_fastqs_dir
+                        List.find t.current_dump.Layout.client_fastqs_dir
                           (fun c ->
                             Some CFD.(unsafe_cast c.g_id) = fpud.PUD.g_result)
                         >>= fun cfd ->
@@ -325,47 +275,48 @@ module Make
       |! return
 
     let library_in_lane t ~il_pointer ~flowcell =
-      List.find_map t.current_dump.Layout.record_input_library
+      List.find_map t.current_dump.Layout.input_library
         (fun lil_input ->
           if lil_input.IL.g_id = il_pointer.IL.id
           then (List.find_map
-                  t.current_dump.Layout.record_stock_library
+                  t.current_dump.Layout.stock_library
                   (fun lil_stock ->
-                    if lil_stock.SL.g_id = lil_input.IL.library.SL.id
+                    if lil_stock.SL.g_id = lil_input.IL.g_value.IL.library.SL.id
                     then Some {lil_input; lil_stock}
                     else None))
           else None)
       
     let inaccessible_hiseq_raws t =
-      let cur = ref (Some 0., [| |]) in
-      List.iter t.current_dump.Layout.record_inaccessible_hiseq_raw
-        ~f:(fun {Layout.Record_inaccessible_hiseq_raw. g_last_modified; deleted} ->
-          let fl = Option.map g_last_modified Time.to_float in
-          if (fst !cur) < fl then cur := (fl, deleted));
+      let cur = ref (0., [| |]) in
+      List.iter t.current_dump.Layout.inaccessible_hiseq_raw
+        ~f:(fun ihr ->
+          let open Layout.Record_inaccessible_hiseq_raw in
+          let fl = Time.to_float ihr.g_last_modified in
+          if (fst !cur) < fl then cur := (fl, ihr.g_value.deleted));
       Array.to_list (snd !cur)
         
     let compute_person_affairs t person_id =
       let flowcells () =
-        List.filter_map t.current_dump.Layout.record_flowcell
+        List.filter_map t.current_dump.Layout.flowcell
           (fun fc ->
-            let {FC. g_id; serial_name; lanes} = fc in
+            let {FC. g_id; g_value = {FC. serial_name; lanes }} = fc in
             let person_pointer = P.unsafe_cast person_id in
             let lanes_of_flowcell =
-              List.filter_map t.current_dump.Layout.record_lane
+              List.filter_map t.current_dump.Layout.lane
                 (fun lane ->
                   let t_pointer = L.unsafe_cast lane.L.g_id in
                   match Array.findi lanes ~f:(fun _ -> (=) t_pointer) with
                   | Some (array_index,_) ->
-                    if Array.exists lane.L.contacts ~f:((=) person_pointer)
+                    if Array.exists lane.L.g_value.L.contacts ~f:((=) person_pointer)
                     then (
                       let lane_libraries =
-                        List.filter_map (Array.to_list lane.L.libraries)
+                        List.filter_map (Array.to_list lane.L.g_value.L.libraries)
                           (fun il_pointer ->
                             library_in_lane t ~il_pointer ~flowcell:fc) in
                       let lane_invoices =
-                        List.filter t.current_dump.Layout.record_invoicing
+                        List.filter t.current_dump.Layout.invoicing
                           ~f:(fun i ->
-                            Array.exists i.Layout.Record_invoicing.lanes
+                            Array.exists Layout.Record_invoicing.(i.g_value.lanes)
                               ~f:(fun l -> l.L.id = lane.L.g_id)) in
                       Some { lane_t = lane; lane_invoices;
                              lane_index = array_index + 1; lane_libraries}
@@ -378,15 +329,15 @@ module Make
               let ff_runs =
                 let open Layout.Record_hiseq_run in
                 let flowcell_pointer = FC.unsafe_cast g_id in
-                List.filter_map t.current_dump.Layout.record_hiseq_run
+                List.filter_map t.current_dump.Layout.hiseq_run
                   ~f:(fun hs ->
-                    if hs.flowcell_a = Some flowcell_pointer
-                    || hs.flowcell_b = Some flowcell_pointer
+                    if hs.g_value.flowcell_a = Some flowcell_pointer
+                    || hs.g_value.flowcell_b = Some flowcell_pointer
                     then (
                       let hr_raws =
-                        List.filter t.current_dump.Layout.record_hiseq_raw
+                        List.filter t.current_dump.Layout.hiseq_raw
                           ~f:(fun hsrw ->
-                            hsrw.HSRaw.flowcell_name = serial_name
+                            HSRaw.(hsrw.g_value.flowcell_name) = serial_name
                             && List.for_all (inaccessible_hiseq_raws t)
                               ~f:(fun p -> p.HSRaw.id <> g_id))
                       in
@@ -396,26 +347,27 @@ module Make
               Some  {ff_t = fc; ff_id = serial_name; ff_lanes = l; ff_runs})
       in
       let person_t_opt =
-        List.find t.current_dump.Layout.record_person
+        List.find t.current_dump.Layout.person
           (fun p -> p.P.g_id = person_id) in
       Option.map person_t_opt (fun pa_person_t ->
         let cmp fca fcb =
           let latest_date fc =
             List.fold_left fc.ff_runs ~init:0.
-            ~f:(fun c hsr -> max c (Time.to_float hsr.hr_t.HSRun.date)) in
+            ~f:(fun c hsr ->
+              max c (Time.to_float hsr.hr_t.HSRun.g_value.HSRun.date)) in
           compare (latest_date fcb) (latest_date fca)  in
         {pa_person_t; pa_flowcells = List.sort ~cmp (flowcells ())})
         
     let person_affairs_hash_depencencies t person affairs =
       Digest.string (Marshal.to_string
-                        (t.current_dump.Layout.record_person,
-                         t.current_dump.Layout.record_input_library,
-                         t.current_dump.Layout.record_stock_library,
-                         t.current_dump.Layout.record_flowcell,
-                         t.current_dump.Layout.record_lane,
-                         t.current_dump.Layout.record_hiseq_run,
-                         t.current_dump.Layout.record_hiseq_raw,
-                         t.current_dump.Layout.record_inaccessible_hiseq_raw) [])
+                        (t.current_dump.Layout.person,
+                         t.current_dump.Layout.input_library,
+                         t.current_dump.Layout.stock_library,
+                         t.current_dump.Layout.flowcell,
+                         t.current_dump.Layout.lane,
+                         t.current_dump.Layout.hiseq_run,
+                         t.current_dump.Layout.hiseq_raw,
+                         t.current_dump.Layout.inaccessible_hiseq_raw) [])
 
     let person_affairs t ~person =
       Cache.get ~last_change:t.last_change
@@ -426,7 +378,7 @@ module Make
         
     let reload t ~dbh ~configuration =
       lock_mutex t >>= fun () ->
-      Layout.get_dump dbh >>= fun current_dump ->
+      Access.get_dump dbh >>= fun current_dump ->
       t.current_dump <- current_dump;
       t.last_change <- Time.now ();
       unlock_mutex t;
@@ -434,8 +386,9 @@ module Make
 
     let find_person t ~identifier =
       let l =
-      List.filter t.current_dump.Layout.record_person
-        ~f:(fun {Layout.Record_person.login; email; secondary_emails} ->
+        let open Layout.Record_person in
+      List.filter t.current_dump.Layout.person
+        ~f:(fun {g_value = {login; email; secondary_emails}} ->
           login = Some identifier || email = identifier
           || Array.exists secondary_emails ~f:((=) identifier)) in
       match l with
@@ -445,19 +398,18 @@ module Make
         
     let modify_person t ~dbh ~person =
       let open Layout.Record_person in
-      let pointer = unsafe_cast person.g_id in
       lock_mutex t >>= fun () ->
-      delete_value ~dbh pointer >>= fun () ->
-      let new_person = { person with g_last_modified = Some (Time.now ()) } in
-      insert_value ~dbh new_person >>= fun new_pointer ->
-      ksprintf (Common.add_log ~dbh) "(modification record_person %ld %s)"
+      Access.Person.delete_value_unsafe ~dbh person >>= fun () ->
+      let new_person = { person with g_last_modified = Time.now () } in
+      Access.Person.insert_value_unsafe ~dbh new_person >>= fun new_pointer ->
+      ksprintf (Common.add_log ~dbh) "(modification record_person %d %s)"
         person.g_id (sexp_of_t person |! Sexp.to_string_hum)
       >>= fun () ->
-      let record_person =
-        List.map t.current_dump.Layout.record_person ~f:(fun p ->
+      let person =
+        List.map t.current_dump.Layout.person ~f:(fun p ->
           if p.g_id = person.g_id then new_person else p)
       in
-      t.current_dump <- { t.current_dump with Layout.record_person };
+      t.current_dump <- { t.current_dump with Layout.person };
       t.last_change <- Time.now ();
       unlock_mutex t;
       return ()
@@ -467,34 +419,35 @@ module Make
       let open Layout.Record_stock_library in
       match lib with
       | `id x ->
-        List.find t.current_dump.Layout.record_stock_library
+        List.find t.current_dump.Layout.stock_library
           (fun l -> l.g_id = x)
       | `qualified_name (p, n) ->
-        List.find t.current_dump.Layout.record_stock_library
-          (fun l -> l.project = p && l.name = n)
+        List.find t.current_dump.Layout.stock_library
+          (fun l -> l.g_value.project = p && l.g_value.name = n)
       
     let hash_deps_of_library_info t spec info =
       Digest.string (Marshal.to_string
-                        (t.current_dump.Layout.record_flowcell,
-                         t.current_dump.Layout.record_lane,
-                         t.current_dump.Layout.record_input_library,
-                         t.current_dump.Layout.record_stock_library) [])
+                        (t.current_dump.Layout.flowcell,
+                         t.current_dump.Layout.lane,
+                         t.current_dump.Layout.input_library,
+                         t.current_dump.Layout.stock_library) [])
       
     let compute_library_info t library =
       Option.map (find_stock_library t library) (fun lib ->
         let lib_pointer = SL.unsafe_cast lib.SL.g_id in
         let li_submissions =
-          List.filter_map t.current_dump.Layout.record_input_library
+          List.filter_map t.current_dump.Layout.input_library
             (fun il ->
-              if il.IL.library = lib_pointer
+              if il.IL.g_value.IL.library = lib_pointer
               then (
                 let open Option in
-                List.find t.current_dump.Layout.record_lane (fun lan ->
-                  Array.exists lan.L.libraries
+                List.find t.current_dump.Layout.lane (fun lan ->
+                  Array.exists lan.L.g_value.L.libraries
                     (fun l -> l.IL.id = il.IL.g_id))
                 >>= fun lane_t ->
-                List.find_map t.current_dump.Layout.record_flowcell (fun fc ->
-                  Array.findi fc.FC.lanes ~f:(fun _ l -> l.L.id = lane_t.L.g_id)
+                List.find_map t.current_dump.Layout.flowcell (fun fc ->
+                  Array.findi fc.FC.g_value.FC.lanes
+                    ~f:(fun _ l -> l.L.id = lane_t.L.g_id)
                   >>= fun (index, _) ->
                   return (fc, index))
                 >>= fun (si_flowcell, array_index) ->
@@ -513,8 +466,8 @@ module Make
         | Some s -> return s)
 
     let create ?mutex ~dbh ~configuration () =
-      Layout.get_dump dbh >>= fun current_dump ->
-      let layout = Layout.Meta.layout () in
+      Access.get_dump dbh >>= fun current_dump ->
+      let layout = Meta.layout () in
       let t_non_init =
         { last_change = Time.now (); layout;
           current_dump;
