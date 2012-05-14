@@ -299,7 +299,8 @@ module type BACKEND = sig
   | `disconnection of exn
   | `query of (string * exn)
   ]
-  type result = string option list list
+  type result_item = string option list
+  type result = result_item list
 
   val connect :
     ?host:string ->
@@ -357,7 +358,8 @@ module Backend : BACKEND = struct
   | `disconnection of exn
   | `query of (string * exn)
   ]
-  type result = string option list list
+  type result_item = string option list
+  type result = result_item list
     
   let connect ?host ?port ?database ?user ?password ?log () :
       (db_handle, [> `db_backend_error of [> error ] ]) monad =

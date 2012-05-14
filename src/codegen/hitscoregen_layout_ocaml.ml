@@ -97,7 +97,8 @@ let ocaml_encapsulate_layout_errors out ~error_location f =
   f out;
   line out "in";
   line out "bind_on_error work_m (fun e -> \
-              error (`Layout (%s, e)))" error_location;
+              error (`Layout ((%s: error_location), \
+                              (e : error_cause))))" error_location;
   ()
       
 let ocaml_record_access_module ~out name fields =
@@ -573,6 +574,26 @@ let ocaml_module raw_dsl dsl output_string =
 
   line out "module Layout = struct ";
 
+  line out "type error_location = [";
+  line out "| `Dump";
+  line out "| `Function of string";
+  line out "| `Record of string";
+  line out "| `File_system";
+  line out "]";
+  line out "type error_cause = [";
+  line out "| `db_backend_error of Backend.error"; 
+  line out "| `wrong_add_value";
+  line out "| `parse_sexp_error of Hitscore_std.Sexp.t * exn";
+  line out "| `parse_value_error of Hitscore_db_backend.Backend.result_item * exn";
+  line out "| `parse_volume_error of Hitscore_db_backend.Backend.result_item * exn";
+  line out "| `result_not_unique of Hitscore_db_backend.Backend.result";
+  line out "| `parse_evaluation_error of \
+                  Hitscore_db_backend.Backend.result_item * exn";
+  line out "| `wrong_version of string * string";
+  line out "]";
+
+
+  
   let (volume_kinds, file_types) = filesystem_kinds_and_types dsl in
   let all_nodes =
     Enumeration ("volume_kind", volume_kinds)

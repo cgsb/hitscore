@@ -28,12 +28,8 @@ module type ACCESS_RIGHTS = sig
     [ `dir of string | `file of string ] ->
     (unit,
      [> `Layout of
-         [> `Record of string ] *
-           [> `db_backend_error of
-               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-           | `parse_value_error of string option list * exn
-           | `wrong_add_value ]
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
      | `system_command_error of string * exn ])
       Flow.t
 end

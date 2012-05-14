@@ -16,12 +16,8 @@ module type COMMON = sig
     string ->
     (unit,
      [> `Layout of
-         [> `Record of string ] *
-           [> `db_backend_error of
-               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-           | `wrong_add_value ] ])
-      Flow.t
-
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause ]) Flow.monad
            
   (** Check that an HiSeq-raw directory (the database) record is usable. *) 
   val check_hiseq_raw_availability :
@@ -30,12 +26,8 @@ module type COMMON = sig
     (Layout.Record_inaccessible_hiseq_raw.pointer *
        Layout.Record_hiseq_raw.pointer Hitscore_std.List.t,
      [> `Layout of
-         [> `Record of string ] *
-           [> `db_backend_error of
-               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-           | `parse_value_error of string option list * exn
-           | `wrong_add_value ]
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause 
      | `hiseq_dir_deleted ]) Flow.monad
 
   (** Get the full path from an HiSeq directory name. *)
@@ -63,14 +55,8 @@ module type COMMON = sig
     Layout.File_system.pointer ->
     (Layout.File_system.tree list,
      [> `Layout of
-         [> `File_system ] *
-           [> `db_backend_error of
-               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-           | `parse_value_error of string option list * exn
-           | `parse_volume_error of string option list * exn
-           | `result_not_unique of Backend.result ] ])
-      Flow.t
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause ]) Flow.monad
       
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
@@ -80,15 +66,10 @@ module type COMMON = sig
     Layout.File_system.pointer ->
     (string,
      [> `Layout of
-         [> `File_system ] *
-           [> `db_backend_error of
-               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-           | `parse_value_error of string option list * exn
-           | `parse_volume_error of string option list * exn
-           | `result_not_unique of Backend.result ]
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
      | `root_directory_not_configured ])
-      Flow.t
+      Flow.monad
 
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
@@ -98,15 +79,8 @@ module type COMMON = sig
     Layout.File_system.pointer ->
     (string Hitscore_std.List.t,
      [> `Layout of
-         [> `File_system ] *
-           [> `db_backend_error of
-               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-           | `parse_value_error of string option list * exn
-           | `parse_volume_error of string option list * exn
-           | `result_not_unique of Backend.result ]
-     | `root_directory_not_configured ])
-      Flow.t
+         Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
+     | `root_directory_not_configured ]) Flow.monad
 
   module PBS: sig
 
@@ -144,12 +118,8 @@ module type COMMON = sig
       configuration:Configuration.local_configuration ->
       (unit,
        [> `Layout of
-           [> `Record of string ] *
-             [> `db_backend_error of
-                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-             | `parse_value_error of string option list * exn
-             | `wrong_add_value ]
+           Hitscore_layout.Layout.error_location *
+             Hitscore_layout.Layout.error_cause
        | `system_command_error of string * exn
        | `work_directory_not_configured ])
         Flow.t
@@ -161,12 +131,8 @@ module type COMMON = sig
       string ->
       (unit,
        [> `Layout of
-           [> `Record of string ] *
-             [> `db_backend_error of
-                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-             | `parse_value_error of string option list * exn
-             | `wrong_add_value ]
+           Hitscore_layout.Layout.error_location *
+             Hitscore_layout.Layout.error_cause
        | `system_command_error of string * exn
        | `work_directory_not_configured ])
         Flow.t
@@ -194,12 +160,8 @@ module type COMMON = sig
       string ->
       (unit,
        [> `Layout of
-           [> `Record of string ] *
-             [> `db_backend_error of
-                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-             | `parse_value_error of string option list * exn
-             | `wrong_add_value ]
+           Hitscore_layout.Layout.error_location *
+             Hitscore_layout.Layout.error_cause
        | `system_command_error of string * exn
        | `work_directory_not_configured
        | `write_file_error of string * string * exn ]) Flow.monad
@@ -232,24 +194,16 @@ module type COMMON = sig
         pointer ->
         (unit,
          [> `Layout of
-             [> `Function of string ] *
-               [> `db_backend_error of
-                   [> `query of Hitscore_db_backend.Sql_query.t * exn ] ] ])
-          Hitscore_std.monad
+             Hitscore_layout.Layout.error_location *
+               Hitscore_layout.Layout.error_cause ]) Flow.monad
       val get_status :
         pointer ->
         dbh:Hitscore_db_backend.Backend.db_handle ->
         (Layout.Enumeration_process_status.t,
          [> `Layout of
-             [> `Function of string ] *
-               [> `db_backend_error of
-                   [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-               | `parse_evaluation_error of
-                   string Hitscore_std.Option.t list * exn
-               | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-               | `result_not_unique of
-                   Hitscore_db_backend.Backend.result ] ])
-          Flow.monad
+             Hitscore_layout.Layout.error_location *
+               Hitscore_layout.Layout.error_cause ]) Flow.monad
+
       val pbs_fun : PBS.t_fun
       val name_in_log: string
     end) ->
@@ -263,11 +217,8 @@ module type COMMON = sig
       Layout_function.pointer ->
       (Layout_function.pointer,
        [> `Layout of
-           [> `Function of string | `Record of string ] *
-             [> `db_backend_error of
-                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-             | `wrong_add_value ] ])
-        Flow.monad
+           Hitscore_layout.Layout.error_location *
+             Hitscore_layout.Layout.error_cause ]) Flow.monad
         
     (** Get the status of the evaluation by checking its data-base
         status and it presence in the PBS queue. *)
@@ -280,14 +231,8 @@ module type COMMON = sig
        | `started_but_not_running of
            [> `system_command_error of string * exn ] ],
        [> `Layout of
-           [> `Function of string ] *
-             [> `db_backend_error of
-                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-             | `parse_evaluation_error of
-                 string Hitscore_std.Option.t list * exn
-             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-             | `result_not_unique of
-                 Hitscore_db_backend.Backend.result ]
+           Hitscore_layout.Layout.error_location *
+             Hitscore_layout.Layout.error_cause
        | `work_directory_not_configured ]) Flow.monad
 
     (** Kill the evaluation ([qdel]) and set it as failed. *)
@@ -297,18 +242,12 @@ module type COMMON = sig
       Layout_function.pointer ->
       (Layout_function.pointer,
        [> `Layout of
-           [> `Function of string | `Record of string ] *
-             [> `db_backend_error of
-                 [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-             | `parse_evaluation_error of
-                 string Hitscore_std.Option.t list * exn
-             | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-             | `result_not_unique of
-                 Hitscore_db_backend.Backend.result
-             | `wrong_add_value ]
-               | `not_started of Layout.Enumeration_process_status.t
-               | `system_command_error of string * exn
-               | `work_directory_not_configured ])
+           Hitscore_layout.Layout.error_location *
+             Hitscore_layout.Layout.error_cause
+       | `not_started of
+           Hitscore_layout.Layout.Enumeration_process_status.t
+       | `system_command_error of string * exn
+       | `work_directory_not_configured ])
         Flow.monad
   end
 
@@ -541,24 +480,15 @@ module Common : COMMON = struct
         pointer ->
         (unit,
          [> `Layout of
-             [> `Function of string ] *
-               [> `db_backend_error of
-                   [> `query of Hitscore_db_backend.Sql_query.t * exn ] ] ])
-          Hitscore_std.monad
+             Hitscore_layout.Layout.error_location *
+               Hitscore_layout.Layout.error_cause ]) Flow.monad
       val get_status :
         pointer ->
         dbh:Hitscore_db_backend.Backend.db_handle ->
         (Layout.Enumeration_process_status.t,
          [> `Layout of
-             [> `Function of string ] *
-               [> `db_backend_error of
-                   [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-               | `parse_evaluation_error of
-                   string Hitscore_std.Option.t list * exn
-               | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-               | `result_not_unique of
-                   Hitscore_db_backend.Backend.result ] ])
-          Flow.monad
+             Hitscore_layout.Layout.error_location *
+               Hitscore_layout.Layout.error_cause ]) Flow.monad
     val pbs_fun : PBS.t_fun
     val name_in_log: string
   end) = struct

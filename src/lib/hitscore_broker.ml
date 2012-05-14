@@ -66,30 +66,16 @@ module type BROKER = sig
     unit ->
     ('a t,
      [> `Layout of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `db_backend_error of
-               [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-           | `parse_evaluation_error of
-               string Hitscore_std.Option.t list * exn
-           | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-           | `parse_value_error of string option list * exn
-           | `parse_volume_error of string option list * exn ] ])
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause ])
       Flow.monad
 
   val current_dump: 'a t -> Layout.dump
     
   val reload :
     ([> `Layout of
-        [> `File_system | `Function of string | `Record of string ] *
-          [> `db_backend_error of
-              [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-          | `parse_evaluation_error of
-              string Hitscore_std.Option.t list * exn
-          | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-          | `parse_value_error of string option list * exn
-          | `parse_volume_error of string option list * exn ] ]
-        as 'a)
-             t ->
+        Hitscore_layout.Layout.error_location *
+          Hitscore_layout.Layout.error_cause ] as 'a) t ->
     dbh:Hitscore_db_backend.Backend.db_handle ->
     configuration:'b -> (unit, 'a) Flow.monad
 
@@ -102,12 +88,8 @@ module type BROKER = sig
 
   val modify_person :
     ([> `Layout of
-        [> `Record of string ] *
-          [> `db_backend_error of
-              [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-          | `wrong_add_value ] ]
-        as 'a)
-             t ->
+        Hitscore_layout.Layout.error_location *
+          Hitscore_layout.Layout.error_cause ] as 'a) t ->
     dbh:Hitscore_db_backend.Backend.db_handle ->
     person:Layout.Record_person.t ->
     (unit, 'a) Flow.monad
