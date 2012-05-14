@@ -4,7 +4,8 @@ let (|>) x f = f x
 
 
 open Hitscore_app_util
-open Hitscore_threaded
+open Hitscore
+open Flow
 
 
 module Configuration_file = struct
@@ -18,7 +19,7 @@ module Configuration_file = struct
 
   let print_config config =
     let open Option in
-    let open Hitscore_threaded.Configuration in
+    let open Configuration in
     iter (root_path config) (printf "Root path: %S\n");
     iter (vol_path config) (printf "  VFS-Volumes path: %S\n");
     printf "  Root-dir writers: [%s]\n"
@@ -36,7 +37,6 @@ module Configuration_file = struct
 
   let print_env () =
     let open Option in
-    let open Hitscore_threaded in
     iter (Sys.getenv "PGHOST") (printf "Env: PGHOST : %S\n");
     iter (Sys.getenv "PGPORT") (printf "Env: PGPORT : %S\n");
     iter (Sys.getenv "PGUSER") (printf "Env: PGUSER : %S\n");
@@ -45,7 +45,7 @@ module Configuration_file = struct
     ()
     
   let print_all profiles =
-    let open Hitscore_threaded.Configuration in
+    let open Configuration in
     List.iter (profile_names profiles) (fun n ->
       printf "** Configuration %S:\n" n;
       print_config (use_profile profiles n |! result_ok_exn ~fail:Not_found));
@@ -55,7 +55,7 @@ module Configuration_file = struct
 
   let export_env config command =
     let open Option in
-    let open Hitscore_threaded.Configuration in
+    let open Configuration in
     let cmd = ref "" in
     let f s = cmd := !cmd ^ s in
     let print = ksprintf in
@@ -345,58 +345,18 @@ end
 module Dumps = struct
 
   let to_file hsc file =
-    match Hitscore_threaded.db_connect hsc with
-    | Ok dbh ->
-      let dump =
-        match Layout.get_dump ~dbh with
-        | Ok dump ->
-          Layout.sexp_of_dump dump |> Sexplib.Sexp.to_string_hum
-        | Error (`layout_inconsistency 
-                    (`file_system, `select_did_not_return_one_cache (tbl, l))) ->
-          eprintf "get_dump detected a file system inconsistency: \n\
-                   table %s returned %d caches for a given id" tbl l;
-          failwith "Dumps.to_file"
-        | Error (`layout_inconsistency _) -> (* TODO *)
-          eprintf "get_dump detected a layout inconsistency:
-                   UNKNOWN -- WORK IN PROGRESS \n";
-          failwith "Dumps.to_file"
-        | Error (`pg_exn e) ->
-          eprintf "Getting the dump from the DB failed:\n  %s" 
-            (Exn.to_string e);
-          failwith "Dumps.to_file"
-      in
-      Out_channel.(with_file file ~f:(fun o -> output_string o dump));
-      ignore (Hitscore_threaded.db_disconnect hsc dbh)
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+    with_database hsc (fun ~dbh ->
+      Access.get_dump ~dbh
+      >>= fun dump ->
+      let dumps = Layout.sexp_of_dump dump |! Sexplib.Sexp.to_string_hum in
+      Out_channel.(with_file file ~f:(fun o -> output_string o dumps));
+      return ())
       
   let load_file hsc file =
-    match Hitscore_threaded.db_connect hsc with
-    | Ok dbh ->
-      let insert_result = 
-        In_channel.with_file file ~f:(fun i ->
-          Sexplib.Sexp.input_sexp i |> Layout.dump_of_sexp |>
-              Layout.insert_dump ~dbh) in
-      begin match insert_result with 
-      | Ok () -> eprintf "Load: Ok\n%!"
-      | Error (`wrong_version (one, two)) ->
-        eprintf "Load: Wrong Version Error: %S Vs %S\n%!" one two
-      | Error (`layout_inconsistency
-                  (`file_system, `insert_cache_did_not_return_one_id (table, ids))) ->
-        eprintf "Load: insert_dump detected an inconsistency: inserting in %S \
-                 returned more than one id: [%s]\n%!" 
-          table (String.concat ~sep:"; " (List.map ids Int32.to_string))
-      | Error (`layout_inconsistency _) -> (* TODO *)
-        eprintf "get_dump detected a layout inconsistency:
-                   UNKNOWN -- WORK IN PROGRESS \n";
-        failwith "Dumps.to_file"
-      | Error (`pg_exn e) ->
-        eprintf "Load: Got a DB exception: %s\n" (Exn.to_string e)
-      end;
-      Hitscore_threaded.db_disconnect hsc dbh  |> ignore
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-        
+    with_database hsc (fun ~dbh ->
+      In_channel.with_file file ~f:(fun i ->
+        Sexplib.Sexp.input_sexp i |! Layout.dump_of_sexp |!
+            Access.insert_dump ~dbh)) 
 
 
 end
@@ -420,7 +380,7 @@ module Hiseq_raw = struct
     end;
     begin
       try
-        Unix.stat run_params |> ignore
+        Unix.stat run_params |! Pervasives.ignore
       with 
       | Unix.Unix_error _ ->
         eprintf "Cannot stat %s\n" run_params;
@@ -428,7 +388,7 @@ module Hiseq_raw = struct
     end;
     begin
       try
-        Unix.stat sum1 |> ignore
+        Unix.stat sum1 |! Pervasives.ignore
       with 
       | Unix.Unix_error _ ->
         eprintf "Cannot stat %s\n" sum1;
@@ -455,7 +415,7 @@ module Hiseq_raw = struct
       let xml = 
         In_channel.with_file xml_run_params ~f:(fun ic ->
           XML.(make_input (`Channel ic) |> in_tree)) in
-      match Hitscore_threaded.Hiseq_raw.run_parameters (snd xml) with
+      match Hiseq_raw.run_parameters (snd xml) with
       | Ok t -> t
       | Error (`parse_run_parameters (`wrong_date s)) ->
         failwithf "Error while parsing date in runParameters.xml: %s" s ()
@@ -464,34 +424,18 @@ module Hiseq_raw = struct
     in
 
     let host = Option.value ~default:"bowery.es.its.nyu.edu" host in
-    match Hitscore_threaded.db_connect config with
-    | Ok dbh ->
-      let hs_raw =
-        Hitscore_threaded.Layout.Record_hiseq_raw.add_value ~dbh
-          ~flowcell_name
-          ~read_length_1:(Int32.of_int_exn read_length_1)
-          ?read_length_2:(Option.map read_length_2 Int32.of_int_exn)
-          ?read_length_index:(Option.map read_length_index Int32.of_int_exn)
-          ~with_intensities ~run_date ~host
-          ~hiseq_dir_name:(Filename.basename directory)
-      in
-      begin match hs_raw with
-      | Ok in_db ->
-        Hitscore_threaded.db_disconnect config dbh  |> ignore;
-        eprintf "The HiSeq raw directory was successfully added as %ld\n"
-        in_db.Hitscore_threaded.Layout.Record_hiseq_raw.id
-      | Error (`layout_inconsistency (_,
-                                      `insert_did_not_return_one_id (s, i32l))) ->
-        eprintf "ERROR: Layout Inconsistency Detected: \n\
-                  insert in %s did not return one id but %d\n"
-          s (List.length i32l);
-        failwith "Hiseq_raw.register"
-      | Error (`pg_exn e) ->
-        eprintf "ERROR: from PGOCaml:\n%s\n" (Exn.to_string e);
-        failwith "Hiseq_raw.register"
-      end
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+    with_database config (fun ~dbh ->
+      Access.Hiseq_raw.add_value ~dbh
+        ~flowcell_name
+        ~read_length_1:(Int.of_int_exn read_length_1)
+        ?read_length_2:(Option.map read_length_2 Int.of_int_exn)
+        ?read_length_index:(Option.map read_length_index Int.of_int_exn)
+        ~with_intensities ~run_date ~host
+        ~hiseq_dir_name:(Filename.basename directory)
+      >>= fun in_db ->
+      eprintf "The HiSeq raw directory was successfully added as %d\n"
+        in_db.Layout.Record_hiseq_raw.id;
+      return ())
 
   let get_info directory = 
     let xml_run_params = Filename.concat directory "runParameters.xml" in
@@ -507,7 +451,7 @@ module Hiseq_raw = struct
       let xml = 
         In_channel.with_file xml_run_params ~f:(fun ic ->
           XML.(make_input (`Channel ic) |> in_tree)) in
-      match Hitscore_threaded.Hiseq_raw.run_parameters (snd xml) with
+      match Hiseq_raw.run_parameters (snd xml) with
       | Ok t -> t
       | Error (`parse_run_parameters (`wrong_date s)) ->
         failwithf "Error while parsing date in runParameters.xml: %s" s ()
@@ -518,7 +462,7 @@ module Hiseq_raw = struct
       let xml = 
         In_channel.with_file xml_read1 ~f:(fun ic ->
           XML.(make_input (`Channel ic) |> in_tree)) in
-      match Hitscore_threaded.Hiseq_raw.clusters_summary (snd xml) with
+      match Hiseq_raw.clusters_summary (snd xml) with
       | Ok t -> t
       | Error (`parse_clusters_summary s) ->
         failwithf "Error while parsing read1.xml: %s" s ()
@@ -562,6 +506,8 @@ module Verify = struct
 
 
   let check_file_system ?(try_fix=false) ?(verbose=true) hsc =
+
+      (*
     let buffer = ref [] in
     let log fmt =
       let f s = buffer := (`info s) :: !buffer in
@@ -569,8 +515,8 @@ module Verify = struct
     let error kind fmt =
       let f s = buffer := (`error (kind, s)) :: !buffer in
       ksprintf f fmt in
-    begin match Hitscore_threaded.db_connect hsc with
-    | Ok dbh ->
+    with_database hsc (fun ~dbh ->
+        
       let (>>>) x f = result_ok_exn ~fail:(Failure f) x in
       let vols = Layout.File_system.get_all ~dbh >>> "File_system.get_all" in
       List.iter vols ~f:(fun volume -> 
@@ -619,6 +565,8 @@ module Verify = struct
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
     end;
     List.rev !buffer
+      *)
+      failwith "NOT IMPLEMENTED"
 
   let print_fs_check =
     List.iter  ~f:(function
@@ -629,8 +577,7 @@ module Verify = struct
     | `error (`file, s) -> printf "ERROR(file): %s\n" s)
 
   let check_duplicates configuration =
-    let open Hitscore_threaded in
-    let open Flow in
+    (*
     let work_samples =
       with_database ~configuration ~f:(fun ~dbh ->
         Layout.Record_sample.(
@@ -674,8 +621,9 @@ module Verify = struct
     in
     check work_samples "sample";
     check work_libraries "stock-library";
-    ()
-    
+    *)
+    failwith "NOT IMPLEMENTED"
+   (* 
   module Make_fixable_status_checker (Layout_function : sig
     type 'a pointer = private {
       id : int32;
@@ -746,10 +694,11 @@ module Verify = struct
 
 
     end
-
+   *)
     
   let wake_up ?(fix_it=false) configuration =
-    let open Hitscore_threaded in
+    failwith "NOT IMPLEMENTED"
+    (*
     begin match db_connect configuration with
     | Ok dbh ->
       let count_fs_errors =
@@ -776,7 +725,7 @@ module Verify = struct
     end;
     check_duplicates configuration;
     Some ()
-
+    *)
 
 end
 
@@ -846,25 +795,23 @@ end
 
 
 module Flowcell = struct
-  open Hitscore_threaded
-  open Flow
 
   let check_lane_unused ~dbh lane = 
-    let q_res =
-      let module PGOCaml = Hitscore_threaded.Layout.PGOCaml in
-      let open Batteries in
-      let lanes = [| lane |] in
-      PGSQL (dbh)
-        "select g_id, serial_name from flowcell
-         where flowcell.lanes @> $lanes"
-    in
+    let layout = Classy.make dbh in
+    layout#flowcell#all
+    >>| List.filter ~f:(fun fc ->
+      Array.exists fc#lanes ~f:(fun l -> l#id = lane))
+    >>= fun q_res ->
     if List.length q_res <> 0 then (
-      List.iter q_res (fun (id, fcid) ->
-        failwithf "Lane %ld already used in flowcell %ld (%S)" lane id fcid ()))
+      List.iter q_res (fun fc ->
+        failwithf "Lane %d already used in flowcell %d (%S)"
+          lane fc#g_id fc#serial_name ());
+      return ())
     else
-      ()
+      return ()
 
   let checks_and_read_lengths ~dbh lanes =
+    (*
     if List.length (List.dedup lanes) < List.length lanes then
       failwithf "Cannot reuse same lane" ();
     let lanes_r1_r2 =
@@ -893,7 +840,9 @@ module Flowcell = struct
       failwith "ERROR"
     );
     (first_r1, first_r2)
-
+    *)
+    failwith "NOT IMPLEMENTED"
+(*
   let new_input_phix ~dbh r1 r2 =
     begin match Layout.Search.record_stock_library_by_name ~dbh "PhiX_v3" with
     | Ok [library] ->
@@ -958,9 +907,10 @@ module Flowcell = struct
       let i = try Int32.of_string x with e ->
           failwithf "Cannot understand arg: %S (should be an integer)" x () in
       `lane i)
-
+*)
 
   let register hsc name args =
+    (*
     if List.length args <> 8 then
       failwith "Expecting 8 arguments after the flowcell name.";
     let lanes = parse_args args in
@@ -1008,12 +958,13 @@ module Flowcell = struct
       db_disconnect hsc |! Pervasives.ignore
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-
+    *)
+    failwith "NOT IMPLEMENTED"
 
 end
 
 module Query = struct
-
+(*
   module PGOCaml = Hitscore_threaded.Layout.PGOCaml
 
   let predefined_queries = [
@@ -1251,13 +1202,15 @@ module Query = struct
         end;
      ));
   ]
-
   let describe out =
     List.iter predefined_queries ~f:(fun (name, (desc, _)) ->
       fprintf out " * %S:\n        %s\n" name
         (String.concat ~sep:"\n        " desc))
 
+*)
   let predefined hsc name args =
+    failwith "NOT IMPLEMENTED"
+      (*
     let open Hitscore_threaded in
     match db_connect hsc with
     | Ok dbh ->
@@ -1269,13 +1222,15 @@ module Query = struct
       db_disconnect hsc dbh |! Pervasives.ignore
     | Error (`pg_exn e) ->
       eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-
+      *)
 
 end
 
 module Prepare_delivery = struct
 
   let run_function configuration bb inv dir directory_tag =
+    failwith "NOT IMPLEMENTED"
+      (*
     let open Hitscore_threaded in
     let open Flow in
     let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
@@ -1346,11 +1301,13 @@ module Prepare_delivery = struct
         out "Error with system command:\n  %s\n  %s\n" c (Exn.to_string e)
 
       end
-        
+      *)
 end
 
 module Intensities_deletion = struct
   let do_registration configuration dir =
+    failwith "NOT IMPLEMENTED"
+      (*
     let open Hitscore_threaded in
     let open Flow in
     let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
@@ -1370,11 +1327,14 @@ module Intensities_deletion = struct
       | `layout_inconsistency _ ->
         out "LAYOUT INCONSISTENCY"
       end
+      *)
 end 
 
 module Hiseq_run = struct
 
   let register configuration day_date fca fcb note =
+    failwith "NOT IMPLEMENTED"
+      (*
     let open Hitscore_threaded in
     let open Flow in
     with_database configuration (fun ~dbh ->
@@ -1395,13 +1355,15 @@ module Hiseq_run = struct
         ?flowcell_a ?flowcell_b ?note)
     |! result_ok_exn ~fail:(Failure "adding the hiseq_run went wrong")
     |! Pervasives.ignore
-
+      *)
 
 end
 
 module Fastx_qs = struct
 
   let start_parse_cmdline usage_prefix args =
+    failwith "NOT IMPLEMENTED"
+    (*
     let (user, queue, nodes, ppn, wall_hours, hitscore_command, pbs_options) =
       pbs_related_command_line_options ~default_ppn:1 () in
     let from_b2f = ref None in
@@ -1463,8 +1425,10 @@ module Fastx_qs = struct
       | Error e ->
         eprintf "ERROR(call-fastqx): %s" (string_of_error e);
         exit 4
-          
+    *)    
   let start configuration prefix cl_args =
+    failwith "NOT IMPLEMENTED"
+    (*
     begin match (start_parse_cmdline prefix cl_args) with
     | `go (args, Some from_b2f, option_Q, filter_names,
            user, queue, nodes, ppn, wall_hours, hitscore_command) ->
@@ -1502,8 +1466,8 @@ module Fastx_qs = struct
       eprintf "%s" b; Ok ()
     end
     |! flow_ok_or_fail
-
-
+    *)
+(*
   let register_success configuration id = 
     with_database ~configuration ~f:(fun ~dbh ->
       let f = (Layout.Function_fastx_quality_stats.unsafe_cast id) in
@@ -1551,7 +1515,7 @@ module Fastx_qs = struct
         (Layout.Function_fastx_quality_stats.unsafe_cast id)
     >>= fun _ -> return ())
     |! flow_ok_or_fail
-
+*)
         
 end
 
@@ -1561,7 +1525,18 @@ end
 let commands = ref []
 
 let define_command ~names ~description ~usage ~run =
-  commands := (names, description, usage, run) :: !commands
+  let meta_run a b c d =
+    begin match Lwt_main.run (run a b c d) with
+    | Ok () -> true
+    | Error (`invalid_command_line s) -> 
+      eprintf "Wrong arguments: %s!\n" s;
+      false
+    | Error  e ->
+      eprintf "HITSCORE: ERROR:\n  %s\n" (string_of_error e);
+      true
+    end
+  in
+  commands := (names, description, usage, meta_run) :: !commands
 
 let short_help indent =
   String.concat ~sep:"\n"
@@ -1574,6 +1549,7 @@ let find_command cmd =
   List.find !commands (fun (names, _, _, _) -> List.exists names ((=) cmd))
 
 let () =
+  (*
   define_command 
     ~names:["all-barcodes-sample-sheet"; "abc"]
     ~description:"Make a sample sheet with all barcodes"
@@ -1608,15 +1584,15 @@ let () =
       | [ name; basecalls; sample_sheet ] ->
         Some (Gen_BclToFastq.prepare name basecalls sample_sheet)
       | _ -> None);
-
+  *)
   define_command
     ~names:["dump-to-file"]
     ~description:"Dump the database to a S-Exp file"
     ~usage:(fun o exec cmd ->
       fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
     ~run:(fun config exec cmd -> function
-      | [file] -> Some (Dumps.to_file config file)
-      | _ -> None);
+      | [file] -> Dumps.to_file config file
+      | _ -> error (`invalid_command_line "no filename provided"));
 
   define_command
     ~names:["load-file"]
@@ -1624,9 +1600,9 @@ let () =
     ~usage:(fun o exec cmd ->
       fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
     ~run:(fun config exec cmd -> function
-      | [file] -> Some (Dumps.load_file config file)
-      | _ -> None);
-
+    | [file] -> Dumps.load_file config file
+    | _ -> error (`invalid_command_line "no filename provided"));
+(*
   define_command 
     ~names:["register-hiseq-raw"; "rhr"]
     ~description:"Register a HiSeq raw directory"
@@ -1754,7 +1730,7 @@ let () =
     ~run:(fun config exec cmd -> function
     | [] -> None
     | name :: args -> Query.predefined config name args; Some ());
-
+*)
   define_command
     ~names:["bcl-to-fastq"; "b2f"]
     ~description:"Run, monitor, … the bcl_to_fastq function"
@@ -1786,9 +1762,10 @@ let () =
       | "kill" :: id :: [] ->
         B2F.kill config id
       | "info" :: id :: [] ->
-        B2F.info config id
-      | _ -> None);
-  
+        (* B2F.info config id *)
+        failwith "NOT IMPLEMENTED"
+      | _ -> error (`invalid_command_line "unknown command"));
+ (* 
   define_command
     ~names:["fastx-quality-stats"; "fxqs"]
     ~description:"Run, monitor, … the fastx-quality-stats function"
@@ -1874,7 +1851,7 @@ let () =
     | [date; fca; fcb; note] ->
       Some (Hiseq_run.register config date fca fcb (Some note))
     | _ -> None);
-
+ *)
   let global_usage = function
     | `error -> 
       eprintf "ERROR: Main usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n" 
@@ -1927,7 +1904,7 @@ let () =
     in
     let config = In_channel.(with_file config_file ~f:input_all) in
     let hitscore_config =
-      match Hitscore_threaded.Configuration.(parse_str config) with
+      match Configuration.(parse_str config) with
       | Ok o -> o
       | Error (`configuration_parsing_error e) ->
         eprintf "Error while parsing configuration: %s\n" (Exn.to_string e);
@@ -1949,7 +1926,7 @@ let () =
     let config = In_channel.(with_file config_file ~f:input_all) in
     let hitscore_config =
       let open Result in
-      Hitscore_threaded.Configuration.(
+      Configuration.(
         parse_str config
         >>= fun c ->
         use_profile c profile_name)
@@ -1964,11 +1941,9 @@ let () =
     in      
     begin match find_command cmd with
     | Some (names, description, usage, run) ->
-      begin match run hitscore_config exec cmd args with
-      | Some _ -> ()
-      | None -> 
-        eprintf "Wrong arguments!\n";
-        usage stderr exec cmd;
+      begin match (run hitscore_config exec cmd args) with
+      | true -> ()
+      | false -> usage stderr exec cmd;
       end
     | _ -> 
       eprintf "Unknown Command: %S !\n" cmd; 

@@ -4,7 +4,7 @@ open Core.Std
 
 open Hitscore_app_util
 
-open Hitscore_threaded
+open Hitscore
 open Flow
 
 let get_or_make_sample_sheet ~dbh ~hsc ~kind ?force_new flowcell =
@@ -14,31 +14,42 @@ let get_or_make_sample_sheet ~dbh ~hsc ~kind ?force_new flowcell =
     printf "NEW FAILURE\n";
     error e
   | `new_success f ->
+    let layout = Classy.make dbh in
     printf "Assemble_sample_sheet.run succeeded\n";
-    Layout.Function_assemble_sample_sheet.(
-      get ~dbh f >>= function
+    layout#assemble_sample_sheet#get f
+    >>= fun ft ->
+    begin match ft#g_result with
+    | None -> error `assemble_sample_sheet_no_result
+    | Some r -> return r#pointer
+    end
+      (*get ~dbh f >>= function
       | { g_result = None; _ } -> error `assemble_sample_sheet_no_result
-      | { g_result = Some r } -> return r)
+      | { g_result = Some r } -> return r) *)
   | `previous_success (f, r) ->
     printf "Assemble_sample_sheet.run hit a previously ran assembly\n";
     return r
 
 let get_hiseq_raw ~dbh s =
+  let layout = Classy.make dbh in
   begin match String.split ~on:'_' (Filename.basename s) with
   | [_ ; _ ; _; almost_fc] ->
-    Layout.Search.record_hiseq_raw_by_hiseq_dir_name ~dbh s
+    layout#hiseq_raw#all
+    >>| List.filter ~f:(fun hr -> hr#hiseq_dir_name = s)
     >>= fun search_result ->
     return (search_result, String.drop_prefix almost_fc 1)
   | _ ->
     begin 
       try
-        Layout.Record_hiseq_raw.(
-          let hst = unsafe_cast (Int32.of_string s) in
-          get ~dbh hst >>= fun {flowcell_name; _} ->
-          return ([hst], flowcell_name))
+        let hst = Layout.Record_hiseq_raw.unsafe_cast (Int.of_string s) in
+        layout#hiseq_raw#get hst
+        >>= fun found ->
+        (* get ~dbh hst >>= fun {flowcell_name; _} -> *)
+        return ([found], found#flowcell_name)
       with
         e ->
-          (Layout.Search.record_hiseq_raw_by_flowcell_name ~dbh s
+          (layout#hiseq_raw#all
+           >>| List.filter ~f:(fun hr -> hr#flowcell_name = s)
+          (* (Layout.Search.record_hiseq_raw_by_flowcell_name ~dbh s *)
            >>= fun search_result ->
            return (search_result, s))
     end
@@ -46,7 +57,7 @@ let get_hiseq_raw ~dbh s =
   >>= fun (search_result, flowcell) ->
   begin match search_result with
   | [one] ->
-    printf "Found one hiseq-raw directory\n"; return (one, flowcell)
+    printf "Found one hiseq-raw directory\n"; return (one#g_pointer, flowcell)
   | [] ->
     error (`cant_find_hiseq_raw_for_flowcell flowcell)
   | more ->
@@ -109,7 +120,6 @@ let start_parse_cmdline usage_prefix args =
   end
 
 let start hsc prefix cl_args =
-  let open Hitscore_threaded in
   begin match (start_parse_cmdline prefix cl_args) with
   | `go (args, kind, force_new, user, queue, nodes, ppn,
          wall_hours, version, mismatch, 
@@ -129,10 +139,10 @@ let start hsc prefix cl_args =
       >>= fun started ->
       begin match started with
       | `success s -> 
-        printf "Evaluation %ld started.\n" s.Layout.Function_bcl_to_fastq.id;
+        printf "Evaluation %d started.\n" s.Layout.Function_bcl_to_fastq.id;
         return ()
       | `failure (s, e) ->
-        printf "Evaluation %ld FAILED to START.\n" 
+        printf "Evaluation %d FAILED to START.\n" 
           s.Layout.Function_bcl_to_fastq.id;
         error e
       end
@@ -142,81 +152,82 @@ let start hsc prefix cl_args =
         (List.length l)
         (sprintf ": [%s]" (String.concat ~sep:", " l)); return ()
     end
-      |! display_errors;
+    >>= fun () ->
     db_disconnect hsc dbh
   | `help h ->
-    printf "%s" h; Ok ()
+    printf "%s" h; return ()
   | `bad b ->
-    eprintf "%s" b; Ok ()
+    eprintf "%s" b; return ()
   end
-    |! Result.ok
 
 
 let register_success hsc id = 
-  let open Hitscore_threaded in
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
     let work =
-      db_connect hsc
-      >>= fun dbh ->
-      Layout.Function_bcl_to_fastq.(
-        get ~dbh bcl_to_fastq >>= function
-        | { g_status = `Started; } as e -> return e
-        | { g_status } -> error (`not_started g_status))
-      >>= fun _ ->
-      Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~configuration:hsc
+      with_database hsc (fun ~dbh ->
+        let layout = Classy.make dbh in
+        layout#bcl_to_fastq#get bcl_to_fastq
+        >>= fun b2f ->
+        begin
+          if b2f#g_status = `Started then return ()
+          else error (`bcl_to_fastq_not_started b2f#g_status)
+        end
+        >>= fun () ->
+        Bcl_to_fastq.succeed ~dbh ~bcl_to_fastq ~configuration:hsc)
     in
-    begin match work with
-    | Ok (`success s) ->
-      printf "\nThis is a success: %ld\n\n" s.Layout.Function_bcl_to_fastq.id
-    | Ok (`failure (_, e)) ->
-      printf "\nThis is actually a failure:\n";
-      display_errors (Error e)
-    | Error  e ->
-      printf "\nThere have been errors:\n";
-      display_errors (Error e)          
-    end;
-    Some ()
+    double_bind work
+      ~ok:(function
+      | (`success s) ->
+        printf "\nThis is a success: %d\n\n" s.Layout.Function_bcl_to_fastq.id;
+        return ()
+      | (`failure (_, e)) ->
+        printf "\nThis is actually a failure.\n";
+        error e)
+      ~error:(fun e ->
+        printf "\nThere have been errors.\n";
+        error e)          
   | None ->
-    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
+    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n";
+    error (`invalid_command_line (sprintf "%S is not an integer" id))
   end
 
 let register_failure ?reason hsc id =
-  let open Hitscore_threaded in
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
-    let work =
-      db_connect hsc >>= fun dbh -> 
-      Layout.Function_bcl_to_fastq.(
-        get ~dbh bcl_to_fastq  >>= function
-        | { g_status = `Started; } as e -> return e
-        | { g_status } -> error (`not_started g_status))
-      >>= fun _ ->
-      Bcl_to_fastq.fail ~dbh ?reason bcl_to_fastq in
-    display_errors work;
-    Some ()
+    with_database hsc (fun ~dbh ->
+      let layout = Classy.make dbh in
+      layout#bcl_to_fastq#get bcl_to_fastq
+      >>= fun b2f ->
+      begin
+        if b2f#g_status = `Started then return ()
+        else error (`bcl_to_fastq_not_started b2f#g_status)
+      end
+      >>= fun () ->
+      Bcl_to_fastq.fail ~dbh ?reason bcl_to_fastq)
+    >>= fun _ ->
+    return ()
   | None ->
-    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
+    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n";
+    error (`invalid_command_line (sprintf "%S is not an integer" id))
   end
 
 let check_status ?(fix_it=false) hsc id =
-  let open Hitscore_threaded in
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
-    let work =
-      db_connect hsc >>= fun dbh -> 
+    with_database hsc (fun ~dbh ->
       Bcl_to_fastq.status ~dbh ~configuration:hsc bcl_to_fastq
       >>= function
-      |  `running ->
+      | `running ->
         printf "The function is STILL RUNNING.\n"; 
         return ()
       | `started_but_not_running e -> 
@@ -231,65 +242,68 @@ let check_status ?(fix_it=false) hsc id =
       | `not_started e ->
         printf "The function is NOT STARTED: %S.\n"
           (Layout.Enumeration_process_status.to_string e);
-        return ()
-    in
-    display_errors work;
-    Some ()
+        return ())
   | None ->
-    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
+    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n";
+    error (`invalid_command_line (sprintf "%S is not an integer" id))
   end
     
 let kill hsc id =
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int32.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
-    let work =
-      db_connect hsc >>= fun dbh -> 
-      Layout.Function_bcl_to_fastq.(
-        get ~dbh bcl_to_fastq  >>= function
-        | { g_status = `Started; } as e -> return e
-        | { g_status } -> error (`not_started g_status))
+    with_database hsc (fun ~dbh ->
+      let layout = Classy.make dbh in
+      layout#bcl_to_fastq#get bcl_to_fastq
+      >>= fun b2f ->
+      begin
+        if b2f#g_status = `Started then return ()
+        else error (`bcl_to_fastq_not_started b2f#g_status)
+      end
+      >>= fun () ->
+      Bcl_to_fastq.kill ~dbh ~configuration:hsc bcl_to_fastq
       >>= fun _ ->
-      Bcl_to_fastq.kill ~dbh ~configuration:hsc bcl_to_fastq in
-    display_errors work;
-    Some ()
+      return ())
   | None ->
-    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n"; None
+    eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n";
+    error (`invalid_command_line (sprintf "%S is not an integer" id))
   end
-
+(*
 let info hsc id_or_dir = 
   let dir = 
     let bcl_to_fastq =
       try Some (Layout.Function_bcl_to_fastq.unsafe_cast 
-                  (Int32.of_string id_or_dir)) 
+                  (Int.of_string id_or_dir)) 
       with e -> None in
     begin match bcl_to_fastq with
     | Some bcl_to_fastq ->
-      let work = 
-        db_connect hsc >>= fun dbh -> 
-        Layout.Function_bcl_to_fastq.(
-          get ~dbh bcl_to_fastq  >>= function
-          | { g_status = `Succeeded; g_result = Some s; raw_data} -> 
-            return (raw_data, s)
-          | { g_status } -> error (`not_started g_status))
-        >>= fun (hsraw, b2fu) ->
-        Layout.Record_hiseq_raw.(
-          get ~dbh hsraw >>= fun { flowcell_name } -> return flowcell_name)
+      with_database hsc (fun ~dbh ->
+        let layout = Classy.make dbh in
+        layout#bcl_to_fastq#get bcl_to_fastq
+        >>= fun b2f ->
+        begin match b2f#g_status, b2f#g_result with
+        | `Succeeded, Some s -> return (b2f#raw_data, s)
+        | _ -> error (`bcl_to_fastq_not_succeeded (b2f#g_status, b2f#g_result))
+        end
+        >>= fun (hsraw_p, b2fu) ->
+        hsraw_p#get
+        >>= fun hsraw ->
+        return hsraw#flowcell_name
         >>= fun fcid ->
-        Layout.Record_bcl_to_fastq_unaligned.(
-          get ~dbh b2fu >>= fun { directory } -> return directory)
+        b2fu#get
+        >>= fun b2fu ->
+        b2fu#directory
         >>= fun vol ->
-        Common.all_paths_of_volume ~dbh ~configuration:hsc vol
+        Common.all_paths_of_volume ~dbh ~configuration:hsc vol#pointer
         >>= (function
         | [ unaligned ] -> return  unaligned
         | l -> error (`there_is_more_than_unaligned l))
         >>= fun unaligned ->
-        return (Filename.concat unaligned (sprintf "Basecall_Stats_%s" fcid))
-      in
-      display_errors work;
-      let udir = result_ok_exn work in
+        return (Filename.concat unaligned (sprintf "Basecall_Stats_%s" fcid)))
+      >>= fun udir ->
+      Common.path_of_volume udir
       begin match Configuration.path_of_volume_fun hsc with
       | Some f -> f udir
       | None -> failwith "Root directory not configured"
@@ -349,4 +363,4 @@ let info hsc id_or_dir =
     );
   );
   Some ()
-
+  *)

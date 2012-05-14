@@ -6,7 +6,6 @@ open Flow
 let result_ok_exn ?(fail=Failure "Not Ok") = function
   | Ok o -> o
   | Error _ -> raise fail
-    
 module System = struct
   exception Wrong_status of [ `Exit_non_zero of int | `Signal of Signal.t ]
   let command_exn s =
@@ -31,6 +30,7 @@ module System = struct
     Unix.open_process_in s |! In_channel.input_all
         
 end
+
 module XML = struct
   include Xmlm
   let in_tree i = 
@@ -38,15 +38,15 @@ module XML = struct
     let data d = `D d in
     input_doc_tree ~el ~data i
 end
-
 let string_of_error = function
   | `barcode_not_found (i, p) ->
-    sprintf "ERROR: Barcode not found: %ld (%s)\n" i
+    sprintf "ERROR: Barcode not found: %d (%s)\n" i
       (Layout.Enumeration_barcode_provider.to_string p)
   | `fatal_error  `trees_to_unix_paths_should_return_one ->
     sprintf "FATAL_ERROR: trees_to_unix_paths_should_return_one\n"
   | `io_exn e ->
     sprintf "IO-ERROR: %s\n" (Exn.to_string e)
+      (*
   | `layout_inconsistency (where, what) ->
     let int32_list il = (List.map il Int32.to_string |! String.concat ~sep:", ") in
     sprintf "LAYOUT-INCONSISTENCY-ERROR for %s: %s!\n"
@@ -72,6 +72,7 @@ let string_of_error = function
         sprintf "search_flowcell_by_name_not_unique: %s" fcid
       | `successful_status_with_no_result id ->
         sprintf "successful_status_with_no_result: %ld" id)
+      *)
   | `new_failure (_, _) ->
     sprintf "NEW FAILURE\n"
   | `pg_exn e ->
@@ -121,10 +122,53 @@ let string_of_error = function
   | `cannot_recognize_fastq_format file ->
     sprintf "cannot_recognize_fastq_format of %s" file
   | `file_path_not_in_volume (file, v) ->
-    sprintf "file_path_not_in_volume (%s, %ld)" file v.Layout.File_system.id
+    sprintf "file_path_not_in_volume (%s, %d)" file v.Layout.File_system.id
   | `duplicated_barcode s ->
     sprintf "Duplicated barcode: %S" s
+  | `invalid_command_line s ->
+    sprintf "Invalid command-line argument(s): %s" s
+  | `bcl_to_fastq_not_started status ->
+    sprintf "bcl_to_fastq_not_started but %S"
+      (Hitscore.Layout.Enumeration_process_status.to_string status)
+  | `layout_inconsistency (where, what) ->
+    sprintf "LAYOUT-INCONSISTENCY (%s): %s"
+      (match where with
+      | `Dump -> "Dump"
+      | `File_system -> "File-system"
+      | `Function f -> sprintf  "function %S" f
+      | `Record r -> sprintf "record %S" r) 
+      (match what with
+      | `search_flowcell_by_name_not_unique (s, i) ->
+        sprintf "search_flowcell_by_name_not_unique %s %d" s i
+      | `successful_status_with_no_result i ->
+        sprintf "successful_status_with_no_result %d" i)
+  | `db_backend_error _ ->
+    failwith "string_of_error NOT IMPLEMENTED"
+  | `Layout (where, what) ->
+    sprintf "LAYOUT-ERROR (%s): %s"
+      (match where with
+      | `Dump -> "Dump"
+      | `File_system -> "File-system"
+      | `Function f -> sprintf  "function %S" f
+      | `Record r -> sprintf "record %S" r) 
+      (match what with
+      | `db_backend_error (`query (q, e)) ->
+        sprintf "Query %S failed: %s" q (Exn.to_string e)
+      | _ -> 
+        failwith "string_of_error NOT IMPLEMENTED"
+          (*
+                   [> `query of Hitscore_db_backend.Sql_query.t * exn ]
+               | `parse_evaluation_error of
+                   string Hitscore_std.Option.t list * exn
+               | `parse_sexp_error of Hitscore_std.Sexp.t * exn
+               | `parse_value_error of string option list * exn
+               | `parse_volume_error of string option list * exn
+               | `result_not_unique of Hitscore_db_backend.Backend.result
+               | `wrong_add_value
+               | `wrong_version of string * string _ -> "TODO" *))
+        
 
+(*
 let display_errors = function
   | Ok _ -> ()
   | Error e ->
@@ -134,8 +178,8 @@ let flow_ok_or_fail = function
   | Ok o -> o
   | Error e ->
     failwithf "%s" (string_of_error e) ()
-
-
+*)
+(*
 let pg_raw_query  ~dbh ~query =
   let module PG = Layout.PGOCaml in
   let name = "todo_change_this" in
@@ -152,13 +196,15 @@ let print_query_result query l =
     (String.concat ~sep:"; " (List.map l (fun l2 ->
       sprintf "(%s)"
         (String.concat ~sep:", " (List.map l2 (Option.value ~default:"—"))))))
-    
+*)  
 let pbs_related_command_line_options
     ?(default_nodes=1) ?(default_ppn=8) ?(default_wall_hours=12) () = 
   let user = ref (Sys.getenv "LOGNAME") in
+  let command_to_string s =
+    Unix.open_process_in s |! In_channel.input_all in
   let queue = 
     let groups =
-      System.command_to_string "groups" 
+      command_to_string "groups" 
       |! String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
     match List.find groups ((=) "cgsb") with
     | Some _ -> ref (Some "cgsb-s")

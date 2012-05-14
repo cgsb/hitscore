@@ -2,14 +2,17 @@ open Hitscore_std
 
 module Flow = Flow
 
+  (*
 module Backend_queries = Hitscore_db_backend.Sql_query
 module Backend = Hitscore_db_backend.Backend
+  *)
+include Hitscore_db_backend
 
 include Hitscore_layout
 
   (* module Layou_access = Hitscore_db_access.Make(Flow) *)
 
-module Configuration = Hitscore_configuration
+module Configuration = Hitscore_configuration.Configuration
 
 module Access_rights = Hitscore_access_rights.Access_rights
   

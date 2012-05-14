@@ -53,7 +53,7 @@ Library hitscore
 Executable hitscore
   Path: src/app
   MainIs: hitscore_main.ml
-  BuildDepends: threads, core, hitscore
+  BuildDepends: threads, core, hitscore, lwt.unix
   CompiledObject: best
   Install: true
 

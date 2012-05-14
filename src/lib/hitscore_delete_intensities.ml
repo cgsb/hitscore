@@ -1,3 +1,7 @@
+open Hitscore_std
+open Hitscore_layout
+open Hitscore_access_rights
+open Hitscore_db_backend
 
 open Hitscore_common
 open Common

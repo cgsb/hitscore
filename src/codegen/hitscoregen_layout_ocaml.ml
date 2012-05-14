@@ -699,15 +699,15 @@ let ocaml_module raw_dsl dsl output_string =
     names := name :: !names;
   | Volume (_, _) -> ()
   );
-  let error_location = "`Dump" in
+  (* let error_location = "`Dump" in *)
   line out "return {version; file_system; %s}" (String.concat ~sep:"; " !names);
 
   line out "let insert_dump ~dbh ?(check_version=true) dump =";
-  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+  (* ocaml_encapsulate_layout_errors out ~error_location (fun out -> *)
     line out "  if check_version && \
                     dump.version <> Hitscore_conf_values.version then (";
-    line out "    error (`wrong_version (dump.version, \
-                          Hitscore_conf_values.version))";
+    line out "    error (`Layout (`Dump, `wrong_version (dump.version, \
+                          Hitscore_conf_values.version)))";
     line out "  ) else (";
     List.iter all_nodes (function
     | Enumeration (name, fields) -> ()
@@ -725,8 +725,8 @@ let ocaml_module raw_dsl dsl output_string =
     line out "    of_list_sequential dump.file_system \
                   (Volume.insert_volume_unsafe ~dbh)";
     line out "    >>= fun (_: unit list) ->";
-    line out "    return ()\n  )"
-  );
+    line out "    return ()\n  )";
+  (* ); *)
 
 
   line out "end";

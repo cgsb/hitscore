@@ -1,7 +1,7 @@
 open Hitscore_std
 open Hitscore_layout
 open Hitscore_db_backend
-module Configuration = Hitscore_configuration
+open Hitscore_configuration
 
 
 (** Permissions management.  *)
@@ -40,7 +40,6 @@ end
 
 module Access_rights : ACCESS_RIGHTS = struct
              
-
   let get_people role ~dbh =
     let layout = Classy.make dbh in
     layout#person#all

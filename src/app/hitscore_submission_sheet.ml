@@ -2,55 +2,36 @@ open Core.Std
 let (|>) x f = f x
 
 open Hitscore_app_util
-open Hitscore_threaded 
+open Hitscore
+open Flow
 
 let find_contact ~dbh ~verbose first last email =
   let if_verbose fmt = 
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
   if_verbose "Person: %S %S %S\n" first last email;
-  let by_email = Layout.Search.record_person_by_email ~dbh email in
-  begin match by_email with
-  | Ok [ one ] ->
-    if_verbose
-      "  Found one person with that email: %ld.\n"
-      one.Layout.Record_person.id;
-    (`one one)
-  | Ok [] ->
-    if_verbose "  Found no person with that email … ";
-    begin match Layout.Search.record_person_by_given_name_family_name
-        ~dbh first last with
-    | Ok [ one ] ->
-      if_verbose "BUT found one person with that name: %ld.\n"
-        one.Layout.Record_person.id;
-      (`to_fix (one,
-                sprintf "%S: wrong email for contact %ld" email
-                  one.Layout.Record_person.id))
-    | Ok [] ->
-      if_verbose "neither with that full name … ";
-      begin match Layout.Search.record_person_by_nickname_family_name
-          ~dbh (Some first) last with
-      | Ok [ one ] ->
-        if_verbose "BUT found one person with that nick name: %ld.\n"
-          one.Layout.Record_person.id;
-        (`to_fix (one,
-                  sprintf "%S: wrong email for contact %ld" email
-                    one.Layout.Record_person.id))
-      | Ok [] ->
-        if_verbose "neither with that nick-fullname … \n";
-        (`none (first, last, email))
-      | _ ->
-        failwith "search by nick-full-name returned wrong"
-      end
-    | _ ->
-      failwith "search by full-name returned wrong"
-    end
-  | _ ->
-    failwith "search by email returned wrong"
+  let layout = Classy.make dbh in
+  layout#person#all
+  >>= fun all_the_people ->
+  of_list_sequential all_the_people (fun p ->
+    if p#email = email then
+      return (Some (`one p#g_pointer))
+    else if (p#given_name = first || p#nickname = Some first)
+        && p#family_name = last then
+      return (Some
+                (`to_fix (p#g_pointer,
+                          sprintf "%S: wrong email for contact %d" email p#g_id)))
+    else
+          return None)
+  >>| List.filter_opt
+  >>= fun filtered ->
+  begin match filtered with
+  | [ one ] -> return one
+  | other -> return (`none (first, last, email))
   end
 
 let print = ksprintf
 let errbuf = Buffer.create 42
-let error fmt = 
+let perror fmt = 
   let  f = Buffer.add_string errbuf in
   print f ("ERROR:" ^^ fmt ^^ "\n")
 let warning fmt =
@@ -81,11 +62,19 @@ let list_of_filteri f =
   M.lofi ();
   List.rev !rl
 
+let get_section sanitized ~start ~first_column_condition =
+  list_of_filteri (fun i ->
+    let row = sanitized.(start + i) in
+    if not (List.for_all row ((=) ""))
+      && first_column_condition (List.hd_exn row) then
+      Some row
+    else
+      None)
 
-let int32 ?(msg="") s =
-  try Scanf.sscanf s "%ld" Option.some
+let int ?(msg="") s =
+  try Scanf.sscanf s "%d" Option.some
   with e ->
-    error "%sCannot read an integer from %s" msg s; None
+    perror "%sCannot read an integer from %s" msg s; None
 
 
 let parse_run_type s =
@@ -93,15 +82,15 @@ let parse_run_type s =
   | [ "PE"; lengths ] ->
     begin match String.split ~on:'x' lengths with
     | [ left; right ] ->
-      Option.bind (int32 left) (fun l -> Some (s, l, int32 right))
+      Option.bind (int left) (fun l -> Some (s, l, int right))
     | _ ->
-      error "Wrong read length spec (PE): %s" s;
+      perror "Wrong read length spec (PE): %s" s;
       None
     end
   | [ "SE"; length ] ->
-    Option.bind (int32 length) (fun l -> Some (s, l, None))
+    Option.bind (int length) (fun l -> Some (s, l, None))
   | _ ->
-    error "Wrong read length spec (PE): %s" s;
+    perror "Wrong read length spec (PE): %s" s;
     None
     
 let parse_date s =
@@ -113,10 +102,10 @@ let parse_date s =
                     (Int.of_string year) (Int.of_string month)
                     (Int.of_string day))
       with Failure e ->
-        error "Cannot parse date: %s %s" s e; None
+        perror "Cannot parse date: %s %s" s e; None
     end
   | l ->
-    error "Cannot parse date: %s" s;
+    perror "Cannot parse date: %s" s;
     None
 
  
@@ -154,16 +143,27 @@ let col_Library_Preparator_Email = "Library Preparator Email"
 let col_Notes = "Notes"
 
 
+let search_person_by_email layout email =
+  layout#person#all
+  >>| List.filter ~f:(fun p -> p#email = email)
+  >>= function
+  | [one] -> return one
+  | more -> error (`cannot_find_a_unique_person_for_email email)
 
+let failwithf fmt =
+  ksprintf (fun s -> error (`failure s)) fmt
+    
 let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
+  (*
   let if_verbose fmt = 
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
 
   Buffer.clear errbuf;
   printf "========= Loading %S =========\n" file;
-  match db_connect hsc with
-  | Ok dbh ->
+  with_database hsc (fun ~dbh ->
+    let layout = Classy.make dbh in
     let loaded = Csv.load ~separator:',' file |> Array.of_list in
+    (* Csv is not Lwt-compliant... we don't care for now. *)
     let sanitized =
       let sanitize s =
         (String.split_on_chars ~on:[' '; '\t'; '\n'; '\r'] s) |>
@@ -174,14 +174,17 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     in
     let stropt s = if s = "" then None else Some s in
     let contacts =
-      let contacts_section = find_section sanitized "Contacts" in
-      list_of_filteri (fun i ->
-        let row = sanitized.(contacts_section + i + 1) in
-        if not (List.for_all row ((=) ""))
-        && List.hd_exn row <> "Invoicing" then
-          begin match row with
-          | "" :: [] | [] -> failwith "should not be trying this... (contacts)"
-          | ["" ; email ] ->
+      let contact_rows =
+        let contacts_section = find_section sanitized "Contacts" in
+        get_section sanitized ~start:(contacts_section + 1)
+          ~first_column_condition:((<>) "Invoicing") in
+      of_list_sequential contact_rows (function
+      | "" :: [] | [] -> failwithf "should not be trying this... (contacts)"
+      | ["" ; email ] ->
+        search_person_by_email layout email
+        >>= fun p ->
+        return (email, Some p#g_pointer, [])
+         (* 
             begin match Layout.Search.record_person_by_email ~dbh email with
             | Ok [ one ] ->
               if_verbose
@@ -189,30 +192,30 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 email one.Layout.Record_person.id;
               Some (email, Some one, [])
             | Ok [] ->
-              error "  Found no one with %S as email." email;
+              perror "  Found no one with %S as email." email;
               None
             | _ ->
               failwithf "Database problem while looking for %S" email ()
-            end
-          | printname :: email :: first :: middle :: last :: _ as l ->
-            begin match (find_contact ~dbh ~verbose first last email) with
-            | `one o ->
-              Some (email, Some o, [])
-            | `to_fix (o, msg) ->
-              error "Contact to fix: %s" msg;
-              Some (email, None, (List.map l stropt))
-            | `none _ -> 
-              Some (email, None, (List.map l stropt))
-            end
-          | l -> 
-            error "Wrong contact line: %s" (strlist l); None
-          end
-        else None)
+            end *)
+      | printname :: email :: first :: middle :: last :: _ as l ->
+        find_contact ~dbh ~verbose first last email
+        >>= (function
+        | `one o ->
+          return (email, Some o, [])
+        | `to_fix (o, msg) ->
+          perror "Contact to fix: %s" msg;
+          return (email, None, (List.map l stropt))
+        | `none _ -> 
+          return (email, None, (List.map l stropt)))
+      | l -> 
+        failwithf "Wrong contact line: %s" (strlist l))
     in
+    (*
     if_verbose "Contacts:\n";
     List.iter contacts (function
     | email, None, _ -> if_verbose "  %s (TO CREATE)\n" email
     | email, Some o, _ -> if_verbose "  %s -- %ld\n" email o.Layout.Record_person.id);
+    *)
     let submission_date, run_type_parsed, invoicing =
       let section = find_section sanitized "Invoicing" in
       let submission_date, run_type_parsed =
@@ -221,34 +224,32 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           :: "Run Type Requested:" :: run_type_str :: _ ->
           (parse_date date, parse_run_type run_type_str)
         | l ->
-          error "Wrong invoicing row: %s\n" (strlist l);
+          perror "Wrong invoicing row: %s\n" (strlist l);
           (None, None)
       in
+      let invoicing_rows =
+        get_section sanitized ~start:(section + 1)
+          ~first_column_condition:(String.is_prefix ~prefix:"Pool") in
       (submission_date, run_type_parsed,
-       list_of_filteri (fun i ->
-         let row = sanitized.(section + i + 2) in
-         if_verbose "Row: %s\n" (strlist row);
-         match row with
-         | [] | "" :: [] -> None
-         | p :: _ when String.is_prefix p ~prefix:"Pool" -> None
-         | piemail :: percent :: chartstuff when 
-             List.length (String.split ~on:'@' piemail) = 2 ->
-           begin match try Some (Float.of_string percent) with _ -> None with
-           | Some p -> Some (piemail, p, chartstuff)
-           | None -> error "Wrong chartfield row: %s" (strlist row); None
-           end
-         | l -> error "Wrong chartfield row: %s" (strlist row); None))
+       List.filter_map invoicing_rows (function
+       | piemail :: percent :: chartstuff as row when 
+           List.length (String.split ~on:'@' piemail) = 2 ->
+         begin match try Some (Float.of_string percent) with _ -> None with
+         | Some p -> Some (piemail, p, chartstuff)
+         | None -> perror "Wrong chartfield row: %s" (strlist row); None
+         end
+       | l -> perror "Wrong chartfield row: %s" (strlist l); None))
     in
     let sum = List.fold_left invoicing ~f:(fun x (_, p, _) -> x +. p) ~init:0. in
     if 99. < sum && sum < 101. then
       ()
     else
-      error "Invoicing sums up to %f" sum;
+      perror "Invoicing sums up to %f" sum;
     if_verbose "Invoicing:\n";
     List.iter invoicing (fun (email, p, chartstuff) -> 
       if_verbose "  %s, %f, [%s]\n" email p (strlist chartstuff)
     );
-
+    
     let pools =
       let sections =
         Array.mapi sanitized ~f:(fun i a -> (i, a)) |> Array.to_list |>
@@ -263,7 +264,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           :: "Total Volume (uL):" :: tvs :: "Concentration (nM):" :: cs :: 
             emptyness when List.for_all emptyness ((=) "") ->
           let seeding_pM, tot_vol, nm =
-            let i32 = int32 ~msg:(sprintf "%s row: " pool) in
+            let i32 = int ~msg:(sprintf "%s row: " pool) in
             (i32 scs, i32 tvs, i32 cs) in
           let pool_libs =
             list_of_filteri (fun i ->
@@ -276,7 +277,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 begin match try Some (Float.of_string percent) with e -> None with
                 | Some p -> Some (lib, p)
                 | None -> 
-                  error "Wrong pool percentage %s in row [%s]" percent (strlist row);
+                  perror "Wrong pool percentage %s in row [%s]" percent (strlist row);
                   None
                 end
               | _ -> (* We should had hit another pool *) None) in
@@ -292,19 +293,19 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           in
           Some (pool, seeding_pM, tot_vol, nm, pool_libs_redistributed)
         | l ->
-          error "Wrong Pool row: %s" (strlist l); None)
+          perror "Wrong Pool row: %s" (strlist l); None)
     in
     List.iter pools (function
     | Some (pool, _,_,_, l) ->
       let sum = List.fold_left l ~f:(fun x (_, p) -> (x +. p)) ~init:0. in
       if sum < 99. || sum > 101. then
-        error "Pooled percentages for %s do not sum up to 100" pool
+        perror "Pooled percentages for %s do not sum up to 100" pool
     | None -> ());
 
     if_verbose "Pools:\n";
     List.iter pools (function
     | Some (pool, spm, tv, nm, l) -> 
-      let f = Option.value_map ~default:"WRONG" ~f:(sprintf "%ld") in
+      let f = Option.value_map ~default:"WRONG" ~f:(sprintf "%d") in
       if_verbose "  %s %s %s %s [%s]\n" pool (f spm) (f tv) (f nm)
         (String.concat ~sep:", " 
            (List.map l ~f:(fun (x,y) -> sprintf "%s:%.2f%%" x y)))
@@ -319,7 +320,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | _ -> false) then
           ()
         else (
-          error "Wrong library name: %S" n
+          perror "Wrong library name: %S" n
         ) in
           
       let check_existing_library libname rest =
@@ -327,32 +328,33 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           match rest with
           | "" :: _ | [] -> None
           | p :: _ -> Some p in
-        let search = (* working around strangety of PGOCaml (c.f. 
-                        email sent to the mailinglist)  *)
-          match project with
-          | Some _ ->
-            Layout.Search.record_stock_library_by_name_project
-              ~dbh libname project
-          | None ->
-            Layout.Search.record_stock_library_by_name ~dbh libname
-        in
+        layout#stock_library#all
+        >>| List.filter ~f:(fun l ->
+          l#name = libname && l#project = project)
+        >>= fun search ->
+        (* let search = (\* working around strangety of PGOCaml (c.f.  *)
+        (*                 email sent to the mailinglist)  *\) *)
+        (*   match project with *)
+        (*   | Some _ -> *)
+        (*     Layout.Search.record_stock_library_by_name_project *)
+        (*       ~dbh libname project *)
+        (*   | None -> *)
+        (*     Layout.Search.record_stock_library_by_name ~dbh libname *)
+        (* in *)
         begin match search with
-            | Ok [one] ->
-              if_verbose "Ok found that library: %ld\n"
-                one.Layout.Record_stock_library.id;
-              Some one
-            | Ok [] ->
-              error "Library %s is declared as already defined but was not found%s"
-                libname 
-                (Option.value_map project ~default:"" ~f:(sprintf " in project %s"));
-              None
-            | Ok l ->
-              error "Library %s has an ambiguous name: %d homonyms%s"
-                libname (List.length l)
-                (Option.value_map project ~default:"" ~f:(sprintf " in project %s"));
-              None
-            | Error _ ->
-              failwith "check_existing_library DB error"
+        | [one] ->
+          if_verbose "Ok found that library: %d\n" one#g_id;
+          return (Some one)
+        | [] ->
+          perror "Library %s is declared as already defined but was not found%s"
+            libname 
+            (Option.value_map project ~default:"" ~f:(sprintf " in project %s"));
+          return None
+        |  l ->
+          perror "Library %s has an ambiguous name: %d homonyms%s"
+            libname (List.length l)
+            (Option.value_map project ~default:"" ~f:(sprintf " in project %s"));
+          return None
         end
       in
 
@@ -391,7 +393,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             check_libname libname;
             if_verbose "%s should be already known\n" libname;
             let exisiting = check_existing_library libname rest in
-            let int32 = int32 ~msg:(sprintf "Lib %s: " libname) in
+            let int = int ~msg:(sprintf "Lib %s: " libname) in
             begin match exisiting with
             | Some lib_t ->
               let key_value_list =
@@ -404,11 +406,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 `existing (libname, lib_t, None, None, key_value_list)
               |  _ :: conc :: []
               |  _ :: conc :: "" :: _ ->
-                `existing (libname, lib_t, int32 conc, None, key_value_list)
+                `existing (libname, lib_t, int conc, None, key_value_list)
               | _ :: "" :: note :: _ ->
                 `existing (libname, lib_t, None, Some note, key_value_list)
               | _ :: conc :: note :: _ ->
-                `existing (libname, lib_t, int32 conc, Some note, key_value_list))
+                `existing (libname, lib_t, int conc, Some note, key_value_list))
             | None -> Some (`wrong libname)
             end
           | libname :: rest when libname <> ""->
@@ -419,12 +421,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               match column row col with
               | Some s -> Some s
               | None -> 
-                error "Lib: %s, mandatory field not provided: %s" libname col; None in
+                perror "Lib: %s, mandatory field not provided: %s" libname col; None in
             let mandatory32 r c = 
-              mandatory r c >>= int32 ~msg:(sprintf "Lib: %s (%s)" libname c) in
+              mandatory r c >>= int ~msg:(sprintf "Lib: %s (%s)" libname c) in
             let column32 r c = 
-              column r c >>= int32 ~msg:(sprintf "Lib: %s (%s)" libname c) in
-            let int32 = int32 ~msg:(sprintf "Lib %s: " libname) in
+              column r c >>= int ~msg:(sprintf "Lib: %s (%s)" libname c) in
+            let int = int ~msg:(sprintf "Lib %s: " libname) in
             let project = column row col_Project_Name in
             let conc = column32 row col_Concentration__nM_ in
             let note = column row col_Note in
@@ -454,7 +456,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   | Ok s -> s
                   | Error "bioo scientific" -> `bioo
                   | Error s ->
-                    error "Lib: %s cannot recognize barcode provider: %s" libname s;
+                    perror "Lib: %s cannot recognize barcode provider: %s" libname s;
                     `none
                   end
                 | None -> `none in
@@ -465,7 +467,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 String.split ~on:',' s 
                 |! List.map ~f:String.strip
                 |! List.filter ~f:((<>) "") 
-                |! List.filter_map ~f:int32
+                |! List.filter_map ~f:int
             in
             let custom_barcode_sequence =
               (column row col_Custom_Barcode_Sequence 
@@ -480,11 +482,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               |! value_map ~default:[] ~f:(List.map ~f:String.strip)
               |! List.filter_map ~f:(fun s ->
                 match String.split ~on:':' s |! List.map ~f:String.strip with
-                | [ "r1" ; two ] -> int32 two >>= fun i -> Some (`on_r1 i) 
-                | [ "r2" ; two ] -> int32 two >>= fun i -> Some (`on_r2 i) 
-                | [ "i"  ; two ] -> int32 two >>= fun i -> Some (`on_i i ) 
+                | [ "r1" ; two ] -> int two >>= fun i -> Some (`on_r1 i) 
+                | [ "r2" ; two ] -> int two >>= fun i -> Some (`on_r2 i) 
+                | [ "i"  ; two ] -> int two >>= fun i -> Some (`on_i i ) 
                 | _ ->
-                  error "Lib %s: cannot understand custom-barcode-loc: %S" libname s;
+                  perror "Lib %s: cannot understand custom-barcode-loc: %S" libname s;
                   None)
             in
             let rawrow = loaded.(section + i + 2) in
@@ -572,7 +574,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           sprintf "Barcode [Type: %s"
             (Layout.Enumeration_barcode_provider.to_string bt);
           sprintf "(%s)]" (String.concat ~sep:", " 
-                                      (List.map bcs (Int32.to_string)));
+                                      (List.map bcs (Int.to_string)));
           if cbs <> [] then
             sprintf "[Custom: (%s)]" (String.concat ~sep:", " cbs)
           else "";
@@ -629,7 +631,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | [ one ] -> ()
           | [] -> failwith "should nt be there"
           | more ->
-            error "Sample %s is defined with too many organisms: %s" s
+            perror "Sample %s is defined with too many organisms: %s" s
               (String.concat ~sep:", " 
                  (List.map ~f:snd
                     (List.Assoc.map more (Option.value ~default:"NONE")))));
@@ -653,11 +655,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | Some (pool, spm, tv, nm, input_libs) ->
             (List.find input_libs ~f:(fun (n, _) -> libname = n)) <> None
           | None -> false) = None then
-          error "Lib %S is not used in any pool." libname
+          perror "Lib %S is not used in any pool." libname
       in
       List.iter lib_names check_lib;
       if List.dedup lib_names |! List.length <> List.length lib_names then
-        error "There are duplicates in library names! E.g.: %s"
+        perror "There are duplicates in library names! E.g.: %s"
           (Option.value_exn (List.find_a_dup lib_names));
 
     in
@@ -682,7 +684,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | Some (p, _) -> Ok (fake p)
         | None ->
           incr fake_pointer;
-          let pointer = (Int32.of_int !fake_pointer |> Option.value_exn) in
+          let pointer = (Int.of_int !fake_pointer |> Option.value_exn) in
           dry_buffer := (pointer, log) :: !dry_buffer;
           Ok (fake pointer)
       ) else (
@@ -701,7 +703,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           match List.nth contents nth with
           | Some (Some s) -> s
           | None | Some None -> 
-            error "Contact %S: %s not provided" email name; 
+            perror "Contact %S: %s not provided" email name; 
             (name ^ "-fake")
         in
         let print_name =  List.nth contents 0 |! Option.value ~default:None in
@@ -715,13 +717,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             >>= fun l ->
             if String.for_all l Char.is_alphanum
             then Some l else (
-              error "Contact %S: the NetID should be alphanumeric: %S" email l;
+              perror "Contact %S: the NetID should be alphanumeric: %S" email l;
               None)) in
         if String.for_all email (function
         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9'
         | '.' | '-' | '_' | '+' | '@' -> true
         | _ -> false) then () else (
-          error "Email address: %S does not pass-filter …" email;
+          perror "Email address: %S does not pass-filter …" email;
         );
         let id =
           run ~dbh
@@ -778,7 +780,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 ~log:(sprintf 
                         "(add_volume protocol_directory %s (files %S))" hr_tag s)
             | None ->
-              error "Lib: %s, Protocol %S is not in the DB and has no file." 
+              perror "Lib: %s, Protocol %S is not in the DB and has no file." 
                 libname name;
               Ok (Layout.File_system.unsafe_cast (-1l))
             end
@@ -878,7 +880,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | None ->
               begin match Layout.Search.record_person_by_email ~dbh email with
               | Ok [] ->
-                error "Lib %s: Unknown preparator: %s" libname email;
+                perror "Lib %s: Unknown preparator: %s" libname email;
                 None
               | Ok [one] -> Some one
               | _ -> failwith "DB error searching preparator"
@@ -937,7 +939,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         in
         stock_lib |! Result.ok
         >>= fun library ->
-        let f32o o = bind o (fun x -> return (Float.of_int64 (Int64.of_int32 x))) in
+        let f32o o = bind o (fun x -> return (Float.of_int64 (Int64.of_int x))) in
         Layout.Record_bioanalyzer.(
           run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
@@ -983,7 +985,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         in
         stock_lib |! Result.ok
         >>= fun library ->
-        let f32o o = bind o (fun x -> return (Float.of_int64 (Int64.of_int32 x))) in
+        let f32o o = bind o (fun x -> return (Float.of_int64 (Int64.of_int x))) in
         Layout.Record_agarose_gel.(
           run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
@@ -1005,7 +1007,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       | Some _, Some _, Some _, Some _, Some _ -> agarose_gel () |! Pervasives.ignore
       | None, None, None, None, None -> ()
       | _ ->
-        error "Lib %s: Incomplete Agarose Gel" libname;
+        perror "Lib %s: Incomplete Agarose Gel" libname;
         agarose_gel () |! Pervasives.ignore
       end;
       Pervasives.ignore (bioanalyzer, agarose_gel);
@@ -1048,7 +1050,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     None
                 ) with
                 | None ->
-                  error "Pool: %s, can't find library %S" pool libname;
+                  perror "Pool: %s, can't find library %S" pool libname;
                   (Layout.Record_stock_library.unsafe_cast 99l, None,
                    Some (sprintf "Completely fake stock library: %s for pool %s"
                            libname pool), [])
@@ -1066,7 +1068,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               |! Array.of_list in
             let input_lib =
               let concentration_nM =
-                concentration >>| Int64.of_int32 >>| Float.of_int64 in
+                concentration >>| Int64.of_int >>| Float.of_int64 in
               Layout.Record_input_library.(
                 run ~dbh ~fake:(fun x -> unsafe_cast x)
                   ~real:(fun dbh ->
@@ -1094,8 +1096,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           run ~dbh ~fake:(fun x -> unsafe_cast x)
             ~real:(fun dbh ->
               add_value ~dbh ~libraries ~pooled_percentages
-                ?seeding_concentration_pM:(spm >>| Int64.of_int32 >>| Float.of_int64)
-                ?total_volume:(tv >>| Int64.of_int32 >>| Float.of_int64)
+                ?seeding_concentration_pM:(spm >>| Int64.of_int >>| Float.of_int64)
+                ?total_volume:(tv >>| Int64.of_int >>| Float.of_int64)
                 ~requested_read_length_1 ?requested_read_length_2
                 ~contacts)
             ~log:(sprintf "(add_lane (libraries (%s)) (percentages %s) \
@@ -1124,7 +1126,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | None ->
             begin match Layout.Search.record_person_by_email ~dbh piemail with
             | Ok [] ->
-              error "Invoice for %s: Unknown PI." piemail;
+              perror "Invoice for %s: Unknown PI." piemail;
               None
             | Ok [one] -> Some one
             | _ -> failwith "DB error searching preparator"
@@ -1135,19 +1137,19 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           let open Option in
           let mandatory msg s = 
             if s = "" then (
-              error "Invoicing for %s: wrong %s: %s (mandatory field)" piemail msg s;
+              perror "Invoicing for %s: wrong %s: %s (mandatory field)" piemail msg s;
               None) else Some s in
           let optional s = if s = "" then None else Some s in
           let is_n_digits n msg s =
             if String.length s = n && String.for_all s Char.is_digit 
             then Some s else (
-              error "Invoicing for %s: wrong %s: %S should be a \
+              perror "Invoicing for %s: wrong %s: %S should be a \
                        %d-digit string." piemail msg s n; 
               None) in
           let is_n_alphanum n msg s =
             if String.length s = n && String.for_all s Char.is_alphanum 
             then Some s else (
-              error "Invoicing for %s: wrong %s: %S should be a \
+              perror "Invoicing for %s: wrong %s: %S should be a \
                        %d-alphanums string." piemail msg s n; 
               None) in
           match chartstuff with
@@ -1160,10 +1162,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
              (match rest with [] -> None
              | q :: [] -> optional q
              | q :: t ->
-               error "Wrong row for invoice for %s: %s" piemail
+               perror "Wrong row for invoice for %s: %s" piemail
                  (strlist chartstuff); None))
           | _ -> 
-            error "Wrong chartfield for invoice for %s: %s" piemail
+            perror "Wrong chartfield for invoice for %s: %s" piemail
               (strlist chartstuff);
             (None, None, None, None, None, None)
         in
@@ -1204,6 +1206,6 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     );
     printf "Charged to %s.\n" (String.concat ~sep:", " 
                                  (List.map invoicing (fun (e, _, _) -> e)));
-    ()
-  | Error (`pg_exn e) ->
-    eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
+    ())
+  *)
+  return ()

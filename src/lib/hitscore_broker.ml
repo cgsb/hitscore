@@ -1,4 +1,9 @@
+open Hitscore_std
+open Hitscore_layout
+open Hitscore_access_rights
+open Hitscore_db_backend
 open Hitscore_common
+open Hitscore_configuration
 module Broker_types = struct
     
   type delivered_demultiplexing = {
@@ -55,9 +60,9 @@ module type BROKER = sig
   type 'a t
 
   val create :
-    ?mutex:(unit -> (unit, 'a) Hitscore_common.monad) * (unit -> unit) ->
+    ?mutex:(unit -> (unit, 'a) Flow.monad) * (unit -> unit) ->
     dbh:Hitscore_db_backend.Backend.db_handle ->
-    configuration:Hitscore_common.Configuration.local_configuration ->
+    configuration:Configuration.local_configuration ->
     unit ->
     ('a t,
      [> `Layout of
@@ -104,7 +109,7 @@ module type BROKER = sig
         as 'a)
              t ->
     dbh:Hitscore_db_backend.Backend.db_handle ->
-    person:Hitscore_common.Layout.Record_person.t ->
+    person:Layout.Record_person.t ->
     (unit, 'a) Flow.monad
  
 

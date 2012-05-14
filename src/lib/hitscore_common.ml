@@ -1,9 +1,10 @@
 (** Container-module to make it easier to pass arguments to functors. *)
 
-include Hitscore_std
-include Hitscore_layout
-include Hitscore_access_rights
-include Hitscore_db_backend
+open Hitscore_std
+open Hitscore_layout
+open Hitscore_access_rights
+open Hitscore_db_backend
+open Hitscore_configuration
   
 
 (** Container-module to make it easier to pass arguments to functors. *)
