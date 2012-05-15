@@ -654,12 +654,12 @@ module Verify = struct
     >>= fun () ->
     return (List.rev !errors)
 
-  let print_fs_check l =
-    List.iter l (fun s -> printf "FS-Error: %s\n" s);
+  let print_errors name l =
+    List.iter l (fun s -> printf "%s: %s\n" name s);
     return ()
 
-  let print_count_fs_check l =
-    printf "%d File-system errors\n" (List.length l);
+  let print_error_count name l =
+    printf "%d %s\n" (List.length l) name;
     return ()
 
   let () =
@@ -672,63 +672,44 @@ module Verify = struct
         fprintf o "  -try-fix: Try to fix fixable errors\n"
       )
       ~run:(fun config exec cmd -> function
-      | [] -> check_file_system config >>= print_fs_check
-      | [ "-quiet" ] -> check_file_system config >>= print_count_fs_check
+      | [] -> check_file_system config >>= print_errors "FS-Error"
+      | [ "-quiet" ] -> check_file_system config >>= print_error_count "FS Error(s)"
       | [ "-try-fix" ] ->
-        check_file_system ~try_fix:true config >>= print_fs_check
+        check_file_system ~try_fix:true config >>= print_errors "FS-Error"
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))
 
   let check_duplicates configuration =
+    let errors = ref [] in
+    let add_error e = errors := e :: !errors in
+    let check l what =
+      List.iter (List.sort ~cmp:compare l) (fun (name, project) ->
+        let all = (List.filter l ~f:(fun (n, p) -> n = name && p <> project)) in
+        match all with
+        | []  -> ()
+        | more ->
+          ksprintf add_error "Duplicate %s: %S . %S " what
+            (Option.value ~default:"" project) name;
+          List.iter more (fun (n, p) ->
+            printf " ==  %S . %S" (Option.value ~default:"" p) n;);
+      ) in
     with_database ~configuration (fun ~dbh ->
-      failwith "NOT IMPLEMENTED"
-    )
-    (*
-    let work_samples =
-      with_database ~configuration ~f:(fun ~dbh ->
-        Layout.Record_sample.(
-          get_all ~dbh
-          >>= fun all ->
-          of_list_sequential all ~f:(fun p ->
-            get ~dbh p
-            >>= fun {name; project; _} ->
-            return (name, project))
-          >>= fun all_names_and_projects ->
-          return all_names_and_projects))
-    in
-    let work_libraries =
-      with_database ~configuration ~f:(fun ~dbh ->
-        Layout.Record_stock_library.(
-          get_all ~dbh
-          >>= fun all ->
-          of_list_sequential all ~f:(fun p ->
-            get ~dbh p
-            >>= fun {name; project; _} ->
-            return (name, project))
-          >>= fun all_names_and_projects ->
-          return all_names_and_projects))
-    in
-    let check work what =
-      match work with
-      | Ok l ->
-        List.iter (List.sort ~cmp:compare l) (fun (name, project) ->
-        (* printf "%s . %s\n" (Option.value ~default:"" project) name; *)
-          let all = (List.filter l ~f:(fun (n, p) -> n = name && p <> project)) in
-          match all with
-          | []  -> ()
-          | more ->
-            printf "Duplicate %s: %S . %S " what
-              (Option.value ~default:"" project) name;
-            List.iter more (fun (n, p) ->
-              printf " ==  %S . %S" (Option.value ~default:"" p) n;);
-            printf "\n")
-      | Error e ->
-        printf "ERROR"
-    in
-    check work_samples "sample";
-    check work_libraries "stock-library";
-    *)
+      let layout = Classy.make dbh in
+      layout#sample#all >>= fun all_samples ->
+      of_list_sequential all_samples (fun sample ->
+        return (sample#name, sample#project))
+      >>= fun to_check ->
+      check to_check "sample";
+      layout#stock_library#all >>= fun all_stocks ->
+      of_list_sequential all_stocks (fun stock ->
+        return (stock#name, stock#project))
+      >>= fun to_check ->
+      check to_check "stock-library";
+      return ())
+    >>= fun () ->
+    return !errors
+
    (* 
   module Make_fixable_status_checker (Layout_function : sig
     type 'a pointer = private {
@@ -802,37 +783,70 @@ module Verify = struct
     end
    *)
     
-  let wake_up ?(fix_it=false) configuration =
-    failwith "NOT IMPLEMENTED"
-    (*
-    begin match db_connect configuration with
-    | Ok dbh ->
-      let count_fs_errors =
-        List.fold_left (check_file_system ~verbose:false configuration)
-          ~init:0 ~f:(fun x -> function `info _ -> x | `error _ -> x + 1) in
-      begin match count_fs_errors with
-      | 0 -> printf "File-system: OK.\n"; 
-      | n -> printf "File-system: %d errors.\n" n
-      end;
-      let () =
-        let module Check_b2f =
-          Make_fixable_status_checker
-            (Layout.Function_bcl_to_fastq) (Bcl_to_fastq) in
-        Check_b2f.check_and_fix ~dbh ~configuration ~fix_it  ();
-        let module Check_fxqs =
-          Make_fixable_status_checker
-            (Layout.Function_fastx_quality_stats) (Fastx_quality_stats) in
-        Check_fxqs.check_and_fix ~dbh ~configuration ~fix_it  ();
-      in
-      db_disconnect configuration dbh |! ignore
+  let check_function ~name ~status ~fail ~fix_it all =
+    let all_started = List.filter ~f:(fun b -> b#g_status = `Started) all in
+    printf "Function %s:" name;
+    printf " %d started.\n" (List.length all_started);
+    of_list_sequential all_started (fun f ->
+      status f
+      >>= fun status ->
+      begin match status with
+      | `running -> printf " * %d is running.\n" f#g_id; return ()
+      | `started_but_not_running e ->
+        printf " * %d is started but not running.\n" f#g_id;
+        if fix_it then (
+          printf "   -> FIXING\n";
+          fail f ~reason:"checking_status_reported_started_but_not_running"
+          >>= fun _ ->
+          return ())
+        else
+          return ()
+      | `not_started e -> 
+        printf "ERROR: The function %d is NOT STARTED: %S.\n" f#g_id
+          (Layout.Enumeration_process_status.to_string e);
+        return ()
+      end)
+    >>= fun _ ->
+    return ()
 
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-    end;
-    check_duplicates configuration;
-    Some ()
-    *)
+    
+  let wake_up ?(fix_it=false) ?(verbose=false) configuration =
+    check_file_system configuration >>= fun fs_errors ->
+    print_error_count "File-System Error(s)" fs_errors >>= fun () ->
+    (if verbose then print_errors "FS-Error" fs_errors else return ())
+    >>= fun () ->
+    check_duplicates configuration >>= fun duplicate_errors ->
+    print_error_count "Duplicates" duplicate_errors >>= fun () ->
+    (if verbose then print_errors "Error" duplicate_errors else return ())
+    >>= fun () ->
+    with_database configuration (fun ~dbh ->
+      let layout = Classy.make dbh in
+      layout#bcl_to_fastq#all >>= fun all_b2f ->
+      check_function ~name:"bcl_to_fastq" all_b2f ~fix_it
+        ~status:(fun f -> Bcl_to_fastq.status ~dbh ~configuration f#g_pointer)
+        ~fail:(fun f ~reason -> Bcl_to_fastq.fail ~reason ~dbh f#g_pointer)
+      >>= fun () ->
+      layout#fastx_quality_stats#all >>= fun all_fxqs ->
+      check_function ~name:"fastx_quality_stats" all_fxqs ~fix_it
+        ~status:(fun f -> Fastx_quality_stats.status ~dbh ~configuration f#g_pointer)
+        ~fail:(fun f ~reason -> Fastx_quality_stats.fail ~reason ~dbh f#g_pointer)
+      >>= fun () ->
+      return ())
 
+  let () =
+    define_command
+      ~names:["wake-up"; "wu"]
+      ~description:"Do some checks on the Layout"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s [-fix|-verbose]\n" exec cmd)
+      ~run:(fun config exec cmd -> function
+      | flags when List.for_all flags (fun f -> f = "-fix" || f = "-verbose") ->
+        wake_up config
+          ~fix_it:(List.exists flags ((=) "-fix"))
+          ~verbose:(List.exists flags ((=) "-verbose"))
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))))
 end
 
 module FS = struct
