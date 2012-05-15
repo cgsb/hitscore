@@ -921,13 +921,45 @@ module Flowcell = struct
 end
 
 module Query = struct
-(*
-  module PGOCaml = Hitscore_threaded.Layout.PGOCaml
 
+  let run_type r1 = function
+    | Some r2 -> sprintf "PE %dx%d" r1 r2
+    | None -> sprintf "SE %d" r1
+      
   let predefined_queries = [
     ("orphan-lanes", 
      (["List of lanes which are not referenced by any flowcell."],
       fun dbh args ->
+        let layout = Classy.make dbh in
+        layout#flowcell#all >>= fun all_flowcells ->
+        layout#lane#all >>= fun all_lanes ->
+        layout#invoicing#all >>= fun all_invoicings ->
+        layout#person#all >>= fun all_persons ->
+        List.iter all_lanes (fun lane ->
+          if List.exists all_flowcells ~f:(fun f ->
+            Array.exists f#lanes ~f:(fun l -> l#id = lane#g_id)) then
+            ()
+          else (
+            let invoicing =
+              List.find_map all_invoicings ~f:(fun inv ->
+                if Array.exists inv#lanes ~f:(fun l -> l#id = lane#g_id) then
+                  List.find_map all_persons ~f:(fun p ->
+                    if p#g_id = inv#pi#id then
+                      Some (inv#g_id, p#g_id, p#family_name)
+                    else
+                      None)
+                else
+                  None) in
+            printf "Lane %d (%s) is orphan%s\n" lane#g_id
+              (run_type lane#requested_read_length_1 lane#requested_read_length_2)
+              Option.(
+                value_map ~default:"" invoicing ~f:(fun (inv, pid, name) ->
+                  sprintf " --> invoicing %d to %s (%d)" inv name pid))
+          )
+        );
+        return ()));
+  ]
+  (*  
         let lanes =
           let open Batteries in
           PGSQL (dbh)
@@ -958,9 +990,6 @@ module Query = struct
             | [one] -> one
             | more -> String.concat "--" more
         in
-        let run_type r1 = function
-          | Some r2 -> sprintf "PE %ldx%ld" r1 r2
-          | None -> sprintf "SE %ld" r1 in
         let fixed =
           List.sort lanes ~cmp:(fun (x, _, _ , _) (y, _, _ , _) -> compare x y)
           |! List.fold_left ~init:(0l, "", 0) 
@@ -1158,28 +1187,32 @@ module Query = struct
               |! String.concat ~sep:"\n")
         end;
      ));
-  ]
+  ] *)
+    
   let describe out =
     List.iter predefined_queries ~f:(fun (name, (desc, _)) ->
       fprintf out " * %S:\n        %s\n" name
         (String.concat ~sep:"\n        " desc))
 
-*)
   let predefined hsc name args =
-    failwith "NOT IMPLEMENTED"
-      (*
-    let open Hitscore_threaded in
-    match db_connect hsc with
-    | Ok dbh ->
+    with_database hsc (fun ~dbh ->
       begin match List.Assoc.find predefined_queries name with
       | Some (_, run) -> run dbh args
       | None ->
         printf "Unknown custom query: %S\n" name;
-      end;
-      db_disconnect hsc dbh |! Pervasives.ignore
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-      *)
+        return ()
+      end)
+  let () =
+    define_command
+      ~names:["query"; "Q"]
+      ~description:"Query the database with (predefined) queries"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s <query> [<query arguments>]\n" exec cmd;
+        fprintf o "where the queries are:\n";
+        describe o;)
+      ~run:(fun config exec cmd -> function
+      | [] -> error (`invalid_command_line "no query argument")
+      | name :: args -> predefined config name args)
 
 end
 
