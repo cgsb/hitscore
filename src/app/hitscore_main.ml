@@ -929,7 +929,7 @@ module Query = struct
   let predefined_queries = [
     ("orphan-lanes", 
      (["List of lanes which are not referenced by any flowcell."],
-      fun dbh args ->
+      fun _ dbh args ->
         let layout = Classy.make dbh in
         layout#flowcell#all >>= fun all_flowcells ->
         layout#lane#all >>= fun all_lanes ->
@@ -958,236 +958,97 @@ module Query = struct
           )
         );
         return ()));
-  ]
-  (*  
-        let lanes =
-          let open Batteries in
-          PGSQL (dbh)
-            "select lane.g_id, 
-                    lane.requested_read_length_1, lane.requested_read_length_2,
-                    invoicing.pi
-             from (lane left outer join flowcell 
-                    on flowcell.lanes @> array_append ('{}', lane.g_id))
-                  left outer join invoicing on
-                   invoicing.lanes @> array_append('{}', lane.g_id)
-             where flowcell.serial_name is NULL and invoicing.pi is not NULL;"
-          @ (
-            PGSQL (dbh)
-            "select lane.g_id, 
-                    lane.requested_read_length_1, lane.requested_read_length_2
-             from (lane left outer join flowcell 
-                    on flowcell.lanes @> array_append ('{}', lane.g_id))
-                  left outer join invoicing on
-                   invoicing.lanes @> array_append('{}', lane.g_id)
-             where flowcell.serial_name is NULL and invoicing.pi is NULL;"
-              |! List.map (fun (x,y,z) -> (x,y,z,0l)))
-        in
-        let person_string p =
-          let open Batteries in
-          PGSQL (dbh) "select family_name from person where g_id = $p"
-          |! function
-            | [] -> "NO-INVOICED-PI"
-            | [one] -> one
-            | more -> String.concat "--" more
-        in
-        let fixed =
-          List.sort lanes ~cmp:(fun (x, _, _ , _) (y, _, _ , _) -> compare x y)
-          |! List.fold_left ~init:(0l, "", 0) 
-              ~f:(fun (c, s, cpt) (x, r1, r2, pi) ->
-                if x = c then
-                  (x, sprintf "%s, %s" s (person_string pi), cpt)
-                else
-                  (x, sprintf "%s\n * %ld (%s) -> %s" s x 
-                    (run_type r1 r2) (person_string pi), 
-                   cpt + 1))
-        in
-        begin match fixed with
-        | (_, _, 0) -> printf "No orphan lanes found.\n"
-        | (_, s, n) ->
-          printf "Found %d orphan lanes:%s\n" n s
-        end));
-
     ("log",
      (["Display the log table.";
        "usage: log [<number of items>]"],
-      fun dbh args ->
-        let logs =
-          let open Batteries in
-          PGSQL (dbh)
-            " select log.g_last_modified, log.log from log 
-              order by g_last_modified"
-        in
-        begin match List.length logs with
-        | 0 -> printf "No logs found.\n"
-        | n ->
-          let filtered = 
-            match args with
-            | [] -> logs
-            | [ n ] -> 
-              begin try 
-                      let n = List.length logs - Int.of_string n  in
-                      List.split_n logs n |! snd
-                with e -> failwithf "Can't understand argument: %s" n ()
-              end
-            | _ -> failwithf "Wrong arguments!" ()
-          in
-          List.iter filtered (function
-          | (Some t, l) ->
-            printf "[%s] %s\n" t l
-          | None, l ->
-            printf "[???NO DATE???] %s\n" l
-          );
-        end));
+      fun _ dbh args ->
+        let max_num =
+          match args with
+          | [n] -> Some (Int.of_string n)
+          | _ -> None in
+        let layout = Classy.make dbh in
+        layout#log#all >>| List.sort ~cmp:(fun l1 l2 ->
+          compare l2#g_last_modified l1#g_last_modified)
+        >>= fun all_logs ->
+        begin match max_num with
+        | None -> return all_logs
+        | Some s -> return (List.take all_logs s)
+        end
+        >>= fun logs ->
+        List.iter logs (fun l ->
+          printf "[%s] %s\n" (Time.to_string l#g_last_modified) l#log);
+        return ()));
+
     ("orphan-input-libraries", 
      (["List of libraries which are not referenced in any lane."],
-      fun dbh args ->
-        let libs =
-          let open Batteries in
-          PGSQL (dbh)
-            "select input_library.g_id, 
-                    stock_library.project,
-                    stock_library.name
-             from (input_library left outer join lane 
-                    on lane.libraries @> array_append ('{}', input_library.g_id)),
-                  stock_library
-             where lane.g_id is NULL and input_library.library = stock_library.g_id;"
-        in
-        let fixed = libs in
-        begin match List.length fixed with
-        | 0 -> printf "No orphan input-libraries found.\n"
-        | n ->
-          printf "Found %d orphan input-librar%s:\n%s\n" n 
-            (if n > 1 then "ies" else "y")
-            (String.concat ~sep:"\n" 
-               (List.map fixed
-                  (fun (i, p, n) ->
-                    sprintf " * %ld: %s%S" i
-                      (Option.value_map p ~default:"" ~f:(sprintf "%S.")) n)))
-        end));
-    ("flowcells-csv",
-     (["A CSV output, imitating the Flowcell in the Meta-data."],
-     fun dbh args ->
-       let work =
-         let open Hitscore_threaded in
-         let open Flow in
-         Layout.Record_flowcell.(
-           get_all ~dbh
-           >>= fun flowcells ->
-           of_list_sequential flowcells ~f:(fun f ->
-             get ~dbh f >>= fun {serial_name; lanes} ->
-             of_list_sequential
-               (Array.to_list (Array.mapi lanes ~f:(fun i a -> (i,a))))
-               ~f:(fun (i, l) ->
-                 Layout.Record_lane.(
-                   get ~dbh l >>= fun {libraries; _} ->
-                   of_list_sequential (Array.to_list libraries) ~f:(fun lib ->
-                     Layout.Record_input_library.(
-                       get ~dbh lib >>= fun {library; _} ->
-                       Layout.Record_stock_library.(
-                         get ~dbh library >>= fun {name; _} ->
-                         return (serial_name, i + 1, name))))))))
-         >>= fun ll ->
-         return (List.iter (List.concat (List.concat ll)) (fun (s, i, n) ->
-           printf "%S,%d,%s\n" s i n
-         )) in
-       ignore work
-           
-     ));
-    ("b2f-volumes", 
-     (["List of B2F results."],
-      fun dbh args ->
-        let results =
-          let open Batteries in
-          PGSQL (dbh)
-            "select bcl_to_fastq.g_id as B2F_id,
-                    hiseq_raw.flowcell_name as FCID,
-                    bcl_to_fastq.tiles as TILES,
-                    g_volume.g_id as VOL_id,
-                    g_volume.g_sexp
-             from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume, hiseq_raw
-             where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
-                   bcl_to_fastq_unaligned.directory = g_volume.g_id AND
-                   bcl_to_fastq.raw_data = hiseq_raw.g_id;"
-        in
-        begin match List.length results with
-        | 0 -> printf "No results found.\n"
-        | n ->
-          printf "Found %d result%s:\n%s\n" n 
-            (if n > 1 then "s" else "")
-            (String.concat ~sep:"\n" 
-               (List.map results
-                  (fun (i, fc, til, v, sexp) ->
-                    sprintf " % 4ld: %- 10s %- 40S --> % 4ld %s" i fc
-                      (Option.value ~default:"N/A" til) v sexp)))
-        end));
-    ("invoices", 
-     (["List of invoices."],
-      fun dbh args ->
-        let results =
-          let open Batteries in
-          PGSQL (dbh)
-            "select invoicing.g_id, person.family_name, flowcell.serial_name 
-             from invoicing, person, flowcell
-             where invoicing.pi = person.g_id
-              and flowcell.lanes @> invoicing.lanes "
-        in
-        begin match List.length results with
-        | 0 -> printf "No results found.\n"
-        | n ->
-          printf "Found %d result%s:\n%s\n" n 
-            (if n > 1 then "s" else "")
-            (List.map results (fun (inv, pi, fcid) ->
-              sprintf "% 4ld | % 20s | % 20s" inv pi fcid)
-              |! String.concat ~sep:"\n")
-        end));
+      fun _ dbh args ->
+        let layout = Classy.make dbh in
+        layout#input_library#all >>= fun all_ils ->
+        layout#lane#all >>= fun all_lanes ->
+        let orphans =
+          List.filter all_ils (fun il ->
+            List.for_all all_lanes (fun lane ->
+              Array.for_all lane#libraries (fun l -> l#id <> il#g_id))) in
+        printf "%d orphan input-libraries\n" (List.length orphans);
+        of_list_sequential orphans (fun oil ->
+          oil#library#get
+          >>= fun stock ->
+          printf "  * %d submitted on %s (stock: %d, %s%s)\n"
+            oil#g_id Time.(to_string oil#submission_date) stock#g_id
+            Option.(value ~default:"" (map stock#project (sprintf "%s.")))
+            stock#name;
+          return ())
+        >>= fun _ ->
+        return ()));
+
     ("deliveries",
      (["List of potential deliveries for a flowcell"],
-      fun dbh args ->
+      fun configuration dbh args ->
         let fcid =
           match args with [one] -> one | _ -> failwith "expecting one argument" in
+        let layout = Classy.make dbh in
+        layout#flowcell#all >>| List.filter ~f:(fun f -> f#serial_name = fcid)
+        >>= (function
+        | [one] -> return one
+        | _ -> failwithf "Not exactly one flowcell called %s" fcid ())
+        >>= fun flowcell ->
+        layout#invoicing#all >>= fun all_invoices ->
+        let lanes = Array.to_list flowcell#lanes in
         let invoices =
-          let open Batteries in
-          PGSQL (dbh)
-            "select invoicing.g_id, person.family_name
-             from invoicing, person, flowcell
-             where invoicing.pi = person.g_id
-              and flowcell.lanes @> invoicing.lanes
-              and flowcell.serial_name = $fcid"
-        in
-        let b2fs =
-          let open Batteries in
-          PGSQL (dbh)
-            "select bcl_to_fastq.g_id as B2F_id,
-                    bcl_to_fastq.tiles as TILES,
-                    g_volume.g_id as VOL_id,
-                    g_volume.g_sexp
-             from bcl_to_fastq, bcl_to_fastq_unaligned, g_volume, hiseq_raw
-             where bcl_to_fastq.g_result = bcl_to_fastq_unaligned.g_id AND
-                   bcl_to_fastq_unaligned.directory = g_volume.g_id AND
-                   bcl_to_fastq.raw_data = hiseq_raw.g_id AND
-                   hiseq_raw.flowcell_name = $fcid;"
-        in
-        begin match List.length invoices with
-        | 0 -> printf "No invoices found.\n"
-        | n ->
-          printf "Found %d invoice%s:\n%s\n" n 
-            (if n > 1 then "s" else "")
-            (List.map invoices
-               (fun (inv, pi) -> sprintf "% 4ld (to %s)" inv pi)
-                                 |! String.concat ~sep:"\n")
-        end;
-        begin match List.length b2fs with
-        | 0 -> printf "No bcl-to-fastqs found.\n"
-        | n ->
-          printf "Found %d bcl-to-fastqs%s:\n%s\n" n 
-            (if n > 1 then "s" else "")
-            (List.map b2fs (fun (id, tiles, volid, sexp) ->
-              sprintf "% 4ld (tiles: %s, result: %ld/%s)" id
-                      (Option.value ~default:"N/A" tiles) volid sexp)
-              |! String.concat ~sep:"\n")
-        end;
-     ));
-  ] *)
+          List.filter all_invoices ~f:(fun inv ->
+            Array.exists inv#lanes ~f:(fun il ->
+              List.exists lanes (fun fl -> il#id = fl#id))) in 
+        printf "%d invoices:\n" (List.length invoices);
+        of_list_sequential invoices (fun inv ->
+          inv#pi#get >>= fun pi ->
+          printf " * %d to %s" inv#g_id pi#family_name;
+          return ())
+        >>= fun _ ->
+        layout#bcl_to_fastq#all >>= fun b2fs ->
+        of_list_sequential b2fs (fun b2f ->
+          b2f#raw_data#get >>= fun hr ->
+          if hr#flowcell_name = fcid then (
+            match b2f#g_result with
+            | None -> return None
+            | Some u ->
+              u#get >>= fun unaligned ->
+              unaligned#directory#get >>= fun vol ->
+              Common.path_of_volume ~dbh ~configuration vol#g_pointer >>= fun path ->
+              return (Some (b2f, hr, unaligned, path))
+          ) else
+            return None)
+        >>| List.filter_opt
+        >>= fun interesting_b2fs ->
+        printf "%d interesting bcl_to_fastq's\n" (List.length interesting_b2fs);
+        List.iter interesting_b2fs (fun (b2f, hr, unaligned, path) ->
+          printf " * %d %s%s, result: %d (%s)\n" b2f#g_id
+            Option.(value ~default:"" (map b2f#tiles (sprintf "(tiles: %S) ")))
+            Option.(value_map ~default:"" b2f#bases_mask ~f:(sprintf "(b-mask: %S) "))
+            unaligned#g_id
+            path
+        );
+        return ()));
+  ] 
     
   let describe out =
     List.iter predefined_queries ~f:(fun (name, (desc, _)) ->
@@ -1197,7 +1058,7 @@ module Query = struct
   let predefined hsc name args =
     with_database hsc (fun ~dbh ->
       begin match List.Assoc.find predefined_queries name with
-      | Some (_, run) -> run dbh args
+      | Some (_, run) -> run hsc dbh args
       | None ->
         printf "Unknown custom query: %S\n" name;
         return ()
