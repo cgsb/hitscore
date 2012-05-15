@@ -1133,29 +1133,44 @@ end
 module Hiseq_run = struct
 
   let register configuration day_date fca fcb note =
-    failwith "NOT IMPLEMENTED"
-      (*
-    let open Hitscore_threaded in
-    let open Flow in
     with_database configuration (fun ~dbh ->
+      let layout = Classy.make dbh in
       let flowcell id =
         if id = "_" then return None else
           try
-            return (Some (Int32.of_string id |! Layout.Record_flowcell.unsafe_cast))
+            let p =
+              Int.of_string id |! Layout.Record_flowcell.unsafe_cast in
+            layout#flowcell#get p >>= fun f ->
+            return (Some f#g_pointer)
           with e ->
-            (Layout.Search.record_flowcell_by_serial_name ~dbh id
-             >>= function
-             | [one] -> return (Some one)
-             | _ -> failwithf "Error while looking for flowcell %s" id ())
+            begin
+              layout#flowcell#all >>| List.filter ~f:(fun f -> f#serial_name = id)
+              >>= function
+              | [one] -> return (Some one#g_pointer)
+              | _ -> failwithf "Error while looking for flowcell %s" id ()
+            end
       in
       flowcell fca >>= fun flowcell_a ->
       flowcell fcb >>= fun flowcell_b ->
-      Layout.Record_hiseq_run.add_value
-        ~dbh ~date:(Time.of_string (day_date ^ " 10:00"))
-        ?flowcell_a ?flowcell_b ?note)
-    |! result_ok_exn ~fail:(Failure "adding the hiseq_run went wrong")
-    |! Pervasives.ignore
-      *)
+      layout#add_hiseq_run ~date:(Time.of_string (day_date ^ " 10:00"))
+        ?flowcell_a ?flowcell_b ?note ()
+      >>= fun hsr ->
+      printf "Added Hiseq run %d\n" hsr#id;
+      return ())
+
+  let () =
+    define_command ~names:["register-hiseq-run"]
+      ~description:"Register an HiSeq 2000 run"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s <date> <fcidA> <fcidB> [<note>]\n" exec cmd;
+        fprintf o "  where fcid is a database id, a proper FCID, or '_'\n")
+      ~run:(fun config exec cmd -> function
+      | [date; fca; fcb] -> register config date fca fcb None
+      | [date; fca; fcb; note] -> register config date fca fcb (Some note)
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))))
+
 
 end
 
@@ -1482,29 +1497,7 @@ let () =
         Some (FXQS.kill config (Int32.of_string id))
       | _ -> None);
 
-  define_command
-    ~names:["wake-up"; "wu"]
-    ~description:"Do some checks on the Layout"
-    ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s [-fix]\n" exec cmd)
-    ~run:(fun config exec cmd -> function
-    | [] -> Verify.wake_up config
-    | ["-fix"] -> Verify.wake_up ~fix_it:true config
-    | _ -> None);
 
-
-
-
-  define_command ~names:["register-hiseq-run"]
-    ~description:"Register an HiSeq 2000 run"
-    ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s <date> <fcidA> <fcidB> [<note>]\n" exec cmd;
-      fprintf o "  where fcid is a database id, a proper FCID, or '_'\n")
-    ~run:(fun config exec cmd -> function
-    | [date; fca; fcb] -> Some (Hiseq_run.register config date fca fcb None)
-    | [date; fca; fcb; note] ->
-      Some (Hiseq_run.register config date fca fcb (Some note))
-    | _ -> None);
  *)
   let global_usage = function
     | `error -> 
