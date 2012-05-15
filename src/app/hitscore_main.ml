@@ -1107,28 +1107,27 @@ end
 
 module Intensities_deletion = struct
   let do_registration configuration dir =
-    failwith "NOT IMPLEMENTED"
-      (*
-    let open Hitscore_threaded in
-    let open Flow in
-    let out fmt = ksprintf (fun s -> (eprintf "%s" s)) fmt in
-    let work =
-      with_database configuration (fun ~dbh ->
-        Delete_intensities.register ~dbh
-          ~hiseq_raw: (Layout.Record_hiseq_raw.unsafe_cast (Int32.of_string dir)) 
-      ) in
-    match work with
-    | Ok _ -> out "OK\n"
-    | Error e ->
-      begin match e with
-      | `pg_exn e ->
-        out "PostgreSQL Error: %s\n" (Exn.to_string e)
-      | `hiseq_dir_deleted ->
-        out "Trying to access a deleted HiSeq-raw\n"
-      | `layout_inconsistency _ ->
-        out "LAYOUT INCONSISTENCY"
-      end
-      *)
+    with_database configuration (fun ~dbh ->
+      Delete_intensities.register ~dbh
+        ~hiseq_raw: (Layout.Record_hiseq_raw.unsafe_cast (Int.of_string dir)))
+    >>= fun di ->
+    eprintf "Intensities deletion %d: DONE."
+      di.Layout.Function_delete_intensities.id;
+    return ()
+
+  let () =
+    define_command ~names:["delete-intensities";"di"]
+      ~description:"Intensities Deletion commands"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s <cmd>\n" exec cmd;
+        fprintf o "  where <cmd> is:\n";
+        fprintf o "    * register <id>: Register the manual deletion of \
+        intensities in the hiseq-dir <id>.")
+      ~run:(fun config exec cmd -> function
+      | ["register"; dir] -> do_registration config dir
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))))
 end 
 
 module Hiseq_run = struct
@@ -1495,17 +1494,6 @@ let () =
 
 
 
-  define_command ~names:["delete-intensities";"di"]
-    ~description:"Intensities Deletion commands"
-    ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s <cmd>\n" exec cmd;
-      fprintf o "  where <cmd> is:\n";
-      fprintf o "    * register <id>: Register the manual deletion of \
-        intensities in the hiseq-dir <id>.")
-    ~run:(fun config exec cmd -> function
-    | ["register"; dir] ->
-      Some (Intensities_deletion.do_registration config dir)
-    | _ -> None);
 
   define_command ~names:["register-hiseq-run"]
     ~description:"Register an HiSeq 2000 run"
