@@ -29,7 +29,7 @@ module Unaligned_coercion:
       >>= fun res ->
       inserted#set_succeeded res#pointer
     in
-    double_bind post_insert_work ~ok:return
+    double_bind post_insert_work ~ok:(fun () -> return inserted#g_pointer)
       ~error:(fun e -> inserted#set_failed >>= fun () -> error e)
 
     

@@ -271,7 +271,7 @@ module type COERCE_B2F_UNALIGNED = sig
     dbh:Hitscore_db_backend.Backend.db_handle ->
     configuration:'a ->
     input:Layout.Record_bcl_to_fastq_unaligned.pointer ->
-    (unit,
+    (Layout.Function_coerce_b2f_unaligned.pointer,
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause ]) Flow.monad
