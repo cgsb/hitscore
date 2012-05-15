@@ -596,79 +596,94 @@ end
 
 module Verify = struct
 
+  let check_directory dir =
+    let m =
+      wrap_io Lwt_unix.stat dir
+      >>= fun {Lwt_unix. st_kind} ->
+      begin if st_kind = Lwt_unix.S_DIR then
+          return `ok
+        else
+          return (`not_a_directory st_kind)
+      end
+    in
+    double_bind m ~ok:return
+      ~error:(function
+      | `io_exn (Unix.Unix_error (e,_,s)) ->
+        return (`not_there (e, s))
+      | `io_exn _ as e -> error e)
 
-  let check_file_system ?(try_fix=false) ?(verbose=true) hsc =
+  let check_file_system ?(try_fix=false) configuration =
+    let errors = ref [] in
+    let add_error e = errors := e :: !errors; return () in
+    with_database ~configuration (fun ~dbh ->
+      let layout = Classy.make dbh in
+      layout#file_system#all
+      >>= fun all_vols ->
+      of_list_sequential all_vols (fun vol ->
+        Common.path_of_volume ~dbh ~configuration vol#g_pointer
+        >>= fun path ->
+        check_directory path
+        >>= fun checked ->
+        begin match checked with
+        | `ok -> return ()
+        | `not_a_directory st_kind ->
+          add_error (sprintf "%s is not a directory" path)
+        | `not_there _ ->
+          if try_fix then
+            bind_on_error (ksprintf system_command "mkdir -p '%s'" path)
+              (fun e ->
+                add_error (sprintf "Cannot create %s: %s" path
+                             (string_of_error e)))
+          else 
+            add_error (sprintf "%s is missing" path)
+        end
+        >>= fun () ->
+        Common.all_paths_of_volume ~dbh ~configuration vol#g_pointer
+        >>= fun paths ->
+        of_list_sequential paths (fun path ->
+          check_directory path >>= fun checked ->
+          begin match checked with
+          | `ok -> return ()
+          | `not_a_directory st_kind -> return ()
+          | `not_there _ -> add_error (sprintf "%s is missing" path)
+          end)
+        >>= fun _ ->
+        return ())
+      >>= fun _ ->
+      return ())
+    >>= fun () ->
+    return (List.rev !errors)
 
-      (*
-    let buffer = ref [] in
-    let log fmt =
-      let f s = buffer := (`info s) :: !buffer in
-      ksprintf f fmt in
-    let error kind fmt =
-      let f s = buffer := (`error (kind, s)) :: !buffer in
-      ksprintf f fmt in
-    with_database hsc (fun ~dbh ->
-        
-      let (>>>) x f = result_ok_exn ~fail:(Failure f) x in
-      let vols = Layout.File_system.get_all ~dbh >>> "File_system.get_all" in
-      List.iter vols ~f:(fun volume -> 
-        let path =
-          Hitscore_threaded.Common.path_of_volume ~dbh ~configuration:hsc
-            volume >>> "Getting path"
-        in
-        if verbose then
-          log "* Checking volume %S\n" path;
-        Unix.(try
-                let vol_stat = stat path in
-                if vol_stat.st_kind <> S_DIR then (
-                  error `volume "%S: Not a directory" path;
-                ) else
-                  if verbose then
-                    log "-> OK\n"
-                  else
-                    ()
-          with
-          | Unix_error (e, _, s) ->
-            error `volume "%S: %S (%S)" path (error_message e) s;
-            if try_fix then
-              begin match ksprintf System.command "mkdir -p %s" path with
-              | Ok () ->
-                begin match 
-                    Hitscore_threaded.Access_rights.set_posix_acls ~dbh 
-                      ~configuration:hsc (`dir path) with
-                      | Ok () -> log "Fixed %S\n" path;
-                      | Error _ -> error `fix "%S: Cannot set ACLs" path
-                end
-              | Error _ -> error `fix "%S: Cannot mkdir" path
-              end);
-        let all_paths =
-          Hitscore_threaded.Common.all_paths_of_volume ~dbh ~configuration:hsc
-            volume >>> "Getting All paths" in
-        List.iter all_paths ~f:(fun filename -> 
-          if verbose then log "  \\-> %S\n" filename;
-          Unix.(
-            try let file_stat = stat filename in
-                ignore file_stat
-            with
-            | Unix_error (e, _, s) ->
-              error `file "%S: %S (%S)" filename (error_message e) s);
-        ))
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-    end;
-    List.rev !buffer
-      *)
-      failwith "NOT IMPLEMENTED"
+  let print_fs_check l =
+    List.iter l (fun s -> printf "FS-Error: %s\n" s);
+    return ()
 
-  let print_fs_check =
-    List.iter  ~f:(function
-    | `info s -> printf "%s" s
-    | `error (`fix, s) -> printf "ERROR(fixing/mkdir): %s" s
-    | `error (`volume, s) -> printf "ERROR(volume): %s\n" s
-    | `error (`get_files, s) -> printf "ERROR(get-files): %s\n" s
-    | `error (`file, s) -> printf "ERROR(file): %s\n" s)
+  let print_count_fs_check l =
+    printf "%d File-system errors\n" (List.length l);
+    return ()
+
+  let () =
+    define_command
+      ~names:["check-file-system"; "check-fs"]
+      ~description:"Check the files registered in the database"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s [-quiet|-try-fix]\n" exec cmd;
+        fprintf o "  -quiet : Non-verbose output (only count errors)\n";
+        fprintf o "  -try-fix: Try to fix fixable errors\n"
+      )
+      ~run:(fun config exec cmd -> function
+      | [] -> check_file_system config >>= print_fs_check
+      | [ "-quiet" ] -> check_file_system config >>= print_count_fs_check
+      | [ "-try-fix" ] ->
+        check_file_system ~try_fix:true config >>= print_fs_check
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))))
 
   let check_duplicates configuration =
+    with_database ~configuration (fun ~dbh ->
+      failwith "NOT IMPLEMENTED"
+    )
     (*
     let work_samples =
       with_database ~configuration ~f:(fun ~dbh ->
@@ -714,7 +729,6 @@ module Verify = struct
     check work_samples "sample";
     check work_libraries "stock-library";
     *)
-    failwith "NOT IMPLEMENTED"
    (* 
   module Make_fixable_status_checker (Layout_function : sig
     type 'a pointer = private {
@@ -1617,21 +1631,6 @@ let () =
 (*
  
 
-  define_command
-    ~names:["check-file-system"; "check-fs"]
-    ~description:"Check the files registered in the database"
-    ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s [-quiet|-try-fix]\n" exec cmd;
-      fprintf o "  -quiet : Non-verbose output\n";
-      fprintf o "  -try-fix: Try to fix fixable errors\n"
-    )
-    ~run:(fun config exec cmd -> function
-      | [] -> Some Verify.(check_file_system config |! print_fs_check)
-      | [ "-quiet" ] -> Some Verify.(
-        check_file_system ~verbose:false config |! print_fs_check)
-      | [ "-try-fix" ] -> Some Verify.(
-        check_file_system ~try_fix:true config |! print_fs_check)
-      | _ -> None);
 
   define_command
     ~names:["add-files-to-volume"; "afv"]
