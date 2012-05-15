@@ -1177,8 +1177,6 @@ end
 module Fastx_qs = struct
 
   let start_parse_cmdline usage_prefix args =
-    failwith "NOT IMPLEMENTED"
-    (*
     let (user, queue, nodes, ppn, wall_hours, hitscore_command, pbs_options) =
       pbs_related_command_line_options ~default_ppn:1 () in
     let from_b2f = ref None in
@@ -1207,84 +1205,84 @@ module Fastx_qs = struct
       try Arg.parse_argv cmdline options anon usage;
           let filter_names = if !filter = [] then None else Some !filter in
           `go (List.rev !anon_args,
-               !from_b2f, Option.map ~f:Int32.of_int_exn !option_Q, filter_names,
+               !from_b2f,  !option_Q, filter_names,
                !user, !queue, !nodes, !ppn, !wall_hours, !hitscore_command)
       with
       | Arg.Bad b -> `bad b
       | Arg.Help h -> `help h
     end
 
-  open Hitscore_threaded 
-  open Flow
-
-
   let find_a_link ~dbh b2fu_dir =
-    let str = sprintf "(Link ((id %ld)))" b2fu_dir.Layout.File_system.id in
-    let query =
-      sprintf 
-      "select generic_fastqs.g_id from g_volume,generic_fastqs where
-      g_kind = 'generic_fastqs_dir' and directory = g_volume.g_id
-      and g_sexp = '%s'" str in
-    pg_raw_query ~dbh ~query
-    >>| function
-    | [Some g_id] :: _ -> Some (Int32.of_string g_id)
-    | l -> print_query_result query l; None
-  
+    let layout = Classy.make dbh in
+    layout#generic_fastqs#all >>= fun all_gf ->
+    of_list_sequential all_gf (fun gf ->
+      gf#directory#get >>= fun d -> return (gf, d))
+    >>= fun all_vols ->
+    return (List.find all_vols ~f:(fun (gf, vol) ->
+      let open Layout.File_system in
+      match vol#g_content with
+      | Link { id } -> id = b2fu_dir.Layout.File_system.id
+      | _ -> false)
+      |! Option.map ~f:fst)
+
   let call_fastx configuration volid opt_q path destdir =
-    with_database configuration (fun ~dbh ->
-      Fastx_quality_stats.call_fastx ~dbh ~configuration
-        ~volume:(Layout.File_system.unsafe_cast (Int32.of_string volid))
-        ~option_Q:(Int.of_string opt_q) path destdir)
-    |! function
-      | Ok () -> ()
-      | Error e ->
-        eprintf "ERROR(call-fastqx): %s" (string_of_error e);
-        exit 4
-    *)    
+    let work_m =
+      with_database configuration (fun ~dbh ->
+        Fastx_quality_stats.call_fastx ~dbh ~configuration
+          ~volume:(Layout.File_system.unsafe_cast (Int.of_string volid))
+          ~option_Q:(Int.of_string opt_q) path destdir)
+    in
+    bind_on_error work_m (fun e ->
+      eprintf "ERROR(call-fastqx): %s" (string_of_error e);
+      exit 4)
+
   let start configuration prefix cl_args =
-    failwith "NOT IMPLEMENTED"
-    (*
     begin match (start_parse_cmdline prefix cl_args) with
     | `go (args, Some from_b2f, option_Q, filter_names,
            user, queue, nodes, ppn, wall_hours, hitscore_command) ->
       with_database configuration (fun ~dbh ->
-        Layout.Function_bcl_to_fastq.(
-          get ~dbh (unsafe_cast (Int32.of_int_exn from_b2f))
-          >>= function
-          |{ g_status = `Succeeded; g_result = Some b2fu} ->
-            Layout.Record_bcl_to_fastq_unaligned.(
-              get ~dbh b2fu >>= fun input ->
-              find_a_link ~dbh input.directory >>= function
-              | None -> 
-                printf "Creating VFS link (coerce_b2f_unaligned)\n";
-                Coerce_b2f_unaligned.run ~dbh ~configuration ~input:b2fu
-                >>= fun f ->
-                Layout.Function_coerce_b2f_unaligned.(
-                  get ~dbh f >>= fun ff -> return (Option.value_exn ff.g_result))
-              | Some h ->
-                printf "Found an existing Link: %ld\n" h;
-                return (Layout.Record_generic_fastqs.unsafe_cast h))
-            >>= fun generic_fastqs ->
-            Fastx_quality_stats.start ~dbh ~configuration
-              generic_fastqs ?option_Q ?filter_names
-              ?user ~nodes ~ppn ?queue ~wall_hours ~hitscore_command
-            >>= fun pf ->
-            printf "Evaluation %ld started!\n%!"
-              pf.Layout.Function_fastx_quality_stats.id;
-            return ()
-          | _ -> failwith "The bcl_to_fastq function has not succeeded"))
+        let layout = Classy.make dbh in
+        layout#bcl_to_fastq#get_unsafe from_b2f
+        >>= fun b2f ->
+        begin match b2f#g_result with
+        | None -> failwith "The bcl_to_fastq function has not succeeded"
+        | Some p ->
+          p#get >>= fun b2fu ->
+          find_a_link ~dbh b2fu#directory#pointer
+          >>= fun existsing_link ->
+          begin match existsing_link with
+          | None -> 
+            printf "Creating VFS link (coerce_b2f_unaligned)\n";
+            Coerce_b2f_unaligned.run ~dbh ~configuration ~input:b2fu#g_pointer
+            >>= fun f ->
+            layout#coerce_b2f_unaligned#get f
+            >>= fun ff ->
+            (* Layout.Function_coerce_b2f_unaligned.(
+                  get ~dbh f >>= fun ff -> *)
+            return (Option.value_exn ff#g_result)#pointer
+          | Some h ->
+            printf "Found an existing Link: %d\n" h#g_id;
+            return h#g_pointer
+          end
+        end
+        >>= fun generic_fastqs ->
+        Fastx_quality_stats.start ~dbh ~configuration
+          generic_fastqs ?option_Q ?filter_names
+          ?user ~nodes ~ppn ?queue ~wall_hours ~hitscore_command
+        >>= fun pf ->
+        printf "Evaluation %d started!\n%!"
+          pf.Layout.Function_fastx_quality_stats.id;
+        return ())
     | `go something_else ->
       failwith "non-from-b2f: not implemented"
     | `help h ->
-      printf "%s" h; Ok ()
+      printf "%s" h; return ()
     | `bad b ->
-      eprintf "%s" b; Ok ()
+      eprintf "%s" b; return ()
     end
-    |! flow_ok_or_fail
-    *)
-(*
+
   let register_success configuration id = 
-    with_database ~configuration ~f:(fun ~dbh ->
+    with_database ~configuration (fun ~dbh ->
       let f = (Layout.Function_fastx_quality_stats.unsafe_cast id) in
       Fastx_quality_stats.succeed ~dbh ~configuration f
       >>= function
@@ -1292,17 +1290,15 @@ module Fastx_qs = struct
       | `failure (o, e) ->
         printf "The Function failed: %s\n" (string_of_error e);
         exit 3)
-    |! flow_ok_or_fail
 
   let register_failure ?reason configuration id =
-    with_database ~configuration ~f:(fun ~dbh ->
+    with_database ~configuration (fun ~dbh ->
       let f = (Layout.Function_fastx_quality_stats.unsafe_cast id) in
       Fastx_quality_stats.fail ?reason ~dbh f
       >>= fun _ -> return ())
-    |! flow_ok_or_fail
 
   let check_status ?(fix_it=false) configuration id =
-    with_database ~configuration ~f:(fun ~dbh ->
+    with_database ~configuration (fun ~dbh ->
       let f = (Layout.Function_fastx_quality_stats.unsafe_cast id) in
       Fastx_quality_stats.status ~dbh ~configuration f
       >>= function
@@ -1322,17 +1318,48 @@ module Fastx_qs = struct
         printf "The function is NOT STARTED: %S.\n"
           (Layout.Enumeration_process_status.to_string e);
         return ())
-    |! flow_ok_or_fail
     
   let kill configuration id = 
-    with_database ~configuration ~f:(fun ~dbh ->
+    with_database ~configuration (fun ~dbh ->
       Fastx_quality_stats.kill ~dbh ~configuration 
         (Layout.Function_fastx_quality_stats.unsafe_cast id)
     >>= fun _ -> return ())
-    |! flow_ok_or_fail
-*)
         
-end
+  let () =
+    define_command
+      ~names:["fastx-quality-stats"; "fxqs"]
+      ~description:"Run, monitor, … the fastx-quality-stats function"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s <command> <args>\n" exec cmd;
+        fprintf o "Where the commands are:\n\
+          \  * start: start the function (try \"-help\").\n\
+          \  * register-success <id>.\n\
+          \  * register-failure <id> [<reason-log>].\n\
+          \  * status <id> : Get the current status of an evaluation.\n\
+          \  * fix-status <id> : Get the status and fix it if possible\n\
+          \  * kill <id>.\n")
+      ~run:(fun config exec cmd ->
+        function
+        | "start" :: args -> 
+          start config (sprintf "%s <config> %s start" exec cmd) args
+        | "register-success" :: id :: [] ->
+          register_success config (Int.of_string id)
+        | "register-failure" :: id  :: [] ->
+          register_failure config (Int.of_string id)
+        | "register-failure" :: id  :: reason :: [] ->
+          register_failure ~reason config (Int.of_string id)
+        | "status" :: id :: [] ->
+          check_status config (Int.of_string id)
+        | "fix-status" :: id :: [] ->
+          check_status ~fix_it:true config (Int.of_string id)
+        | "call-fastx" :: volid :: opt_q :: path :: destdir :: [] ->
+          call_fastx config volid opt_q path destdir
+        | "kill" :: id :: [] ->
+          kill config (Int.of_string id)
+        | l -> error (`invalid_command_line
+                         (sprintf "don't know what to do with: %s"
+                            String.(concat ~sep:", " l))))
+        end
 
 
 (* more define_command's: *)
@@ -1406,43 +1433,7 @@ let () =
         B2F.kill config id
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
-                          String.(concat ~sep:", " l))))
-  (* 
-     define_command
-     ~names:["fastx-quality-stats"; "fxqs"]
-    ~description:"Run, monitor, … the fastx-quality-stats function"
-    ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s <command> <args>\n" exec cmd;
-      fprintf o "Where the commands are:\n\
-          \  * start: start the function (try \"-help\").\n\
-          \  * register-success <id>.\n\
-          \  * register-failure <id> [<reason-log>].\n\
-          \  * status <id> : Get the current status of an evaluation.\n\
-          \  * fix-status <id> : Get the status and fix it if possible\n\
-          \  * kill <id>.\n")
-    ~run:(fun config exec cmd ->
-      let module FXQS = Fastx_qs in
-      function
-      | "start" :: args -> 
-        Some (FXQS.start config (sprintf "%s <config> %s start" exec cmd) args)
-      | "register-success" :: id :: [] ->
-        Some (FXQS.register_success config (Int32.of_string id))
-      | "register-failure" :: id  :: [] ->
-        Some (FXQS.register_failure config (Int32.of_string id))
-      | "register-failure" :: id  :: reason :: [] ->
-        Some (FXQS.register_failure ~reason config (Int32.of_string id))
-      | "status" :: id :: [] ->
-        Some (FXQS.check_status config (Int32.of_string id))
-      | "fix-status" :: id :: [] ->
-        Some (FXQS.check_status ~fix_it:true config (Int32.of_string id))
-      | "call-fastx" :: volid :: opt_q :: path :: destdir :: [] ->
-        Some (FXQS.call_fastx config volid opt_q path destdir)
-      | "kill" :: id :: [] ->
-        Some (FXQS.kill config (Int32.of_string id))
-      | _ -> None);
-
-
-  *)
+                          String.(concat ~sep:", " l))));
   ()
 
 
