@@ -41,19 +41,18 @@ module Fastx_quality_stats =
 
 module Broker = Hitscore_broker. Broker
 
-let db_connect t =
+let db_connect ?log t =
   let open Configuration in
   let host, port, database, user, password =
     db_host t, db_port t, db_database t, db_username t, db_password t in
-  let log = None in
   Backend.connect ?host ?port ?database ?user ?password ?log ()
     
 let db_disconnect t dbh = 
   Backend.disconnect ~dbh
 
-let with_database ~configuration ~f =
+let with_database ~configuration ?log f =
   let open Flow in
-  db_connect configuration 
+  db_connect ?log configuration 
   >>= fun dbh ->
   let m = f ~dbh in
   double_bind m
