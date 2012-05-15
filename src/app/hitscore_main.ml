@@ -709,79 +709,6 @@ module Verify = struct
       return ())
     >>= fun () ->
     return !errors
-
-   (* 
-  module Make_fixable_status_checker (Layout_function : sig
-    type 'a pointer = private {
-      id : int32;
-    }
-    val get_all_started : dbh:Layout.db_handle ->
-      ([ `can_complete ] pointer list, [> `pg_exn of exn ]) Flow.monad
-  end)
-    (Function_implementation: sig
-      val fail :
-        dbh:Layout.db_handle ->
-        ?reason:string ->
-        [> `can_complete ] Layout_function.pointer ->
-        ([ `can_nothing ] Layout_function.pointer,
-         [> `layout_inconsistency of
-             [>  `File_system | `Function of string | `Record of string ] *
-               [> `insert_did_not_return_one_id of string * int32 list ]
-         | `pg_exn of exn ])
-          Flow.monad
-          
-      val status :
-      dbh:Layout.db_handle ->
-      configuration:Configuration.local_configuration ->
-      'a Layout_function.pointer ->
-      ([ `not_started of Layout.Enumeration_process_status.t
-       | `running
-       | `started_but_not_running of [ `system_command_error of string * exn ] ],
-       [> `layout_inconsistency of
-           [>  `File_system | `Function of string | `Record of string ] *
-             [> `select_did_not_return_one_tuple of string * int ]
-       | `pg_exn of exn
-       | `work_directory_not_configured ]) Flow.monad
-    end) = struct
-
-      let check_and_fix ~dbh ~configuration ~fix_it () =
-        let open Layout_function in
-        let started =
-          match get_all_started ~dbh with
-          | Ok l -> l
-          | Error (`pg_exn e) -> 
-            failwithf "Layout_function.get_all_started: %S" (Exn.to_string e) ()
-        in
-        List.iter started ~f:(fun pointer ->
-          let status = 
-            Function_implementation.status ~dbh ~configuration pointer in
-          match status with
-          | Ok `running -> ()
-          | Ok (`started_but_not_running e) -> 
-            printf "The function %ld is STARTED BUT NOT RUNNING!!!\n" pointer.id;
-            if fix_it then (
-              printf "Fixing …\n";
-              Function_implementation.fail ~dbh pointer
-                ~reason:"checking_status_reported_started_but_not_running"
-              |! ignore)
-          | Ok (`not_started e) ->
-            printf "ERROR: The function %ld is NOT STARTED: %S.\n"
-              pointer.id
-              (Layout.Enumeration_process_status.to_string e);
-          | Error (`pg_exn e) -> 
-            printf "ERROR Function_implementation.status: %S\n" (Exn.to_string e) 
-          | Error (`status_parsing_error e) ->
-            printf "ERROR Function_implementation.status: status_parsing_error %S\n" e 
-          | Error (`work_directory_not_configured) ->
-            printf "ERROR Function_implementation.status: \
-               work_directory_not_configured\n" 
-          | Error _ ->
-            failwithf "Function_implementation.status.status ERROR" ()
-        )
-
-
-    end
-   *)
     
   let check_function ~name ~status ~fail ~fix_it all =
     let all_started = List.filter ~f:(fun b -> b#g_status = `Started) all in
@@ -849,70 +776,6 @@ module Verify = struct
                           String.(concat ~sep:", " l))))
 end
 
-module FS = struct
-
-  let add_files_to_volume hsc vol files =
-    failwith "Not implemented any more"
-     (* 
-    let open Hitscore_threaded.Flow in
-    let volume_path = Hitscore_threaded.Configuration.path_of_volume_fun hsc |!
-        Option.value_exn_message "Configuration has no root directory" in 
-    match Hitscore_threaded.db_connect hsc with
-    | Ok dbh ->
-      Hitscore_threaded.Layout.File_system.(
-        let vol_cache = get_volume ~dbh (unsafe_cast vol) in
-        begin match vol_cache with 
-        | Ok vc ->
-          let path = entry_unix_path vc.volume_entry in
-          let file_args = 
-            String.concat ~sep:" " (List.map files (sprintf "%S")) in
-          eprintf "Copying %s to %s/\n" file_args (volume_path path);
-          ksprintf System.command_exn "cp %s %s/" file_args (volume_path path)
-        | Error (`layout_inconsistency (`file_system,
-                                        `select_did_not_return_one_tuple (s, i))) ->
-          eprintf "ERROR(FS.add_tree_to_volume): \n\
-          Layout.File_system.get_volume detected an inconsistency\n\
-          FILE_SYSTEM: select_did_not_return_one_tuple (%s, %d)" s i;
-          failwith "STOP"
-        | Error (`pg_exn e) ->
-          eprintf "ERROR(FS.add_tree_to_volume): \n\
-          Layout.File_system.cache_volume had a PGOCaml error:\n%s"
-            (Exn.to_string e);
-          failwith "STOP"
-        end;
-        eprintf "Copy: DONE (won't go back).\n";
-        begin match
-            add_tree_to_volume ~dbh (unsafe_cast_volume vol) 
-              (List.map files (fun f -> Tree.file (Filename.basename f))) with
-        | Ok () ->
-          begin match
-            Hitscore_threaded.Layout.Record_log.add_value ~dbh
-              ~log:(sprintf "(add_files_to_volume %ld (%s))" vol
-                      (String.concat ~sep:" " 
-                         (List.map files (sprintf "%S")))) with
-              | Ok _ -> 
-                eprintf "add_tree_to_volume: OK\n"
-              | Error _ ->
-                eprintf "add_tree_to_volume: OK (but logging problem?)\n"
-          end
-        | Error (`layout_inconsistency (`file_system,
-                                        `add_did_not_return_one (s, l))) ->
-          eprintf "ERROR(FS.add_tree_to_volume): \n\
-          Layout.File_system.add_tree_to_volume detected an inconsistency\n\
-          FILE_SYSTEM: add_did_not_return_one (%s, [%s])"
-            s (String.concat ~sep:"; " (List.map l Int32.to_string))
-      | Error (`pg_exn e) ->
-        eprintf "ERROR(FS.add_tree_to_volume): \n\
-          Layout.File_system.add_tree_to_volume had a PGOCaml error:\n%s"
-          (Exn.to_string e)
-        end
-      )
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-     *)
-
-end
-
 
 module Flowcell = struct
 
@@ -931,22 +794,18 @@ module Flowcell = struct
       return ()
 
   let checks_and_read_lengths ~dbh lanes =
-    (*
     if List.length (List.dedup lanes) < List.length lanes then
       failwithf "Cannot reuse same lane" ();
-    let lanes_r1_r2 =
-      List.map lanes (fun id ->
-        check_lane_unused ~dbh id;
-        Layout.Record_lane.(
-          get ~dbh (unsafe_cast id)
-          >>= fun { requested_read_length_1; requested_read_length_2; _ } ->
-          return (requested_read_length_1, requested_read_length_2 )
-        ) |! function
-        | Ok (a, b) -> (a, b)
-        | Error e -> 
-          printf "ERROR while checking lane %ld\n" id;
-          failwith "ERROR") in
-    let first_r1, first_r2 = List.hd_exn lanes_r1_r2 in
+    of_list_sequential lanes (fun id ->
+      check_lane_unused ~dbh id >>= fun () ->
+      Layout.Record_lane.(
+        Access.Lane.get ~dbh (unsafe_cast id)
+        >>= fun {g_value = { requested_read_length_1; requested_read_length_2; _ }} ->
+        return (requested_read_length_1, requested_read_length_2 )
+      ))
+    >>= fun lanes_r1_r2 ->
+    let first_r1, first_r2 =
+      Option.value (List.hd lanes_r1_r2) ~default:(42, None) in
     let all_equal =
       List.for_all lanes_r1_r2 
         ~f:(fun (r1, r2) -> r1 = first_r1 && r2 = first_r2) in
@@ -954,133 +813,111 @@ module Flowcell = struct
       printf "ERROR: Requested read-lengths are not all equal: [\n%s]\n"
         (List.mapi lanes_r1_r2 (fun i (r1, r2) ->
           match r2 with
-          | None -> sprintf "  %d : SE %ld\n" (i + 2) r1
-          | Some r -> sprintf "  %d : PE %ldx%ld\n" (i + 2) r1 r)
+          | None -> sprintf "  %d : SE %d\n" (i + 2) r1
+          | Some r -> sprintf "  %d : PE %dx%d\n" (i + 2) r1 r)
           |! String.concat ~sep:"");
       failwith "ERROR"
     );
-    (first_r1, first_r2)
-    *)
-    failwith "NOT IMPLEMENTED"
-(*
+    return (first_r1, first_r2)
+
   let new_input_phix ~dbh r1 r2 =
-    begin match Layout.Search.record_stock_library_by_name ~dbh "PhiX_v3" with
-    | Ok [library] ->
-      let input_phix =
-        Layout.Record_input_library.add_value ~dbh
-          ~library ~submission_date:(Time.now ())
-          ?volume_uL:None ?concentration_nM:None ~user_db:[| |] ?note:None
-      in
-      begin match input_phix with
-      | Ok i_phix ->
-        Layout.Record_log.add_value ~dbh
-          ~log:(sprintf "(add_input_library_phix %ld)"
-                  i_phix.Layout.Record_input_library.id)
-        |! Pervasives.ignore;
-        let libraries = [| i_phix |] in
-        let phix_lane = Layout.Record_lane.add_value ~dbh
-          ~libraries  ?total_volume:None ?seeding_concentration_pM:None
-          ~pooled_percentages:[| 100. |]
-          ~requested_read_length_1:r1 ?requested_read_length_2:r2
-          ~contacts:[| |] in
-        begin match phix_lane with
-        | Ok l_phix ->
-          Layout.Record_log.add_value ~dbh
-            ~log:(sprintf "(add_lane_phix %ld)"
-                    l_phix.Layout.Record_lane.id) |! Pervasives.ignore;
-          l_phix
-        | Error e ->
-          failwithf "Could not create the lane for PhiX.\n" ();
-            (* TODO delete input_library *)
-        end
-      | Error e ->
-        failwithf "ERROR: Cannot add input_library for PhiX\n" ();
-      end
+    let layout = Classy.make dbh in
+    layout#stock_library#all >>| List.filter ~f:(fun s -> s#name = "PhiX_v3")
+    >>= fun phixs ->
+    begin match phixs with
+    |  [library] ->
+      Access.Input_library.add_value ~dbh
+        ~library:library#g_pointer ~submission_date:(Time.now ())
+        ?volume_uL:None ?concentration_nM:None ~user_db:[| |] ?note:None
+      >>= fun input_phix ->
+      Common.add_log ~dbh (sprintf "(add_input_library_phix %d)"
+                             input_phix.Layout.Record_input_library.id)
+      >>= fun () ->
+      let libraries = [| input_phix |] in
+      Access.Lane.add_value ~dbh
+        ~libraries  ?total_volume:None ?seeding_concentration_pM:None
+        ~pooled_percentages:[| 100. |]
+        ~requested_read_length_1:r1 ?requested_read_length_2:r2
+        ~contacts:[| |]
+      >>= fun l_phix ->
+      Common.add_log ~dbh (sprintf "(add_lane_phix %d)"
+                             l_phix.Layout.Record_lane.id)
+      >>= fun () ->
+      return l_phix
     | _ ->
       failwithf "ERROR: Could not find PhiX_v3\n" ();
     end
 
   let new_empty_lane ~dbh r1 r2 =
-    let lane = 
-      Layout.Record_lane.add_value ~dbh
-        ~libraries:[||]
-        ?total_volume:None ?seeding_concentration_pM:None
-        ~pooled_percentages:[| |]
-        ~requested_read_length_1:r1 ?requested_read_length_2:r2
-        ~contacts:[||] in
-    begin match lane with
-    | Ok l ->
-      Layout.Record_log.add_value ~dbh
-        ~log:(sprintf "(add_empty_lane %ld)" l.Layout.Record_lane.id)
-      |! Pervasives.ignore;
-      l
-    | Error e ->
-      failwithf "Could not create the empty lane.\n" ();
-    end
-
+    Access.Lane.add_value ~dbh
+      ~libraries:[||]
+      ?total_volume:None ?seeding_concentration_pM:None
+      ~pooled_percentages:[| |]
+      ~requested_read_length_1:r1 ?requested_read_length_2:r2
+      ~contacts:[||]
+    >>= fun lane ->
+    Common.add_log ~dbh (sprintf "(add_empty_lane %d)" lane.Layout.Record_lane.id)
+    >>= fun () ->
+    return lane
 
   let parse_args =
     List.map ~f:(function
     | "PhiX" | "phix" | "PHIX" -> `phix
     | "Empty" | "empty" | "EMPTY" -> `empty
     | x -> 
-      let i = try Int32.of_string x with e ->
+      let i = try Int.of_string x with e ->
           failwithf "Cannot understand arg: %S (should be an integer)" x () in
       `lane i)
-*)
 
   let register hsc name args =
-    (*
     if List.length args <> 8 then
       failwith "Expecting 8 arguments after the flowcell name.";
     let lanes = parse_args args in
-    match db_connect hsc with
-    | Ok dbh ->
-      begin match Layout.Search.record_flowcell_by_serial_name ~dbh name with
-      | Ok [] ->
+    with_database hsc (fun ~dbh ->
+      let layout = Classy.make dbh in
+      layout#flowcell#all >>| List.filter ~f:(fun s -> s#serial_name = name)
+      >>= function
+      | [] ->
         printf "Registering %s\n" name;
-        let r1, r2 = 
-          checks_and_read_lengths ~dbh 
-            (List.filter_map lanes (function `lane i -> Some i | _ -> None)) in
+        checks_and_read_lengths ~dbh 
+          (List.filter_map lanes (function `lane i -> Some i | _ -> None))
+        >>= fun (r1, r2) ->
         printf "It is a %S flowcell\n"
           (match r2 with 
-          | Some s -> sprintf "PE %ldx%ld" r1 s
-          | None -> sprintf "SE %ld" r1);
-        let lanes =
-          List.map lanes ~f:(function
-          | `phix ->  new_input_phix ~dbh r1 r2 
-          | `lane id -> Layout.Record_lane.unsafe_cast id
-          | `empty -> new_empty_lane ~dbh r1 r2)
-          |! Array.of_list in
-        let flowcell = 
-          Layout.Record_flowcell.add_value ~dbh ~serial_name:name ~lanes in
-        begin match flowcell with
-        | Ok f ->
-          Layout.Record_log.add_value ~dbh
-            ~log:(sprintf "(add_flowcell %ld %s (lanes %s))"
-                    f.Layout.Record_flowcell.id name
-                    (List.map (Array.to_list lanes) (fun i ->
-                      sprintf "%ld" i.Layout.Record_lane.id)
-                      |! String.concat ~sep:" "))
-          |! Pervasives.ignore;
-        | Error e ->
-          printf "Could not add flowcell: %s\n" name
-              (* TODO: manage input_lib and lane *)
-        end
-      | Ok [one] ->
+          | Some s -> sprintf "PE %dx%d" r1 s
+          | None -> sprintf "SE %d" r1);
+        of_list_sequential lanes ~f:(function
+        | `phix ->  new_input_phix ~dbh r1 r2 
+        | `lane id -> return (Layout.Record_lane.unsafe_cast id)
+        | `empty -> new_empty_lane ~dbh r1 r2)
+        >>= fun lanes ->
+        Access.Flowcell.add_value ~dbh ~serial_name:name ~lanes:(Array.of_list lanes)
+        >>= fun flowcell ->
+        Common.add_log ~dbh (sprintf "(add_flowcell %d %s (lanes %s))"
+                               flowcell.Layout.Record_flowcell.id name
+                               (List.map lanes (fun i ->
+                                 sprintf "%d" i.Layout.Record_lane.id)
+                                 |! String.concat ~sep:" "))
+      | [one] ->
         printf "ERROR: Flowcell name %S already used.\n" name;
-      | Ok l ->
+        return ()
+      | l ->
         printf "BIG-ERROR: Flowcell name %S already used %d times!!!\n" 
           name (List.length l);
-      | Error _ ->
-        printf "Database error"
-      end;
-      db_disconnect hsc |! Pervasives.ignore
-    | Error (`pg_exn e) ->
-      eprintf "Could not connect to the database: %s\n" (Exn.to_string e)
-    *)
-    failwith "NOT IMPLEMENTED"
+        return ()
+    )
 
+  let () =
+    define_command
+      ~names:["register-flowcell"]
+      ~description:"Register a new flowcell (for existing lanes)"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s <flowcell-name> <L1> <L2> .. <L8>\n"
+          exec cmd;
+        fprintf o "where Lx is 'PhiX', 'Empty', or an orphan lane's id.\n")
+      ~run:(fun config exec cmd -> function
+      | [] -> error (`invalid_command_line "no arguments provided")
+      | name :: lanes -> register config name lanes)
 end
 
 module Query = struct
@@ -1722,17 +1559,6 @@ let () =
           end
         | _ -> None);
 
-  define_command
-    ~names:["register-flowcell"]
-    ~description:"Register a new flowcell (for existing lanes)"
-    ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s <flowcell-name> <L1> <L2> .. <L8>\n"
-        exec cmd;
-      fprintf o "where Lx is 'PhiX', 'Empty', or an orphan lane's id.\n")
-    ~run:(fun config exec cmd -> function
-    | [] -> None
-    | name :: lanes ->
-      Some (Flowcell.register config name lanes));
 
   define_command
     ~names:["query"; "Q"]
