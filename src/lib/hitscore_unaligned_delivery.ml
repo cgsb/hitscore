@@ -96,6 +96,8 @@ module Unaligned_delivery:
       layout#add_client_fastqs_dir ~directory:links_dir ()
       >>= fun result ->
       f#set_succeeded result#pointer
+      >>= fun () ->
+      return fpointer#pointer 
     | l -> 
       error (`not_single_flowcell l)
 

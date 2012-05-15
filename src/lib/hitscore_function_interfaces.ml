@@ -225,7 +225,7 @@ module type UNALIGNED_DELIVERY = sig
     bcl_to_fastq:Layout.Function_bcl_to_fastq.pointer ->
     invoice:Layout.Record_invoicing.pointer ->
     destination:string ->
-    (unit,
+    (Layout.Function_prepare_unaligned_delivery.pointer,
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
