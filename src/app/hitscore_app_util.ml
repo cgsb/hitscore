@@ -130,6 +130,19 @@ let string_of_error = function
   | `bcl_to_fastq_not_started status ->
     sprintf "bcl_to_fastq_not_started but %S"
       (Hitscore.Layout.Enumeration_process_status.to_string status)
+  | `bcl_to_fastq_not_succeeded (pointer, status) ->
+    sprintf "bcl_to_fastq %d not succeeded but %S"
+      pointer.Hitscore_layout.Layout.Function_bcl_to_fastq.id
+      Hitscore_layout.Layout.Enumeration_process_status.(to_string status)
+  | `not_single_flowcell l ->
+    sprintf "Flowcell not unique: %s" 
+      (String.concat ~sep:";" (List.map l (fun (s, ll) ->
+        sprintf "%S: [%s]" s (String.concat ~sep:", "
+                                (List.map ll (sprintf "%d"))))))
+  | `partially_found_lanes (i, s) ->
+    sprintf "partially_found_lanes %d %s" i s
+  | `wrong_unaligned_volume sl ->
+    sprintf "wrong_unaligned_volume [%s]" (String.concat ~sep:"; " sl)
   | `layout_inconsistency (where, what) ->
     sprintf "LAYOUT-INCONSISTENCY (%s): %s"
       (match where with
