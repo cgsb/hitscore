@@ -1335,52 +1335,9 @@ module Fastx_qs = struct
 end
 
 
-
+(* more define_command's: *)
 let () =
-(*
- 
-
-
-  define_command
-    ~names:["add-files-to-volume"; "afv"]
-    ~description:"Move files to a volume (at its root)"
-    ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <volume_id:int> <file1> <file2> ...\n" 
-        exec cmd)
-    ~run:(fun config exec cmd -> function
-      | vol :: files ->
-        begin 
-          try 
-            let v = Int32.of_string vol in
-            Some (FS.add_files_to_volume config v files)
-          with e -> 
-            eprintf "Exception: %s\n" (Exn.to_string e); None
-        end
-      | _ -> None);
-
-  define_command 
-    ~names:["print-configuration"; "pc"]
-    ~description:"Display the current profile (and environment)."
-    ~usage:(fun o exec cmd -> fprintf o "usage: %s <profile> %s\n" exec cmd)
-    ~run:(fun config exec cmd -> function
-      | [] -> 
-        printf "** Current configuration:\n";
-        Configuration_file.print_config config;
-        printf "** Environment:\n";
-        Configuration_file.print_env ();
-        Some ()
-      | _ -> None);
-  define_command 
-    ~names:["with-env"; "wenv"]
-    ~description:"Run a command (default \"bash\") with the current \
-                  profile's environment."
-    ~usage:(fun o exec cmd -> fprintf o "usage: %s <profile> %s [<cmd>]\n" exec cmd)
-    ~run:(fun config exec cmd -> function
-      | [] -> Configuration_file.export_env config "bash"; Some ()
-      | [cmd] -> Configuration_file.export_env config cmd; Some ()
-      | _ -> None);
-
-
+  (*
   define_command
     ~names:["parse-submission-sheet"; "pss"]
     ~description:"Parse a submission sheet (CSV)"
@@ -1416,19 +1373,8 @@ let () =
             | e -> eprintf "Exception: %s\n" (Exn.to_string e); None
           end
         | _ -> None);
-
-
-  define_command
-    ~names:["query"; "Q"]
-    ~description:"Query the database with (predefined) queries"
-    ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <query> [<query arguments>]\n" exec cmd;
-      fprintf o "where the queries are:\n";
-      Query.describe o;)
-    ~run:(fun config exec cmd -> function
-    | [] -> None
-    | name :: args -> Query.predefined config name args; Some ());
-*)
+    
+  *)
   define_command
     ~names:["bcl-to-fastq"; "b2f"]
     ~description:"Run, monitor, … the bcl_to_fastq function"
@@ -1440,8 +1386,7 @@ let () =
           \  * register-failure <id> [<reason-log>].\n\
           \  * status <id> : Get the current status of an evaluation.\n\
           \  * fix-status <id> : Get the status and fix it if possible\n\
-          \  * kill <id>.\n\
-          \  * info <b2f-id or stats-dir>: Get stats about the result.\n")
+          \  * kill <id>.\n")
     ~run:(fun config exec cmd ->
       let module B2F = Hitscore_b2f_commands in
       function
@@ -1459,13 +1404,12 @@ let () =
         B2F.check_status ~fix_it:true config id
       | "kill" :: id :: [] ->
         B2F.kill config id
-      | "info" :: id :: [] ->
-        (* B2F.info config id *)
-        failwith "NOT IMPLEMENTED"
-      | _ -> error (`invalid_command_line "unknown command"));
- (* 
-  define_command
-    ~names:["fastx-quality-stats"; "fxqs"]
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))))
+  (* 
+     define_command
+     ~names:["fastx-quality-stats"; "fxqs"]
     ~description:"Run, monitor, … the fastx-quality-stats function"
     ~usage:(fun o exec cmd ->
       fprintf o "Usage: %s <profile> %s <command> <args>\n" exec cmd;
@@ -1498,7 +1442,12 @@ let () =
       | _ -> None);
 
 
- *)
+  *)
+  ()
+
+
+(* MAIN *)
+let () =
   let global_usage = function
     | `error -> 
       eprintf "ERROR: Main usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n" 
