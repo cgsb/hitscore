@@ -1,11 +1,35 @@
 
 open Core.Std
-let (|>) x f = f x
-
-
 open Hitscore_app_util
 open Hitscore
 open Flow
+
+  
+let commands = ref []
+
+let define_command ~names ~description ~usage ~run =
+  let meta_run a b c d =
+    begin match Lwt_main.run (run a b c d) with
+    | Ok () -> true
+    | Error (`invalid_command_line s) -> 
+      eprintf "Wrong arguments: %s!\n" s;
+      false
+    | Error  e ->
+      eprintf "HITSCORE: ERROR:\n  %s\n" (string_of_error e);
+      true
+    end
+  in
+  commands := (names, description, usage, meta_run) :: !commands
+
+let short_help indent =
+  String.concat ~sep:"\n"
+    (List.map !commands
+       (fun (names, desc, _, _) ->
+         sprintf "%s * %s:\n%s%s%s" indent (String.concat ~sep:"|" names) 
+           indent indent desc))
+
+let find_command cmd = 
+  List.find !commands (fun (names, _, _, _) -> List.exists names ((=) cmd))
 
 
 module Configuration_file = struct
@@ -76,79 +100,40 @@ module Configuration_file = struct
     System.command_exn (!cmd ^ " " ^ command);
     ()
 
+  let () =
+    define_command 
+      ~names:["print-configuration"; "pc"]
+      ~description:"Display the current profile (and environment)."
+      ~usage:(fun o exec cmd -> fprintf o "usage: %s <profile> %s\n" exec cmd)
+      ~run:(fun config exec cmd -> function
+      | [] -> 
+        printf "** Current configuration:\n";
+        print_config config;
+        printf "** Environment:\n";
+        print_env ();
+        return ()
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))));
+    define_command 
+      ~names:["with-env"; "wenv"]
+      ~description:"Run a command (default \"bash\") with the current \
+                  profile's environment."
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s [<cmd>]\n" exec cmd)
+      ~run:(fun config exec cmd -> function
+      | [] -> export_env config "bash"; return ()
+      | [cmd] -> export_env config cmd; return ()
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))));
+    () 
 end
-
-
-
 
 module All_barcodes_sample_sheet = struct
 
-
-  let illumina_barcodes = [
-    1, "ATCACG";
-    2, "CGATGT";
-    3, "TTAGGC";
-    4, "TGACCA";
-    5, "ACAGTG";
-    6, "GCCAAT";
-    7, "CAGATC";
-    8, "ACTTGA";
-    9, "GATCAG";
-    10, "TAGCTT";
-    11, "GGCTAC";
-    12, "CTTGTA"
-  ]
-
-  let bioo_barcodes = [
-    1 ,"CGATGT";
-    2 ,"TGACCA";
-    3 ,"ACAGTG";
-    4 ,"GCCAAT";
-    5 ,"CAGATC";
-    6 ,"CTTGTA";
-    7 ,"ATCACG";
-    8 ,"TTAGGC";
-    9 ,"ACTTGA";
-    10,"GATCAG";
-    11,"TAGCTT";
-    12,"GGCTAC";
-    13,"AGTCAA";
-    14,"AGTTCC";
-    15,"ATGTCA";
-    16,"CCGTCC";
-    17,"GTAGAG";
-    18,"GTCCGC";
-    19,"GTGAAA";
-    20,"GTGGCC";
-    21,"GTTTCG";
-    22,"CGTACG";
-    23,"GAGTGG";
-    24,"GGTAGC";
-    25,"ACTGAT";
-    26,"ATGAGC";
-    27,"ATTCCT";
-    28,"CAAAAG";
-    29,"CAACTA";
-    30,"CACCGG";
-    31,"CACGAT";
-    32,"CACTCA";
-    33,"CAGGCG";
-    34,"CATGGC";
-    35,"CATTTT";
-    36,"CCAACA";
-    37,"CGGAAT";
-    38,"CTAGCT";
-    39,"CTATAC";
-    40,"CTCAGA";
-    41,"GCGCTA";
-    42,"TAATCG";
-    43,"TACAGC";
-    44,"TATAAT";
-    45,"TCATTC";
-    46,"TCCCGA";
-    47,"TCGAAG";
-    48,"TCGGCA";
-  ]
+  let illumina_barcodes = Assemble_sample_sheet.illumina_barcodes
+  let bioo_barcodes = Assemble_sample_sheet.bioo_barcodes
 
   let make ~flowcell ~specification output_string = 
     let config =
@@ -193,6 +178,23 @@ module All_barcodes_sample_sheet = struct
     );
     ()
 
+  let () =
+    define_command 
+      ~names:["all-barcodes-sample-sheet"; "abc"]
+      ~description:"Make a sample sheet with all barcodes"
+      ~usage:(fun o exec cmd ->
+        fprintf o
+          "usage: %s <profile> %s <flowcell id>  <list lanes/barcode vendors>\n" 
+          exec cmd;
+        fprintf o "  example: %s %s D03NAKCXX N1 I2 I3 B4 B5 I6 I7 N8\n" exec cmd;
+        fprintf o "  where N1 means no barcode on lane 1, I2 means all \
+        Illumina barcodes on lane 2,\n  B4 means all BIOO barcodes on lane \
+        4, etc.\n";)
+      ~run:(fun config exec cmd -> function
+      | flowcell :: specification ->
+        make ~flowcell ~specification print_string;
+        return ()
+      | _ -> error (`invalid_command_line "expecting at least one argument"))
 
 end
 
@@ -243,7 +245,7 @@ module PBS_script_generator = struct
              (Option.value ~default:"NOTSET" (Sys.getenv "LOGNAME"))) in
     let queue = 
       let groups =
-        System.command_to_string "groups" |> 
+        System.command_to_string "groups" |! 
             String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
       match List.find groups ((=) "cgsb") with
       | Some _ -> ref (Some "cgsb-s")
@@ -286,7 +288,17 @@ module PBS_script_generator = struct
           ~variables:!variables ?queue:!queue ~email:!email);
     ()
 
-
+  let () =
+    define_command
+      ~names:[ "pbs"; "make-pbs" ]
+      ~description:"Generate PBS scripts"
+      ~usage:(fun o exec cmd -> 
+        fprintf o
+          "usage: %s <profile> %s [OPTIONS] <script-names>\nsee: %s %s -help\n"
+          exec cmd exec cmd)
+      ~run:(fun config exec cmd _ ->
+        parse_cmdline (sprintf "%s %s" exec cmd) 1;
+        return ())
 
 
 end
@@ -340,9 +352,22 @@ make -j8 \
     System.command_exn (sprintf "sh %s" tmp);
     ()
 
+  let () =
+    define_command
+      ~names:["gb2f"; "gen-bcl-to-fastq"]
+      ~usage:(fun o exec bcl2fastq ->
+        fprintf o  "usage: %s profile %s name basecalls-dir sample-sheet\n" 
+          exec bcl2fastq)
+      ~description:"Prepare a BclToFastq run"
+      ~run:(fun config exec cmd -> function
+      | [ name; basecalls; sample_sheet ] ->
+        prepare name basecalls sample_sheet;
+        return ()
+      | _ -> error (`invalid_command_line "expecting 3 arguments"))
+
 end
 
-module Dumps = struct
+module Backend_management = struct
 
   let to_file hsc file =
     with_database hsc (fun ~dbh ->
@@ -357,6 +382,52 @@ module Dumps = struct
       In_channel.with_file file ~f:(fun i ->
         Sexplib.Sexp.input_sexp i |! Layout.dump_of_sexp |!
             Access.insert_dump ~dbh)) 
+
+  let () =
+    define_command
+      ~names:["dump-to-file"]
+      ~description:"Dump the database to a S-Exp file"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
+      ~run:(fun config exec cmd -> function
+      | [file] -> to_file config file
+      | _ -> error (`invalid_command_line "no filename provided"));
+    
+    define_command
+      ~names:["load-file"]
+      ~description:"Load a dump the database (S-Exp file)"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
+      ~run:(fun config exec cmd -> function
+      | [file] -> load_file config file
+      | _ -> error (`invalid_command_line "no filename provided"));
+
+    define_command
+      ~names:["wipe-out-database"]
+      ~description:"Empty the database (only Hitscore's tables)"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s <say-you're-sure>\n" exec cmd)
+      ~run:(fun configuration exec cmd -> function
+      | ["I'm sure"]
+      | ["I am sure"]
+      | ["I"; "am"; "sure"]
+      | ["I-am-sure"]
+      | ["i-am-sure"] ->
+        with_database ~log:(eprintf "%s\n") ~configuration Backend.wipe_out
+      | _ ->
+        error (`invalid_command_line "please, explicitly say you're sure"));
+    define_command 
+      ~names:["check-database"; "check-db"]
+      ~description:"Check that the database is ready and fix it if it is not"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s\n" exec cmd)
+      ~run:(fun configuration exec cmd -> function
+      | [] ->
+        with_database ~log:(eprintf "%s\n") ~configuration Backend.check_db
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))));
+    ()
 
 
 end
@@ -414,7 +485,7 @@ module Hiseq_raw = struct
           run_date          ; } =
       let xml = 
         In_channel.with_file xml_run_params ~f:(fun ic ->
-          XML.(make_input (`Channel ic) |> in_tree)) in
+          XML.(make_input (`Channel ic) |! in_tree)) in
       match Hiseq_raw.run_parameters (snd xml) with
       | Ok t -> t
       | Error (`parse_run_parameters (`wrong_date s)) ->
@@ -450,7 +521,7 @@ module Hiseq_raw = struct
           run_date          ; } =
       let xml = 
         In_channel.with_file xml_run_params ~f:(fun ic ->
-          XML.(make_input (`Channel ic) |> in_tree)) in
+          XML.(make_input (`Channel ic) |! in_tree)) in
       match Hiseq_raw.run_parameters (snd xml) with
       | Ok t -> t
       | Error (`parse_run_parameters (`wrong_date s)) ->
@@ -461,7 +532,7 @@ module Hiseq_raw = struct
     let clustering =
       let xml = 
         In_channel.with_file xml_read1 ~f:(fun ic ->
-          XML.(make_input (`Channel ic) |> in_tree)) in
+          XML.(make_input (`Channel ic) |! in_tree)) in
       match Hiseq_raw.clusters_summary (snd xml) with
       | Ok t -> t
       | Error (`parse_clusters_summary s) ->
@@ -500,6 +571,27 @@ module Hiseq_raw = struct
     );
     ()
 
+  let () = 
+    define_command 
+      ~names:["register-hiseq-raw"; "rhr"]
+      ~description:"Register a HiSeq raw directory"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s [-host <host-addr>] <absolute-path>\n" 
+          exec cmd;
+        fprintf o "   (default host being bowery.es.its.nyu.edu)\n")
+      ~run:(fun config exec cmd -> function
+      | [path] -> register config path
+      | ["-host"; host; path] -> register config ~host path
+      | _ -> error (`invalid_command_line "unexpected arguments"));
+    define_command 
+      ~names:["get-hiseq-raw-info"; "ghri"]
+      ~description:"Get information from an HiSeq Raw directory"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s <hiseq-dir>\n" exec cmd)
+      ~run:(fun config exec cmd -> function
+      | [dir] -> get_info dir; return ()
+      | _ -> error (`invalid_command_line "unexpected arguments"));
+    ()
 end
 
 module Verify = struct
@@ -735,7 +827,7 @@ module FS = struct
     failwith "Not implemented any more"
      (* 
     let open Hitscore_threaded.Flow in
-    let volume_path = Hitscore_threaded.Configuration.path_of_volume_fun hsc |>
+    let volume_path = Hitscore_threaded.Configuration.path_of_volume_fun hsc |!
         Option.value_exn_message "Configuration has no root directory" in 
     match Hitscore_threaded.db_connect hsc with
     | Ok dbh ->
@@ -991,12 +1083,12 @@ module Query = struct
                   left outer join invoicing on
                    invoicing.lanes @> array_append('{}', lane.g_id)
              where flowcell.serial_name is NULL and invoicing.pi is NULL;"
-              |> List.map (fun (x,y,z) -> (x,y,z,0l)))
+              |! List.map (fun (x,y,z) -> (x,y,z,0l)))
         in
         let person_string p =
           let open Batteries in
           PGSQL (dbh) "select family_name from person where g_id = $p"
-          |> function
+          |! function
             | [] -> "NO-INVOICED-PI"
             | [one] -> one
             | more -> String.concat "--" more
@@ -1521,99 +1613,8 @@ end
 
 
 
-  
-let commands = ref []
-
-let define_command ~names ~description ~usage ~run =
-  let meta_run a b c d =
-    begin match Lwt_main.run (run a b c d) with
-    | Ok () -> true
-    | Error (`invalid_command_line s) -> 
-      eprintf "Wrong arguments: %s!\n" s;
-      false
-    | Error  e ->
-      eprintf "HITSCORE: ERROR:\n  %s\n" (string_of_error e);
-      true
-    end
-  in
-  commands := (names, description, usage, meta_run) :: !commands
-
-let short_help indent =
-  String.concat ~sep:"\n"
-    (List.map !commands
-       (fun (names, desc, _, _) ->
-         sprintf "%s * %s:\n%s%s%s" indent (String.concat ~sep:"|" names) 
-           indent indent desc))
-
-let find_command cmd = 
-  List.find !commands (fun (names, _, _, _) -> List.exists names ((=) cmd))
-
 let () =
-  (*
-  define_command 
-    ~names:["all-barcodes-sample-sheet"; "abc"]
-    ~description:"Make a sample sheet with all barcodes"
-    ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <flowcell id>  <list lanes/barcode vendors>\n" 
-        exec cmd;
-      fprintf o "  example: %s %s D03NAKCXX N1 I2 I3 B4 B5 I6 I7 N8\n" exec cmd;
-      fprintf o "  where N1 means no barcode on lane 1, I2 means all \
-        Illumina barcodes on lane 2,\n  B4 means all BIOO barcodes on lane \
-        4, etc.\n";)
-    ~run:(fun config exec cmd -> function
-      | flowcell :: specification ->
-        Some (All_barcodes_sample_sheet.make ~flowcell ~specification print_string) 
-      | _ -> None);
-  
-  define_command
-    ~names:[ "pbs"; "make-pbs" ]
-    ~description:"Generate PBS scripts"
-    ~usage:(fun o exec cmd -> 
-      fprintf o "usage: %s <profile> %s [OPTIONS] <script-names>\nsee: %s %s -help\n"
-        exec cmd exec cmd)
-    ~run:(fun config exec cmd _ ->
-      Some (PBS_script_generator.parse_cmdline (sprintf "%s %s" exec cmd) 1));
-
-  define_command
-    ~names:["gb2f"; "gen-bcl-to-fastq"]
-    ~usage:(fun o exec bcl2fastq ->
-      fprintf o  "usage: %s profile %s name basecalls-dir sample-sheet\n" 
-        exec bcl2fastq)
-    ~description:"Prepare a BclToFastq run"
-    ~run:(fun config exec cmd -> function
-      | [ name; basecalls; sample_sheet ] ->
-        Some (Gen_BclToFastq.prepare name basecalls sample_sheet)
-      | _ -> None);
-  *)
-  define_command
-    ~names:["dump-to-file"]
-    ~description:"Dump the database to a S-Exp file"
-    ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
-    ~run:(fun config exec cmd -> function
-      | [file] -> Dumps.to_file config file
-      | _ -> error (`invalid_command_line "no filename provided"));
-
-  define_command
-    ~names:["load-file"]
-    ~description:"Load a dump the database (S-Exp file)"
-    ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
-    ~run:(fun config exec cmd -> function
-    | [file] -> Dumps.load_file config file
-    | _ -> error (`invalid_command_line "no filename provided"));
 (*
-  define_command 
-    ~names:["register-hiseq-raw"; "rhr"]
-    ~description:"Register a HiSeq raw directory"
-    ~usage:(fun o exec cmd ->
-      fprintf o "usage: %s <profile> %s [-host <host-addr>] <absolute-path>\n" 
-        exec cmd;
-      fprintf o "   (default host being bowery.es.its.nyu.edu)\n")
-    ~run:(fun config exec cmd -> function
-      | [path] -> Some (Hiseq_raw.register config path)
-      | ["-host"; host; path] -> Some (Hiseq_raw.register config ~host path)
-      | _ -> None);
  
 
   define_command
@@ -1809,14 +1810,6 @@ let () =
     | ["-fix"] -> Verify.wake_up ~fix_it:true config
     | _ -> None);
 
-  define_command 
-    ~names:["get-hiseq-raw-info"; "ghri"]
-    ~description:"Get information from an HiSeq Raw directory"
-    ~usage:(fun o exec cmd ->
-      fprintf o "Usage: %s <profile> %s <hiseq-dir>\n" exec cmd)
-    ~run:(fun config exec cmd -> function
-    | [dir] -> Some (Hiseq_raw.get_info dir)
-    | _ -> None);
 
   define_command ~names:["deliver"] ~description:"Deliver links to clients"
     ~usage:(fun o exec cmd ->
