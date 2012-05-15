@@ -87,13 +87,13 @@ module Unaligned_delivery:
       Access_rights.set_posix_acls ~dbh 
         ~more_readers:logins ~configuration (`dir links_dir)
       >>= fun () ->
-      layout#prepare_unaligned_delivery#add
+      layout#add_prepare_unaligned_delivery
         ~recomputable:false ~recompute_penalty:0.
         ~unaligned:unaligned#pointer ~invoice:invoice#g_pointer ()
       >>= fun fpointer ->
       fpointer#get >>= fun f ->
       f#set_started >>= fun () ->
-      layout#client_fastqs_dir#add ~directory:links_dir ()
+      layout#add_client_fastqs_dir ~directory:links_dir ()
       >>= fun result ->
       f#set_succeeded result#pointer
     | l -> 

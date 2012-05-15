@@ -16,16 +16,16 @@ module Unaligned_coercion:
     let layout = Classy.make dbh in
     layout#bcl_to_fastq_unaligned#get input
     >>= fun b2fu ->
-    layout#coerce_b2f_unaligned#add
+    layout#add_coerce_b2f_unaligned
       ~input ~recomputable:true ~recompute_penalty:0.1 ()
     >>= fun inserted ->
     inserted#get >>= fun inserted ->
     inserted#set_started >>= fun () ->
     let post_insert_work =
-      layout#file_system#add_link_volume 
+      layout#add_link_volume 
         ~kind:`generic_fastqs_dir ~pointer:b2fu#directory#pointer ()
       >>= fun vol ->
-      layout#generic_fastqs#add ~directory:vol#pointer ()
+      layout#add_generic_fastqs ~directory:vol#pointer ()
       >>= fun res ->
       inserted#set_succeeded res#pointer
     in

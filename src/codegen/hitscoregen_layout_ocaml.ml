@@ -385,54 +385,74 @@ class ['pointer, 'pointed, 'error ] pointer
   (id: 'pointer -> int)
   (p: 'pointer) =
 object
+  constraint 'error = [> `Layout of error_location * error_cause ]
   method id = id p
   method pointer = p
   method get = layout_get p
 end";
-  let make_pointer_object p t modname =
-    sprintf "new pointer layout#%s#get (fun p -> p.%s.id) %s" t modname p
+
+  let make_pointer_object p tget class_name modname =
+    sprintf "(new pointer (%s : %s.pointer -> ('error %s, 'error) Flow.monad) \
+                         (fun p -> p.%s.id) %s : \
+                (%s.pointer, 'error %s, 'error) pointer)"
+      tget modname class_name modname p modname class_name
   in
-  let ocaml_object_transform_field modname field = function
+  let record_get s =
+    sprintf "fun p -> %s.get ~dbh p >>| new %s_element dbh"
+      (String.capitalize s) s in
+  let function_get s =
+    sprintf "fun p -> %s.get ~dbh p >>| new %s_element dbh"
+      (String.capitalize s) s in
+  let volume_get = "fun p -> Volume.get ~dbh p >>| new volume_element dbh" in
+  let ocaml_object_transform_field modname field =
+    function
     | Record_name s ->
-      make_pointer_object (sprintf "%s.(%s)" modname field) s
+      make_pointer_object
+        (sprintf "%s.(%s)" modname field)
+        (record_get s)
+        (sprintf "%s_element" s)
         (sprintf "Record_%s" s)
     | Option (Record_name s) ->
       sprintf "Option.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" s (sprintf "Record_%s" s))
+        (make_pointer_object "p"
+           (record_get s)
+           (sprintf "%s_element" s)
+           (sprintf "Record_%s" s))
     | Array (Record_name s) ->
       sprintf "Array.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" s (sprintf "Record_%s" s))
+        (make_pointer_object "p"
+           (record_get s)
+           (sprintf "%s_element" s)
+           (sprintf "Record_%s" s))
     | Volume_name s ->
       make_pointer_object 
-        (sprintf "%s.(%s)" modname field) "file_system" "File_system"
+        (sprintf "%s.(%s)" modname field)
+        volume_get
+        "volume_element"
+        "File_system"
     | Option (Volume_name s) ->
       sprintf "Option.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" "file_system" "File_system")
+        (make_pointer_object "p"
+           volume_get
+           "volume_element"
+           "File_system")
     | Array (Volume_name s) ->
       sprintf "Array.map %s.(%s) ~f:(fun p -> %s)" modname field
-        (make_pointer_object "p" "file_system" "File_system")
-
+        (make_pointer_object "p"
+           volume_get
+           "volume_element"
+           "File_system")
     | _ -> sprintf "%s.(%s)" modname field
   in
-  let get_like_easy_methods modname eltname types_module =
-    line out "\
-      method all =
-        (%s.get_all ~dbh)
-        >>| List.map ~f:(%s layout)
-      method get p =
-        %s.get ~dbh p >>| %s layout
-      method get_unsafe p = 
-        %s.(get ~dbh (%s.unsafe_cast p)) >>| %s layout"
-      modname eltname modname eltname modname types_module eltname;
-  in
 
-  let add_method ?(method_name="add") add_function fields name modname =
+  let add_method ?(method_name="add") add_function fields tget class_name modname =
     line out "  method %s " method_name;
     List.iter fields (function
     | (n, Option t) -> line out "   ?%s" n
     | (n, t) -> line out "   ~%s" n
     );
-    line out "    () =";
+    line out "    () : ((%s.pointer, 'error %s, 'error) pointer, 'error) Flow.monad ="
+      modname class_name;
     line out "    %s ~dbh " add_function;
     List.iter fields (function
     | (n, Option t) -> line out "   ?%s" n
@@ -440,53 +460,33 @@ end";
     );
     line out "    >>= fun p ->";
     line out "    return (%s)"
-      (make_pointer_object "p" name modname)
+      (make_pointer_object "p" tget class_name modname)
   in
-  line out "type hidden_for_ocamldoc = unit";
-  line out "let classy (dbh : Backend.db_handle) = ( () : hidden_for_ocamldoc )";
+  
 
-  line out "(**/**)";
-  line out "let rec make (dbh : Backend.db_handle) =";
-  line out "  object (self_layout)";
-  line out "  method _dbh = dbh";
-  List.iter dsl.nodes (function
-  | Enumeration (name, fields) -> ()
-  | Record (name, fields) ->
-    line out "  method %s = %s self_layout" name name
-  | Function (name, args, result) ->
-    line out "  method %s = %s self_layout" name name
-  | Volume (_, _) -> ()
-  );
-  line out "  method file_system = file_system self_layout";
-  line out "  end";
-  line out "and volume layout t = object";
+  line out "class ['error] volume_element dbh t = object";
+ (* line out "  constraint 'error = \
+               [> `Layout of Layout.error_location * Layout.error_cause ]"; *)
+  line out "  val mutable t = t";
   line out "  method g_id = t.File_system.g_id";
   line out "  method g_kind = t.File_system.g_kind";
   line out "  method g_content = t.File_system.g_content";
   line out "  method g_pointer = File_system.(pointer t)";
-  line out "  end";
-  line out "and file_system layout = let dbh = layout#_dbh in object";
-  get_like_easy_methods "Volume" "volume" "File_system";
-  (* Using type 'Int' is a hack, add_method only cares about options: *)
-  add_method ~method_name:"add_volume"
-    "Volume.add_volume " ["kind", Int; "content", Int]
-    "file_system" "File_system";
-  add_method ~method_name:"add_tree_volume"
-    "Volume.add_tree_volume "
-    ["kind", Int; "hr_tag", Option String; "files", Int]
-    "file_system" "File_system";
-  add_method ~method_name:"add_link_volume"
-    "Volume.add_link_volume "
-    ["kind", Int; "pointer", Int]
-    "file_system" "File_system";
-  
+  line out "  method re_get : (unit, 'error) Flow.monad = \n\
+                  Volume.get ~dbh (File_system.pointer t) >>= fun new_t -> \n\
+                  t <- new_t; return ()";
   line out "  end";
   List.iter dsl.nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
-    (* record element  *)
-    line out "and %s_element layout t = object " name;
+    let modname = sprintf "%s" (String.capitalize name) in
+    let types_module = sprintf "Record_%s" name in
+    line out "class ['error] %s_element dbh t = object (self)" name;
+    (*line out "  constraint 'error = \
+               [> `Layout of Layout.error_location * Layout.error_cause ]";*)
+    line out "  val mutable t = t";
     line out "  method g_pointer = Record_%s.(pointer t)" name;
+    line out "  method g_t = t";
     List.iter record_standard_fields (fun (n, t) ->
       line out "  method %s = t.Record_%s.%s" n name n;
     );
@@ -495,22 +495,17 @@ end";
         (ocaml_object_transform_field
            (sprintf "Record_%s" name) (sprintf "t.g_value.%s" n) t);
     );
-    line out "  end";
-    (* record collection *)
-    line out "and %s layout = let dbh = layout#_dbh in object " name;
-    let modname = sprintf "%s" (String.capitalize name) in
-    get_like_easy_methods modname (sprintf "%s_element" name)
-      (sprintf "Record_%s" name);
-    add_method (sprintf "%s.add_value" modname) fields
-      name (sprintf "Record_%s" name);
-    line out "  end";
+    line out "  method re_get : (unit, 'error) Flow.monad = \n\
+                  %s.(get ~dbh (%s.pointer t)) >>= fun new_t -> \n\
+                  t <- new_t; return ()" modname types_module;
+    line out "end"
   | Function (name, args, result) ->
-    (* function element  *)
-    line out "and %s_element layout t = let dbh = layout#_dbh in object(self)" name;
+    line out "class ['error] %s_element dbh t = object(self)" name;
     let modname = sprintf "%s" (String.capitalize name) in
     let types_module = sprintf "Function_%s" name in
     line out "val mutable t = t";
     line out "  method g_pointer = Function_%s.(pointer t)" name;
+    line out "  method g_t = t";
     List.iter (function_standard_fields result) (fun (n, t) ->
       line out "  method %s = %s" n
         (ocaml_object_transform_field types_module (sprintf "t.%s" n) t);
@@ -519,31 +514,90 @@ end";
       line out "  method %s = %s" n
         (ocaml_object_transform_field types_module (sprintf "t.g_evaluation.%s" n) t);
     );
-    line out "  method re_get = \n\
+    line out "  method re_get : (unit, 'error) Flow.monad = \n\
                   %s.(get ~dbh (%s.pointer t)) >>= fun new_t -> \n\
                   t <- new_t; return ()" modname types_module;
-    line out "  method set_started = \n\
+    line out "  method set_started : (unit, 'error) Flow.monad  = \n\
                   %s.(set_started ~dbh (%s.pointer t)) >>= fun () -> \n\
                   self#re_get" modname types_module;
-    line out "  method set_failed = \n\
+    line out "  method set_failed  : (unit, 'error) Flow.monad = \n\
                   %s.(set_failed ~dbh (%s.pointer t)) >>= fun () -> \n\
                   self#re_get" modname types_module;
-    line out "  method set_succeeded result = \n\
+    line out "  method set_succeeded result  : (unit, 'error) Flow.monad = \n\
                   %s.(set_succeeded ~result ~dbh (%s.pointer t)) \n\
                   >>= fun () -> \n\
                   self#re_get" modname types_module;
     line out "  end";
-    (* function collection  *)
-    line out "and %s layout = let dbh = layout#_dbh in object " name;
-    get_like_easy_methods modname (sprintf "%s_element" name) types_module;
-    let add_args =
-      ("recomputable", Option Bool) :: ("recompute_penalty", Option Real) :: args in
-    add_method (sprintf "%s.add_evaluation" modname) add_args name types_module;
-    line out "  end";
   | Volume (_, _) -> ()
   );
 
-  line out "(**/**)";
+
+  line out "
+class ['pointer, 'pointed, 'error ] collection
+  (layout_get: 'pointer -> ('pointed, 'error) Flow.monad)
+  (layout_get_all: unit -> ('pointed list, 'error) Flow.monad)
+  (unsafe_cast: int -> 'pointer)
+ =
+object
+method all = (layout_get_all ())
+method get p = layout_get p
+method get_unsafe i = layout_get (unsafe_cast i)
+end";
+  let make_collection access_mod types_mod class_name =
+    sprintf 
+      "new collection \n\
+      \  ((fun p -> %s.get ~dbh p >>| new %s dbh): \
+         %s.pointer -> ('error %s, 'error) Flow.monad)\n\
+      \  (fun () -> %s.get_all ~dbh >>| List.map ~f:(new %s dbh)) \n\
+      %s.unsafe_cast"
+      access_mod class_name types_mod class_name access_mod class_name types_mod
+  in
+  line out "class ['error] layout dbh = object";
+  line out "method file_system = %s"
+    (make_collection "Volume" "File_system" "volume_element");
+  add_method ~method_name:"add_volume"
+    "Volume.add_volume " ["kind", Int; "content", Int]
+    volume_get "volume_element" "File_system";
+  add_method ~method_name:"add_tree_volume"
+    "Volume.add_tree_volume "
+    ["kind", Int; "hr_tag", Option String; "files", Int]
+    volume_get "volume_element" "File_system";
+  add_method ~method_name:"add_link_volume"
+    "Volume.add_link_volume "
+    ["kind", Int; "pointer", Int]
+    volume_get "volume_element" "File_system";
+  List.iter dsl.nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    let types_module = sprintf "Record_%s" name in
+    let access_module = String.capitalize name in
+    let class_name = sprintf "%s_element" name in
+    line out "  method %s = %s " name
+      (make_collection access_module (types_module)
+         (sprintf "%s_element" name));
+    add_method ~method_name:(sprintf "add_%s" name)
+      (sprintf "%s.add_value" access_module)
+      fields (record_get name) class_name types_module
+  | Function (name, args, result) ->
+    let types_module = sprintf "Function_%s" name in
+    let access_module = String.capitalize name in
+    let class_name = sprintf "%s_element" name in
+    line out "  method %s = %s " name
+      (make_collection access_module (types_module)
+         (sprintf "%s_element" name));
+    let add_args =
+      ("recomputable", Option Bool) :: ("recompute_penalty", Option Real) :: args in
+    add_method ~method_name:(sprintf "add_%s" name)
+      (sprintf "%s.add_evaluation" access_module)
+      add_args (function_get name) class_name types_module
+  | Volume (_, _) -> ()
+  );
+
+  line out "end";
+
+
+  line out "let make (dbh : Backend.db_handle) = new layout dbh";
+
   
   ()
 
