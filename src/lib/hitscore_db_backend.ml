@@ -72,7 +72,7 @@ module Sql_query = struct
   let update_sequence : t =
     "select setval('id_sequence', \
      (select greatest (record.id, function.id, volume.id) \
-      from record,volume,function limit 1))"
+      from record,volume,function ORDER BY 1 DESC LIMIT 1))"
 
   let create_record: t =
     sprintf
