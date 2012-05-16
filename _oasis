@@ -27,7 +27,7 @@ Library hitscore
   Path: src/lib
   FindlibName: hitscore
   BuildDepends: threads, core, pgocaml, sexplib.syntax,
-               biocaml, sequme, hitscoregen, lwt
+               biocaml, sequme, hitscoregen, lwt, lwt.unix
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore
@@ -53,7 +53,7 @@ Library hitscore
 Executable hitscore
   Path: src/app
   MainIs: hitscore_main.ml
-  BuildDepends: threads, core, hitscore, lwt.unix
+  BuildDepends: threads, hitscore
   CompiledObject: best
   Install: true
 
