@@ -264,7 +264,7 @@ let parse_invoicing sanitized =
        (optional prog >>= is_n_alphanum 5 "Program"),
        (mandatory "Project" proj >>= is_n_alphanum 5 "Project"),
        (match rest with [] -> None
-       | q :: [] -> optional q
+       | q :: t when List.for_all t ((=) "") -> optional q
        | q :: t ->
          perror "Wrong row for invoice for %s: %s" piemail
            (strlist stuff); None))
