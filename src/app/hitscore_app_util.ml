@@ -143,6 +143,7 @@ let string_of_error = function
     sprintf "partially_found_lanes %d %s" i s
   | `wrong_unaligned_volume sl ->
     sprintf "wrong_unaligned_volume [%s]" (String.concat ~sep:"; " sl)
+  | `pss_failure s -> sprintf "pss_failure: %S" s
   | `layout_inconsistency (where, what) ->
     sprintf "LAYOUT-INCONSISTENCY (%s): %s"
       (match where with
@@ -155,8 +156,14 @@ let string_of_error = function
         sprintf "search_flowcell_by_name_not_unique %s %d" s i
       | `successful_status_with_no_result i ->
         sprintf "successful_status_with_no_result %d" i)
-  | `db_backend_error _ ->
-    failwith "string_of_error NOT IMPLEMENTED"
+  | `db_backend_error e ->
+    begin match e with
+    | `exn e
+    | `connection e
+    | `disconnection e
+    | `query  (_, e) -> 
+      sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
+    end
   | `Layout (where, what) ->
     sprintf "LAYOUT-ERROR (%s): %s"
       (match where with
@@ -167,18 +174,33 @@ let string_of_error = function
       (match what with
       | `db_backend_error (`query (q, e)) ->
         sprintf "Query %S failed: %s" q (Exn.to_string e)
-      | _ -> 
-        failwith "string_of_error NOT IMPLEMENTED"
-          (*
-                   [> `query of Hitscore_db_backend.Sql_query.t * exn ]
-               | `parse_evaluation_error of
-                   string Hitscore_std.Option.t list * exn
-               | `parse_sexp_error of Hitscore_std.Sexp.t * exn
-               | `parse_value_error of string option list * exn
-               | `parse_volume_error of string option list * exn
-               | `result_not_unique of Hitscore_db_backend.Backend.result
-               | `wrong_add_value
-               | `wrong_version of string * string _ -> "TODO" *))
+      | `db_backend_error e ->
+        begin match e with
+        | `exn e
+        | `connection e
+        | `disconnection e
+        | `query  (_, e) -> 
+          sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
+        end
+      | `parse_evaluation_error (sol, e)
+      | `parse_value_error (sol, e)
+      | `parse_volume_error (sol, e) ->
+        sprintf "error while parsing result [%s]: %s"
+          (String.concat ~sep:", "
+             (List.map sol (Option.value ~default:"NONE"))) (Exn.to_string e)
+      | `parse_sexp_error (sexp, e) ->
+        sprintf "S-Exp parsing error: %S: %s"
+          (Sexp.to_string_hum sexp) (Exn.to_string e)
+      | `result_not_unique soll ->
+        sprintf "result_not_unique: [%s]"
+          (String.concat ~sep:", "
+             (List.map soll (fun sol ->
+               String.concat ~sep:", "
+                 (List.map sol (Option.value ~default:"NONE")))))
+      | `wrong_add_value ->
+        sprintf "WRONG-ADD-VALUE"
+      | `wrong_version (v1, v2) ->
+        sprintf "Wrong version: %s Vs %s" v1 v2)
         
 
 (*
