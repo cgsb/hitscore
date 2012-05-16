@@ -39,6 +39,8 @@ let warning fmt =
   print f ("WARNING:" ^^ fmt ^^ "\n")
 let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S"))
 
+let failwithf fmt =
+  ksprintf (fun s -> error (`pss_failure s)) fmt
 
 let find_section sanitized section =
   Array.findi sanitized (fun _ -> function
@@ -148,7 +150,7 @@ let search_person_by_email layout email =
   >>| List.filter ~f:(fun p -> p#email = email)
   >>= function
   | [one] -> return one
-  | _ -> failwithf "more than one person with email %S" email () 
+  | _ -> failwithf "more than one person with email %S" email
 
 let stropt s = if s = "" then None else Some s
     
@@ -159,7 +161,7 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
     get_section sanitized ~start:(contacts_section + 1)
       ~first_column_condition:((<>) "Invoicing") in
   of_list_sequential contact_rows (function
-  | "" :: [] | [] -> failwithf "should not be trying this... (contacts)" ()
+  | "" :: [] | [] -> failwithf "should not be trying this... (contacts)"
   | ["" ; email ] ->
     search_person_by_email layout email
     >>= fun p ->
@@ -188,7 +190,7 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
     | `none _ -> 
       return (email, None, (List.map l stropt)))
   | l -> 
-    failwithf "Wrong contact line: %s" (strlist l) ())
+    failwithf "Wrong contact line: %s" (strlist l))
     
 let parse_pools ~phix sanitized =
   let sections =
@@ -284,8 +286,8 @@ let parse_invoicing sanitized =
       (None, None)
   in
   let invoicing_rows =
-    get_section sanitized ~start:(section + 1)
-      ~first_column_condition:(String.is_prefix ~prefix:"Pool") in
+    get_section sanitized ~start:(section + 2)
+      ~first_column_condition:(fun s -> not (String.is_prefix ~prefix:"Pool" s)) in
   (submission_date, run_type_parsed,
    List.filter_map invoicing_rows (function
    | piemail :: percent :: chartstuff as row when 
@@ -328,7 +330,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
     begin match search with
     | [one] ->
       (* if_verbose "Ok found that library: %d\n" one#g_id; *)
-      return (Some one#g_t)
+      return (Some one#g_pointer)
     | [] ->
       perror "Library %s is declared as already defined but was not found%s"
         libname 
@@ -740,6 +742,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           return (fake !fake_pointer)
       ) else (
         dry_buffer := (0, log) :: !dry_buffer;
+        if verbose then printf "--> %s\n%!" log;
         real dbh >>= fun real_thing ->
         Common.add_log ~dbh log >>= fun () ->
         return real_thing
@@ -899,7 +902,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | [one] -> return one#g_pointer
         | more ->
           failwithf "Searching the sample %S got %d results." name
-            (List.length more) ()
+            (List.length more) 
         end)
       >>= fun sample ->
 
@@ -940,7 +943,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             perror "Lib %s: Unknown preparator: %s" libname email;
             return (erroneous_pointer Layout.Record_person.unsafe_cast)
           | [one] -> return one#g_pointer
-          | _ -> failwithf "more than one person with email %S" email () 
+          | _ -> failwithf "more than one person with email %S" email
           end
         end)
       >>= fun preparator ->
@@ -1055,10 +1058,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       | None, None, None, None, None -> ()
       | _ -> warning "Lib %s: Incomplete Agarose Gel" libname;
       end;
-      layout#stock_library#get stock_library
-      >>= fun slib_t ->
 
-      stock := (libname, project, slib_t#g_t) :: !stock;
+      stock := (libname, project, stock_library) :: !stock;
       return ())
     >>= fun _ ->
 
@@ -1069,8 +1070,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             layout#stock_library#all
             >>| List.filter ~f:(fun s -> s#name = "PhiX_v3") >>= fun search ->
             begin match search with
-            | [one] -> return (one#g_t, None, None, [])
-            | _ -> failwithf "Can't find PhiX_v3" ()
+            | [one] -> return (one#g_pointer, None, None, [])
+            | _ -> failwithf "Can't find PhiX_v3"
             end
           ) else (
             let f = function
@@ -1098,10 +1099,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             match List.find_map libraries ~f with
             | None ->
               perror "Pool: %s, can't find library %S" pool libname;
-              failwithf "cannot fake a whole stock library..." ()
-          (* return (erroneous_pointer Layout.Record_stock_library.unsafe_cast, None, *)
-          (*         Some (sprintf "Completely fake stock library: %s for pool %s" *)
-          (*                 libname pool), []) *)
+              (* failwithf "cannot fake a whole stock library for %s..." libname *)
+              return (erroneous_pointer Layout.Record_stock_library.unsafe_cast, None,
+                      Some (sprintf "Completely fake stock library: %s for pool %s"
+                          libname pool), [])
             | Some (s, conc, note, kv) -> return (s, conc, note, kv)
           ) in
         find_stock >>= fun (the_lib, concentration, note, key_values) ->
@@ -1124,12 +1125,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         run ~dbh ~fake:(fun x -> Layout.Record_input_library.unsafe_cast x)
           ~real:(fun dbh ->
             Access.Input_library.add_value ~dbh
-              ~library:Layout.Record_stock_library.(pointer the_lib)
+              ~library:the_lib
               ~submission_date:(Option.value submission_date ~default:(Time.now ()))
               ?volume_uL:None ?concentration_nM ~user_db ?note)
           ~log:Option.(sprintf "(add_input_library %d (submission_date %S)%s \
                                 (user_db (%s))%s)" 
-                  (the_lib.Layout.Record_stock_library.g_id)
+                  (the_lib.Layout.Record_stock_library.id)
                   (value_map ~f:Time.to_string ~default:"NONE" submission_date)
                   (value_map concentration_nM
                      ~default:"" ~f:(sprintf " (concentration_nM %f)"))
