@@ -1364,7 +1364,6 @@ module Fastx_qs = struct
 
 (* more define_command's: *)
 let () =
-  (*
   define_command
     ~names:["parse-submission-sheet"; "pss"]
     ~description:"Parse a submission sheet (CSV)"
@@ -1375,33 +1374,33 @@ let () =
                  <pool-name>:<phix-percent> or 'No_PhiX'\n";
       fprintf o "example: %s dev %s -verbose A:1,C:4 pss_with_some_pools.csv\n"
         exec cmd)
-    ~run:(fun config exec cmd -> function
-      | [] -> None
+    ~run:(fun config exec cmd -> fun l ->
+      let dry_run = not (List.exists l ~f:((=) "-wet-run")) in
+      let verbose = List.exists l ~f:((=) "-verbose") in
+      let args = List.filter l ~f:(fun x -> x <> "-wet-run" && x <> "-verbose") in
+      begin match args with
+      | [phix_raw ; pss ] ->
+        begin 
+          try
+            let phix =
+              List.filter_map (String.split ~on:',' phix_raw) ~f:(fun s ->
+                match String.split s ~on:':' with
+                | [ name; percent ] ->
+                  Some ("Pool " ^ name, Int.of_string percent)
+                | [one] when String.lowercase one = "no_phix" -> None
+                | _ ->
+                  eprintf "Can't understand %s\n" s;
+                  failwith "phix parsing") in
+            Hitscore_submission_sheet.parse ~dry_run ~verbose ~phix config pss
+          with
+          | e -> eprintf "Exception: %s\n" (Exn.to_string e); return ()
+        end
       | l ->
-        let dry_run = not (List.exists l ~f:((=) "-wet-run")) in
-        let verbose = List.exists l ~f:((=) "-verbose") in
-        let args = List.filter l ~f:(fun x -> x <> "-wet-run" && x <> "-verbose") in
-        match args with
-        | [phix_raw ; pss ] ->
-          begin 
-            try
-              let phix =
-                List.filter_map (String.split ~on:',' phix_raw) ~f:(fun s ->
-                  match String.split s ~on:':' with
-                  | [ name; percent ] ->
-                    Some ("Pool " ^ name, Int.of_string percent)
-                  | [one] when String.lowercase one = "no_phix" -> None
-                  | _ ->
-                    eprintf "Can't understand %s\n" s;
-                    failwith "phix parsing") in
-              Some (Hitscore_submission_sheet.parse
-                      ~dry_run ~verbose ~phix config pss)
-            with
-            | e -> eprintf "Exception: %s\n" (Exn.to_string e); None
-          end
-        | _ -> None);
-    
-  *)
+        error (`invalid_command_line
+                  (sprintf "don't know what to do with: %s"
+                     String.(concat ~sep:", " l)))
+      end);
+  
   define_command
     ~names:["bcl-to-fastq"; "b2f"]
     ~description:"Run, monitor, … the bcl_to_fastq function"
