@@ -8,20 +8,53 @@ make_module () {
     local tag=$2
     local version=$2
     local tmp=/tmp/mmm.ml
+    git checkout $tag
+    if [ $? -ne 0 ] ; then
+        git checkout v$version
+    fi
+
+    rm -fr _build/src/codegen $name $tmp
+    ocamlbuild src/codegen/hitscoregen.native
+
+    echo "Writing to $tmp"
+    _build/src/codegen/hitscoregen.native codegen-ocaml data/hitscore_layout $tmp
+
+    echo "module Info = struct let version = \"$version\" end" >> $name
+    echo "module Hitscore_std = struct" >> $name
+    cat src/lib/hitscore_std.ml >> $name
+    echo "end" >> $name
+    echo "module Hitscore_db_backend = struct" >> $name
+    cat src/lib/hitscore_db_backend.ml >> $name
+    echo "end" >> $name
+    cat $tmp >> $name
+
+    $OCAMLFINDOPT -c $name
+    
+}
+make_module_pre10 () {
+
+    local name=_migrator/$1.ml
+    local tag=$2
+    local version=$2
+    local tmp=/tmp/mmm.ml
 
     git checkout $tag
     if [ $? -ne 0 ] ; then
         git checkout v$version
     fi
 
-    rm -fr _build/src/codegen
+    rm -fr _build/src/codegen $name $tmp
     ocamlbuild src/codegen/hitscoregen.native
 
-    _build/src/codegen/hitscoregen.native codegen data/hitscore_layout $tmp
     echo 'let ($) f x = f x' > $name
     echo "module Info = struct let version = \"$version\" end" >> $name
-    cat $tmp >> $name
 
+    _build/src/codegen/hitscoregen.native codegen-itf data/hitscore_layout $tmp
+    echo "module Hitscore_layout_interface = struct" >> $name
+    cat $tmp >> $name
+    echo "end" >> $name
+    _build/src/codegen/hitscoregen.native codegen data/hitscore_layout $tmp
+    cat $tmp >> $name
     sed -i 's/: Hitscore_layout_interface.LAYOUT//' $name
     sed -i 's/with module Flow = Flow//' $name
     sed -i "s/with type 'a PGOCaml.monad = 'a Flow.IO.t//" $name
@@ -36,8 +69,8 @@ if [ "$1" = "update" ]; then
     mkdir -p _migrator
     current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
                       -e 's/* \(.*\)/\1/'`
-    make_module v08  0.8
-    make_module v07  0.7
+    make_module v10 1.0
+    make_module_pre10 v08  0.8
     git checkout $current_branch
     cd _migrator
     ln -sf ../src/migrator/migrator.ml
@@ -52,6 +85,6 @@ if [ "$1" = "-h" ]; then
 fi
 
 cd _migrator
-$OCAMLFINDOPT -linkpkg v07.cmx v08.cmx migrator.ml -o migrator
+$OCAMLFINDOPT -linkpkg v08.cmx v10.cmx migrator.ml -o migrator
 cd ..
 

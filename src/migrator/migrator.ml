@@ -1,11 +1,7 @@
 
 open Core.Std
-let (|>) x f = f x
 
-module Hitscore_threaded =
-  Hitscore.Make(Sequme_flow_monad.Preemptive_threading_config)
-open Hitscore_threaded
-
+open Hitscore
   
 let add_empty name =
   let open Sexplib.Sexp in
@@ -14,57 +10,47 @@ let add_empty name =
   | List l ->
     List (List [Atom name; List []] :: l)
       
-let v07_to_v08 file_in file_out =
-  let dump_v07 =
+let v08_to_v10 file_in file_out =
+  let dump_v08 =
     In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
 
-  let module V07M = V07.Make (Flow) in
   let module V08M = V08.Make (Flow) in
 
   let () =
-    V07M.dump_of_sexp dump_v07 |! ignore in
+    V08M.dump_of_sexp dump_v08 |! ignore in
 
-  let dump_v08 =
+  let dump_v10 =
     let open Sexplib.Sexp in
     let rec parse =
       function
       | Atom a -> Atom a
       | List [Atom "version"; Atom old_version]
-          when old_version = V07.Info.version ->
-        List [Atom "version"; Atom V08.Info.version ]
-
-      | List [Atom "record_person"; List persons] ->
-        List [Atom "record_person";
-              List (List.map persons (add_empty "password_hash"))]
-          
-      | List [Atom "function_bcl_to_fastq"; List persons] ->
-        List [Atom "function_bcl_to_fastq";
-              List (List.map persons (add_empty "bases_mask"))]
+          when old_version = V08.Info.version ->
+        List [Atom "version"; Atom V10.Info.version ]
           
       | List l ->
         List (List.map ~f:parse l) in
-    dump_v07
+    dump_v08
     (* |! add_empty "record_fastx_quality_stats_result" *)
     |! parse
   in
   
   let () =
     try
-      V08M.dump_of_sexp dump_v08 |! ignore
+      V10.Layout.dump_of_sexp dump_v10 |! ignore
     with e ->
-      printf "Could not reparse in V8: %s" (Exn.to_string e)
+      printf "Could not reparse in V10: %s" (Exn.to_string e)
   in
   
-  let module V08M = V08.Make(Flow) in
   Out_channel.(with_file file_out ~f:(fun o ->
-    output_string o (Sexplib.Sexp.to_string_hum dump_v08)));
+    output_string o (Sexplib.Sexp.to_string_hum dump_v10)));
   ()
 
     
 let () =
   match Array.to_list Sys.argv with
-  | exec :: "v07-v08" :: file_in :: file_out :: [] ->
-    v07_to_v08 file_in file_out 
+  | exec :: "v08-v10" :: file_in :: file_out :: [] ->
+    v08_to_v10 file_in file_out 
   | _ ->
-    eprintf "usage: %s {v07-v08} <dump-in> <dump-out>\n"
+    eprintf "usage: %s {v08-v10} <dump-in> <dump-out>\n"
       Sys.argv.(0)
