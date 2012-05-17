@@ -175,13 +175,15 @@ let ocaml_record_access_module ~out name fields =
     line out "  >>= fun _ -> return ()";
   );
 
-  line out "let insert_value_unsafe ~dbh v =";
+  line out "let insert_value_unsafe ?(and_update_sequence=true) ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.insert_value (to_value v) in";
     line out "  Backend.query ~dbh query";
     line out "  >>= fun _ ->";
-    line out "  Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
-    line out "  return ()";
+    line out "  if and_update_sequence then (";
+    line out "    Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
+    line out "    return ())";
+    line out "  else return ()";
   );
 
   
@@ -297,13 +299,15 @@ let ocaml_function_access_module ~out name result_type args =
     line out "  >>= fun _ -> return ()";
   );
 
-  line out "let insert_evaluation_unsafe ~dbh v =";
+  line out "let insert_evaluation_unsafe ?(and_update_sequence=true) ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.insert_evaluation (to_evaluation v) in";
     line out "  Backend.query ~dbh query";
     line out "  >>= fun _ ->";
-    line out "  Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
-    line out "  return ()";
+    line out "  if and_update_sequence then (";
+    line out "    Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
+    line out "    return ())";
+    line out "  else return ()";
   );
 
   line out "end";
@@ -368,13 +372,15 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  >>= fun _ -> return ()";
   );
 
-  line out "let insert_volume_unsafe ~dbh v =";
+  line out "let insert_volume_unsafe ?(and_update_sequence=true) ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.insert_volume (to_volume v) in";
     line out "  Backend.query ~dbh query";
     line out "  >>= fun _ ->";
-    line out "  Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
-    line out "  return ()";
+    line out "  if and_update_sequence then (";
+    line out "    Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
+    line out "    return ())";
+    line out "  else return ()";
   );
   line out "end"
 
@@ -668,7 +674,7 @@ let ocaml_module raw_dsl dsl output_string =
     line out "let of_string_exn: string -> t = function\n| %s\n" 
       (List.map fields (fun s -> sprintf "\"%s\" -> `%s" s s) |!
           String.concat ~sep:"\n| ");
-    line out "| s -> raise (Failure %S)"
+    line out "| s -> raise (Failure (sprintf \"%s %%S\" s))"
       (sprintf "Enumeration_%s.of_string" name);
     
     line out "let of_string s = try Core.Std.Ok (of_string_exn s) \
@@ -779,22 +785,25 @@ let ocaml_module raw_dsl dsl output_string =
   line out "    error (`Layout (`Dump, `wrong_version (dump.version, \
                           Hitscore_conf_values.version)))";
   line out "  ) else (";
+  line out "    let and_update_sequence = false in";
   List.iter all_nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
     line out "    of_list_sequential dump.%s \
-                  (%s.insert_value_unsafe ~dbh)" name (String.capitalize name);
+                  (%s.insert_value_unsafe ~and_update_sequence ~dbh)"
+      name (String.capitalize name);
     line out "    >>= fun (_: unit list) ->";
   | Function (name, args, result) ->
     line out "    of_list_sequential dump.%s \
-                      (%s.insert_evaluation_unsafe ~dbh)"
+                      (%s.insert_evaluation_unsafe ~and_update_sequence ~dbh)"
       name (String.capitalize name);
     line out "    >>= fun (_: unit list) ->";
   | Volume (_, _) -> ()
   );
   line out "    of_list_sequential dump.file_system \
-                  (Volume.insert_volume_unsafe ~dbh)";
+                  (Volume.insert_volume_unsafe ~and_update_sequence ~dbh)";
   line out "    >>= fun (_: unit list) ->";
+  line out "    Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
   line out "    return ()\n  )";
 
 
