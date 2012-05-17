@@ -148,6 +148,15 @@ let v08_to_v10 file_in file_out =
                                                     get_id_atom
                                                       (type_of_field name field)
                                                       (int_of_string i)]]]]
+              | List [Atom field; List list_of_ids] ->
+                let new_list =
+                  List.map list_of_ids (function
+                  | List [List [Atom "id"; Atom i]] ->
+                    List [List [Atom "id";
+                                get_id_atom (type_of_field name field)
+                                  (int_of_string i)]]
+                  | e -> e) in 
+                List [Atom field; List  new_list]
               | e -> e) in
               
             List (g_values @ [List [Atom g_thing; List relinked_non_g_values]])
