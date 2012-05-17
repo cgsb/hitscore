@@ -693,10 +693,11 @@ module Verify = struct
         match all with
         | []  -> ()
         | more ->
-          ksprintf add_error "Duplicate %s: %S . %S " what
-            (Option.value ~default:"" project) name;
-          List.iter more (fun (n, p) ->
-            printf " ==  %S . %S" (Option.value ~default:"" p) n;);
+          ksprintf add_error "Duplicate %s: %S . %S %s" what
+            (Option.value ~default:"" project) name
+            (String.concat ~sep:"" 
+               (List.map more (fun (n, p) ->
+                 sprintf " ==  %S . %S" (Option.value ~default:"" p) n)));
       ) in
     with_database ~configuration (fun ~dbh ->
       let layout = Classy.make dbh in
