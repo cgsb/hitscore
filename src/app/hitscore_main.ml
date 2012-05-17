@@ -369,16 +369,18 @@ end
 
 module Backend_management = struct
 
-  let to_file hsc file =
-    with_database hsc (fun ~dbh ->
+  let to_file ?(verbose=true) configuration file =
+    let log = if verbose then Some (eprintf "%s\n%!") else None in
+    with_database ?log ~configuration (fun ~dbh ->
       Access.get_dump ~dbh
       >>= fun dump ->
       let dumps = Layout.sexp_of_dump dump |! Sexplib.Sexp.to_string_hum in
       Out_channel.(with_file file ~f:(fun o -> output_string o dumps));
       return ())
       
-  let load_file hsc file =
-    with_database hsc (fun ~dbh ->
+  let load_file ?(verbose=false) configuration file =
+    let log = if verbose then Some (eprintf "%s\n%!") else None in
+    with_database ?log ~configuration (fun ~dbh ->
       In_channel.with_file file ~f:(fun i ->
         Sexplib.Sexp.input_sexp i |! Layout.dump_of_sexp |!
             Access.insert_dump ~dbh)) 
@@ -388,18 +390,20 @@ module Backend_management = struct
       ~names:["dump-to-file"]
       ~description:"Dump the database to a S-Exp file"
       ~usage:(fun o exec cmd ->
-        fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
+        fprintf o "usage: %s <profile> %s [-verbose] <filename>\n" exec cmd)
       ~run:(fun config exec cmd -> function
       | [file] -> to_file config file
+      | ["-verbose"; file] -> to_file ~verbose:true config file
       | _ -> error (`invalid_command_line "no filename provided"));
     
     define_command
       ~names:["load-file"]
       ~description:"Load a dump the database (S-Exp file)"
       ~usage:(fun o exec cmd ->
-        fprintf o "usage: %s <profile> %s <filename>\n" exec cmd)
+        fprintf o "usage: %s <profile> %s [-verbose] <filename>\n" exec cmd)
       ~run:(fun config exec cmd -> function
       | [file] -> load_file config file
+      | ["-verbose"; file] -> load_file ~verbose:true config file
       | _ -> error (`invalid_command_line "no filename provided"));
 
     define_command
