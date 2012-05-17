@@ -10,7 +10,7 @@ let add_empty name =
   | List l ->
     List (List [Atom name; List []] :: l)
       
-let v08_to_v10 file_in file_out =
+let v08_to_v10 file_in file_out  moves id_table =
   let dump_v08 =
     In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
 
@@ -27,6 +27,12 @@ let v08_to_v10 file_in file_out =
       id_map := ((name, oid), !id) :: !id_map;
       !id in
   let get_id_atom name oid = Sexplib.Sexp.Atom (string_of_int (get_id name oid)) in
+  let print_id_table () =
+    Out_channel.with_file id_table ~f:(fun o ->
+      List.iter !id_map (fun ((n, oid), nid) ->
+        fprintf o "%s    %d  %d\n" n oid nid;
+      ));
+  in
 
 
   let dsl = V10.Meta.layout () in
@@ -74,13 +80,14 @@ let v08_to_v10 file_in file_out =
       fs_movements := (dir before, dir after) :: !fs_movements;
   in
   let print_fs_movements () =
-    List.iter !fs_movements (fun (o, n) ->
-      if o = n then
-        printf "echo 'Nothing to do for %s'\n" o
-      else
-        printf "if [ -d %s ]; then\n  echo 'Moving %s to %s'\n  mv %s %s\n\
+    Out_channel.(with_file moves ~f:(fun out ->
+      List.iter !fs_movements (fun (o, n) ->
+        if o = n then
+          fprintf out "echo 'Nothing to do for %s'\n" o
+        else
+          fprintf out "if [ -d %s ]; then\n  echo 'Moving %s to %s'\n  mv %s %s\n\
                \ else\n  echo 'Dir %s is not there'\nfi\n"
-          o o n o n o)
+            o o n o n o)))
   in
   
   let dump_v10 =
@@ -182,13 +189,14 @@ let v08_to_v10 file_in file_out =
     output_string o (Sexplib.Sexp.to_string_hum dump_v10)));
 
   print_fs_movements ();
+  print_id_table ();
   ()
 
     
 let () =
   match Array.to_list Sys.argv with
-  | exec :: "v08-v10" :: file_in :: file_out :: [] ->
-    v08_to_v10 file_in file_out 
+  | exec :: "v08-v10" :: file_in :: file_out :: moves :: id_table :: [] ->
+    v08_to_v10 file_in file_out moves id_table
   | _ ->
-    eprintf "usage: %s {v08-v10} <dump-in> <dump-out>\n"
+    eprintf "usage: %s {v08-v10} <dump-in> <dump-out> <moves-out> <id-table-out>\n"
       Sys.argv.(0)
