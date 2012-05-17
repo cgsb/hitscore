@@ -741,6 +741,22 @@ module Verify = struct
     >>= fun _ ->
     return ()
 
+  let verify_layout ?(verbose=false) configuration =
+    let log = if verbose then Some (eprintf "%s\n%!") else None in
+    with_database ?log ~configuration Verify_layout.all_pointers
+
+  let () =
+    define_command
+      ~names:["verify-layout"]
+      ~description:"Verify all the pointers in the Database"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s [-verbose]\n" exec cmd)
+      ~run:(fun config exec cmd -> function
+      | [] -> verify_layout config
+      | ["-verbose"] -> verify_layout ~verbose:true config
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))))
     
   let wake_up ?(fix_it=false) ?(verbose=false) configuration =
     check_file_system configuration >>= fun fs_errors ->
