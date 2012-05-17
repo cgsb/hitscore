@@ -815,6 +815,38 @@ let ocaml_module raw_dsl dsl output_string =
   ocaml_classy_access ~out dsl;
   line out "end";
 
+  line out "module Verify_layout = struct";
+  let call_fields name fields =
+    List.iter fields (function
+    | n, Record_name _
+    | n, Volume_name _ ->
+      line out "    %s#%s#get >>= fun _ ->" name n;
+    | n, Option (Record_name _)
+    | n, Option (Volume_name _) ->
+      line out "    of_option %s#%s (fun o -> o#get) >>= fun _ ->" name n;
+    | n, Array (Record_name _)
+    | n, Array (Volume_name _) ->
+      line out "    of_list_sequential (Array.to_list %s#%s) \
+                       (fun o -> o#get) >>= fun _ ->" name n;
+    | _ -> ()) in 
+  line out "let all_pointers ~dbh =";
+  line out "  let layout = Classy.make dbh in";
+  List.iter all_nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out "  layout#%s#all >>= fun all_%s ->" name name;
+    line out "  of_list_sequential all_%s (fun %s ->" name name;
+    call_fields name fields;
+    line out "  return ())\n  >>= fun (_ : unit list) ->";
+  | Function (name, args, result) ->
+    line out "  layout#%s#all >>= fun all_%s ->" name name;
+    line out "  of_list_sequential all_%s (fun %s ->" name name;
+    call_fields name (("g_result", Option (Record_name result)) :: args);
+    line out "  return ())\n  >>= fun (_ : unit list) ->";
+  | Volume (_, _) -> ()
+  );
+  line out "  return ()";
+  line out "end";
 
   ocaml_meta_module ~out dsl ~raw_dsl;
   ()
