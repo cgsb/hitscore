@@ -62,6 +62,26 @@ let v08_to_v10 file_in file_out =
     | None -> failwithf "can't find type of %s.%s" name field  () in
     
 
+  let fs_movements = ref [] in
+  let add_movement before after kind content_sexp =
+    let open Layout.File_system in
+    match content_of_sexp content_sexp with
+    | Link _ -> ()
+    | Tree (hr_tag, _) ->
+      let dir id =
+        Common.volume_unix_directory ~id ?hr_tag
+          ~kind:(Layout.Enumeration_volume_kind.of_string_exn kind) in
+      fs_movements := (dir before, dir after) :: !fs_movements;
+  in
+  let print_fs_movements () =
+    List.iter !fs_movements (fun (o, n) ->
+      if o = n then
+        printf "echo 'Nothing to do for %s'\n" o
+      else
+        printf "if [ -d %s ]; then\n  echo 'Moving %s to %s'\n  mv %s %s\n\
+               \ else\n  echo 'Dir %s is not there'\nfi\n"
+          o o n o n o)
+  in
   
   let dump_v10 =
     let open Sexplib.Sexp in
@@ -77,11 +97,14 @@ let v08_to_v10 file_in file_out =
           List.map fs_items (function
           | List [
             List [Atom "volume_pointer"; List [List [Atom "id"; Atom oid]]];
-            List [Atom "volume_kind"; kind_sexp];
+            List [Atom "volume_kind"; Atom kind];
             List [Atom "volume_content"; content_sexp] ] ->
+            let before = int_of_string oid in
+            let after = get_id "g_volume" before in
+            add_movement before after kind content_sexp;
             List [
-              List [Atom "g_id"; get_id_atom "g_volume" (int_of_string oid)];
-              List [Atom "g_kind"; kind_sexp];
+              List [Atom "g_id"; Atom (string_of_int after)];
+              List [Atom "g_kind"; Atom kind];
               List [Atom "g_content"; content_sexp];
             ]
           | sexp ->
@@ -148,6 +171,8 @@ let v08_to_v10 file_in file_out =
   
   Out_channel.(with_file file_out ~f:(fun o ->
     output_string o (Sexplib.Sexp.to_string_hum dump_v10)));
+
+  print_fs_movements ();
   ()
 
     
