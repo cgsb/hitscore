@@ -89,7 +89,7 @@ module Bytea = struct
       let cc = Char.to_int c in
       if  cc < 0x20 || cc > 0x7e || c = '\'' || c = '"' || c = '\\'
       then
-        Buffer.add_string buf (sprintf "\\\\%03o" cc) (* non-print -> \ooo *)
+        Buffer.add_string buf (sprintf "\\%03o" cc) (* non-print -> \ooo *)
       else 
         Buffer.add_char buf c (* printable *)
     done;
@@ -366,7 +366,7 @@ module Sql_query = struct
       Result.(
         try_with (fun () -> Int.of_string i) >>= fun v_id ->
         try_with (fun () -> Sexp.of_string (unescape sexp)) >>= fun v_sexp ->
-        return {v_id; v_kind = k; v_sexp})
+        return {v_id; v_kind = unescape k; v_sexp})
       |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
     | _ -> Error (`parse_volume_error (sol, Failure "Wrong format"))
 
@@ -445,7 +445,8 @@ end
 module Backend : BACKEND = struct
     
   type db_handle = {
-    mutable connection: (string, bool) Hashtbl.t PG.t;
+    mutable connection: int PG.t; (* ensure it does not come from the
+                                     syntax extension *)
     host: string option;
     port: int option;
     database: string option;
