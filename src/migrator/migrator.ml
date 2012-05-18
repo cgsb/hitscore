@@ -72,12 +72,13 @@ let v08_to_v10 file_in file_out  moves id_table =
   let add_movement before after kind content_sexp =
     let open Layout.File_system in
     match content_of_sexp content_sexp with
-    | Link _ -> ()
+    | Link { id } -> Link { id = get_id "g_volume" id } |! sexp_of_content
     | Tree (hr_tag, _) ->
       let dir id =
         Common.volume_unix_directory ~id ?hr_tag
           ~kind:(Layout.Enumeration_volume_kind.of_string_exn kind) in
       fs_movements := (dir before, dir after) :: !fs_movements;
+      content_sexp
   in
   let print_fs_movements () =
     Out_channel.(with_file moves ~f:(fun out ->
@@ -108,11 +109,11 @@ let v08_to_v10 file_in file_out  moves id_table =
             List [Atom "volume_content"; content_sexp] ] ->
             let before = int_of_string oid in
             let after = get_id "g_volume" before in
-            add_movement before after kind content_sexp;
+            let new_content_sexp = add_movement before after kind content_sexp in
             List [
               List [Atom "g_id"; Atom (string_of_int after)];
               List [Atom "g_kind"; Atom kind];
-              List [Atom "g_content"; content_sexp];
+              List [Atom "g_content"; new_content_sexp];
             ]
           | sexp ->
             failwithf "new_fs_items:\n  %s\n" (Sexp.to_string_hum sexp)  ()) in
