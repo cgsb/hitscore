@@ -14,7 +14,7 @@ Library hitscoregen
   Path: src/codegen/
   BuildDepends: threads, core
   Install: true
-  Modules: Hitscoregen_layout_dsl, Hitscoregen_layout_ocaml, Hitscoregen_psql
+  Modules: Hitscoregen_layout_dsl, Hitscoregen_layout_ocaml
 
 Executable hitscoregen
   Path: src/codegen

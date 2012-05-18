@@ -1,6 +1,5 @@
 open Core.Std
 
-module Psql = Hitscoregen_psql
 module Sx = Sexplib.Sexp
 
 open Hitscoregen_layout_dsl
@@ -687,21 +686,6 @@ let ocaml_module raw_dsl dsl output_string =
   ocaml_file_system_module out dsl;
   line out "end";
   
-  let record_standard_fields = [
-    ("g_id", Identifier);
-    ("g_created", Timestamp);
-    ("g_last_modified", Timestamp);
-  ] in
-  let function_standard_fields result = [
-    ("g_id"                , Identifier);
-    ("g_result"            , Option (Record_name result));
-    ("g_recomputable"      , Bool);
-    ("g_recompute_penalty" , Real);
-    ("g_inserted"          , Timestamp);
-    ("g_started"           , Option Timestamp);
-    ("g_completed"         , Option Timestamp);
-    ("g_status"            , Enumeration_name "process_status");
-  ] in
   List.iter all_nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
