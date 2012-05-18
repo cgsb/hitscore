@@ -89,11 +89,11 @@ module Bytea = struct
       let cc = Char.to_int c in
       if  cc < 0x20 || cc > 0x7e || c = '\'' || c = '"' || c = '\\'
       then
-        Buffer.add_string buf (sprintf "\\%03o" cc) (* non-print -> \ooo *)
+        Buffer.add_string buf (sprintf "\\\\%03o" cc) (* non-print -> \ooo *)
       else 
         Buffer.add_char buf c (* printable *)
     done;
-    Buffer.contents buf
+    sprintf "E'%s'::bytea" (Buffer.contents buf)
 
       
   let to_db_input = string_of_bytea
@@ -210,7 +210,7 @@ module Sql_query = struct
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
     let str_type = escape_sql record_name in
     sprintf "INSERT INTO record (type, created, last_modified, sexp)\n\
-      \ VALUES (E'%s', E'%s', E'%s', E'%s') RETURNING id" str_type now now str_sexp
+      \ VALUES (%s, %s, %s, %s) RETURNING id" str_type now now str_sexp
 
   let add_evaluation_sexp
       ~function_name ~recomputable ~recompute_penalty ~status sexp : t =
@@ -220,14 +220,14 @@ module Sql_query = struct
     let status_str = escape_sql status in
     sprintf "INSERT INTO function \
       \ (type, recomputable, recompute_penalty, inserted, status, sexp)\n\
-      \ VALUES ('%s', %b, %f, '%s', '%s', '%s') RETURNING id"
+      \ VALUES (%s, %b, %f, %s, %s, %s) RETURNING id"
       str_type recomputable recompute_penalty now status_str str_sexp
     
   let add_volume_sexp ~kind sexp : t =
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
     let str_type = escape_sql kind in
     sprintf "INSERT INTO volume (kind, sexp)\n\
-      \ VALUES ('%s','%s') RETURNING id" str_type str_sexp
+      \ VALUES (%s,%s) RETURNING id" str_type str_sexp
       
   let insert_value v : t =
     let id            = v.r_id in
@@ -236,7 +236,7 @@ module Sql_query = struct
     let last_modified = Timestamp.to_string v.r_last_modified |! escape_sql in
     let sexp          = Sexp.to_string v.r_sexp |! escape_sql in
     sprintf "INSERT INTO record (id, type, created, last_modified, sexp)\n\
-      \ VALUES (%d, '%s'::bytea, '%s'::bytea, '%s'::bytea, '%s'::bytea)"
+      \ VALUES (%d, %s, %s, %s, %s)"
       id typ created last_modified sexp
 
   let insert_evaluation v : t =
@@ -255,17 +255,17 @@ module Sql_query = struct
      sprintf "INSERT INTO function \
         (id , type , result , recomputable , recompute_penalty ,
         inserted , started , completed , status , sexp)
-        VALUES (%d, '%s', %s, %b, %f, '%s', %s, %s, '%s', '%s') "
+        VALUES (%d, %s, %s, %b, %f, %s, %s, %s, %s, %s) "
        id typ result recomputable recompute_penalty inserted 
-       (Option.value_map started ~default:"NULL" ~f:(sprintf "'%s'"))
-       (Option.value_map completed ~default:"NULL" ~f:(sprintf "'%s'"))
+       (Option.value started ~default:"NULL")
+       (Option.value completed ~default:"NULL")
        status sexp 
      
   let insert_volume v : t =
     let str_sexp = Sexp.to_string_hum v.v_sexp |! escape_sql in
     let str_type = escape_sql v.v_kind in
     sprintf "INSERT INTO volume (id, kind, sexp)\n\
-      \ VALUES (%d, '%s','%s')" v.v_id str_type str_sexp
+      \ VALUES (%d, %s,%s)" v.v_id str_type str_sexp
 
   let single_id_of_result = function
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
@@ -273,11 +273,11 @@ module Sql_query = struct
 
   let get_value_sexp ~record_name id =
     let str_type = escape_sql record_name in
-    sprintf "SELECT * FROM record WHERE type = '%s' AND id = %d" str_type id
+    sprintf "SELECT * FROM record WHERE type = %s AND id = %d" str_type id
 
   let get_evaluation_sexp ~function_name id =
     let str_type = escape_sql function_name in
-    sprintf "SELECT * FROM function WHERE type = '%s' AND id = %d" str_type id
+    sprintf "SELECT * FROM function WHERE type = %s AND id = %d" str_type id
 
   let get_volume_sexp id =
     sprintf "SELECT * FROM volume WHERE id = %d" id
@@ -287,26 +287,27 @@ module Sql_query = struct
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
     let str_type = escape_sql record_name in
-    sprintf "UPDATE record SET last_modified = '%s', sexp = '%s' \
-             WHERE id = %d AND type = '%s'" now str_sexp id str_type
+    sprintf "UPDATE record SET last_modified = %s, sexp = %s \
+             WHERE id = %d AND type = %s" now str_sexp id str_type
   let set_evaluation_started ~function_name id =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_type = escape_sql function_name in
-    sprintf "UPDATE function SET started = '%s', status = '%s' \
-             WHERE id = %d AND type = '%s'"
-      now (status_to_string `Started) id str_type
+    sprintf "UPDATE function SET started = %s, status = %s \
+             WHERE id = %d AND type = %s"
+      now (status_to_string `Started |! escape_sql) id str_type
+
   let set_evaluation_failed ~function_name id =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_type = escape_sql function_name in
-    sprintf "UPDATE function SET completed = '%s', status = '%s' \
-             WHERE id = %d AND type = '%s'"
-      now (status_to_string `Failed) id str_type
+    sprintf "UPDATE function SET completed = %s, status = %s \
+             WHERE id = %d AND type = %s"
+      now (status_to_string `Failed |! escape_sql) id str_type
   let set_evaluation_succeeded ~function_name id result =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_type = escape_sql function_name in
-    sprintf "UPDATE function SET completed = '%s', status = '%s', result = %d \
-             WHERE id = %d AND type = '%s'"
-      now (status_to_string `Succeeded) result id str_type
+    sprintf "UPDATE function SET completed = %s, status = %s, result = %d \
+             WHERE id = %d AND type = %s"
+      now (status_to_string `Succeeded |! escape_sql) result id str_type
     
       
   let should_be_single = function
@@ -372,18 +373,18 @@ module Sql_query = struct
 
   let get_all_values_sexp ~record_name =
     let str_type = escape_sql record_name in
-    sprintf "SELECT * FROM record WHERE type = '%s'" str_type
+    sprintf "SELECT * FROM record WHERE type = %s" str_type
   let get_all_evaluations_sexp ~function_name =
     let str_type = escape_sql function_name in
-    sprintf "SELECT * FROM function WHERE type = '%s'" str_type
+    sprintf "SELECT * FROM function WHERE type = %s" str_type
   let get_all_volumes_sexp () = "SELECT * FROM volume"
 
   let delete_value_sexp ~record_name id =
     let str_type = escape_sql record_name in
-    sprintf "DELETE FROM record WHERE type = '%s' AND id = %d" str_type id
+    sprintf "DELETE FROM record WHERE type = %s AND id = %d" str_type id
   let delete_evaluation_sexp ~function_name id =
     let str_type = escape_sql function_name in
-    sprintf "DELETE FROM function WHERE type = '%s' AND id = %d" str_type id
+    sprintf "DELETE FROM function WHERE type = %s AND id = %d" str_type id
   let delete_volume_sexp id =
     sprintf "DELETE FROM volume WHERE id = %d" id
 
