@@ -289,6 +289,13 @@ module Sql_query = struct
     let str_type = escape_sql record_name in
     sprintf "UPDATE record SET last_modified = %s, sexp = %s \
              WHERE id = %d AND type = %s" now str_sexp id str_type
+     
+  let update_volume_sexp ~kind id sexp : t =
+    let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
+    let str_type = escape_sql kind in
+    sprintf "UPDATE volume SET sexp = %s\n\
+      \ WHERE id = %d AND kind = %s"  str_sexp id str_type
+
   let set_evaluation_started ~function_name id =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_type = escape_sql function_name in
