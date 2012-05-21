@@ -832,7 +832,7 @@ let ocaml_module raw_dsl dsl output_string =
   line out "  return ()";
 
   doc out "Check that an S-Expression respects the syntax for a given \
-    type-name (record or function)";
+    type-name (value, evaluation, or volume)";
   line out "let check_sexp type_name sexp =";
   line out "  let open Layout in";
   line out "  match type_name with";
@@ -844,7 +844,9 @@ let ocaml_module raw_dsl dsl output_string =
   | Function (name, _, _) ->
     line out "| %S -> begin try let _ = Function_%s.evaluation_of_sexp sexp in Ok () \
               with e -> Error (`parse_sexp_error (sexp, e)) end" name name;
-  | Volume (_, _) -> ()
+  | Volume (name, _) -> 
+    line out "| %S -> begin try let _ = File_system.content_of_sexp sexp in Ok () \
+              with e -> Error (`parse_sexp_error (sexp, e)) end" name;
   );
 
   
