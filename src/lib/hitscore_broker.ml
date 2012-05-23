@@ -386,9 +386,8 @@ module Broker : BROKER = struct
     let modify_person t ~dbh ~person =
       let open Layout.Record_person in
       lock_mutex t >>= fun () ->
-      Access.Person.delete_value_unsafe ~dbh person >>= fun () ->
       let new_person = { person with g_last_modified = Time.now () } in
-      Access.Person.insert_value_unsafe ~dbh new_person >>= fun new_pointer ->
+      Access.Person.update ~dbh new_person >>= fun () ->
       ksprintf (Common.add_log ~dbh) "(modification record_person %d %s)"
         person.g_id (sexp_of_t person |! Sexp.to_string_hum)
       >>= fun () ->
