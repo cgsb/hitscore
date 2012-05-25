@@ -848,6 +848,8 @@ let ocaml_module raw_dsl dsl output_string =
     line out "| %S -> begin try let _ = File_system.content_of_sexp sexp in Ok () \
               with e -> Error (`parse_sexp_error (sexp, e)) end" name;
   );
+  line out "| s -> Error (`parse_sexp_error (sexp,
+                      Failure (sprintf \"Unknown type: %%s\" type_name)))";
 
   
   line out "end";
