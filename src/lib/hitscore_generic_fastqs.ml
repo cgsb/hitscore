@@ -16,8 +16,7 @@ module Unaligned_coercion:
     let layout = Classy.make dbh in
     layout#bcl_to_fastq_unaligned#get input
     >>= fun b2fu ->
-    layout#add_coerce_b2f_unaligned
-      ~input ~recomputable:true ~recompute_penalty:0.1 ()
+    layout#add_coerce_b2f_unaligned ~input ()
     >>= fun inserted ->
     inserted#get >>= fun inserted ->
     inserted#set_started >>= fun () ->

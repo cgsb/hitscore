@@ -88,7 +88,6 @@ module Unaligned_delivery:
         ~more_readers:logins ~configuration (`dir links_dir)
       >>= fun () ->
       layout#add_prepare_unaligned_delivery
-        ~recomputable:false ~recompute_penalty:0.
         ~unaligned:unaligned#pointer ~invoice:invoice#g_pointer ()
       >>= fun fpointer ->
       fpointer#get >>= fun f ->

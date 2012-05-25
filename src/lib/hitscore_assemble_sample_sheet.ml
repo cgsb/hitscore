@@ -239,7 +239,6 @@ module Assemble_sample_sheet:
 
     let register_with_success ~dbh ?note ~file sample_sheet =
       Access.Assemble_sample_sheet.add_evaluation
-        ~recomputable:true ~recompute_penalty:1.
         ~kind:sample_sheet.kind ~dbh ~flowcell:sample_sheet.flowcell
       >>= fun assembly ->
       Access.Sample_sheet.add_value ~file ?note ~dbh
@@ -251,7 +250,6 @@ module Assemble_sample_sheet:
 
     let register_with_failure ~dbh ?note sample_sheet =
       Access.Assemble_sample_sheet.add_evaluation
-        ~recomputable:true ~recompute_penalty:1.
         ~kind:sample_sheet.kind ~dbh ~flowcell:sample_sheet.flowcell
       >>= fun assembly ->
       Access.Assemble_sample_sheet.set_failed ~dbh assembly

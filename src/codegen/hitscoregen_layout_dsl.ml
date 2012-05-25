@@ -291,8 +291,6 @@ let record_standard_fields = [
 let function_standard_fields result = [
   ("g_id"                , Identifier);
   ("g_result"            , Option (Record_name result));
-  ("g_recomputable"      , Bool);
-  ("g_recompute_penalty" , Real);
   ("g_inserted"          , Timestamp);
   ("g_started"           , Option Timestamp);
   ("g_completed"         , Option Timestamp);

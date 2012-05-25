@@ -18,9 +18,7 @@ module Delete_intensities:
       Access.Hiseq_raw.get ~dbh hiseq_raw
       >>= fun hiseq_raw_info ->
       Layout.Function_delete_intensities.(
-        Access.Delete_intensities.add_evaluation ~dbh
-          ~recomputable:false ~recompute_penalty:0.
-          ~hiseq_raw ~availability
+        Access.Delete_intensities.add_evaluation ~dbh ~hiseq_raw ~availability
         >>= fun evaluation ->
         Access.Delete_intensities.set_started ~dbh evaluation
         >>= fun () ->

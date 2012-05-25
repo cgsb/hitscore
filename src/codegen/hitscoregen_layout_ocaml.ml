@@ -197,8 +197,6 @@ let ocaml_function_access_module ~out name result_type args =
   let error_location = sprintf "`Function %S" name in
 
   line out "let add_evaluation";
-  line out "    ?(recomputable=false)";
-  line out "    ?(recompute_penalty=0.)";
   List.iter args (function
   | (n, Option t) -> line out "   ?%s" n;
   | (n, t) -> line out "   ~%s" n;
@@ -208,7 +206,6 @@ let ocaml_function_access_module ~out name result_type args =
   line out "} in";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.add_evaluation_sexp ~function_name:%S \
-                   ~recomputable ~recompute_penalty \
                    ~status:(Enumeration_process_status.to_string `Inserted) \
                    (sexp_of_evaluation v) in" name;
     line out "  Backend.query ~dbh query";
@@ -222,8 +219,6 @@ let ocaml_function_access_module ~out name result_type args =
   line out "  try Ok \
     {g_id                = r.f_id;
      g_result            = Option.map ~f:Record_%s.unsafe_cast r.f_result;
-     g_recomputable      = r.f_recomputable;
-     g_recompute_penalty = r.f_recompute_penalty;
      g_inserted          = r.f_inserted;
      g_started           = r.f_started;
      g_completed         = r.f_completed;
@@ -237,8 +232,6 @@ let ocaml_function_access_module ~out name result_type args =
   line out "  f_type = %S;" name;
   line out "  f_result = Option.map t.g_result (fun x -> x.Record_%s.id); "
     result_type;
-  line out "  f_recomputable = t.g_recomputable; ";
-  line out "  f_recompute_penalty = t.g_recompute_penalty; ";
   line out "  f_inserted = t.g_inserted; ";
   line out "  f_started = t.g_started; ";
   line out "  f_completed = t.g_completed; ";
@@ -590,11 +583,9 @@ end";
     line out "  method %s = %s " name
       (make_collection access_module (types_module)
          (sprintf "%s_element" name));
-    let add_args =
-      ("recomputable", Option Bool) :: ("recompute_penalty", Option Real) :: args in
     add_method ~method_name:(sprintf "add_%s" name)
       (sprintf "%s.add_evaluation" access_module)
-      add_args (function_get name) class_name types_module
+      args (function_get name) class_name types_module
   | Volume (_, _) -> ()
   );
 

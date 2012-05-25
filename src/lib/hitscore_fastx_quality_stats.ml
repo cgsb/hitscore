@@ -52,9 +52,7 @@ module Fastx_quality_stats:
       ?(hitscore_command="echo hitscore should: ")
       (input_dir:Layout.Record_generic_fastqs.pointer)
       =
-    AFQS.add_evaluation
-      ~dbh ~recomputable:true ~recompute_penalty:10.
-      ~input_dir ~option_Q
+    AFQS.add_evaluation ~dbh ~input_dir ~option_Q
       ~filter_names:List.(sexp_of_t sexp_of_string filter_names
                           |! Sexp.to_string_hum)
     >>= fun created ->

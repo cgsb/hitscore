@@ -134,8 +134,8 @@ module Sql_query = struct
     {f_id:int;
      f_type: string;
      f_result: int option;
-     f_recomputable: bool;
-     f_recompute_penalty: float;
+     (* f_recomputable: bool; *)
+     (* f_recompute_penalty: float; *)
      f_inserted: Timestamp.t;
      f_started: Timestamp.t option;
      f_completed: Timestamp.t option;
@@ -187,8 +187,6 @@ module Sql_query = struct
       \  id %s,\n\
       \  type bytea NOT NULL,\n\
       \  result integer,\n\
-      \  recomputable bool NOT NULL,\n\
-      \  recompute_penalty real NOT NULL,\n\
       \  inserted bytea NOT NULL,\n\
       \  started bytea,\n\
       \  completed bytea,\n\
@@ -212,16 +210,15 @@ module Sql_query = struct
     sprintf "INSERT INTO record (type, created, last_modified, sexp)\n\
       \ VALUES (%s, %s, %s, %s) RETURNING id" str_type now now str_sexp
 
-  let add_evaluation_sexp
-      ~function_name ~recomputable ~recompute_penalty ~status sexp : t =
+  let add_evaluation_sexp ~function_name ~status sexp : t =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
     let str_type = escape_sql function_name in
     let status_str = escape_sql status in
     sprintf "INSERT INTO function \
       \ (type, recomputable, recompute_penalty, inserted, status, sexp)\n\
-      \ VALUES (%s, %b, %f, %s, %s, %s) RETURNING id"
-      str_type recomputable recompute_penalty now status_str str_sexp
+      \ VALUES (%s, %s, %s, %s) RETURNING id"
+      str_type now status_str str_sexp
     
   let add_volume_sexp ~kind sexp : t =
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
@@ -243,8 +240,6 @@ module Sql_query = struct
      let id = v.f_id in
      let typ = v.f_type |! escape_sql in
      let result = match v.f_result with None -> "null" | Some s -> Int.to_string s in
-     let recomputable = v.f_recomputable in
-     let recompute_penalty = v.f_recompute_penalty in
      let inserted = Timestamp.to_string v.f_inserted |! escape_sql in
      let started =
        Option.map v.f_started Timestamp.to_string |! Option.map ~f:escape_sql in
@@ -253,10 +248,9 @@ module Sql_query = struct
      let status = v.f_status |! status_to_string |! escape_sql in
      let sexp = v.f_sexp |! Sexp.to_string_hum |! escape_sql in
      sprintf "INSERT INTO function \
-        (id , type , result , recomputable , recompute_penalty ,
-        inserted , started , completed , status , sexp)
-        VALUES (%d, %s, %s, %b, %f, %s, %s, %s, %s, %s) "
-       id typ result recomputable recompute_penalty inserted 
+        (id , type , result , inserted , started , completed , status , sexp)
+        VALUES (%d, %s, %s, %s, %s, %s, %s, %s) "
+       id typ result inserted 
        (Option.value started ~default:"NULL")
        (Option.value completed ~default:"NULL")
        status sexp 
@@ -321,10 +315,6 @@ module Sql_query = struct
     | [one] -> Ok one
     | more -> Error (`result_not_unique more)
       
-  let parse_bool = function
-    | "f" | "false" | "False" | "FALSE" -> Ok false
-    | "t" | "true" | "True" | "TRUE" -> Ok true
-    | s -> Error (Failure (sprintf "parse_bool: %S" s))
       
   let parse_timestamp s =
     Result.try_with (fun () -> Timestamp.of_string (unescape s))
@@ -347,7 +337,6 @@ module Sql_query = struct
   let parse_evaluation sol =
     match sol with
     | [ Some id; Some typ; result_opt;
-        Some recomputable; Some recompute_penalty;
         Some inserted; started_opt; completed_opt;
         Some status; Some sexp ] ->
       Result.(
@@ -356,14 +345,12 @@ module Sql_query = struct
         try_with (fun () ->
           Option.map ~f:(fun s -> unescape s |! Int.of_string) result_opt
         ) >>= fun f_result ->
-        parse_bool recomputable >>= fun f_recomputable ->
-        try_with (fun () -> Float.of_string recompute_penalty) >>= fun f_recompute_penalty ->
         parse_timestamp inserted >>= fun f_inserted ->
         parse_timestamp_opt started_opt >>= fun f_started ->
         parse_timestamp_opt completed_opt >>= fun f_completed ->
         try_with (fun () -> status_of_string_exn (unescape status)) >>= fun f_status ->
         try_with (fun () -> Sexp.of_string (unescape sexp)) >>= fun f_sexp ->
-        return {f_id; f_type; f_result; f_recomputable; f_recompute_penalty;
+        return {f_id; f_type; f_result;
                 f_inserted; f_started; f_completed; f_status; f_sexp; })
       |! Result.map_error ~f:(fun e -> `parse_evaluation_error (sol, e))
     | _ -> Error (`parse_evaluation_error (sol, Failure "Wrong format"))
