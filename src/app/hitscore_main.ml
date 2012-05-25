@@ -1173,7 +1173,7 @@ module Hiseq_run = struct
       in
       flowcell fca >>= fun flowcell_a ->
       flowcell fcb >>= fun flowcell_b ->
-      layout#add_hiseq_run ~date:(Time.of_string (day_date ^ " 10:00"))
+      layout#add_hiseq_run ~date:(Time.of_string (day_date ^ " 10:00:00-04:00"))
         ?flowcell_a ?flowcell_b ?note ()
       >>= fun hsr ->
       printf "Added Hiseq run %d\n" hsr#id;
