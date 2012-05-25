@@ -166,8 +166,13 @@ let v08_to_v10 file_in file_out  moves id_table =
                   | e -> e) in 
                 List [Atom field; List  new_list]
               | e -> e) in
-              
-            List (g_values @ [List [Atom g_thing; List relinked_non_g_values]])
+            let filtered_g_values =
+              List.filter g_values (function
+              | List [Atom "g_recomputable"; _]
+              | List [Atom "g_recompute_penalty"; _] -> false
+              | _ -> true) in
+            List (filtered_g_values
+                  @ [List [Atom g_thing; List relinked_non_g_values]])
           | Atom a -> failwithf "unexpected atom : %s " a () 
           ) in
         List [Atom name; List new_values]
