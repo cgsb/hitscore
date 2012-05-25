@@ -134,8 +134,6 @@ module Sql_query = struct
     {f_id:int;
      f_type: string;
      f_result: int option;
-     (* f_recomputable: bool; *)
-     (* f_recompute_penalty: float; *)
      f_inserted: Timestamp.t;
      f_started: Timestamp.t option;
      f_completed: Timestamp.t option;
@@ -216,7 +214,7 @@ module Sql_query = struct
     let str_type = escape_sql function_name in
     let status_str = escape_sql status in
     sprintf "INSERT INTO function \
-      \ (type, recomputable, recompute_penalty, inserted, status, sexp)\n\
+      \ (type, inserted, status, sexp)\n\
       \ VALUES (%s, %s, %s, %s) RETURNING id"
       str_type now status_str str_sexp
     
