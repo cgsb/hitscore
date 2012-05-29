@@ -2,7 +2,7 @@ open Hitscored_std
 
     
 let main ?ca_cert ~cert_key () =
-  debug "Hello world!" >>= fun () ->
+  dbg "Hello world!" >>= fun () ->
   let with_client_authentication =
     Option.map ca_cert (fun c -> `CA_certificate c) in
   Flow_net.ssl_server_context ?with_client_authentication cert_key
