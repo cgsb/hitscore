@@ -53,6 +53,14 @@ let main ~server_cert ?with_auth () =
 
 
 let () =
+  if Array.length Sys.argv < 2
+    || Sys.argv.(1) = "-help"
+    || Sys.argv.(1) = "-h"
+    || Sys.argv.(1) = "--help"
+  then (
+    eprintf "usage: %s <server-crtkey> [<ca-crt> <client-crtkey>]\n" Sys.argv.(0);
+    exit 0
+  );
   Ssl.init ();
   global_log_app_name := "TEST";
   let main_m =
