@@ -1,20 +1,28 @@
 include Core.Std
 
-let (|>) x f = f x
-(*
-module Util = struct
+module Lwt_config = struct
+  include Lwt
+  include Lwt_chan
+  let map_sequential l ~f = Lwt_list.map_s f l
+  let log_error s = output_string Lwt_io.stderr s >>= fun () -> flush Lwt_io.stderr
+    
+  exception System_command_error of Lwt_unix.process_status
+  let system_command s = 
+    Lwt_unix.(
+      system s >>= function
+      | WEXITED 0 -> return ()
+      | e -> fail (System_command_error e))
 
-  let now () =
-    CalendarLib.Calendar.now (), CalendarLib.Time_Zone.current()
+  let write_string_to_file s f =
+    Lwt_io.(
+      with_file ~mode:output f (fun o ->
+        output_string o s))
 
-  let file_last_modified_time file =
-    let open Unix in
-    let open CalendarLib in
-    ((stat file).st_mtime |! localtime |! Calendar.from_unixtm),
-    Time_Zone.Local
 end
 
-module IntMap = Map.Make(Int)
-module StringSet = Set.Make(String)
-*)
+module Flow = Sequme_flow_monad.Make(Lwt_config)
+include Flow
+  
+module PG = PGOCaml_generic.Make(Flow.IO)
+(* let (|>) x f = f x *)
 

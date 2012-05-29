@@ -1,5 +1,7 @@
 open Hitscore_std
 
+module Configuration = struct
+    
 type db_configuration = {
   db_host     : string;
   db_port     : int;
@@ -143,3 +145,5 @@ let use_profile profiles name =
   match List.Assoc.find profiles name with
   | Some c -> Ok (c ())
   | None -> Error (`profile_not_found name)
+
+    end

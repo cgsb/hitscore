@@ -1,7 +1,7 @@
 
 OASISFormat: 0.2
 Name:        hitscore
-Version:     0.8
+Version:     1.0
 Synopsis:    CGSB Core Library
 Authors:     Ashish Agarwal, Sebastien Mondet
 License:     PROP
@@ -10,15 +10,11 @@ BuildTools:  ocamlbuild
 FilesAB: src/lib/hitscore_conf_values.ml.ab
 
 
-Flag lwt
-  Description: Build stuff depending on Lwt
-  Default: false
-
 Library hitscoregen
   Path: src/codegen/
   BuildDepends: threads, core
   Install: true
-  Modules: Hitscoregen_layout_dsl, Hitscoregen_layout_ocaml, Hitscoregen_psql
+  Modules: Hitscoregen_layout_dsl, Hitscoregen_layout_ocaml
 
 Executable hitscoregen
   Path: src/codegen
@@ -30,15 +26,15 @@ Executable hitscoregen
 Library hitscore
   Path: src/lib
   FindlibName: hitscore
-  BuildDepends: threads, core, pgocaml, pgocaml.syntax, sexplib.syntax,
-               biocaml, sequme, hitscoregen
+  BuildDepends: threads, core, pgocaml, sexplib.syntax,
+               biocaml, sequme, hitscoregen, lwt, lwt.unix
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore
           , Hitscore_std
           , Hitscore_interfaces
-          , Hitscore_layout_interface
-          , Hitscore_db_access
+          , Hitscore_layout
+          , Hitscore_db_backend
           , Hitscore_function_interfaces
           , Hitscore_assemble_sample_sheet
           , Hitscore_bcl_to_fastq
@@ -57,7 +53,7 @@ Library hitscore
 Executable hitscore
   Path: src/app
   MainIs: hitscore_main.ml
-  BuildDepends: threads, core, hitscore
+  BuildDepends: threads, hitscore
   CompiledObject: best
   Install: true
 
@@ -66,20 +62,12 @@ Executable hitscored
   MainIs: hitscored.ml
   BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.ssl, lwt.preemptive,
                 sexplib.syntax
-  if flag(lwt)
-    Build: true
-  else
-    Build: false
   CompiledObject: best
   Install: true
   
 Executable test_hitscored
   path: src/server
   MainIs: test_hitscored.ml
-  if flag(lwt)
-    Build: true
-  else
-    Build: false
   BuildDepends: threads, core, hitscore, lwt, lwt.unix, lwt.preemptive, lwt.ssl
   CompiledObject: best
   Install: false

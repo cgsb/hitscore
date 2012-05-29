@@ -1,7 +1,6 @@
 open Core.Std
 let (|>) x f = f x
 
-module Psql = Hitscoregen_psql
 module Sx = Sexplib.Sexp
 
 exception Parse_error of string
@@ -188,18 +187,18 @@ let parse_sexp sexp =
     match entry with
     | (Sx.Atom "subrecord") :: (Sx.Atom name) :: l ->
       sanitize name;
-      let fields = List.map ~f:parse_field l |> List.flatten in
+      let fields = List.map ~f:parse_field l |> List.concat in
       subrecord_macros := (name, fields) :: !subrecord_macros;
       None
     | (Sx.Atom "record") :: (Sx.Atom name) :: l ->
       sanitize name;
-      let fields = List.map ~f:parse_field l |> List.flatten in
+      let fields = List.map ~f:parse_field l |> List.concat in
       existing_types := Record_name name :: !existing_types;
       Some (Record (name, fields))
     | (Sx.Atom "function") :: (Sx.Atom lout) :: (Sx.Atom name) :: lin ->
       sanitize name;
       sanitize lout;
-      let fields = List.map ~f:parse_field lin |> List.flatten in
+      let fields = List.map ~f:parse_field lin |> List.concat in
       begin match check_type lout with
       | Record_name r -> ()
       | t -> 
@@ -284,83 +283,21 @@ let parse_str str =
   in
   (parse_sexp sexp)
 
-  
-let dsl_type_to_db t =
-  let props = ref [ Psql.Not_null] in
-  let rec convert t =
-    match t with
-    | Identifier -> Psql.Identifier
-    | Bool        -> Psql.Bool      
-    | Timestamp   -> Psql.Text
-    | Int         -> Psql.Integer       
-    | Real        -> Psql.Real      
-    | String      -> Psql.Text   
-    | Option t2 -> 
-      props := List.filter !props ~f:((<>) Psql.Not_null);
-      convert t2
-    | Array Real -> Psql.Text
-    | Array (Enumeration_name n) -> Psql.Text
-    | Array String -> Psql.Text
-    | Array t2 ->
-      props := Psql.Array :: !props;
-      convert t2
-    | Function_name s -> Psql.Pointer (s, "g_id")
-    | Enumeration_name s -> Psql.Text
-    | Record_name s -> Psql.Pointer (s, "g_id")
-    | Volume_name s -> Psql.Pointer ("g_volume", "g_id")
-  in
-  let converted = convert t in
-  (converted, !props)
-
-let typed_value_to_db (n, t) =
-  let (tdb, props) = dsl_type_to_db t in
-  (n, tdb, props)
-
 let record_standard_fields = [
   ("g_id", Identifier);
-  ("g_created", Option Timestamp);
-  ("g_last_modified", Option Timestamp);
+  ("g_created", Timestamp);
+  ("g_last_modified", Timestamp);
 ]
 let function_standard_fields result = [
   ("g_id"                , Identifier);
   ("g_result"            , Option (Record_name result));
-  ("g_recomputable"      , Bool);
-  ("g_recompute_penalty" , Option Real);
-  ("g_inserted"          , Option Timestamp);
+  ("g_inserted"          , Timestamp);
   ("g_started"           , Option Timestamp);
   ("g_completed"         , Option Timestamp);
   ("g_status"            , Enumeration_name "process_status");
 ]
-
-let to_db dsl =
-  let db_record_standard_fields = 
-    List.map record_standard_fields typed_value_to_db in
-  let db_function_standard_fields result = 
-    List.map (function_standard_fields result) typed_value_to_db in
-  let filesystem = [
-    Psql.({ name = "g_volume"; fields = [
-      ("g_id", Identifier, [Not_null]);
-      ("g_kind", Text, [Not_null]);
-      ("g_sexp", Text, [Not_null]);
-    ]})
-  ] in
-  let nodes =
-    List.map dsl.nodes (function
-      | Record (name, record) ->
-        let user_fields = List.map record typed_value_to_db in
-        let fields = db_record_standard_fields @ user_fields in
-        [{ Psql.name ; Psql.fields }]
-      | Function (name, args, result) ->
-        let arg_fields = List.map args typed_value_to_db in
-        let fields = (db_function_standard_fields result) @ arg_fields in
-        [ { Psql.name; Psql.fields } ]
-      | Enumeration _ -> []
-      | Volume (_, _) -> []
-    ) |> List.flatten
-  in
-  filesystem @ nodes
-
-      
+  
+  
 let digraph dsl ?(name="dsl") output_string =
   sprintf "digraph %s {
         graph [fontsize=20 labelloc=\"t\" label=\"\" \

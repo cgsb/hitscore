@@ -1,85 +1,96 @@
 # OASIS_START
-# DO NOT EDIT (digest: 9b28cab76ceca4375febc9f5bcdc6db1)
+# DO NOT EDIT (digest: 9febba96a922b373b3cdff95d16009ed)
+# Ignore VCS directories, you can use the same kind of rule outside 
+# OASIS_START/STOP if you want to exclude directories that contains 
+# useless stuff for the build process
+<**/.svn>: -traverse
+<**/.svn>: not_hygienic
+".bzr": -traverse
+".bzr": not_hygienic
+".hg": -traverse
+".hg": not_hygienic
+".git": -traverse
+".git": not_hygienic
+"_darcs": -traverse
+"_darcs": not_hygienic
+# Library hitscoregen
+"src/codegen/hitscoregen.cmxs": use_hitscoregen
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
-# Library hitscoregen
-"src/codegen": include
 <src/codegen/*.ml{,i}>: pkg_threads
 <src/codegen/*.ml{,i}>: pkg_core
 # Library hitscore
-"src/lib": include
+"src/lib/hitscore.cmxs": use_hitscore
 <src/lib/*.ml{,i}>: use_hitscoregen
 <src/lib/*.ml{,i}>: pkg_threads
-<src/lib/*.ml{,i}>: pkg_sexplib.syntax
-<src/lib/*.ml{,i}>: pkg_sequme
-<src/lib/*.ml{,i}>: pkg_pgocaml.syntax
-<src/lib/*.ml{,i}>: pkg_pgocaml
 <src/lib/*.ml{,i}>: pkg_core
+<src/lib/*.ml{,i}>: pkg_lwt
+<src/lib/*.ml{,i}>: pkg_lwt.unix
+<src/lib/*.ml{,i}>: pkg_sexplib.syntax
+<src/lib/*.ml{,i}>: pkg_pgocaml
 <src/lib/*.ml{,i}>: pkg_biocaml
-# Executable test_hitscored
-<src/server/test_hitscored.{native,byte}>: use_hitscore
-<src/server/test_hitscored.{native,byte}>: use_hitscoregen
-<src/server/test_hitscored.{native,byte}>: pkg_threads
-<src/server/test_hitscored.{native,byte}>: pkg_sexplib.syntax
-<src/server/test_hitscored.{native,byte}>: pkg_sequme
-<src/server/test_hitscored.{native,byte}>: pkg_pgocaml.syntax
-<src/server/test_hitscored.{native,byte}>: pkg_pgocaml
-<src/server/test_hitscored.{native,byte}>: pkg_lwt.unix
-<src/server/test_hitscored.{native,byte}>: pkg_lwt.ssl
-<src/server/test_hitscored.{native,byte}>: pkg_lwt.preemptive
-<src/server/test_hitscored.{native,byte}>: pkg_lwt
-<src/server/test_hitscored.{native,byte}>: pkg_core
-<src/server/test_hitscored.{native,byte}>: pkg_biocaml
+<src/lib/*.ml{,i}>: pkg_sequme
 # Executable hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscoregen
 <src/app/hitscore_main.{native,byte}>: pkg_threads
-<src/app/hitscore_main.{native,byte}>: pkg_sexplib.syntax
-<src/app/hitscore_main.{native,byte}>: pkg_sequme
-<src/app/hitscore_main.{native,byte}>: pkg_pgocaml.syntax
-<src/app/hitscore_main.{native,byte}>: pkg_pgocaml
 <src/app/hitscore_main.{native,byte}>: pkg_core
+<src/app/hitscore_main.{native,byte}>: pkg_lwt
+<src/app/hitscore_main.{native,byte}>: pkg_lwt.unix
+<src/app/hitscore_main.{native,byte}>: pkg_sexplib.syntax
+<src/app/hitscore_main.{native,byte}>: pkg_pgocaml
 <src/app/hitscore_main.{native,byte}>: pkg_biocaml
+<src/app/hitscore_main.{native,byte}>: pkg_sequme
 <src/app/*.ml{,i}>: use_hitscore
 <src/app/*.ml{,i}>: use_hitscoregen
 <src/app/*.ml{,i}>: pkg_threads
-<src/app/*.ml{,i}>: pkg_sexplib.syntax
-<src/app/*.ml{,i}>: pkg_sequme
-<src/app/*.ml{,i}>: pkg_pgocaml.syntax
-<src/app/*.ml{,i}>: pkg_pgocaml
 <src/app/*.ml{,i}>: pkg_core
+<src/app/*.ml{,i}>: pkg_lwt
+<src/app/*.ml{,i}>: pkg_lwt.unix
+<src/app/*.ml{,i}>: pkg_sexplib.syntax
+<src/app/*.ml{,i}>: pkg_pgocaml
 <src/app/*.ml{,i}>: pkg_biocaml
+<src/app/*.ml{,i}>: pkg_sequme
 # Executable hitscored
 <src/server/hitscored.{native,byte}>: use_hitscore
 <src/server/hitscored.{native,byte}>: use_hitscoregen
 <src/server/hitscored.{native,byte}>: pkg_threads
-<src/server/hitscored.{native,byte}>: pkg_sexplib.syntax
-<src/server/hitscored.{native,byte}>: pkg_sequme
-<src/server/hitscored.{native,byte}>: pkg_pgocaml.syntax
-<src/server/hitscored.{native,byte}>: pkg_pgocaml
-<src/server/hitscored.{native,byte}>: pkg_lwt.unix
-<src/server/hitscored.{native,byte}>: pkg_lwt.ssl
-<src/server/hitscored.{native,byte}>: pkg_lwt.preemptive
-<src/server/hitscored.{native,byte}>: pkg_lwt
 <src/server/hitscored.{native,byte}>: pkg_core
+<src/server/hitscored.{native,byte}>: pkg_lwt
+<src/server/hitscored.{native,byte}>: pkg_lwt.unix
+<src/server/hitscored.{native,byte}>: pkg_lwt.preemptive
+<src/server/hitscored.{native,byte}>: pkg_lwt.ssl
+<src/server/hitscored.{native,byte}>: pkg_sexplib.syntax
+<src/server/hitscored.{native,byte}>: pkg_pgocaml
 <src/server/hitscored.{native,byte}>: pkg_biocaml
+<src/server/hitscored.{native,byte}>: pkg_sequme
+# Executable test_hitscored
+<src/server/test_hitscored.{native,byte}>: use_hitscore
+<src/server/test_hitscored.{native,byte}>: use_hitscoregen
+<src/server/test_hitscored.{native,byte}>: pkg_threads
+<src/server/test_hitscored.{native,byte}>: pkg_core
+<src/server/test_hitscored.{native,byte}>: pkg_lwt
+<src/server/test_hitscored.{native,byte}>: pkg_lwt.unix
+<src/server/test_hitscored.{native,byte}>: pkg_lwt.preemptive
+<src/server/test_hitscored.{native,byte}>: pkg_lwt.ssl
+<src/server/test_hitscored.{native,byte}>: pkg_sexplib.syntax
+<src/server/test_hitscored.{native,byte}>: pkg_pgocaml
+<src/server/test_hitscored.{native,byte}>: pkg_biocaml
+<src/server/test_hitscored.{native,byte}>: pkg_sequme
 <src/server/*.ml{,i}>: use_hitscore
 <src/server/*.ml{,i}>: use_hitscoregen
 <src/server/*.ml{,i}>: pkg_threads
-<src/server/*.ml{,i}>: pkg_sexplib.syntax
-<src/server/*.ml{,i}>: pkg_sequme
-<src/server/*.ml{,i}>: pkg_pgocaml.syntax
-<src/server/*.ml{,i}>: pkg_pgocaml
-<src/server/*.ml{,i}>: pkg_lwt.unix
-<src/server/*.ml{,i}>: pkg_lwt.ssl
-<src/server/*.ml{,i}>: pkg_lwt.preemptive
-<src/server/*.ml{,i}>: pkg_lwt
 <src/server/*.ml{,i}>: pkg_core
+<src/server/*.ml{,i}>: pkg_lwt
+<src/server/*.ml{,i}>: pkg_lwt.unix
+<src/server/*.ml{,i}>: pkg_lwt.preemptive
+<src/server/*.ml{,i}>: pkg_lwt.ssl
+<src/server/*.ml{,i}>: pkg_sexplib.syntax
+<src/server/*.ml{,i}>: pkg_pgocaml
 <src/server/*.ml{,i}>: pkg_biocaml
+<src/server/*.ml{,i}>: pkg_sequme
 # OASIS_STOP
 
-<src/lib/hitscore_db_access.ml{,i}>: syntax_camlp4o
-<src/lib/hitscore_assemble_sample_sheet.ml{,i}>: syntax_camlp4o
-<src/app/hitscore_main.ml>: syntax_camlp4o
 <src/server/hitscored_std.ml>: syntax_camlp4o
+<src/lib/hitscore_layout.ml>: syntax_camlp4o

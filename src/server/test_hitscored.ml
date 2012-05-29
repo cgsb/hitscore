@@ -7,12 +7,12 @@ let syscmd fmt =
   ksprintf f fmt
 
 let main ~server_cert ?with_auth () =
-  debug "Starting" >>= fun () ->
-  syscmd "_build/src/server/hitscored %s %s &"
+  dbg "Starting" >>= fun () ->
+  syscmd "_build/src/server/hitscored.native %s %s &"
     server_cert Option.(value_map ~default:"" ~f:fst with_auth)
   >>= fun ()-> 
   Flow_net.sleep 1. >>= fun () ->
-  debug "Started server" >>= fun () ->
+  dbg "Started server" >>= fun () ->
   Flow_net.ssl_client_context ~verification_policy:`ok_self_signed
     Option.(value_map with_auth ~default:`anonymous
               ~f:(fun (_, c) -> `with_pem_certificate c))
@@ -27,13 +27,13 @@ let main ~server_cert ?with_auth () =
         eprintf "Unix.Unix_error: %s %s %s\n%!" (Unix.error_message e) s a;
         raise ex
     ) in
-  wrap_io (Lwt_unix.connect socket) Unix.(ADDR_INET (inet_addr_loopback, 2000))
+  wrap_io (Lwt_unix.connect socket) Unix.(ADDR_INET (Inet_addr.localhost, 2000))
   >>= fun () -> 
-  debug "Connected (unix)" >>= fun () ->
+  dbg "Connected (unix)" >>= fun () ->
   Flow_net.ssl_connect socket ssl_context >>= fun socket ->
   let inchan = Lwt_ssl.in_channel_of_descr  socket in
   let ouchan = Lwt_ssl.out_channel_of_descr socket in
-  debug "Connected (ssl), writing" >>= fun () ->
+  dbg "Connected (ssl), writing" >>= fun () ->
   Message.client_send ouchan `hello
   >>= fun () ->
   Message.recv_server inchan
@@ -47,7 +47,7 @@ let main ~server_cert ?with_auth () =
   end
   >>= fun () ->
   Flow_net.ssl_shutdown socket >>= fun () ->
-  debug "Disconnected (ssl)" >>= fun () ->
+  dbg "Disconnected (ssl)" >>= fun () ->
   Flow_net.sleep 2. >>= fun () ->
   return ()
 
@@ -61,7 +61,7 @@ let () =
       then Some (Sys.argv.(2), Sys.argv.(3)) else None in
     double_bind (main ~server_cert:Sys.argv.(1) ?with_auth ()) ~ok:return
       ~error:(fun e ->
-        system_command "killall hitscored" >>= fun () ->
+        system_command "killall hitscored.native" >>= fun () ->
         error e) in
   match Lwt_main.run main_m with
   | Ok () -> ()

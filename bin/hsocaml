@@ -15,18 +15,15 @@ cat <<EOF > $file_to_use
 
 #use "topfind"
 #thread
+#require "lwt.unix"
+#require "lwt.top"
 #require "hitscore"
 open Core.Std
-open Result
-let () = printf "--> Open Core.Std, Result\n"
-module HS = Hitscore.Make(Sequme_flow_monad.Preemptive_threading_config)
-let () = printf "--> Hiscore.Made -> HS\n"
-open HS
+open Hitscore
+let () = printf "--> Open Core.Std\n"
+let () = printf "--> open Hiscore\n"
 open Flow
-let () = printf "--> Open HS, Flow\n"
-
-let ok_exn a = ok_exn ~fail:(Failure "Not Ok") a
-let () = printf "--> ok_exn\n"
+let () = printf "--> Open Flow\n"
 
 let default_config () =
   sprintf "$HOME/.config/hitscore/config.sexp"
@@ -43,20 +40,25 @@ let configuration =
   let config = In_channel.(with_file config_file ~f:input_all) in
   let hitscore_config =
     Configuration.(
-    parse_str config
-    >>= fun c ->
-    use_profile c "$profile")
-  |! function
-    | Ok o -> o
+    match Result.(parse_str config >>= fun c -> use_profile c "$profile") with
+    | Ok c -> c
     | Error (\`configuration_parsing_error e) ->
       eprintf "Error while parsing configuration: %s\n" (Exn.to_string e);
       failwith "STOP"
     | Error (\`profile_not_found s) ->
       eprintf "Profile %S not found in config-file\n" s;
-      failwith "STOP"
+      failwith "STOP")
    in
    hitscore_config
 let () = printf "--> configuration\n"
+
+let ok_exn m =
+  match Lwt_main.run m with
+| Ok o -> o
+| Error e -> failwith "NOT OK!"
+let () = printf "--> ok_exn (Lwt)\n"
+
+let () = printf "END INIT\n\n"
 EOF
 
 ocaml_init=/tmp/ocaml_init_hs.ml
@@ -72,5 +74,9 @@ if [ -f "$2" ]; then
   cat $2 >> $ocaml_init
 fi
 
-ledit ocaml -init $ocaml_init 
+if [ -t 1 ] ; then
+    ledit ocaml -init $ocaml_init 
+else
+    ocaml -init $ocaml_init 
+fi
 

@@ -18,32 +18,12 @@ _doc/hitscore_layout_digraph.pdf: _build/hitscore_layout_digraph.dot _doc/
 _doc/hitscore_layout_digraph.jpg: _build/hitscore_layout_digraph.dot _doc/
 	dot -Tjpg $< -o$@
 
-_build/hitscore_db_digraph.dot: $(LAYOUT_SOURCE) $(GENERATOR)
-	$(GENERATOR) db_digraph $(LAYOUT_SOURCE) $@
-
-_doc/hitscore_db_digraph.pdf: _build/hitscore_db_digraph.dot _doc/
-	dot -Tpdf $< -o$@
-
-_doc/hitscore_db_digraph.jpg: _build/hitscore_db_digraph.dot _doc/
-	dot -Tjpg $< -o$@
-
 _doc/:
 	mkdir _doc
 
-dots: _doc/hitscore_layout_digraph.pdf _doc/hitscore_db_digraph.pdf \
- _doc/hitscore_layout_digraph.jpg _doc/hitscore_db_digraph.jpg
+dots: _doc/hitscore_layout_digraph.pdf _doc/hitscore_layout_digraph.jpg
 
 
-update_psql: $(GENERATOR)
-	$(GENERATOR) postgres $(LAYOUT_SOURCE) _build/
-
-_build/hitscore_layout_init.psql: $(LAYOUT_SOURCE) $(GENERATOR)
-	$(GENERATOR) postgres $(LAYOUT_SOURCE) _build/
-
-dbinit: _build/hitscore_layout_init.psql
-	psql -1 -q -f _build/hitscore_layout_init.psql
-#dbclear:
-# 	psql -1 -q -f _build/hitscore_layout_clear.psql
 
 dbclear:
 	psql -qAtX -c "select 'DROP table ' || quote_ident(table_schema) \
@@ -52,7 +32,6 @@ dbclear:
               where table_type = 'BASE TABLE' and \
               not table_schema ~ '^(information_schema|pg_.*)$$'" | psql -qAtX
 
-dbupdate: dbclear update_psql dbinit
 
 PKG_VERSION=$(shell printf "`cat setup.data`\necho \$$pkg_version\n" | sed 's/ = /=/' | sh)
 BINDIR=$(shell printf "`cat setup.data`\necho \$$bindir\n" | sed 's/ = /=/' | sh)

@@ -1,31 +1,36 @@
 open Core.Std
   
-module Hitscore_threaded =
-  Hitscore.Make(Sequme.Flow_monad.Preemptive_threading_config)
-open Hitscore_threaded
+open Hitscore
 open Flow
 
+let result_ok_exn ?(fail=Failure "Not Ok") = function
+  | Ok o -> o
+  | Error _ -> raise fail
 module System = struct
-
-  let command_exn s = 
-    let status = Unix.system s in
-    if not (Unix.Process_status.is_ok status) then
-      ksprintf failwith "System.command_exn: %s" 
-        (Unix.Process_status.to_string_hum status)
-    else
-      ()
-
-  let command s =
-    let status = Unix.system s in
+  exception Wrong_status of [ `Exit_non_zero of int | `Signal of Signal.t ]
+  let command_exn s =
+    begin match Unix.system s with
+    | Ok () -> ()
+    | Error e -> raise (Wrong_status e)
+    end
+  let command s = 
+    begin match Unix.system s with
+    | Ok () -> Ok ()
+    | Error status ->
+      Error (`sys_error (`command (s, status)))
+    end
+  (*
     if (Unix.Process_status.is_ok status) then
       Ok ()
     else
       Error (`sys_error (`command (s, status)))
 
+*)
   let command_to_string s =
     Unix.open_process_in s |! In_channel.input_all
         
 end
+
 module XML = struct
   include Xmlm
   let in_tree i = 
@@ -33,15 +38,15 @@ module XML = struct
     let data d = `D d in
     input_doc_tree ~el ~data i
 end
-
 let string_of_error = function
   | `barcode_not_found (i, p) ->
-    sprintf "ERROR: Barcode not found: %ld (%s)\n" i
+    sprintf "ERROR: Barcode not found: %d (%s)\n" i
       (Layout.Enumeration_barcode_provider.to_string p)
   | `fatal_error  `trees_to_unix_paths_should_return_one ->
     sprintf "FATAL_ERROR: trees_to_unix_paths_should_return_one\n"
   | `io_exn e ->
     sprintf "IO-ERROR: %s\n" (Exn.to_string e)
+      (*
   | `layout_inconsistency (where, what) ->
     let int32_list il = (List.map il Int32.to_string |! String.concat ~sep:", ") in
     sprintf "LAYOUT-INCONSISTENCY-ERROR for %s: %s!\n"
@@ -67,6 +72,7 @@ let string_of_error = function
         sprintf "search_flowcell_by_name_not_unique: %s" fcid
       | `successful_status_with_no_result id ->
         sprintf "successful_status_with_no_result: %ld" id)
+      *)
   | `new_failure (_, _) ->
     sprintf "NEW FAILURE\n"
   | `pg_exn e ->
@@ -116,19 +122,99 @@ let string_of_error = function
   | `cannot_recognize_fastq_format file ->
     sprintf "cannot_recognize_fastq_format of %s" file
   | `file_path_not_in_volume (file, v) ->
-    sprintf "file_path_not_in_volume (%s, %ld)" file v.Layout.File_system.id
+    sprintf "file_path_not_in_volume (%s, %d)" file v.Layout.File_system.id
+  | `duplicated_barcode s ->
+    sprintf "Duplicated barcode: %S" s
+  | `invalid_command_line s ->
+    sprintf "Invalid command-line argument(s): %s" s
+  | `bcl_to_fastq_not_started status ->
+    sprintf "bcl_to_fastq_not_started but %S"
+      (Hitscore.Layout.Enumeration_process_status.to_string status)
+  | `bcl_to_fastq_not_succeeded (pointer, status) ->
+    sprintf "bcl_to_fastq %d not succeeded but %S"
+      pointer.Hitscore_layout.Layout.Function_bcl_to_fastq.id
+      Hitscore_layout.Layout.Enumeration_process_status.(to_string status)
+  | `not_single_flowcell l ->
+    sprintf "Flowcell not unique: %s" 
+      (String.concat ~sep:";" (List.map l (fun (s, ll) ->
+        sprintf "%S: [%s]" s (String.concat ~sep:", "
+                                (List.map ll (sprintf "%d"))))))
+  | `partially_found_lanes (i, s) ->
+    sprintf "partially_found_lanes %d %s" i s
+  | `wrong_unaligned_volume sl ->
+    sprintf "wrong_unaligned_volume [%s]" (String.concat ~sep:"; " sl)
+  | `pss_failure s -> sprintf "pss_failure: %S" s
+  | `layout_inconsistency (where, what) ->
+    sprintf "LAYOUT-INCONSISTENCY (%s): %s"
+      (match where with
+      | `Dump -> "Dump"
+      | `File_system -> "File-system"
+      | `Function f -> sprintf  "function %S" f
+      | `Record r -> sprintf "record %S" r) 
+      (match what with
+      | `search_flowcell_by_name_not_unique (s, i) ->
+        sprintf "search_flowcell_by_name_not_unique %s %d" s i
+      | `successful_status_with_no_result i ->
+        sprintf "successful_status_with_no_result %d" i)
+  | `db_backend_error e ->
+    begin match e with
+    | `exn e
+    | `connection e
+    | `disconnection e
+    | `query  (_, e) -> 
+      sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
+    end
+  | `Layout (where, what) ->
+    sprintf "LAYOUT-ERROR (%s): %s"
+      (match where with
+      | `Dump -> "Dump"
+      | `File_system -> "File-system"
+      | `Function f -> sprintf  "function %S" f
+      | `Record r -> sprintf "record %S" r) 
+      (match what with
+      | `db_backend_error (`query (q, e)) ->
+        sprintf "Query %S failed: %s" q (Exn.to_string e)
+      | `db_backend_error e ->
+        begin match e with
+        | `exn e
+        | `connection e
+        | `disconnection e
+        | `query  (_, e) -> 
+          sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
+        end
+      | `parse_evaluation_error (sol, e)
+      | `parse_value_error (sol, e)
+      | `parse_volume_error (sol, e) ->
+        sprintf "error while parsing result [%s]: %s"
+          (String.concat ~sep:", "
+             (List.map sol (Option.value ~default:"NONE"))) (Exn.to_string e)
+      | `parse_sexp_error (sexp, e) ->
+        sprintf "S-Exp parsing error: %S: %s"
+          (Sexp.to_string_hum sexp) (Exn.to_string e)
+      | `result_not_unique soll ->
+        sprintf "result_not_unique: [%s]"
+          (String.concat ~sep:", "
+             (List.map soll (fun sol ->
+               String.concat ~sep:", "
+                 (List.map sol (Option.value ~default:"NONE")))))
+      | `wrong_add_value ->
+        sprintf "WRONG-ADD-VALUE"
+      | `wrong_version (v1, v2) ->
+        sprintf "Wrong version: %s Vs %s" v1 v2)
+        
 
+(*
 let display_errors = function
   | Ok _ -> ()
   | Error e ->
-    printf "%s" (string_of_error e)
+    printf "ERROR:\n  %s\n" (string_of_error e)
 
 let flow_ok_or_fail = function
   | Ok o -> o
   | Error e ->
     failwithf "%s" (string_of_error e) ()
-
-
+*)
+(*
 let pg_raw_query  ~dbh ~query =
   let module PG = Layout.PGOCaml in
   let name = "todo_change_this" in
@@ -145,13 +231,15 @@ let print_query_result query l =
     (String.concat ~sep:"; " (List.map l (fun l2 ->
       sprintf "(%s)"
         (String.concat ~sep:", " (List.map l2 (Option.value ~default:"—"))))))
-    
+*)  
 let pbs_related_command_line_options
     ?(default_nodes=1) ?(default_ppn=8) ?(default_wall_hours=12) () = 
   let user = ref (Sys.getenv "LOGNAME") in
+  let command_to_string s =
+    Unix.open_process_in s |! In_channel.input_all in
   let queue = 
     let groups =
-      System.command_to_string "groups" 
+      command_to_string "groups" 
       |! String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
     match List.find groups ((=) "cgsb") with
     | Some _ -> ref (Some "cgsb-s")

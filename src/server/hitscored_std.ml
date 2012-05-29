@@ -9,30 +9,7 @@ let format_message s =
   List.map l (sprintf "%s: %s\n" !global_log_app_name)
   |! String.concat ~sep:"" 
       
-module Lwt_config = struct
-  include Lwt
-  include Lwt_chan
-  let map_sequential l ~f = Lwt_list.map_s f l
-  let log_error s =
-    let str = format_message s in
-    output_string Lwt_io.stderr str >>= fun () -> flush Lwt_io.stderr
-    
-  exception System_command_error of Lwt_unix.process_status
-  let system_command s = 
-    Lwt_unix.(
-      system s >>= function
-      | WEXITED 0 -> return ()
-      | e -> fail (System_command_error e))
-
-  let write_string_to_file s f =
-    Lwt_io.(
-      with_file ~mode:output f (fun o ->
-        output_string o s))
-
-end
-module Hitscore_lwt = Hitscore.Make(Lwt_config)
-
-include Hitscore_lwt
+include Hitscore
 include Flow
 
 let read_file file =
@@ -40,7 +17,7 @@ let read_file file =
 
 let epr fmt = ksprintf (fun s -> prerr_string (format_message s)) (fmt ^^ "%!")
   
-let dbg fmt = ksprintf debug fmt
+let dbg fmt = ksprintf (fun s-> debug (format_message s)) fmt
   
 let print_error = function
   | `io_exn e ->
@@ -90,7 +67,8 @@ module Certificate_authority = struct
         let mn = get2 8 in
         let sec = get2 10 in
         Time.(of_date_ofday
-                Zone.utc Date.(create ~m ~y ~d) Ofday.(create ~hr ~min:mn ~sec ()))
+                Zone.utc Date.(create_exn ~m ~y ~d)
+                Ofday.(create ~hr ~min:mn ~sec ()))
       with
       | e -> failwithf "invalid_ASN1_date %s" s ()
         
@@ -193,7 +171,7 @@ module Flow_net =  struct
     let open Lwt_unix in
     try
     let fd = socket PF_INET SOCK_STREAM 6 in
-    bind fd (ADDR_INET (Unix.inet_addr_any, port));
+    bind fd (ADDR_INET (Unix.Inet_addr.bind_any, port));
     listen fd port;
     return fd
     with

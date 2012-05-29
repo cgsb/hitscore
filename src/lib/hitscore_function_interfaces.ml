@@ -1,18 +1,17 @@
 (** The interfaces of the function-implementations.  *)
 
+open Hitscore_std
+open Hitscore_layout
+open Hitscore_access_rights
+open Hitscore_db_backend
+open Hitscore_common
+open Hitscore_configuration
 
 (** The sample-sheet assembly function. *)
 module type ASSEMBLE_SAMPLE_SHEET = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
-
-
-  val illumina_barcodes: (int32 * string) list
-  val bioo_barcodes: (int32 * string) list
-
+  val illumina_barcodes : (int * string) list
+  val bioo_barcodes : (int * string) list
   
   (** Run the whole function to assemble a sample-sheet. Example:
       {[
@@ -25,61 +24,48 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
   *)
 
   val run :
-    dbh:(string, bool) Batteries.Hashtbl.t Common.Layout.PGOCaml.t ->
-    kind:Common.Layout.Enumeration_sample_sheet_kind.t ->
-    configuration:Common.Configuration.local_configuration ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    kind:Layout.Enumeration_sample_sheet_kind.t ->
+    configuration:Configuration.local_configuration ->
     ?force_new:bool ->
     ?note:string ->
     string ->
     ([> `new_failure of
-        [ `can_nothing ]
-          Common.Layout.Function_assemble_sample_sheet.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
+        Layout.Function_assemble_sample_sheet.pointer *
+          [> `Layout of
+              Hitscore_layout.Layout.error_location *
+                Hitscore_layout.Layout.error_cause
           | `root_directory_not_configured
           | `system_command_error of string * exn
           | `write_file_error of string * string * exn ]
      | `new_success of
-         [ `can_get_result ]
-           Common.Layout.Function_assemble_sample_sheet.pointer
+         Layout.Function_assemble_sample_sheet.pointer
      | `previous_success of
-         [ `can_get_result ]
-           Common.Layout.Function_assemble_sample_sheet.pointer *
-           Common.Layout.Record_sample_sheet.pointer ],
-     [> `barcode_not_found of
-         int32 * Common.Layout.Enumeration_barcode_provider.t
-     | `fatal_error of
-         [> `add_volume_did_not_create_a_tree_volume of
-             Common.Layout.File_system.pointer
-         | `trees_to_unix_paths_should_return_one ]
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `search_flowcell_by_name_not_unique of
-               (string * (int32 * Common.Layout.PGOCaml.int32_array) list)
-           | `select_did_not_return_one_tuple of string * int
-           | `successful_status_with_no_result of int32 ]
-     | `pg_exn of exn
-     | `wrong_request of
-         [> `record_flowcell ] * [> `value_not_found of string ] ])
-      Common.Flow.monad
-
+         Layout.Function_assemble_sample_sheet.pointer *
+           Layout.Record_sample_sheet.pointer ],
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `barcode_not_found of
+         int *
+           Layout.Enumeration_barcode_provider.t
+               | `duplicated_barcode of string
+               | `fatal_error of
+                   [> `add_volume_did_not_create_a_tree_volume of
+                        Layout.File_system.pointer
+                    | `trees_to_unix_paths_should_return_one ]
+               | `layout_inconsistency of
+                   [> `Function of string | `Record of string ] *
+                     [> `search_flowcell_by_name_not_unique of string * int
+                     | `successful_status_with_no_result of int ]
+               | `wrong_request of
+                   [> `record_flowcell ] * [> `value_not_found of string ] ])
+      Flow.monad
 end
 
 
 (** The module to run CASAVA's demultiplexer.  *)
 module type BCL_TO_FASTQ = sig
-
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
 
            
   (** Start the demultiplexer. Example:
@@ -107,57 +93,47 @@ start ~dbh ~configuration       (* common arguments *)
      monad are other other errors (before starting the function, or
      while setting it as failed -- unlikely).
 *)
-  val start :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    sample_sheet:Common.Layout.Record_sample_sheet.pointer ->
-    hiseq_dir:Common.Layout.Record_hiseq_raw.pointer ->
-    ?tiles:string ->
-    ?bases_mask:string ->
-    ?mismatch:[< `one | `two | `zero > `one ] ->
-    ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
-    ?user:string ->
-    ?wall_hours:int ->
-    ?nodes:int ->
-    ?ppn:int ->
-    ?queue:string ->
-    ?hitscore_command:string ->
-    ?make_command:string ->
-    string ->
-    ([> `failure of
-        [ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
-          | `system_command_error of string * exn
-          | `work_directory_not_configured
-          | `write_file_error of string * string * exn ]
-     | `success of
-         [ `can_complete ]
-           Common.Layout.Function_bcl_to_fastq.pointer ],
-     [> `cannot_recognize_file_type of string
-     | `empty_sample_sheet_volume of
-         Common.Layout.File_system.pointer *
-           Common.Layout.Record_sample_sheet.pointer
-     | `hiseq_dir_deleted
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `no_last_modified_timestamp of
-               Common.Layout.Record_inaccessible_hiseq_raw.pointer
-           | `select_did_not_return_one_tuple of string * int ]
-     | `more_than_one_file_in_sample_sheet_volume of
-         Common.Layout.File_system.pointer *
-           Common.Layout.Record_sample_sheet.pointer * string list
-     | `pg_exn of exn
-     | `raw_data_path_not_configured
-     | `root_directory_not_configured ])
-      Common.Flow.monad
+           val start :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Configuration.local_configuration ->
+             sample_sheet:Layout.Record_sample_sheet.pointer ->
+             hiseq_dir:Layout.Record_hiseq_raw.pointer ->
+             ?tiles:string ->
+             ?bases_mask:string ->
+             ?mismatch:[< `one | `two | `zero > `one ] ->
+             ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
+             ?user:string ->
+             ?wall_hours:int ->
+             ?nodes:int ->
+             ?ppn:int ->
+             ?queue:string ->
+             ?hitscore_command:string ->
+             ?make_command:string ->
+             string ->
+             ([> `failure of
+                   Layout.Function_bcl_to_fastq.pointer *
+                     [> `Layout of
+                         Hitscore_layout.Layout.error_location *
+                           Hitscore_layout.Layout.error_cause
+                     | `system_command_error of string * exn
+                     | `work_directory_not_configured
+                     | `write_file_error of string * string * exn ]
+              | `success of
+                   Layout.Function_bcl_to_fastq.pointer ],
+              [> `Layout of
+                  Hitscore_layout.Layout.error_location *
+                    Hitscore_layout.Layout.error_cause
+              | `empty_sample_sheet_volume of
+                  Layout.File_system.pointer *
+                    Layout.Record_sample_sheet.pointer
+              | `hiseq_dir_deleted
+              | `more_than_one_file_in_sample_sheet_volume of
+                  Layout.File_system.pointer *
+                    Layout.Record_sample_sheet.pointer *
+                    string List.t
+              | `raw_data_path_not_configured
+              | `root_directory_not_configured ])
+               Flow.monad
 
   (** Create the resulting [Layout.Record_bcl_to_fastq.t] and register
       the [bcl_to_fastq] evaluation as a success.
@@ -166,82 +142,69 @@ start ~dbh ~configuration       (* common arguments *)
       [hitscore <profile> register-success] which itself should be called
       only at the end of the PBS script generated by the {!start} function.
   *)
-  val succeed :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    bcl_to_fastq:[> `can_complete ]
-      Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([> `failure of
-        [ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
-          | `system_command_error of string * exn ]
-     | `success of
-         [ `can_get_result ]
-           Common.Layout.Function_bcl_to_fastq.pointer ],
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `root_directory_not_configured
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
+           val succeed :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Configuration.local_configuration ->
+             bcl_to_fastq:Layout.Function_bcl_to_fastq.pointer ->
+             ([> `failure of
+                 Layout.Function_bcl_to_fastq.pointer *
+                   [> `Layout of
+                       Hitscore_layout.Layout.error_location *
+                         Hitscore_layout.Layout.error_cause
+                   | `system_command_error of string * exn ]
+              | `success of
+                  Layout.Function_bcl_to_fastq.pointer ],
+              [> `Layout of
+                  Hitscore_layout.Layout.error_location *
+                    Hitscore_layout.Layout.error_cause
+              | `root_directory_not_configured
+              | `system_command_error of string * exn
+              | `work_directory_not_configured ])
+               t
 
-  (** Register the evaluation as failed with a optional reason to add
-      to the [log] (record). *)
-  val fail :
-    dbh:Common.Layout.db_handle ->
-    ?reason:string ->
-    [> `can_complete ] Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
-      
+           (** Register the evaluation as failed with a optional reason to add
+               to the [log] (record). *)
+           val fail :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             ?reason:string ->
+             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+             (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
+              [> `Layout of
+                  Hitscore_layout.Layout.error_location *
+                    Hitscore_layout.Layout.error_cause ]) Flow.monad
+
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
-  val status :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    'a Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([ `not_started of Common.Layout.Enumeration_process_status.t
-     | `running
-     | `started_but_not_running of
-         [ `system_command_error of string * exn ] ],
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
-      
+           val status :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Configuration.local_configuration ->
+             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+             ([> `not_started of
+                   Layout.Enumeration_process_status.t
+               | `running
+               | `started_but_not_running of
+                   [> `system_command_error of string * exn ] ],
+              [> `Layout of
+                   Hitscore_layout.Layout.error_location *
+                   Hitscore_layout.Layout.error_cause
+              | `work_directory_not_configured ])
+               t
+
+               
   (** Kill the evaluation ([qdel]) and set it as failed. *)
-  val kill :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    [> `can_complete ] Common.Layout.Function_bcl_to_fastq.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_bcl_to_fastq.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `not_started of Common.Layout.Enumeration_process_status.t
-     | `pg_exn of exn
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      Common.Flow.monad
+           val kill :
+             dbh:Hitscore_db_backend.Backend.db_handle ->
+             configuration:Configuration.local_configuration ->
+             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+             (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
+              [> `Layout of
+                   Hitscore_layout.Layout.error_location *
+                   Hitscore_layout.Layout.error_cause
+              | `not_started of
+                  Layout.Enumeration_process_status.t
+              | `system_command_error of string * exn
+              | `work_directory_not_configured ])
+               t
 
 end
 
@@ -249,10 +212,6 @@ end
 Layout}.  *)
 module type UNALIGNED_DELIVERY = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
 
   (** Do the actual preparation of the delivery. We pass the
       [~bcl_to_fastq] function for practical reasons (it the id used
@@ -260,36 +219,28 @@ module type UNALIGNED_DELIVERY = sig
       directory name (the default begin the data of the current day; and
       [~destination] is a directory path. *)
   val run :
-    dbh:Layout.db_handle ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
     configuration:Configuration.local_configuration ->
     ?directory_tag:string ->
-    bcl_to_fastq:'a Layout.Function_bcl_to_fastq.pointer ->
+    bcl_to_fastq:Layout.Function_bcl_to_fastq.pointer ->
     invoice:Layout.Record_invoicing.pointer ->
     destination:string ->
-    ([ `can_get_result ]
-        Layout.Function_prepare_unaligned_delivery.pointer,
-            [> `bcl_to_fastq_not_succeeded of
-                 'a Layout.Function_bcl_to_fastq.pointer *
-                 Layout.Enumeration_process_status.t
-             | `cannot_recognize_file_type of string
-             | `inconsistency_inode_not_found of int32
-             | `io_exn of exn
-             | `layout_inconsistency of
-                 [> `File_system | `Record of string | `Function of string ] *
-                 [> `insert_did_not_return_one_id of string * int32 list
-                  | `select_did_not_return_one_tuple of string * int ]
-             | `not_single_flowcell of
-                 (string * int Hitscore_std.List.t) Hitscore_std.List.t
-             | `partially_found_lanes of
-                 int32 * string *
-                 Layout.Record_lane.pointer Hitscore_std.Array.container *
-                 int option list
-             | `pg_exn of exn
-             | `system_command_error of string * exn
-             | `root_directory_not_configured
-             | `wrong_unaligned_volume of string Hitscore_std.List.t ])
-           Flow.monad
-
+    (Layout.Function_prepare_unaligned_delivery.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `bcl_to_fastq_not_succeeded of
+         Layout.Function_bcl_to_fastq.pointer *
+           Layout.Enumeration_process_status.t
+     | `io_exn of exn
+     | `not_single_flowcell of
+         (string * int List.t)
+           List.t
+     | `partially_found_lanes of int * string
+     | `root_directory_not_configured
+     | `system_command_error of string * exn
+     | `wrong_unaligned_volume of string List.t ])
+      Flow.monad
 
 
 end
@@ -297,27 +248,17 @@ end
 (** Deletion of intensity files. *)
 module type DELETE_INTENSITIES = sig
     
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
-
   (** Register a successful deletion of intensity files and create the
       new Hiseq_raw record. *)
   val register :
-    dbh:Common.Layout.db_handle ->
-    hiseq_raw:Common.Layout.Record_hiseq_raw.pointer ->
-    ([ `can_get_result ]
-        Common.Layout.Function_delete_intensities.pointer,
-     [> `hiseq_dir_deleted
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `no_last_modified_timestamp of
-               Common.Layout.Record_inaccessible_hiseq_raw.pointer
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    hiseq_raw:Layout.Record_hiseq_raw.pointer ->
+    (Layout.Function_delete_intensities.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `hiseq_dir_deleted ])
+      t
 
 end
 
@@ -325,26 +266,15 @@ end
 (** The module to create “untyped” fastq directories.  *)
 module type COERCE_B2F_UNALIGNED = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
-
   
-  (** Start *)
   val run :
-    dbh:Layout.db_handle ->
-    configuration:Configuration.local_configuration ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:'a ->
     input:Layout.Record_bcl_to_fastq_unaligned.pointer ->
-    ([ `can_get_result ]
-        Common.Layout.Function_coerce_b2f_unaligned.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Record of string | `Function of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
+    (Layout.Function_coerce_b2f_unaligned.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause ]) Flow.monad
 
 end
 
@@ -352,133 +282,112 @@ end
 (** The function to run fastx on a given set of fastq files.  *)
 module type FASTX_QUALITY_STATS = sig
 
-(**/**)
-  module Common : Hitscore_common.COMMON
-  open Common
-(**/**)
 
   (** Call fastx_quality_stats the “right” way. *)
   val call_fastx :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    volume:Common.Layout.File_system.pointer ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Configuration.local_configuration ->
+    volume:Layout.File_system.pointer ->
     option_Q:int ->
-    Hitscore_std.String.t ->
+    String.t ->
     string ->
     (unit,
-     [> `cannot_recognize_file_type of string
-     | `cannot_recognize_fastq_format of string
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `cannot_recognize_fastq_format of String.t
      | `file_path_not_in_volume of
-         Hitscore_std.String.t * Common.Layout.File_system.pointer
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
+                   String.t *
+                     Layout.File_system.pointer
      | `root_directory_not_configured
      | `system_command_error of string * exn ])
-      Common.Flow.monad
+      t
   
   (** Start *)
   val start :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    ?option_Q:int32 ->
-    ?filter_names:Hitscore_std.String.sexpable
-      Hitscore_std.List.sexpable ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Configuration.local_configuration ->
+    ?option_Q:int ->
+    ?filter_names:String.t List.t ->
     ?user:string ->
     ?wall_hours:int ->
     ?nodes:int ->
     ?ppn:int ->
     ?queue:string ->
     ?hitscore_command:string ->
-    Common.Layout.Record_generic_fastqs.pointer ->
-    ([ `can_complete ] Layout.Function_fastx_quality_stats.pointer,
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
+    Layout.Record_generic_fastqs.pointer ->
+    (Layout.Function_fastx_quality_stats.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+                   Hitscore_layout.Layout.error_cause
      | `root_directory_not_configured
      | `system_command_error of string * exn
      | `work_directory_not_configured
      | `write_file_error of string * string * exn ])
-      Common.Flow.monad
+      t
+
 
   val succeed :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    [> `can_complete ] Layout.Function_fastx_quality_stats.pointer ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Configuration.local_configuration ->
+    Layout.Function_fastx_quality_stats.pointer ->
     ([> `failure of
-        [ `can_nothing ] Layout.Function_fastx_quality_stats.pointer *
-          [> `layout_inconsistency of
-              [> `File_system
-              | `Function of string
-              | `Record of string ] *
-                [> `insert_did_not_return_one_id of string * int32 list
-                | `select_did_not_return_one_tuple of string * int ]
-          | `pg_exn of exn
-          | `system_command_error of string * exn ]
-     | `success of [ `can_get_result ] Layout.Function_fastx_quality_stats.pointer ],
-     [> `cannot_recognize_file_type of string
-     | `inconsistency_inode_not_found of int32
-     | `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `add_did_not_return_one of string * int32 list
-           | `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
+                   Layout.Function_fastx_quality_stats.pointer *
+              [> `Layout of
+                   Hitscore_layout.Layout.error_location *
+                   Hitscore_layout.Layout.error_cause
+              | `system_command_error of string * exn ]
+     | `success of
+         Layout.Function_fastx_quality_stats.pointer ],
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
      | `root_directory_not_configured
      | `system_command_error of string * exn
      | `work_directory_not_configured ])
-      Common.Flow.monad
+      t
       
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
   val fail :
-    dbh:Common.Layout.db_handle ->
+    dbh:Hitscore_db_backend.Backend.db_handle ->
     ?reason:string ->
-    [> `can_complete ] Common.Layout.Function_fastx_quality_stats.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_fastx_quality_stats.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list ]
-     | `pg_exn of exn ])
-      Common.Flow.monad
+    Hitscore_layout.Layout.Function_fastx_quality_stats.pointer ->
+    (Hitscore_layout.Layout.Function_fastx_quality_stats.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause ]) Flow.monad
       
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
   val status :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    'a Common.Layout.Function_fastx_quality_stats.pointer ->
-    ([ `not_started of Common.Layout.Enumeration_process_status.t
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Configuration.local_configuration ->
+    Hitscore_layout.Layout.Function_fastx_quality_stats.pointer ->
+    ([> `not_started of
+        Layout.Enumeration_process_status.t
      | `running
      | `started_but_not_running of
-         [ `system_command_error of string * exn ] ],
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `select_did_not_return_one_tuple of string * int ]
-     | `pg_exn of exn
+         [> `system_command_error of string * exn ] ],
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
      | `work_directory_not_configured ])
-      Common.Flow.monad
+      t
       
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
-    dbh:Common.Layout.db_handle ->
-    configuration:Common.Configuration.local_configuration ->
-    [> `can_complete ] Common.Layout.Function_fastx_quality_stats.pointer ->
-    ([ `can_nothing ] Common.Layout.Function_fastx_quality_stats.pointer,
-     [> `layout_inconsistency of
-         [> `File_system | `Function of string | `Record of string ] *
-           [> `insert_did_not_return_one_id of string * int32 list
-           | `select_did_not_return_one_tuple of string * int ]
-     | `not_started of Common.Layout.Enumeration_process_status.t
-     | `pg_exn of exn
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Configuration.local_configuration ->
+    Hitscore_layout.Layout.Function_fastx_quality_stats.pointer ->
+    (Hitscore_layout.Layout.Function_fastx_quality_stats.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `not_started of
+         Layout.Enumeration_process_status.t
      | `system_command_error of string * exn
      | `work_directory_not_configured ])
-      Common.Flow.monad
+      t
 
 end
