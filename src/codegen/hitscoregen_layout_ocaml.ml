@@ -500,6 +500,16 @@ end";
       line out "  method %s = %s" n
         (ocaml_object_transform_field
            (sprintf "Record_%s" name) (sprintf "t.g_value.%s" n) t);
+      line out "  method set_%s v =" n;
+      if List.length fields = 1 then (
+        line out "    let g_v = { %s.%s = v } in" types_module n
+      ) else (
+        line out "    let g_v = { t.%s.g_value with %s.%s = v } in"
+          types_module types_module n
+      );
+      line out "    t <- { t with %s.g_value = g_v };\n\
+               \    (Access.%s.update ~dbh t: (unit, 'error) Flow.monad)"
+        types_module modname;
     );
     line out "  method re_get : (unit, 'error) Flow.monad = \n\
                   %s.(get ~dbh (%s.pointer t)) >>= fun new_t -> \n\
