@@ -138,6 +138,7 @@ let ocaml_record_access_module ~out name fields =
   line out "    r_sexp = sexp_of_value t.g_value; ";
   line out "  }";
 
+  doc out "Get the value pointed by [pointer].";
   line out "let get ~dbh pointer =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.get_value_sexp ~record_name:%S pointer.id in"
@@ -148,6 +149,8 @@ let ocaml_record_access_module ~out name fields =
     line out "  >>= fun r -> of_result (of_value r)";
   );
   
+  doc out "Get all the values of this record (previous versions used
+    to return pointers, now they are full values).";
   line out "let get_all ~dbh =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.get_all_values_sexp ~record_name:%S in" name;
@@ -157,7 +160,8 @@ let ocaml_record_access_module ~out name fields =
     line out "    of_result Result.(Sql_query.parse_value row >>= of_value))";
   );
 
-  doc out "Update the 'value' (one {b should not} modify the [g_*] fields.";
+  doc out "Update the 'value' (one {b should not} modify the [g_*] \
+    fields, this function won't touch them anyway).";
   line out "let update ~dbh t =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.update_value_sexp \
@@ -166,6 +170,7 @@ let ocaml_record_access_module ~out name fields =
     line out "  >>= fun _ -> return ()";
   );
 
+  doc out "Delete the value from the DB; this {b does not check any pointer}.";
   line out "let delete_value_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.delete_value_sexp \
@@ -174,6 +179,9 @@ let ocaml_record_access_module ~out name fields =
     line out "  >>= fun _ -> return ()";
   );
 
+  doc out "Insert a “full” value into the DB, [and_update_sequence] \
+    defaults to [true]; it means updating the sequence of IDs and \
+    ensuring that the next index is [max + 1].";
   line out "let insert_value_unsafe ?(and_update_sequence=true) ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.insert_value (to_value v) in";
