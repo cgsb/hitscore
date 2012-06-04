@@ -332,9 +332,6 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
       (* if_verbose "Ok found that library: %d\n" one#g_id; *)
       return (Some one#g_pointer)
     | [] ->
-      perror "Library %s is declared as already defined but was not found%s"
-        libname 
-        (Option.value_map project ~default:"" ~f:(sprintf " in project %s"));
       return None
     |  l ->
       perror "Library %s has an ambiguous name: %d homonyms%s"
@@ -409,11 +406,21 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
           `existing (libname, lib_t, None, Some note, key_value_list)
         | _ :: conc :: note :: _ ->
           `existing (libname, lib_t, int conc, Some note, key_value_list))
-    | None -> return (`wrong libname)
+    | None ->
+      perror "Library %s is declared as already defined but was not found" libname;
+      return (`wrong libname)
     end
   | `new_one (i, libname, rest) ->
     let row = sanitized.(section + i + 2)  in
     check_libname libname;
+    check_existing_library libname rest
+    >>= fun exisiting ->
+    begin match exisiting with
+    | Some lib_p ->
+      perror "Library %s is declared new but the (project.)name is already \
+              in use by: %d" libname lib_p.Layout.Record_stock_library.id;
+    | None -> ()
+    end;
     (* if_verbose "%s should be a new one\n" libname; *)
     let open Option in
     let mandatory row col =
