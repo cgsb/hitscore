@@ -109,17 +109,18 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
       Common.PBS.prepare_work_environment ~dbh ~configuration pbs
       >>= fun () ->
-      of_list_sequential pre_commands (cmd "%s") >>= fun (_: unit list) ->
-      cmd "configureBclToFastq.pl --fastq-cluster-count 800000000 \
+      let command_chain =
+        (String.concat  pre_commands ~sep:"  &&  ")
+        ^ (sprintf " && configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     %s %s --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
                     --mismatches %d"
-        (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
-        (Option.value_map ~default:""
-           ~f:(sprintf "--use-bases-mask %S") bases_mask)
-        basecalls unaligned sample_sheet_path mismatch32
-      >>= fun () ->
+            (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
+            (Option.value_map ~default:""
+               ~f:(sprintf "--use-bases-mask %S") bases_mask)
+          basecalls unaligned sample_sheet_path mismatch32) in
+      cmd "%s" command_chain >>= fun () ->
       Common.PBS.qsub_pbs_script ~dbh ~configuration pbs pbs_script
     in
     double_bind after_start_m
