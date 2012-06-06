@@ -1,5 +1,6 @@
 open Hitscore_std
 open Hitscore_layout
+open Hitscore_configuration
 open Hitscore_access_rights
 open Hitscore_db_backend
 open Hitscore_common
@@ -49,6 +50,8 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       match mismatch with `zero -> 0 | `one -> 1 | `two -> 2 in
     let casava_version =
       match version with `casava_182 -> "1.8.2" | `casava_181 -> "1.8.1" in
+    let pre_commands =
+      Configuration.bcl_to_fastq_pre_commands configuration casava_version in
 
     Layout.Function_bcl_to_fastq.(
       Access.Bcl_to_fastq.add_evaluation ~dbh
@@ -91,6 +94,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
           sprintf "%s register-failure %d 'shell_command_failed %S'"
             hitscore_command id cmd)
         ~add_commands:(fun ~checked ~non_checked ->
+          List.iter pre_commands (ksprintf checked "%s");
           ksprintf checked ". /share/apps/casava/%s/intel/env.sh" casava_version;
           ksprintf checked "cd %s" unaligned;
           ksprintf checked "%s 1> %s 2> %s" 
@@ -105,13 +109,12 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
       Common.PBS.prepare_work_environment ~dbh ~configuration pbs
       >>= fun () ->
-      cmd ". /share/apps/casava/%s/intel/env.sh && \
-                  configureBclToFastq.pl --fastq-cluster-count 800000000 \
+      of_list_sequential pre_commands (cmd "%s") >>= fun (_: unit list) ->
+      cmd "configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     %s %s --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
                     --mismatches %d"
-        casava_version 
         (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
         (Option.value_map ~default:""
            ~f:(sprintf "--use-bases-mask %S") bases_mask)
