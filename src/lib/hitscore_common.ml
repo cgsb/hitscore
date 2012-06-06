@@ -438,7 +438,7 @@ module Common : COMMON = struct
           ~non_checked:(fun s -> r := (non_checked_command s) :: !r);
         List.rev !r in
       let user_list =
-        Option.value_map ~default:[] user ~f:(fun u -> [u ^ "nyu.edu"]) in
+        Option.value_map ~default:[] user ~f:(fun u -> [u ^ "@nyu.edu"]) in
       return Sequme_pbs.(make_script
                            ~mail_options:[JobAborted; JobBegun; JobEnded]
                            ~user_list
