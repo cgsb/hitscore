@@ -95,7 +95,6 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
             hitscore_command id cmd)
         ~add_commands:(fun ~checked ~non_checked ->
           List.iter pre_commands (ksprintf checked "%s");
-          ksprintf checked ". /share/apps/casava/%s/intel/env.sh" casava_version;
           ksprintf checked "cd %s" unaligned;
           ksprintf checked "%s 1> %s 2> %s" 
             make_command make_stdout_path make_stderr_path;
