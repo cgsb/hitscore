@@ -144,8 +144,8 @@ module type COMMON = sig
       nodes:int ->
       ppn:int ->
       wall_hours:int ->
-      queue:string ->
-      user:string ->
+      ?queue:string ->
+      ?user:string ->
       job_name:string ->
       on_command_failure:(string -> string) ->
       add_commands:(checked:(string -> unit) ->
@@ -413,7 +413,7 @@ module Common : COMMON = struct
 
         
     let pbs_script t ~configuration 
-        ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+        ~nodes ~ppn ~wall_hours ?queue ?user ~job_name
         ~on_command_failure ~add_commands =
       pbs_output_path t ~configuration 
       >>= fun out_path ->
@@ -437,12 +437,14 @@ module Common : COMMON = struct
           ~checked:(fun s -> r := (checked_command s) :: !r)
           ~non_checked:(fun s -> r := (non_checked_command s) :: !r);
         List.rev !r in
+      let user_list =
+        Option.value_map ~default:[] user ~f:(fun u -> [u ^ "nyu.edu"]) in
       return Sequme_pbs.(make_script
                            ~mail_options:[JobAborted; JobBegun; JobEnded]
-                           ~user_list:[user ^ "@nyu.edu"]
+                           ~user_list
                            ~resource_list
                            ~job_name
-                           ~stdout_path ~stderr_path ~queue commands
+                           ~stdout_path ~stderr_path ?queue commands
                          |! script_to_string)
 
     let qsub_pbs_script t ~dbh ~configuration content = 

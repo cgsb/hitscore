@@ -19,9 +19,9 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       ?bases_mask
       ?(mismatch=`one)
       ?(version=`casava_182)
-      ?(user="sm4431")
+      ?user
       ?(wall_hours=12) ?(nodes=1) ?(ppn=8)
-      ?(queue="cgsb-s")
+      ?queue
       ?(hitscore_command="echo hitscore should: ")
       ?(make_command="make -j8")
       name =
@@ -89,7 +89,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       let make_stdout_path = sprintf "%s/make.stdout" out_path in
       let make_stderr_path = sprintf "%s/make.stderr" out_path in
       Common.PBS.pbs_script ~configuration pbs
-        ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+        ~nodes ~ppn ~wall_hours ?queue ?user ~job_name
         ~on_command_failure:(fun cmd ->
           sprintf "%s register-failure %d 'shell_command_failed %S'"
             hitscore_command id cmd)
