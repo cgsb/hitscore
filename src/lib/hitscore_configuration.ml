@@ -14,6 +14,11 @@ let db_configuration ~host ~port ~database ~username ~password =
   {db_host = host; db_port = port; db_database = database;
    db_username = username; db_password = password}
 
+type bcl_to_fastq = {
+  b2f_version: string;
+  b2f_pre_commands: string list;
+}
+  
 type local_configuration = {
   root_path: string option;
   vol_directory: string;
@@ -23,14 +28,16 @@ type local_configuration = {
   work_path: string option;
   raw_data_path: string option;
   hiseq_directory: string;
+  bcl_to_fastq:  bcl_to_fastq list;
 }
 
 let configure ?root_path ?(root_writers=[]) ?root_group
     ?(vol_directory="vol") ?db_configuration ?work_path
-    ?raw_data_path ?(hiseq_directory="HiSeq") () =
+    ?raw_data_path ?(hiseq_directory="HiSeq")
+    ?(bcl_to_fastq=[]) () =
   { root_path; root_writers; root_group; 
     vol_directory; db_configuration; work_path;
-    raw_data_path; hiseq_directory;}
+    raw_data_path; hiseq_directory; bcl_to_fastq}
 
 let db t = t.db_configuration
 
@@ -57,6 +64,15 @@ let hiseq_directory t = t.hiseq_directory
 let hiseq_data_path t =
   Option.(t.raw_data_path >>| fun r -> sprintf "%s/%s" r t.hiseq_directory)
   
+let bcl_to_fastq_available_versions t =
+  List.map t.bcl_to_fastq (fun b -> b.b2f_version)
+
+let bcl_to_fastq_pre_commands t ~version =
+  List.find_map t.bcl_to_fastq (fun b ->
+    if b.b2f_version = version then Some b.b2f_pre_commands else None)
+  |! Option.value ~default:[]
+
+    
 let db_host     t = Option.map t.db_configuration (fun dbc -> dbc.db_host    ) 
 let db_port     t = Option.map t.db_configuration (fun dbc -> dbc.db_port    ) 
 let db_database t = Option.map t.db_configuration (fun dbc -> dbc.db_database) 
@@ -104,6 +120,18 @@ let parse_sexp sexp =
           List.find_map c (function
           | List (Atom "hiseq" :: Atom d :: []) -> Some d
           | _ -> None)) in
+      let bcl_to_fastq =
+        List.filter_map l ~f:(function
+        | List (Atom "bcl_to_fastq" :: Atom v :: config) ->
+          let pre_commands =
+            List.filter_map config (function
+            | List (Atom "pre_commands" :: c) ->
+              Some (List.filter_map c ~f:(function
+              | Atom cmd -> Some cmd
+              | _ -> None))
+            | _ -> None) in
+          Some {b2f_version = v; b2f_pre_commands = List.concat pre_commands}
+        | _ -> None) in
       let db_config = 
         List.find_map l (function
         | List (Atom "db" :: l) -> Some l
@@ -121,7 +149,7 @@ let parse_sexp sexp =
       in
       (name, 
        configure ?work_path ?vol_directory:None
-         ?raw_data_path ?hiseq_directory
+         ?raw_data_path ?hiseq_directory ~bcl_to_fastq
          ?root_path ~root_writers ?root_group ?db_configuration)
     | _ -> fail "expecting a (profile ...)"
   in

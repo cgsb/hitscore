@@ -74,6 +74,13 @@ module type CONFIGURATION = sig
       (like "/data/cgsb/gencore-raw/HiSeq"). *)
   val hiseq_data_path: local_configuration -> string option
     
+  (** Get all the available/configured B2F versions. *)
+  val bcl_to_fastq_available_versions: local_configuration -> string list
+
+  (** For a given [version], get the commands to run before. *)
+  val bcl_to_fastq_pre_commands: local_configuration -> version:string -> string list
+
+    
   (** Set of available profiles. *)
   type profile_set
 
