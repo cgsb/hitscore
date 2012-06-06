@@ -36,7 +36,7 @@ dbclear:
 PKG_VERSION=$(shell printf "`cat setup.data`\necho \$$pkg_version\n" | sed 's/ = /=/' | sh)
 BINDIR=$(shell printf "`cat setup.data`\necho \$$bindir\n" | sed 's/ = /=/' | sh)
 
-install-version: _build/src/app/hitscore setup.data
+install-version: _build/src/app/hitscore_main.native setup.data
 	cp $< $(BINDIR)/hitscore-$(PKG_VERSION)
 
 build:

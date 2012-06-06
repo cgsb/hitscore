@@ -27,13 +27,9 @@ type dsl_runtime_type =
   | Function of string * typed_value list * string
   | Volume of string * string (* Volume (dsl-name, toplevel-dir) *)
       
-type custom_action = 
-  | Search_by_and of string * string list
-
 type dsl_runtime_description = {
   nodes: dsl_runtime_type list;
   types: dsl_type list; (* TODO clarify what's in there! *)
-  actions: custom_action list;
 }
 
 let built_in_complex_types = [
@@ -182,7 +178,6 @@ let parse_sexp sexp =
       fail (sprintf "I'm lost parsing fields with: %s\n" (Sx.to_string l))
 
   in
-  let actions = ref [] in
   let parse_entry entry =
     match entry with
     | (Sx.Atom "subrecord") :: (Sx.Atom name) :: l ->
@@ -217,47 +212,9 @@ let parse_sexp sexp =
     | (Sx.Atom "volume") :: (Sx.Atom name) :: (Sx.Atom toplevel) :: [] ->
       existing_types := Volume_name name :: !existing_types;
       Some (Volume (name, toplevel))
-    | (Sx.Atom "search") :: (Sx.Atom record) :: (Sx.Atom "by") :: search_by ->
-      begin match check_type record with
-      | Record_name r -> ()
-      | Function_name r -> ()
-      | t -> 
-        fail (sprintf "A search-by can only operate on records or functions, \
-                 not %S like (search %s by ...) does."
-                (string_of_dsl_type t) record)
-      end;
-      begin match search_by with
-      | [ Sx.List (Sx.Atom "and" :: fields) ] ->
-        let fields = List.map fields (function
-          | Sx.Atom f -> f
-          | _ -> ksprintf fail "In (search %s by ...): 'and' operation only
-                      accepts lists of fields" record)
-        in
-        actions := (Search_by_and (record, fields)) :: !actions
-      | [ Sx.Atom field ] ->
-        actions := (Search_by_and (record, [field])) :: !actions
-      | _ ->
-        ksprintf fail "Can't parse this (search %s by ...)" record
-      end;
-      None
     | s ->
       fail (sprintf "I'm lost while parsing entry with: %s\n"
               (Sx.to_string (Sx.List s)))
-  in
-  let check_actions actions nodes =
-    List.iter actions (function
-      | Search_by_and (record, fields) ->
-        begin match List.find nodes (function
-          | Record (n, _) -> n = record
-          | _ -> false)  with
-        | Some (Record (n, r_f)) ->
-          List.iter fields (fun s ->
-            if List.exists r_f (fun (n, _) -> s = n) then () 
-            else
-              ksprintf fail "In (search %s by ...): field %s does not exist" 
-                record s)
-        | _ -> ()
-        end)
   in
   match sexp with
   | Sx.Atom s -> fail_atom s
@@ -268,11 +225,8 @@ let parse_sexp sexp =
           | Sx.Atom s -> fail_atom s
           | Sx.List l -> parse_entry l) in
     let nodes = built_in_complex_types @ user_nodes in
-    let actions = !actions in
-    check_actions actions nodes;
     { nodes; 
-      types = List.rev !existing_types;
-      actions }
+      types = List.rev !existing_types;}
     
 
 let parse_str str =

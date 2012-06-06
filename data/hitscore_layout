@@ -23,31 +23,22 @@
        notable
        )
 
-(search person by email)
-(search person by login)
-(search person by (and nickname family_name))
-(search person by (and given_name family_name))
-
 (record organism
         (name string option)
         (informal string option)
         notable)
-(search organism by name)
 
 (record sample
         (name        string)
         of_project
         (organism    organism option)
         notable)
-(search sample by name)
-(search sample by (and name project))
 
 (volume protocol_directory protocols)
 (record protocol
         (name string)
         (doc protocol_directory)
         notable)
-(search protocol by name)
 
 (enumeration barcode_provider 
              none bioo bioo_96 illumina nugen custom)
@@ -76,8 +67,6 @@
         (preparator person option)
         notable
 )
-(search stock_library by name)
-(search stock_library by (and name project))
 
 (record key_value
         (key string)
@@ -105,7 +94,6 @@
 (record flowcell
         (serial_name string)
         (lanes lane array))
-(search flowcell by serial_name)
 
 (record hiseq_run
         (date timestamp)
@@ -152,8 +140,6 @@
         (run_date timestamp)
         (host string)
         (hiseq_dir_name string))
-(search hiseq_raw by flowcell_name)
-(search hiseq_raw by hiseq_dir_name)
 
 (record inaccessible_hiseq_raw
         (deleted hiseq_raw array))
