@@ -57,6 +57,12 @@ module Configuration_file = struct
     iter (db_database config) (printf "   database : %S\n"); 
     iter (db_username config) (printf "   username : %S\n"); 
     iter (db_password config) (printf "   password : %S\n");
+    List.iter (bcl_to_fastq_available_versions config) (fun version ->
+      printf "Bcl-to-fastq %S\n" version;
+      List.iter (bcl_to_fastq_pre_commands config ~version) (fun c ->
+        printf "  PRE: %S\n" c;
+      );
+    );
     ()
 
   let print_env () =
