@@ -1048,7 +1048,7 @@ module Query = struct
         printf "%d invoices:\n" (List.length invoices);
         of_list_sequential invoices (fun inv ->
           inv#pi#get >>= fun pi ->
-          printf " * %d to %s" inv#g_id pi#family_name;
+          printf " * %d to %s\n" inv#g_id pi#family_name;
           return ())
         >>= fun _ ->
         layout#bcl_to_fastq#all >>= fun b2fs ->
