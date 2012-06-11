@@ -17,7 +17,7 @@ module type COMMON = sig
     (unit,
      [> `Layout of
          Hitscore_layout.Layout.error_location *
-           Hitscore_layout.Layout.error_cause ]) Flow.monad
+           Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
            
   (** Check that an HiSeq-raw directory (the database) record is usable. *) 
   val check_hiseq_raw_availability :
@@ -28,12 +28,12 @@ module type COMMON = sig
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause 
-     | `hiseq_dir_deleted ]) Flow.monad
+     | `hiseq_dir_deleted ]) Sequme_flow.t
 
   (** Get the full path from an HiSeq directory name. *)
   val hiseq_raw_full_path:
     configuration:Configuration.local_configuration ->
-    string -> (string, [> `raw_data_path_not_configured]) Flow.monad
+    string -> (string, [> `raw_data_path_not_configured]) Sequme_flow.t
     
   (** Convert a list of file-system trees to unix paths relative to a
       volume. *)
@@ -56,7 +56,7 @@ module type COMMON = sig
     (Layout.File_system.tree list,
      [> `Layout of
          Hitscore_layout.Layout.error_location *
-           Hitscore_layout.Layout.error_cause ]) Flow.monad
+           Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
       
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
@@ -69,7 +69,7 @@ module type COMMON = sig
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
      | `root_directory_not_configured ])
-      Flow.monad
+      Sequme_flow.t
 
   (** Get all the full paths of a given volume pointer (follows
       virtual symbolic links). *)
@@ -80,7 +80,7 @@ module type COMMON = sig
     (string Hitscore_std.List.t,
      [> `Layout of
          Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
-     | `root_directory_not_configured ]) Flow.monad
+     | `root_directory_not_configured ]) Sequme_flow.t
 
   module PBS: sig
 
@@ -95,47 +95,52 @@ module type COMMON = sig
     val work_path_for_job :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Flow.monad
+      (string, [> `work_directory_not_configured ]) Sequme_flow.t
     val pbs_output_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Flow.monad
+      (string, [> `work_directory_not_configured ]) Sequme_flow.t
     val pbs_runtime_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Flow.monad
+      (string, [> `work_directory_not_configured ]) Sequme_flow.t
     val pbs_result_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Flow.monad
+      (string, [> `work_directory_not_configured ]) Sequme_flow.t
     val pbs_script_path :
       t ->
       configuration:Configuration.local_configuration ->
-      (string, [> `work_directory_not_configured ]) Flow.monad
+      (string, [> `work_directory_not_configured ]) Sequme_flow.t
     val prepare_work_environment :
       t ->
-      dbh:Backend.db_handle ->
-      configuration:Configuration.local_configuration ->
+      dbh:Hitscore_db_backend.Backend.db_handle ->
+      configuration:Hitscore_configuration.Configuration.local_configuration ->
       (unit,
        [> `Layout of
            Hitscore_layout.Layout.error_location *
              Hitscore_layout.Layout.error_cause
-       | `system_command_error of string * exn
-       | `work_directory_not_configured ])
-        Flow.t
+       | `system_command_error of
+           string *
+             [> `exited of int
+             | `exn of exn
+             | `signaled of int
+             | `stopped of int ]
+       | `work_directory_not_configured ]) Sequme_flow.t
 
     val save_pbs_runtime_information :
       t ->
-      dbh:Backend.db_handle ->
-      configuration:Configuration.local_configuration ->
+      dbh:Hitscore_db_backend.Backend.db_handle ->
+      configuration:Hitscore_configuration.Configuration.local_configuration ->
       string ->
       (unit,
        [> `Layout of
            Hitscore_layout.Layout.error_location *
              Hitscore_layout.Layout.error_cause
-       | `system_command_error of string * exn
-       | `work_directory_not_configured ])
-        Flow.t
+       | `system_command_error of
+           string * [> `exited of int | `exn of exn
+                    | `signaled of int | `stopped of int ]
+       | `work_directory_not_configured ]) Sequme_flow.t
 
     (** Create a PBS script. *)
     val pbs_script :
@@ -150,7 +155,7 @@ module type COMMON = sig
       on_command_failure:(string -> string) ->
       add_commands:(checked:(string -> unit) ->
                     non_checked:(string -> unit) -> 'a) ->
-      (string, [> `work_directory_not_configured ]) Flow.monad
+      (string, [> `work_directory_not_configured ]) Sequme_flow.t
 
     (** Write a PBS script to a file, set the access rights, and qsub it. *)
     val qsub_pbs_script :
@@ -162,26 +167,35 @@ module type COMMON = sig
        [> `Layout of
            Hitscore_layout.Layout.error_location *
              Hitscore_layout.Layout.error_cause
-       | `system_command_error of string * exn
+       | `system_command_error of
+           string * [> `exited of int | `exn of exn
+                    | `signaled of int | `stopped of int ]
        | `work_directory_not_configured
-       | `write_file_error of string * string * exn ]) Flow.monad
+       | `write_file_error of string * exn ]) Sequme_flow.t
         
     val qstat :
       t ->
       configuration:Configuration.local_configuration ->
       ([> `running
        | `started_but_not_running of
-           [> `system_command_error of string * exn ] ],
-       [> `work_directory_not_configured ])
-        Flow.monad
+           [> `system_command_error of
+               string * [> `exited of int | `exn of exn
+                        | `signaled of int | `stopped of int ] ] ],
+        [> `work_directory_not_configured ])
+        Sequme_flow.t
 
     val qdel :
       t ->
-      configuration:Configuration.local_configuration ->
-      (unit, 
-       [> `system_command_error of string * exn
+      configuration:Hitscore_configuration.Configuration.local_configuration ->
+      (unit,
+       [> `system_command_error of
+           string *
+             [> `exited of int
+             | `exn of exn
+             | `signaled of int
+             | `stopped of int ]
        | `work_directory_not_configured ])
-        Flow.monad
+        Sequme_flow.t
 
   end
 
@@ -195,14 +209,14 @@ module type COMMON = sig
         (unit,
          [> `Layout of
              Hitscore_layout.Layout.error_location *
-               Hitscore_layout.Layout.error_cause ]) Flow.monad
+               Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
       val get_status :
         pointer ->
         dbh:Hitscore_db_backend.Backend.db_handle ->
         (Layout.Enumeration_process_status.t,
          [> `Layout of
              Hitscore_layout.Layout.error_location *
-               Hitscore_layout.Layout.error_cause ]) Flow.monad
+               Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
 
       val pbs_fun : PBS.t_fun
       val name_in_log: string
@@ -218,22 +232,29 @@ module type COMMON = sig
       (Layout_function.pointer,
        [> `Layout of
            Hitscore_layout.Layout.error_location *
-             Hitscore_layout.Layout.error_cause ]) Flow.monad
+             Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
         
     (** Get the status of the evaluation by checking its data-base
         status and it presence in the PBS queue. *)
     val status :
       dbh:Hitscore_db_backend.Backend.db_handle ->
-      configuration:Configuration.local_configuration ->
+      configuration:Hitscore_configuration.Configuration.local_configuration ->
       Layout_function.pointer ->
-      ([> `not_started of Layout.Enumeration_process_status.t
+      ([> `not_started of
+          Hitscore_layout.Layout.Enumeration_process_status.t
        | `running
        | `started_but_not_running of
-           [> `system_command_error of string * exn ] ],
+           [> `system_command_error of
+               string *
+                 [> `exited of int
+                 | `exn of exn
+                 | `signaled of int
+                 | `stopped of int ] ] ],
        [> `Layout of
            Hitscore_layout.Layout.error_location *
              Hitscore_layout.Layout.error_cause
-       | `work_directory_not_configured ]) Flow.monad
+       | `work_directory_not_configured ])
+        Sequme_flow.t
 
     (** Kill the evaluation ([qdel]) and set it as failed. *)
     val kill :
@@ -246,9 +267,11 @@ module type COMMON = sig
              Hitscore_layout.Layout.error_cause
        | `not_started of
            Hitscore_layout.Layout.Enumeration_process_status.t
-       | `system_command_error of string * exn
+       | `system_command_error of
+           string * [> `exited of int | `exn of exn
+                    | `signaled of int | `stopped of int ]
        | `work_directory_not_configured ])
-        Flow.monad
+        Sequme_flow.t
   end
 
 end
@@ -264,7 +287,7 @@ module Common : COMMON = struct
   let check_hiseq_raw_availability ~dbh ~hiseq_raw =
     Layout.Record_inaccessible_hiseq_raw.(
       Access.Inaccessible_hiseq_raw.get_all ~dbh >>= fun all ->
-      of_list_sequential all ~f:(fun t ->
+      while_sequential all ~f:(fun t ->
         let p = pointer t in
         return (p, t.g_last_modified, Array.to_list t.g_value.deleted))
       >>| List.sort ~cmp:(fun a b -> compare (snd3 b) (snd3 a))
@@ -451,7 +474,7 @@ module Common : COMMON = struct
       pbs_runtime_path t ~configuration >>= fun run_path ->
       pbs_script_path t ~configuration >>= fun pbs_script_path ->
       ksprintf system_command "mkdir -p %s" run_path >>= fun () ->
-      write_file ~file:pbs_script_path ~content >>= fun () ->
+      write_file pbs_script_path ~content >>= fun () ->
       Access_rights.set_posix_acls ~dbh ~configuration (`file pbs_script_path)
       >>= fun () ->
       ksprintf system_command "qsub %s > %s/jobid" pbs_script_path run_path
@@ -483,14 +506,14 @@ module Common : COMMON = struct
         (unit,
          [> `Layout of
              Hitscore_layout.Layout.error_location *
-               Hitscore_layout.Layout.error_cause ]) Flow.monad
+               Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
       val get_status :
         pointer ->
         dbh:Hitscore_db_backend.Backend.db_handle ->
         (Layout.Enumeration_process_status.t,
          [> `Layout of
              Hitscore_layout.Layout.error_location *
-               Hitscore_layout.Layout.error_cause ]) Flow.monad
+               Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
     val pbs_fun : PBS.t_fun
     val name_in_log: string
   end) = struct

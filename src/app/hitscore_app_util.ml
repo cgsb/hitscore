@@ -100,10 +100,15 @@ let string_of_error = function
     sprintf "INVALID-CONFIGURATION: Raw-data path not set.\n"
   | `work_directory_not_configured ->
     sprintf "INVALID-CONFIGURATION: Work directory not set.\n"
-  | `write_file_error (f,c,e) ->
-    sprintf "SYS-FILE-ERROR: Write file error: %s\n" (Exn.to_string e)
+  | `write_file_error (f,e) ->
+    sprintf "SYS-FILE-ERROR: Write to %S error: %s\n" f (Exn.to_string e)
   | `system_command_error (cmd, e) ->
-    sprintf "SYS-CMD-ERROR: Command: %S --> %s\n" cmd (Exn.to_string e)
+    sprintf "SYS-CMD-ERROR: Command: %S --> %s\n" cmd
+      (match e with
+      | `exited i -> sprintf "Exit %d" i
+      | `exn e -> Exn.to_string e
+      | `signaled i -> sprintf "Signal %d" i
+      | `stopped i -> sprintf "Stopped %d" i)
   | `status_parsing_error s ->
     sprintf "LAYOUT-INCONSISTENCY-ERROR: Cannot parse function status: %s\n" s
   | `wrong_status s ->

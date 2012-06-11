@@ -16,8 +16,6 @@ let doc out fmt = (* Doc to put before values/types *)
   ksprintf out ("\n(** " ^^ fmt ^^ " *)\n")
 let deprecate out fmt =
   doc out (" @deprecated This is left there for emergency purposes only." ^^ fmt)
-let debug out metafmt fmt =
-  line out ("Printf.ksprintf Flow.IO.log_error \"%s\" " ^^ fmt ^^ ";") metafmt
 
 
 let rec ocaml_type = function
@@ -156,7 +154,7 @@ let ocaml_record_access_module ~out name fields =
     line out "  let query = Sql_query.get_all_values_sexp ~record_name:%S in" name;
     line out "  Backend.query ~dbh query";
     line out "  >>= fun results ->";
-    line out "  of_list_sequential results ~f:(fun row ->";
+    line out "  while_sequential results ~f:(fun row ->";
     line out "    of_result Result.(Sql_query.parse_value row >>= of_value))";
   );
 
@@ -263,7 +261,7 @@ let ocaml_function_access_module ~out name result_type args =
       ~function_name:%S in" name;
     line out "  Backend.query ~dbh query";
     line out "  >>= fun results ->";
-    line out "  of_list_sequential results ~f:(fun row ->";
+    line out "  while_sequential results ~f:(fun row ->";
     line out "    of_result Result.(Sql_query.parse_evaluation row >>= \
                  of_evaluation))";
   );
@@ -360,7 +358,7 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  let query = Sql_query.get_all_volumes_sexp () in";
     line out "  Backend.query ~dbh query";
     line out "  >>= fun results ->";
-    line out "  of_list_sequential results ~f:(fun row ->";
+    line out "  while_sequential results ~f:(fun row ->";
     line out "    of_result Result.(Sql_query.parse_volume row \
                     >>= of_volume))";
   );
@@ -387,7 +385,7 @@ let ocaml_file_system_access_module ~out dsl =
 let ocaml_classy_access ~out dsl =
   line out "
 class ['pointer, 'pointed, 'error ] pointer
-  (layout_get: 'pointer -> ('pointed, 'error) Flow.monad)
+  (layout_get: 'pointer -> ('pointed, 'error) Sequme_flow.t)
   (id: 'pointer -> int)
   (p: 'pointer) =
 object
@@ -398,7 +396,7 @@ object
 end";
 
   let make_pointer_object p tget class_name modname =
-    sprintf "(new pointer (%s : %s.pointer -> ('error %s, 'error) Flow.monad) \
+    sprintf "(new pointer (%s : %s.pointer -> ('error %s, 'error) Sequme_flow.t) \
                          (fun p -> p.%s.id) %s : \
                 (%s.pointer, 'error %s, 'error) pointer)"
       tget modname class_name modname p modname class_name
@@ -457,7 +455,7 @@ end";
     | (n, Option t) -> line out "   ?%s" n
     | (n, t) -> line out "   ~%s" n
     );
-    line out "    () : ((%s.pointer, 'error %s, 'error) pointer, 'error) Flow.monad ="
+    line out "    () : ((%s.pointer, 'error %s, 'error) pointer, 'error) Sequme_flow.t ="
       modname class_name;
     line out "    %s ~dbh " add_function;
     List.iter fields (function
@@ -478,7 +476,7 @@ end";
   line out "  method g_kind = t.File_system.g_kind";
   line out "  method g_content = t.File_system.g_content";
   line out "  method g_pointer = File_system.(pointer t)";
-  line out "  method re_get : (unit, 'error) Flow.monad = \n\
+  line out "  method re_get : (unit, 'error) Sequme_flow.t = \n\
                   Volume.get ~dbh (File_system.pointer t) >>= fun new_t -> \n\
                   t <- new_t; return ()";
   line out "  end";
@@ -508,10 +506,10 @@ end";
           types_module types_module n
       );
       line out "    t <- { t with %s.g_value = g_v };\n\
-               \    (Access.%s.update ~dbh t: (unit, 'error) Flow.monad)"
+               \    (Access.%s.update ~dbh t: (unit, 'error) Sequme_flow.t)"
         types_module modname;
     );
-    line out "  method re_get : (unit, 'error) Flow.monad = \n\
+    line out "  method re_get : (unit, 'error) Sequme_flow.t = \n\
                   %s.(get ~dbh (%s.pointer t)) >>= fun new_t -> \n\
                   t <- new_t; return ()" modname types_module;
     line out "end"
@@ -530,16 +528,16 @@ end";
       line out "  method %s = %s" n
         (ocaml_object_transform_field types_module (sprintf "t.g_evaluation.%s" n) t);
     );
-    line out "  method re_get : (unit, 'error) Flow.monad = \n\
+    line out "  method re_get : (unit, 'error) Sequme_flow.t = \n\
                   %s.(get ~dbh (%s.pointer t)) >>= fun new_t -> \n\
                   t <- new_t; return ()" modname types_module;
-    line out "  method set_started : (unit, 'error) Flow.monad  = \n\
+    line out "  method set_started : (unit, 'error) Sequme_flow.t  = \n\
                   %s.(set_started ~dbh (%s.pointer t)) >>= fun () -> \n\
                   self#re_get" modname types_module;
-    line out "  method set_failed  : (unit, 'error) Flow.monad = \n\
+    line out "  method set_failed  : (unit, 'error) Sequme_flow.t = \n\
                   %s.(set_failed ~dbh (%s.pointer t)) >>= fun () -> \n\
                   self#re_get" modname types_module;
-    line out "  method set_succeeded result  : (unit, 'error) Flow.monad = \n\
+    line out "  method set_succeeded result  : (unit, 'error) Sequme_flow.t = \n\
                   %s.(set_succeeded ~result ~dbh (%s.pointer t)) \n\
                   >>= fun () -> \n\
                   self#re_get" modname types_module;
@@ -550,8 +548,8 @@ end";
 
   line out "
 class ['pointer, 'pointed, 'error ] collection
-  (layout_get: 'pointer -> ('pointed, 'error) Flow.monad)
-  (layout_get_all: unit -> ('pointed list, 'error) Flow.monad)
+  (layout_get: 'pointer -> ('pointed, 'error) Sequme_flow.t)
+  (layout_get_all: unit -> ('pointed list, 'error) Sequme_flow.t)
   (unsafe_cast: int -> 'pointer)
  =
 object
@@ -563,7 +561,7 @@ end";
     sprintf 
       "new collection \n\
       \  ((fun p -> %s.get ~dbh p >>| new %s dbh): \
-         %s.pointer -> ('error %s, 'error) Flow.monad)\n\
+         %s.pointer -> ('error %s, 'error) Sequme_flow.t)\n\
       \  (fun () -> %s.get_all ~dbh >>| List.map ~f:(new %s dbh)) \n\
       %s.unsafe_cast"
       access_mod class_name types_mod class_name access_mod class_name types_mod
@@ -782,18 +780,18 @@ let ocaml_module raw_dsl dsl output_string =
   List.iter all_nodes (function
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
-    line out "    of_list_sequential dump.%s \
+    line out "    while_sequential dump.%s \
                   (%s.insert_value_unsafe ~and_update_sequence ~dbh)"
       name (String.capitalize name);
     line out "    >>= fun (_: unit list) ->";
   | Function (name, args, result) ->
-    line out "    of_list_sequential dump.%s \
+    line out "    while_sequential dump.%s \
                       (%s.insert_evaluation_unsafe ~and_update_sequence ~dbh)"
       name (String.capitalize name);
     line out "    >>= fun (_: unit list) ->";
   | Volume (_, _) -> ()
   );
-  line out "    of_list_sequential dump.file_system \
+  line out "    while_sequential dump.file_system \
                   (Volume.insert_volume_unsafe ~and_update_sequence ~dbh)";
   line out "    >>= fun (_: unit list) ->";
   line out "    Backend.query ~dbh Sql_query.update_sequence >>= fun _ ->";
@@ -804,7 +802,6 @@ let ocaml_module raw_dsl dsl output_string =
 
   line out "module Classy = struct";
   line out "open Access";
-  line out "open Flow";
   ocaml_classy_access ~out dsl;
   line out "end";
 
@@ -816,10 +813,10 @@ let ocaml_module raw_dsl dsl output_string =
       line out "    %s#%s#get >>= fun _ ->" name n;
     | n, Option (Record_name _)
     | n, Option (Volume_name _) ->
-      line out "    of_option %s#%s (fun o -> o#get) >>= fun _ ->" name n;
+      line out "    map_option %s#%s (fun o -> o#get) >>= fun _ ->" name n;
     | n, Array (Record_name _)
     | n, Array (Volume_name _) ->
-      line out "    of_list_sequential (Array.to_list %s#%s) \
+      line out "    while_sequential (Array.to_list %s#%s) \
                        (fun o -> o#get) >>= fun _ ->" name n;
     | _ -> ()) in 
   line out "let all_pointers ~dbh =";
@@ -828,12 +825,12 @@ let ocaml_module raw_dsl dsl output_string =
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
     line out "  layout#%s#all >>= fun all_%s ->" name name;
-    line out "  of_list_sequential all_%s (fun %s ->" name name;
+    line out "  while_sequential all_%s (fun %s ->" name name;
     call_fields name fields;
     line out "  return ())\n  >>= fun (_ : unit list) ->";
   | Function (name, args, result) ->
     line out "  layout#%s#all >>= fun all_%s ->" name name;
-    line out "  of_list_sequential all_%s (fun %s ->" name name;
+    line out "  while_sequential all_%s (fun %s ->" name name;
     call_fields name (("g_result", Option (Record_name result)) :: args);
     line out "  return ())\n  >>= fun (_ : unit list) ->";
   | Volume (_, _) -> ()

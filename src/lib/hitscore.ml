@@ -1,6 +1,6 @@
 open Hitscore_std
 
-module Flow = Flow
+module Flow = Sequme_flow
 
   (*
 module Backend_queries = Hitscore_db_backend.Sql_query

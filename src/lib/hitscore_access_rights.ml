@@ -30,8 +30,12 @@ module type ACCESS_RIGHTS = sig
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
-     | `system_command_error of string * exn ])
-      Flow.t
+     | `system_command_error of
+         string *
+           [> `exited of int
+           | `exn of exn
+           | `signaled of int
+           | `stopped of int ] ]) Sequme_flow.t
 end
 
 module Access_rights : ACCESS_RIGHTS = struct
@@ -40,7 +44,7 @@ module Access_rights : ACCESS_RIGHTS = struct
     let layout = Classy.make dbh in
     layout#person#all
     >>= fun citizens ->
-    of_list_sequential citizens (fun someguy ->
+    while_sequential citizens (fun someguy ->
       if Array.exists someguy#roles ~f:((=) role) then
         return someguy#login
       else
@@ -92,15 +96,15 @@ module Access_rights : ACCESS_RIGHTS = struct
     
     let configured_writers = Configuration.root_writers configuration in
     get_people ~dbh `administrator >>= fun admins ->
-    of_list_sequential admins try_login >>| List.filter_opt
+    while_sequential admins try_login >>| List.filter_opt
     >>= fun valid_admins ->
     let valid_writers = List.dedup (valid_admins @ configured_writers) in
     get_people ~dbh `auditor >>= fun readers ->
-    of_list_sequential (readers @ more_readers) try_login >>| List.filter_opt
+    while_sequential (readers @ more_readers) try_login >>| List.filter_opt
     >>= fun valid_readers ->
     match dir_or_file with
     | `dir root -> 
-      of_option (Configuration.root_group configuration) ~f:(fun grp -> 
+      map_option (Configuration.root_group configuration) ~f:(fun grp -> 
         cmd "chown -R :%s %s" grp root 
         >>= fun () ->
         find_exec `dir root (sprintf "chmod u+rwx,g-rw,g+xs,o-rwx %s")
@@ -128,7 +132,7 @@ module Access_rights : ACCESS_RIGHTS = struct
                       (String.concat ~sep:" " readers)
                       (String.concat ~sep:" " valid_readers))
     | `file f ->
-      of_option (Configuration.root_group configuration) ~f:(fun grp ->
+      map_option (Configuration.root_group configuration) ~f:(fun grp ->
         cmd "chown :%s %s" grp f >>= fun () ->
         cmd "chmod 0600 %s" f
         >>= fun () ->
