@@ -10,13 +10,15 @@ let format_message s =
   |! String.concat ~sep:"" 
       
 include Hitscore
-include Flow
+include Sequme_flow
+include Sequme_flow_list
+include Sequme_flow_sys
 
 let read_file file =
   wrap_io Lwt_io.(fun () -> with_file ~mode:input file (fun i -> read i)) ()
 
 let epr fmt = ksprintf (fun s -> prerr_string (format_message s)) (fmt ^^ "%!")
-  
+let debug s = eprintf "%s" s; return ()
 let dbg fmt = ksprintf (fun s-> debug (format_message s)) fmt
   
 let print_error = function
@@ -29,8 +31,12 @@ let print_error = function
   | `socket_creation_exn e ->
     epr "System command error:\n  exn: %s\n" (Exn.to_string e)
   | `system_command_error (c, e) ->
-    epr "System command error:\n  cmd: %s\n  exn: %s\n"
-      c (Exn.to_string e)
+    epr "System command error:\n  cmd: %s\n  exn: %s\n" c
+      (match e with
+      | `exited i -> sprintf "exited %d" i
+      | `signaled i -> sprintf "signaled %d" i
+      | `stopped i -> sprintf "stopped %d" i
+      | `exn exn -> (Exn.to_string exn))
   | `not_an_ssl_socket ->
     epr "Got a plain socket when expecting an SSL one."
   | `ssl_certificate_error ->

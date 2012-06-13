@@ -9,7 +9,7 @@ let main ?ca_cert ~cert_key () =
   >>= fun ssl_context ->
   Flow_net.server_socket ~port:2000 >>= fun socket ->
 
-  of_option ca_cert (fun ca_cert ->
+  map_option ca_cert (fun ca_cert ->
     Certificate_authority.get_index ca_cert
     >>= fun ca_index ->
     return (fun c ->
