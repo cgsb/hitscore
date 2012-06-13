@@ -46,9 +46,9 @@ module Fastx_quality_stats:
   let start ~dbh ~configuration
       ?(option_Q=33)
       ?(filter_names=["*.fastq"; "*.fastq.gz"])
-      ?(user="sm4431")
+      ?user
       ?(wall_hours=12) ?(nodes=1) ?(ppn=8)
-      ?(queue="cgsb-s")
+      ?queue
       ?(hitscore_command="echo hitscore should: ")
       (input_dir:Layout.Record_generic_fastqs.pointer)
       =
@@ -75,7 +75,7 @@ module Fastx_quality_stats:
       Common.PBS.pbs_result_path pbs ~configuration
       >>= fun dest_dir ->
       Common.PBS.pbs_script ~configuration pbs
-        ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+        ~nodes ~ppn ~wall_hours ?queue ?user ~job_name
         ~on_command_failure:(fun cmd ->
           sprintf "%s register-failure %d 'shell_command_failed %S'"
             hitscore_command id cmd)

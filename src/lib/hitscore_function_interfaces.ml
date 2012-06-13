@@ -25,42 +25,46 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
 
   val run :
     dbh:Hitscore_db_backend.Backend.db_handle ->
-    kind:Layout.Enumeration_sample_sheet_kind.t ->
-    configuration:Configuration.local_configuration ->
+    kind:Hitscore_layout.Layout.Enumeration_sample_sheet_kind.t ->
+    configuration:Hitscore_configuration.Configuration.local_configuration ->
     ?force_new:bool ->
     ?note:string ->
     string ->
     ([> `new_failure of
-        Layout.Function_assemble_sample_sheet.pointer *
+        Hitscore_layout.Layout.Function_assemble_sample_sheet.pointer *
           [> `Layout of
               Hitscore_layout.Layout.error_location *
                 Hitscore_layout.Layout.error_cause
           | `root_directory_not_configured
-          | `system_command_error of string * exn
-          | `write_file_error of string * string * exn ]
+          | `system_command_error of
+              string *
+                [> `exited of int
+                | `exn of exn
+                | `signaled of int
+                | `stopped of int ]
+          | `write_file_error of string * exn ]
      | `new_success of
-         Layout.Function_assemble_sample_sheet.pointer
+         Hitscore_layout.Layout.Function_assemble_sample_sheet.pointer
      | `previous_success of
-         Layout.Function_assemble_sample_sheet.pointer *
-           Layout.Record_sample_sheet.pointer ],
+         Hitscore_layout.Layout.Function_assemble_sample_sheet.pointer *
+           Hitscore_layout.Layout.Record_sample_sheet.pointer ],
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
      | `barcode_not_found of
-         int *
-           Layout.Enumeration_barcode_provider.t
-               | `duplicated_barcode of string
-               | `fatal_error of
-                   [> `add_volume_did_not_create_a_tree_volume of
-                        Layout.File_system.pointer
-                    | `trees_to_unix_paths_should_return_one ]
-               | `layout_inconsistency of
-                   [> `Function of string | `Record of string ] *
-                     [> `search_flowcell_by_name_not_unique of string * int
-                     | `successful_status_with_no_result of int ]
-               | `wrong_request of
-                   [> `record_flowcell ] * [> `value_not_found of string ] ])
-      Flow.monad
+         int * Hitscore_layout.Layout.Enumeration_barcode_provider.t
+     | `duplicated_barcode of string
+     | `fatal_error of
+         [> `add_volume_did_not_create_a_tree_volume of
+             Hitscore_layout.Layout.File_system.pointer
+         | `trees_to_unix_paths_should_return_one ]
+     | `layout_inconsistency of
+         [> `Function of string | `Record of string ] *
+           [> `search_flowcell_by_name_not_unique of string * int
+           | `successful_status_with_no_result of int ]
+     | `wrong_request of
+         [> `record_flowcell ] * [> `value_not_found of string ] ])
+      Sequme_flow.t
 end
 
 
@@ -93,47 +97,52 @@ start ~dbh ~configuration       (* common arguments *)
      monad are other other errors (before starting the function, or
      while setting it as failed -- unlikely).
 *)
-           val start :
-             dbh:Hitscore_db_backend.Backend.db_handle ->
-             configuration:Configuration.local_configuration ->
-             sample_sheet:Layout.Record_sample_sheet.pointer ->
-             hiseq_dir:Layout.Record_hiseq_raw.pointer ->
-             ?tiles:string ->
-             ?bases_mask:string ->
-             ?mismatch:[< `one | `two | `zero > `one ] ->
-             ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
-             ?user:string ->
-             ?wall_hours:int ->
-             ?nodes:int ->
-             ?ppn:int ->
-             ?queue:string ->
-             ?hitscore_command:string ->
-             ?make_command:string ->
-             string ->
-             ([> `failure of
-                   Layout.Function_bcl_to_fastq.pointer *
-                     [> `Layout of
-                         Hitscore_layout.Layout.error_location *
-                           Hitscore_layout.Layout.error_cause
-                     | `system_command_error of string * exn
-                     | `work_directory_not_configured
-                     | `write_file_error of string * string * exn ]
-              | `success of
-                   Layout.Function_bcl_to_fastq.pointer ],
-              [> `Layout of
-                  Hitscore_layout.Layout.error_location *
-                    Hitscore_layout.Layout.error_cause
-              | `empty_sample_sheet_volume of
-                  Layout.File_system.pointer *
-                    Layout.Record_sample_sheet.pointer
-              | `hiseq_dir_deleted
-              | `more_than_one_file_in_sample_sheet_volume of
-                  Layout.File_system.pointer *
-                    Layout.Record_sample_sheet.pointer *
-                    string List.t
-              | `raw_data_path_not_configured
-              | `root_directory_not_configured ])
-               Flow.monad
+  val start :
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Hitscore_configuration.Configuration.local_configuration ->
+    sample_sheet:Hitscore_layout.Layout.Record_sample_sheet.pointer ->
+    hiseq_dir:Hitscore_layout.Layout.Record_hiseq_raw.pointer ->
+    ?tiles:string ->
+    ?bases_mask:string ->
+    ?mismatch:[< `one | `two | `zero > `one ] ->
+    ?version:[< `casava_181 | `casava_182 > `casava_182 ] ->
+    ?user:string ->
+    ?wall_hours:int ->
+    ?nodes:int ->
+    ?ppn:int ->
+    ?queue:string ->
+    ?hitscore_command:string ->
+    ?make_command:string ->
+    string ->
+    ([> `failure of
+        Hitscore_layout.Layout.Function_bcl_to_fastq.pointer *
+          [> `Layout of
+              Hitscore_layout.Layout.error_location *
+                Hitscore_layout.Layout.error_cause
+          | `system_command_error of
+              string *
+                [> `exited of int
+                | `exn of exn
+                | `signaled of int
+                | `stopped of int ]
+          | `work_directory_not_configured
+          | `write_file_error of string * exn ]
+     | `success of
+         Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ],
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `empty_sample_sheet_volume of
+         Hitscore_layout.Layout.File_system.pointer *
+           Hitscore_layout.Layout.Record_sample_sheet.pointer
+     | `hiseq_dir_deleted
+     | `more_than_one_file_in_sample_sheet_volume of
+         Hitscore_layout.Layout.File_system.pointer *
+           Hitscore_layout.Layout.Record_sample_sheet.pointer *
+           string Hitscore_std.List.t
+     | `raw_data_path_not_configured
+             | `root_directory_not_configured ])
+      Sequme_flow.t
 
   (** Create the resulting [Layout.Record_bcl_to_fastq.t] and register
       the [bcl_to_fastq] evaluation as a success.
@@ -142,74 +151,93 @@ start ~dbh ~configuration       (* common arguments *)
       [hitscore <profile> register-success] which itself should be called
       only at the end of the PBS script generated by the {!start} function.
   *)
-           val succeed :
-             dbh:Hitscore_db_backend.Backend.db_handle ->
-             configuration:Configuration.local_configuration ->
-             bcl_to_fastq:Layout.Function_bcl_to_fastq.pointer ->
-             ([> `failure of
-                 Layout.Function_bcl_to_fastq.pointer *
-                   [> `Layout of
-                       Hitscore_layout.Layout.error_location *
-                         Hitscore_layout.Layout.error_cause
-                   | `system_command_error of string * exn ]
-              | `success of
-                  Layout.Function_bcl_to_fastq.pointer ],
-              [> `Layout of
-                  Hitscore_layout.Layout.error_location *
-                    Hitscore_layout.Layout.error_cause
-              | `root_directory_not_configured
-              | `system_command_error of string * exn
-              | `work_directory_not_configured ])
-               t
+  val succeed :
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Hitscore_configuration.Configuration.local_configuration ->
+    bcl_to_fastq:Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+    ([> `failure of
+        Hitscore_layout.Layout.Function_bcl_to_fastq.pointer *
+          [> `Layout of
+              Hitscore_layout.Layout.error_location *
+                Hitscore_layout.Layout.error_cause
+          | `system_command_error of
+              string *
+                [> `exited of int
+                | `exn of exn
+                | `signaled of int
+                | `stopped of int ] ]
+     | `success of
+         Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ],
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `root_directory_not_configured
+     | `system_command_error of
+         string *
+           [> `exited of int
+           | `exn of exn
+           | `signaled of int
+           | `stopped of int ]
+     | `work_directory_not_configured ]) Sequme_flow.t
 
-           (** Register the evaluation as failed with a optional reason to add
-               to the [log] (record). *)
-           val fail :
-             dbh:Hitscore_db_backend.Backend.db_handle ->
-             ?reason:string ->
-             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
-             (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
-              [> `Layout of
-                  Hitscore_layout.Layout.error_location *
-                    Hitscore_layout.Layout.error_cause ]) Flow.monad
+  (** Register the evaluation as failed with a optional reason to add
+      to the [log] (record). *)
+  val fail :
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    ?reason:string ->
+    Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+    (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
 
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
-           val status :
-             dbh:Hitscore_db_backend.Backend.db_handle ->
-             configuration:Configuration.local_configuration ->
-             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
-             ([> `not_started of
-                   Layout.Enumeration_process_status.t
-               | `running
-               | `started_but_not_running of
-                   [> `system_command_error of string * exn ] ],
-              [> `Layout of
-                   Hitscore_layout.Layout.error_location *
-                   Hitscore_layout.Layout.error_cause
-              | `work_directory_not_configured ])
-               t
+  val status :
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Hitscore_configuration.Configuration.local_configuration ->
+    Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+    ([> `not_started of
+        Hitscore_layout.Layout.Enumeration_process_status.t
+     | `running
+     | `started_but_not_running of
+         [> `system_command_error of
+             string *
+               [> `exited of int
+               | `exn of exn
+               | `signaled of int
+               | `stopped of int ] ] ],
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `work_directory_not_configured ])
+      Sequme_flow.t
 
-               
+      
   (** Kill the evaluation ([qdel]) and set it as failed. *)
-           val kill :
-             dbh:Hitscore_db_backend.Backend.db_handle ->
-             configuration:Configuration.local_configuration ->
-             Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
-             (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
-              [> `Layout of
-                   Hitscore_layout.Layout.error_location *
-                   Hitscore_layout.Layout.error_cause
-              | `not_started of
-                  Layout.Enumeration_process_status.t
-              | `system_command_error of string * exn
-              | `work_directory_not_configured ])
-               t
+  val kill :
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Hitscore_configuration.Configuration.local_configuration ->
+    Hitscore_layout.Layout.Function_bcl_to_fastq.pointer ->
+    (Hitscore_layout.Layout.Function_bcl_to_fastq.pointer,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `not_started of
+         Hitscore_layout.Layout.Enumeration_process_status.t
+     | `system_command_error of
+         string *
+           [> `exited of int
+           | `exn of exn
+           | `signaled of int
+           | `stopped of int ]
+     | `work_directory_not_configured ])
+      Sequme_flow.t
 
 end
 
 (** The module corresponding to [prepare_unaligned_delivery] in the {i
-Layout}.  *)
+    Layout}.  *)
 module type UNALIGNED_DELIVERY = sig
 
 
@@ -238,9 +266,11 @@ module type UNALIGNED_DELIVERY = sig
            List.t
      | `partially_found_lanes of int * string
      | `root_directory_not_configured
-     | `system_command_error of string * exn
+     | `system_command_error of
+         string * [> `exited of int | `exn of exn
+                  | `signaled of int | `stopped of int ]
      | `wrong_unaligned_volume of string List.t ])
-      Flow.monad
+      Sequme_flow.t
 
 
 end
@@ -266,7 +296,7 @@ end
 (** The module to create “untyped” fastq directories.  *)
 module type COERCE_B2F_UNALIGNED = sig
 
-  
+    
   val run :
     dbh:Hitscore_db_backend.Backend.db_handle ->
     configuration:'a ->
@@ -274,7 +304,7 @@ module type COERCE_B2F_UNALIGNED = sig
     (Layout.Function_coerce_b2f_unaligned.pointer,
      [> `Layout of
          Hitscore_layout.Layout.error_location *
-           Hitscore_layout.Layout.error_cause ]) Flow.monad
+           Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
 
 end
 
@@ -297,12 +327,14 @@ module type FASTX_QUALITY_STATS = sig
            Hitscore_layout.Layout.error_cause
      | `cannot_recognize_fastq_format of String.t
      | `file_path_not_in_volume of
-                   String.t *
-                     Layout.File_system.pointer
+         String.t *
+           Layout.File_system.pointer
      | `root_directory_not_configured
-     | `system_command_error of string * exn ])
-      t
-  
+     | `system_command_error of
+         string * [> `exited of int | `exn of exn
+                  | `signaled of int | `stopped of int ]])
+       Sequme_flow.t
+      
   (** Start *)
   val start :
     dbh:Hitscore_db_backend.Backend.db_handle ->
@@ -319,12 +351,13 @@ module type FASTX_QUALITY_STATS = sig
     (Layout.Function_fastx_quality_stats.pointer,
      [> `Layout of
          Hitscore_layout.Layout.error_location *
-                   Hitscore_layout.Layout.error_cause
+           Hitscore_layout.Layout.error_cause
      | `root_directory_not_configured
-     | `system_command_error of string * exn
+     | `system_command_error of
+         string * [> `exited of int | `exn of exn
+                  | `signaled of int | `stopped of int ]
      | `work_directory_not_configured
-     | `write_file_error of string * string * exn ])
-      t
+     | `write_file_error of string * exn ]) Sequme_flow.t
 
 
   val succeed :
@@ -332,20 +365,23 @@ module type FASTX_QUALITY_STATS = sig
     configuration:Configuration.local_configuration ->
     Layout.Function_fastx_quality_stats.pointer ->
     ([> `failure of
-                   Layout.Function_fastx_quality_stats.pointer *
-              [> `Layout of
-                   Hitscore_layout.Layout.error_location *
-                   Hitscore_layout.Layout.error_cause
-              | `system_command_error of string * exn ]
+        Layout.Function_fastx_quality_stats.pointer *
+          [> `Layout of
+              Hitscore_layout.Layout.error_location *
+                Hitscore_layout.Layout.error_cause
+          | `system_command_error of
+              string * [> `exited of int | `exn of exn
+                       | `signaled of int | `stopped of int ] ]
      | `success of
          Layout.Function_fastx_quality_stats.pointer ],
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
      | `root_directory_not_configured
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      t
+     | `system_command_error of
+         string * [> `exited of int | `exn of exn
+                  | `signaled of int | `stopped of int ]
+     | `work_directory_not_configured ]) Sequme_flow.t
       
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
@@ -356,7 +392,7 @@ module type FASTX_QUALITY_STATS = sig
     (Hitscore_layout.Layout.Function_fastx_quality_stats.pointer,
      [> `Layout of
          Hitscore_layout.Layout.error_location *
-           Hitscore_layout.Layout.error_cause ]) Flow.monad
+           Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
       
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
@@ -368,12 +404,13 @@ module type FASTX_QUALITY_STATS = sig
         Layout.Enumeration_process_status.t
      | `running
      | `started_but_not_running of
-         [> `system_command_error of string * exn ] ],
+         [> `system_command_error of
+             string * [> `exited of int | `exn of exn
+                      | `signaled of int | `stopped of int ] ] ],
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
-     | `work_directory_not_configured ])
-      t
+     | `work_directory_not_configured ]) Sequme_flow.t
       
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
@@ -386,8 +423,9 @@ module type FASTX_QUALITY_STATS = sig
            Hitscore_layout.Layout.error_cause
      | `not_started of
          Layout.Enumeration_process_status.t
-     | `system_command_error of string * exn
-     | `work_directory_not_configured ])
-      t
+     | `system_command_error of
+         string * [> `exited of int | `exn of exn
+                  | `signaled of int | `stopped of int ]
+     | `work_directory_not_configured ]) Sequme_flow.t
 
 end

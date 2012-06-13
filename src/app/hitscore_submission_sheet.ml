@@ -3,7 +3,8 @@ let (|>) x f = f x
 
 open Hitscore_app_util
 open Hitscore
-open Flow
+open Sequme_flow
+open Sequme_flow_list
 
 let find_contact ~dbh ~verbose first last email =
   let if_verbose fmt = 
@@ -12,7 +13,7 @@ let find_contact ~dbh ~verbose first last email =
   let layout = Classy.make dbh in
   layout#person#all
   >>= fun all_the_people ->
-  of_list_sequential all_the_people (fun p ->
+  while_sequential all_the_people (fun p ->
     if p#email = email then
       return (Some (`one p#g_pointer))
     else if (p#given_name = first || p#nickname = Some first)
@@ -160,7 +161,7 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
     let contacts_section = find_section sanitized "Contacts" in
     get_section sanitized ~start:(contacts_section + 1)
       ~first_column_condition:((<>) "Invoicing") in
-  of_list_sequential contact_rows (function
+  while_sequential contact_rows (function
   | "" :: [] | [] -> failwithf "should not be trying this... (contacts)"
   | ["" ; email ] ->
     search_person_by_email layout email
@@ -381,7 +382,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
       | Invalid_argument "index out of bounds" -> None
       | e -> warning "Saw exception: %s" (Exn.to_string e); None) in
 
-  of_list_sequential filtered_rows (function
+  while_sequential filtered_rows (function
   | `known (i, libname, rest) ->
     check_libname libname;
     (* if_verbose "%s should be already known\n" libname; *)
@@ -759,7 +760,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       else failwith "erroneous_pointer during wet-run!" in
 
     (* Adding contacts *)
-    of_list_sequential contacts (function
+    while_sequential contacts (function
       | email, None, contents ->
         let get nth name = 
           match List.nth contents nth with
@@ -803,7 +804,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     let bio_directories = ref [] in
     let arg_directories = ref [] in
     let stock = ref [] in
-    of_list_sequential libraries (function
+    while_sequential libraries (function
     | `wrong libname -> return ()
     | `existing _ -> return ()    
     | `new_lib (libname, project, conc, note,
@@ -861,7 +862,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       | None -> return None
       end
       >>= fun prot_opt ->
-      of_option species (fun name ->
+      map_option species (fun name ->
         layout#organism#all >>| List.filter ~f:(fun o -> o#name = Some name)
         >>= fun search ->
         begin match search with
@@ -876,7 +877,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | _ -> failwith "DB error (record_organism_by_name)"
         end)
       >>= fun organism ->
-      of_option sample_name (fun name ->
+      map_option sample_name (fun name ->
         layout#sample#all >>| List.filter ~f:(fun s ->
           if s#name = name then
             match s#project, project with 
@@ -916,7 +917,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let stranded = Option.value ~default:false strd in
       let truseq_control = Option.value ~default:false tsc in
 
-      of_list_sequential cbs (fun sequence -> (* custom barcode seqs *)
+      while_sequential cbs (fun sequence -> (* custom barcode seqs *)
         let position_in_r1 =
           List.find_map cbp (function | `on_r1 i -> Some i | _ -> None) in
         let position_in_r2 =
@@ -935,7 +936,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       >>| Array.of_list
       >>= fun custom_barcodes ->
 
-      of_option preparator (fun email ->
+      map_option preparator (fun email ->
         begin match List.Assoc.find contacts email with
         | Some id -> return id
         (* |  None ->  *)
@@ -979,7 +980,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                ~f:(fun { Layout.Record_person.id} -> sprintf " (preparator %d)" id)))
       >>= fun stock_library ->
 
-      of_option bio_wnb (fun well_number ->
+      map_option bio_wnb (fun well_number ->
         let dir = List.filter_opt [bio_pdf; bio_xad] in
         let files =
           match List.find !bio_directories (fun (l, i) -> l = dir) with
@@ -1020,7 +1021,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   (sprintf " (files %d)" files.Layout.File_system.id)))
       >>= fun bioanalyzer ->
 
-      of_option arg_wnb (fun well_number ->
+      map_option arg_wnb (fun well_number ->
         let dir = match arg_img with | Some img -> [img] | _ -> [] in
         let files =
           match List.find !arg_directories (fun (l, i) -> l = dir) with
@@ -1070,8 +1071,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       return ())
     >>= fun _ ->
 
-    of_list_sequential (List.filter_opt pools) (fun (pool, spm, tv, nm, input_libs) ->
-      of_list_sequential input_libs (fun (libname, percent) ->
+    while_sequential (List.filter_opt pools) (fun (pool, spm, tv, nm, input_libs) ->
+      while_sequential input_libs (fun (libname, percent) ->
         let find_stock =
           if libname = "PhiX" then (
             layout#stock_library#all
@@ -1118,7 +1119,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           List.filter_map key_values (function
           | k, None ->  None
           | key, Some value -> Some (key, value)) in
-        of_list_sequential user_db_list (fun (key, value) ->
+        while_sequential user_db_list (fun (key, value) ->
           run ~dbh  ~fake:(fun x -> Layout.Record_key_value.unsafe_cast x)
             ~real:(fun dbh ->
               Access.Key_value.add_value ~dbh ~key ~value)
@@ -1177,7 +1178,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     )
     >>= fun named_lanes ->
 
-    of_list_sequential invoicing (fun (piemail, p, chartstuff) ->
+    while_sequential invoicing (fun (piemail, p, chartstuff) ->
       begin match List.Assoc.find contacts piemail with
       | Some id -> return id
       | None ->

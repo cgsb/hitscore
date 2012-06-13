@@ -112,13 +112,13 @@ module Assemble_sample_sheet:
           let print = ksprintf in
           print out "FCID,Lane,SampleID,SampleRef,Index,Description,Control\
                     ,Recipe,Operator,SampleProject\n";
-          of_list_sequential lane_list ~f:(fun (lane_idx, l) ->
+          while_sequential lane_list ~f:(fun (lane_idx, l) ->
             let open Layout.Record_lane in
             Access.Lane.get ~dbh l
             >>= fun {g_value = { libraries; _ }} -> 
             begin match kind with
             | `specific_barcodes ->
-              of_list_sequential (Array.to_list libraries) ~f:(fun input ->
+              while_sequential (Array.to_list libraries) ~f:(fun input ->
                 let open Layout.Record_input_library in
                 Access.Input_library.get ~dbh input
                 >>= fun {g_value = { library; _ }} ->
@@ -157,7 +157,7 @@ module Assemble_sample_sheet:
                   | None -> return ()
                   end
                   >>= fun () ->
-                  of_list_sequential l ~f:(fun (name, bars) -> 
+                  while_sequential l ~f:(fun (name, bars) -> 
                     Array.iter bars ~f:(fun b ->
                       print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
                         flowcell_name (lane_idx + 1) name b (lane_idx + 1));
@@ -172,7 +172,7 @@ module Assemble_sample_sheet:
                 return ()
               | some ->
                 let elected_barcode_type =
-                  of_list_sequential (Array.to_list some) (fun il ->
+                  while_sequential (Array.to_list some) (fun il ->
                     let open Layout.Record_input_library in
                     Access.Input_library.get ~dbh il
                     >>= fun {g_value = { library; _ }} ->
@@ -266,7 +266,7 @@ module Assemble_sample_sheet:
             match Configuration.path_of_volume configuration path_vol with
             | Some vol_dir -> 
               ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
-              write_file ~file:(sprintf "%s/%s" vol_dir path_file)
+              write_file (sprintf "%s/%s" vol_dir path_file)
                 ~content:(Buffer.contents sample_sheet.content)
               >>= fun () ->
               Access_rights.set_posix_acls ~dbh (`dir vol_dir) ~configuration

@@ -19,9 +19,9 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       ?bases_mask
       ?(mismatch=`one)
       ?(version=`casava_182)
-      ?(user="sm4431")
+      ?user
       ?(wall_hours=12) ?(nodes=1) ?(ppn=8)
-      ?(queue="cgsb-s")
+      ?queue
       ?(hitscore_command="echo hitscore should: ")
       ?(make_command="make -j8")
       name =
@@ -89,13 +89,12 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       let make_stdout_path = sprintf "%s/make.stdout" out_path in
       let make_stderr_path = sprintf "%s/make.stderr" out_path in
       Common.PBS.pbs_script ~configuration pbs
-        ~nodes ~ppn ~wall_hours ~queue ~user ~job_name
+        ~nodes ~ppn ~wall_hours ?queue ?user ~job_name
         ~on_command_failure:(fun cmd ->
           sprintf "%s register-failure %d 'shell_command_failed %S'"
             hitscore_command id cmd)
         ~add_commands:(fun ~checked ~non_checked ->
           List.iter pre_commands (ksprintf checked "%s");
-          ksprintf checked ". /share/apps/casava/%s/intel/env.sh" casava_version;
           ksprintf checked "cd %s" unaligned;
           ksprintf checked "%s 1> %s 2> %s" 
             make_command make_stdout_path make_stderr_path;
@@ -109,17 +108,18 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
       Common.PBS.prepare_work_environment ~dbh ~configuration pbs
       >>= fun () ->
-      of_list_sequential pre_commands (cmd "%s") >>= fun (_: unit list) ->
-      cmd "configureBclToFastq.pl --fastq-cluster-count 800000000 \
+      let command_chain =
+        (String.concat  pre_commands ~sep:"  &&  ")
+        ^ (sprintf " && configureBclToFastq.pl --fastq-cluster-count 800000000 \
                     %s %s --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
                     --mismatches %d"
-        (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
-        (Option.value_map ~default:""
-           ~f:(sprintf "--use-bases-mask %S") bases_mask)
-        basecalls unaligned sample_sheet_path mismatch32
-      >>= fun () ->
+            (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
+            (Option.value_map ~default:""
+               ~f:(sprintf "--use-bases-mask %S") bases_mask)
+          basecalls unaligned sample_sheet_path mismatch32) in
+      cmd "%s" command_chain >>= fun () ->
       Common.PBS.qsub_pbs_script ~dbh ~configuration pbs pbs_script
     in
     double_bind after_start_m

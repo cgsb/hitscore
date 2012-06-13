@@ -60,7 +60,7 @@ module type BROKER = sig
   type 'a t
 
   val create :
-    ?mutex:(unit -> (unit, 'a) Flow.monad) * (unit -> unit) ->
+    ?mutex:(unit -> (unit, 'a) Sequme_flow.t) * (unit -> unit) ->
     dbh:Hitscore_db_backend.Backend.db_handle ->
     configuration:Configuration.local_configuration ->
     unit ->
@@ -68,7 +68,7 @@ module type BROKER = sig
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause ])
-      Flow.monad
+      Sequme_flow.t
 
   val current_dump: 'a t -> Layout.dump
     
@@ -77,14 +77,14 @@ module type BROKER = sig
         Hitscore_layout.Layout.error_location *
           Hitscore_layout.Layout.error_cause ] as 'a) t ->
     dbh:Hitscore_db_backend.Backend.db_handle ->
-    configuration:'b -> (unit, 'a) Flow.monad
+    configuration:'b -> (unit, 'a) Sequme_flow.t
 
   val find_person :
     'a t ->
     identifier:string ->
     (Layout.Record_person.t option,
      [> `person_not_unique of string ])
-      Flow.monad
+      Sequme_flow.t
 
   val modify_person :
     ([> `Layout of
@@ -92,17 +92,17 @@ module type BROKER = sig
           Hitscore_layout.Layout.error_cause ] as 'a) t ->
     dbh:Hitscore_db_backend.Backend.db_handle ->
     person:Layout.Record_person.t ->
-    (unit, 'a) Flow.monad
+    (unit, 'a) Sequme_flow.t
  
 
   val person_affairs: 'a t -> person:int ->
-    (person_affairs, [> `person_not_found of int ]) Flow.monad
+    (person_affairs, [> `person_not_found of int ]) Sequme_flow.t
 
   val library_info: 'a t -> library_input_spec -> 
-    (library_info, [> `library_not_found of library_input_spec ]) Flow.monad
+    (library_info, [> `library_not_found of library_input_spec ]) Sequme_flow.t
 
   val delivered_demultiplexings: 'a t -> hiseq_run ->
-    (delivered_demultiplexing list, 'b) Flow.monad
+    (delivered_demultiplexing list, 'b) Sequme_flow.t
 end
 
 module Broker : BROKER = struct
@@ -168,7 +168,7 @@ module Broker : BROKER = struct
         (library_input_spec, library_info option) Cache.t option;
       mutable delivered_demultiplexings_cache:
         (hiseq_run, delivered_demultiplexing list) Cache.t option;
-      mutex: ((unit -> (unit, 'a) monad) * (unit -> unit)) option;
+      mutex: ((unit -> (unit, 'a) Sequme_flow.t) * (unit -> unit)) option;
     }
 
     let lock_mutex t =

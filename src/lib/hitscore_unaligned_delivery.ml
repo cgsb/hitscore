@@ -11,7 +11,7 @@ module Unaligned_delivery:
 = struct
 
   let debug fmt =
-    ksprintf debug fmt
+    ksprintf (fun s -> eprintf "%s%!" s; return ()) fmt
   let cmd fmt =
     ksprintf system_command fmt
 
@@ -47,7 +47,7 @@ module Unaligned_delivery:
        |! List.map ~f:(fun l -> sprintf "%d" l#id) |! String.concat ~sep:", ")
     >>= fun () ->
     layout#flowcell#all >>= fun flowcells ->
-    of_list_sequential flowcells ~f:(fun fc ->
+    while_sequential flowcells ~f:(fun fc ->
       let find_lanes =
         Array.map invoice_lanes
           ~f:(fun l -> Array.findi ~f:(fun _ o -> o#pointer = l#pointer) fc#lanes) 
@@ -64,9 +64,9 @@ module Unaligned_delivery:
       debug "%s wants lanes: %s of %s\n" pi_name 
         (lanes_idxs |! List.map ~f:(sprintf "%d") |! String.concat ~sep:", ")
         flowcell_name >>= fun () ->
-      of_list_sequential (Array.to_list invoice_lanes) ~f:(fun il ->
+      while_sequential (Array.to_list invoice_lanes) ~f:(fun il ->
         il#get >>= fun invlane ->
-        of_list_sequential (Array.to_list invlane#contacts) ~f:(fun cp ->
+        while_sequential (Array.to_list invlane#contacts) ~f:(fun cp ->
           cp#get >>| fun c -> c#login)
         >>| List.filter_opt)
       >>| List.concat >>| List.dedup
@@ -80,7 +80,7 @@ module Unaligned_delivery:
       in          
       cmd "mkdir -m 750 -p %S" links_dir  >>= fun () ->
       debug "created links dir: %s\n" links_dir >>= fun () ->
-      of_list_sequential lanes_idxs ~f:(fun idx ->
+      while_sequential lanes_idxs ~f:(fun idx ->
         cmd "unset CDPATH; cd %s && ln -s %s/Project_Lane%d Lane%d"
           links_dir unaligned_path (idx + 1) (idx + 1))
       >>= fun (_: unit list) ->

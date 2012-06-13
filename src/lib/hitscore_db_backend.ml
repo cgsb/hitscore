@@ -405,25 +405,25 @@ module type BACKEND = sig
     ?log:(string -> unit) ->
     unit ->
     (db_handle,
-     [> `db_backend_error of [> error ] ]) Flow.monad
+     [> `db_backend_error of [> error ] ]) Sequme_flow.t
 
   val disconnect :
     dbh:db_handle ->
     (unit, [> `db_backend_error of [> `disconnection of exn ] ])
-      Flow.monad
+      Sequme_flow.t
   val reconnect :
     dbh:db_handle ->
     (db_handle,
      [> `db_backend_error of
          [> `connection of exn | `disconnection of exn ] ])
-      Flow.t
+      Sequme_flow.t
 
   val query :
     dbh:db_handle ->
     Sql_query.t ->
     (result,
-     [> `db_backend_error of [> `query of Sql_query.t * exn ] ]) Flow.monad
-  val wipe_out : dbh:db_handle -> (unit, 'a) Flow.t
+     [> `db_backend_error of [> `query of Sql_query.t * exn ] ]) Sequme_flow.t
+  val wipe_out : dbh:db_handle -> (unit, 'a) Sequme_flow.t
   val check_db :
     dbh:db_handle ->
     (unit,
@@ -431,7 +431,7 @@ module type BACKEND = sig
          [> `connection of exn
          | `disconnection of exn
          | `query of Sql_query.t * exn ] ])
-      Flow.t
+      Sequme_flow.t
       
 end
   
@@ -457,7 +457,7 @@ module Backend : BACKEND = struct
   type result = result_item list
     
   let connect ?host ?port ?database ?user ?password ?log () :
-      (db_handle, [> `db_backend_error of [> error ] ]) monad =
+      (db_handle, [> `db_backend_error of [> error ] ]) Sequme_flow.t =
     bind_on_error
       (catch_io (PG.connect
                    ?host ?port ?database ?user ?password) ())
@@ -507,7 +507,7 @@ module Backend : BACKEND = struct
         error (`db_backend_error (`query (query, e))))
         
   let wipe_out ~dbh =
-    of_list_sequential Sql_query.wipe_out (fun q ->
+    while_sequential Sql_query.wipe_out (fun q ->
       bind_on_error (query ~dbh q) (fun e -> return []))
     >>= fun _ ->
     return ()

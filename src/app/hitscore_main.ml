@@ -2,7 +2,9 @@
 open Core.Std
 open Hitscore_app_util
 open Hitscore
-open Flow
+open Sequme_flow
+open Sequme_flow_list
+open Sequme_flow_sys
 
   
 let commands = ref []
@@ -629,7 +631,7 @@ module Verify = struct
       let layout = Classy.make dbh in
       layout#file_system#all
       >>= fun all_vols ->
-      of_list_sequential all_vols (fun vol ->
+      while_sequential all_vols (fun vol ->
         Common.path_of_volume ~dbh ~configuration vol#g_pointer
         >>= fun path ->
         check_directory path
@@ -650,7 +652,7 @@ module Verify = struct
         >>= fun () ->
         Common.all_paths_of_volume ~dbh ~configuration vol#g_pointer
         >>= fun paths ->
-        of_list_sequential paths (fun path ->
+        while_sequential paths (fun path ->
           check_directory path >>= fun checked ->
           begin match checked with
           | `ok -> return ()
@@ -708,12 +710,12 @@ module Verify = struct
     with_database ~configuration (fun ~dbh ->
       let layout = Classy.make dbh in
       layout#sample#all >>= fun all_samples ->
-      of_list_sequential all_samples (fun sample ->
+      while_sequential all_samples (fun sample ->
         return (sample#name, sample#project))
       >>= fun to_check ->
       check to_check "sample";
       layout#stock_library#all >>= fun all_stocks ->
-      of_list_sequential all_stocks (fun stock ->
+      while_sequential all_stocks (fun stock ->
         return (stock#name, stock#project))
       >>= fun to_check ->
       check to_check "stock-library";
@@ -725,7 +727,7 @@ module Verify = struct
     let all_started = List.filter ~f:(fun b -> b#g_status = `Started) all in
     printf "Function %s:" name;
     printf " %d started.\n" (List.length all_started);
-    of_list_sequential all_started (fun f ->
+    while_sequential all_started (fun f ->
       status f
       >>= fun status ->
       begin match status with
@@ -823,7 +825,7 @@ module Flowcell = struct
   let checks_and_read_lengths ~dbh lanes =
     if List.length (List.dedup lanes) < List.length lanes then
       failwithf "Cannot reuse same lane" ();
-    of_list_sequential lanes (fun id ->
+    while_sequential lanes (fun id ->
       check_lane_unused ~dbh id >>= fun () ->
       Layout.Record_lane.(
         Access.Lane.get ~dbh (unsafe_cast id)
@@ -913,7 +915,7 @@ module Flowcell = struct
           (match r2 with 
           | Some s -> sprintf "PE %dx%d" r1 s
           | None -> sprintf "SE %d" r1);
-        of_list_sequential lanes ~f:(function
+        while_sequential lanes ~f:(function
         | `phix ->  new_input_phix ~dbh r1 r2 
         | `lane id -> return (Layout.Record_lane.unsafe_cast id)
         | `empty -> new_empty_lane ~dbh r1 r2)
@@ -1017,7 +1019,7 @@ module Query = struct
             List.for_all all_lanes (fun lane ->
               Array.for_all lane#libraries (fun l -> l#id <> il#g_id))) in
         printf "%d orphan input-libraries\n" (List.length orphans);
-        of_list_sequential orphans (fun oil ->
+        while_sequential orphans (fun oil ->
           oil#library#get
           >>= fun stock ->
           printf "  * %d submitted on %s (stock: %d, %s%s)\n"
@@ -1046,13 +1048,13 @@ module Query = struct
             Array.exists inv#lanes ~f:(fun il ->
               List.exists lanes (fun fl -> il#id = fl#id))) in 
         printf "%d invoices:\n" (List.length invoices);
-        of_list_sequential invoices (fun inv ->
+        while_sequential invoices (fun inv ->
           inv#pi#get >>= fun pi ->
-          printf " * %d to %s" inv#g_id pi#family_name;
+          printf " * %d to %s\n" inv#g_id pi#family_name;
           return ())
         >>= fun _ ->
         layout#bcl_to_fastq#all >>= fun b2fs ->
-        of_list_sequential b2fs (fun b2f ->
+        while_sequential b2fs (fun b2f ->
           b2f#raw_data#get >>= fun hr ->
           if hr#flowcell_name = fcid then (
             match b2f#g_result with
@@ -1242,7 +1244,7 @@ module Fastx_qs = struct
   let find_a_link ~dbh b2fu_dir =
     let layout = Classy.make dbh in
     layout#generic_fastqs#all >>= fun all_gf ->
-    of_list_sequential all_gf (fun gf ->
+    while_sequential all_gf (fun gf ->
       gf#directory#get >>= fun d -> return (gf, d))
     >>= fun all_vols ->
     return (List.find all_vols ~f:(fun (gf, vol) ->
