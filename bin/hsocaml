@@ -22,8 +22,10 @@ open Core.Std
 open Hitscore
 let () = printf "--> Open Core.Std\n"
 let () = printf "--> open Hiscore\n"
-open Flow
-let () = printf "--> Open Flow\n"
+open Sequme_flow
+open Sequme_flow_list
+open Sequme_flow_sys
+let () = printf "--> Open Flow (sys,list)\n"
 
 let default_config () =
   sprintf "$HOME/.config/hitscore/config.sexp"
