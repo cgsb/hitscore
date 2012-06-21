@@ -1120,12 +1120,21 @@ module Prepare_delivery = struct
       eprintf "Done: Preparation: %d\n" 
         preparation.Layout.Function_prepare_unaligned_delivery.id;
       return ())
+
+  let do_repair configuration path =
+    with_database configuration (fun ~dbh ->
+      Unaligned_delivery.repair_path ~configuration ~dbh path)
+    
+      
   let () =
     define_command ~names:["deliver"] ~description:"Deliver links to clients"
       ~usage:(fun o exec cmd ->
         fprintf o "Usage: %s <profile> %s <bcl_to_fastq> <invoice> <dir> [<tag>]\n"
-          exec cmd)
+          exec cmd;
+        fprintf o "Usage: %s <profile> %s -redo <path>\n" exec cmd;
+      )
       ~run:(fun config exec cmd -> function
+      | ["-redo"; path] -> do_repair config path
       | [bb; inv; dir] -> run_function config bb inv dir None
       | [bb; inv; dir; tag] -> run_function config bb inv dir (Some tag)
       | l -> error (`invalid_command_line

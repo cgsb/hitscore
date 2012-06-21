@@ -46,6 +46,10 @@ let string_of_error = function
     sprintf "FATAL_ERROR: trees_to_unix_paths_should_return_one\n"
   | `io_exn e ->
     sprintf "IO-ERROR: %s\n" (Exn.to_string e)
+  | `cannot_find_delivery (p, l) ->
+    sprintf "Cannot find the delivery for %s (%d results)\n" p l
+  | `lane_not_found_in_any_flowcell lanep ->
+    sprintf "Cannot find lane %d in any flowcell\n" lanep.Layout.Record_lane.id
       (*
   | `layout_inconsistency (where, what) ->
     let int32_list il = (List.map il Int32.to_string |! String.concat ~sep:", ") in
