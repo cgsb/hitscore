@@ -272,6 +272,27 @@ module type UNALIGNED_DELIVERY = sig
      | `wrong_unaligned_volume of string List.t ])
       Sequme_flow.t
 
+  (** Go to the given delivery directory, re-do the existing links and
+      set the current ACL's. *)
+  val repair_path :
+    dbh:Hitscore_db_backend.Backend.db_handle ->
+    configuration:Hitscore_configuration.Configuration.local_configuration ->
+    string ->
+    (unit,
+     [> `Layout of
+         Hitscore_layout.Layout.error_location *
+           Hitscore_layout.Layout.error_cause
+     | `cannot_find_delivery of string * int
+     | `lane_not_found_in_any_flowcell of
+         Hitscore_layout.Layout.Record_lane.pointer
+     | `root_directory_not_configured
+     | `system_command_error of
+         string *
+           [> `exited of int
+           | `exn of exn
+           | `signaled of int
+           | `stopped of int ] ])
+      Sequme_flow.t
 
 end
   

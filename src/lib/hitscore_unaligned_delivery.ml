@@ -100,5 +100,63 @@ module Unaligned_delivery:
     | l -> 
       error (`not_single_flowcell l)
 
-
+  let repair_path ~dbh ~configuration path =
+    let layout = Classy.make dbh in
+    layout#flowcell#all >>= fun all_flowcells ->
+    layout#prepare_unaligned_delivery#all
+    >>= while_sequential ~f:(fun delivery ->
+      map_option delivery#g_result (fun r ->
+        r#get >>= fun res ->
+        if res#directory = path then (
+          delivery#unaligned#get >>= fun unaligned ->
+          Common.path_of_volume ~configuration ~dbh unaligned#directory#pointer
+          >>= fun unaligned_path ->
+          return (Some (delivery, res, unaligned_path)))
+        else
+          return None))
+    >>| List.filter_opt
+    >>| List.filter_opt
+    >>= begin function
+    | [(deliv, result, unaligned)] ->
+      debug "Deliv: %d\n"   deliv#g_id >>= fun () ->
+      debug "Should be %s\n" unaligned >>= fun () ->
+      deliv#invoice#get >>= fun invoicing ->
+      while_sequential (Array.to_list invoicing#lanes) (fun lane_p ->
+        lane_p#get >>= fun lane ->
+        List.find_map all_flowcells (fun flowcell ->
+          Array.findi flowcell#lanes (fun _ l ->
+            l#id = lane#g_id))
+        |! begin function
+          | Some (i, _) -> return (i + 1)
+          | None -> error (`lane_not_found_in_any_flowcell lane#g_pointer)
+        end)
+      >>= fun lane_indexes ->
+      while_sequential (Array.to_list invoicing#lanes) (fun lane_p ->
+        lane_p#get >>= fun lane ->
+        while_sequential  (Array.to_list lane#contacts) (fun p ->
+          p#get >>= fun person ->
+          return person#login))
+      >>| List.concat
+      >>| List.filter_opt
+      >>= fun logins ->
+      debug "Logins: %s\n" (String.concat ~sep:", " logins) >>= fun () ->
+      while_sequential lane_indexes (fun i ->
+        ksprintf system_command 
+          "unset CDPATH; cd %s && rm -f Lane%d && \
+             ln -s %s/Unaligned/Project_Lane%d Lane%d "
+          path i unaligned i i)
+      >>= fun _ ->
+      Access_rights.set_posix_acls ~dbh 
+        ~more_readers:logins ~configuration (`dir path)
+      >>= fun () ->
+      ksprintf (Common.add_log ~dbh) "(delivery_reparation %S \
+        (date %S) (lanes %s) (logins %s) (unaligned %S))"
+        path Time.(now () |! to_string)
+        (String.concat ~sep:" " (List.map lane_indexes (sprintf "%d")))
+        (String.concat ~sep:" " logins)
+        unaligned
+    | l ->
+      error (`cannot_find_delivery (path, List.length l))
+    end
+    
 end
