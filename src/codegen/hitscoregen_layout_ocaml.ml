@@ -740,6 +740,33 @@ let ocaml_module raw_dsl dsl output_string =
   line out "end";
   line out "open Layout";
   
+  line out "module Universal = struct";
+  line out "type pointer = [";
+  List.iter all_nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out "| `%s_pointer of Record_%s.pointer" name name;
+  | Function (name, args, result) ->
+    line out "| `%s_pointer of Function_%s.pointer" name name;
+  | Volume (name, _) -> 
+    line out "| `%s_pointer of File_system.pointer" name;
+  );
+  line out "] with sexp";
+
+  line out "type value = [";
+  List.iter all_nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out "| `%s_value of Record_%s.t" name name;
+  | Function (name, args, result) ->
+    line out "| `%s_evaluation of Function_%s.t" name name;
+  | Volume (name, _) -> 
+    line out "| `%s_volume of File_system.t" name;
+  );
+  line out "] with sexp";
+
+  line out "end";
+
   doc out "Queries manipulating the stuff in the layout";
   line out "module Access = struct";
 
