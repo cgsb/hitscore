@@ -13,3 +13,7 @@ end
 module PG = PGOCaml_generic.Make(Lwt_config)
 (* let (|>) x f = f x *)
 
+let canonical_path s =
+  match Filename.parts s |! List.reduce ~f:Filename.concat with
+  | Some s -> s
+  | None -> failwithf "FATAL : (canonical_path %S) returned None!" s ()
