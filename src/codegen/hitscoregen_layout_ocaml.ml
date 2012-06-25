@@ -613,6 +613,252 @@ end";
   
   ()
 
+
+let ocaml_dependency_graph_module ~out all_nodes =
+  doc out "Explore the dependencies in the Layout";
+  line out "module Dependency_graph = struct";
+
+  doc out "Report the list of pointers referenced by a given
+          function or record (volumes always return [\\[\\]]).";
+  line out "  let get_children ~dbh (universal_pointer: Universal.pointer) =";
+  line out "    begin match universal_pointer with";
+  List.iter all_nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out "  | `%s_pointer p ->" name;
+    line out "    Access.%s.get ~dbh p >>= fun t ->" (String.capitalize name);
+    line out "    return (List.concat [";
+    List.iter fields (function
+    | n, Record_name r
+    | n, Volume_name r ->
+      line out "      [(`%s_pointer Record_%s.(t.g_value.%s) : \
+                            Universal.pointer)];" r name n;
+    | n, Option (Record_name r)
+    | n, Option (Volume_name r) ->
+      line out "      Option.value_map ~default:[] Record_%s.(t.g_value.%s) \
+                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
+        name n r;
+    | n, Array (Record_name r)
+    | n, Array (Volume_name r) ->
+      line out "      List.map (Array.to_list Record_%s.(t.g_value.%s)) (fun e -> \
+                       \ `%s_pointer e);" name n r;
+    | _ -> ());
+    line out "    ])";
+  | Function (name, args, result) ->
+    line out "  | `%s_pointer p ->" name;
+    line out "    Access.%s.get ~dbh p >>= fun t ->" (String.capitalize name);
+    line out "    return (List.concat [";
+    List.iter args (function
+    | n, Record_name r
+    | n, Volume_name r ->
+      line out "      [(`%s_pointer Function_%s.(t.g_evaluation.%s) : \
+                            Universal.pointer)];" r name n;
+    | n, Option (Record_name r)
+    | n, Option (Volume_name r) ->
+      line out "      Option.value_map ~default:[] Function_%s.(t.g_evaluation.%s) \
+                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
+        name n r;
+    | n, Array (Record_name r)
+    | n, Array (Volume_name r) ->
+      line out "      List.map (Array.to_list Function_%s.(t.g_evaluation.%s)) \
+                     \  (fun e -> `%s_pointer e);" name n r;
+    | _ -> ());
+    line out "      Option.value_map ~default:[] Function_%s.(t.g_result) \
+                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
+      name result;
+    line out "    ])";
+  | Volume (name, _) -> 
+    line out "  | `%s_pointer p -> return []" name;
+  );
+  line out "    end";
+
+
+  doc out "Get the records and functions that point to a given record
+    of volume (functions always return [\\[\\]]).";
+  line out "let get_parents ~dbh unip =";
+  line out "  begin match unip with";
+  List.iter all_nodes (function
+  | Enumeration (_, _) -> ()
+  | Record (name, _) ->
+    line out "  | `%s_pointer p ->" name;
+    let recognized_parents = ref [] in
+    List.iter all_nodes (function
+    | Enumeration (_, _) -> ()
+    | Record (name_parent, fields) ->
+      List.iter fields (function
+      | n, Record_name r when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if t.g_value.%s = p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Option (Record_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if t.g_value.%s = Some p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Array (Record_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if Array.exists t.g_value.%s ((=) p)" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | _ -> ())
+    | Function (name_parent, args, result) ->
+      List.iter args (function
+      | n, Record_name r when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if t.g_evaluation.%s = p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Option (Record_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if t.g_evaluation.%s = Some p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Array (Record_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if Array.exists t.g_evaluation.%s ((=) p)" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | _ -> ());
+      if result = name then (
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if t.g_result = Some p";
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_g_result" name_parent in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      );
+    | Volume (name, _) -> ());
+    line out "    return (List.concat [%s] |! List.dedup)"
+      (String.concat ~sep:";\n" !recognized_parents)
+  | Function (name, _, _) ->
+    line out "  | `%s_pointer p -> return []" name;
+  | Volume (name, _) -> 
+    line out "  | `%s_pointer p ->" name;
+    let recognized_parents = ref [] in
+    List.iter all_nodes (function
+    | Enumeration (_, _) -> ()
+    | Record (name_parent, fields) ->
+      List.iter fields (function
+      | n, Volume_name r when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if t.g_value.%s = p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Option (Volume_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if t.g_value.%s = Some p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Array (Volume_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if Array.exists t.g_value.%s ((=) p)" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | _ -> ())
+    | Function (name_parent, args, result) ->
+      List.iter args (function
+      | n, Volume_name r when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if t.g_evaluation.%s = p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Option (Volume_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if t.g_evaluation.%s = Some p" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Array (Volume_name r) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if Array.exists t.g_evaluation.%s ((=) p)" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | _ -> ());
+      if result = name then (
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Function_%s in" name_parent;
+        line out "      if t.g_result = Some p";
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_g_result" name_parent in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      );
+    | Volume (name, _) -> ());
+    line out "    return (List.concat [%s] |! List.dedup)"
+      (String.concat ~sep:";\n" !recognized_parents)
+  );
+  line out "  end";
+
+
+  
+  line out "end"
+
+    
 let ocaml_meta_module ~out ~raw_dsl dsl =
   doc out "{3 Meta-Information On the Layout}";
   line out "module Meta = struct";
@@ -890,64 +1136,7 @@ let ocaml_module raw_dsl dsl output_string =
   line out "end";
 
 
-  doc out "Explore the dependencies in the Layout";
-  line out "module Dependency_graph = struct";
-
-  doc out "Report the list of pointers referenced by a given
-          function or record (volumes always return [\\[\\]]).";
-  line out "  let get_children ~dbh (universal_pointer: Universal.pointer) =";
-  line out "    begin match universal_pointer with";
-  List.iter all_nodes (function
-  | Enumeration (name, fields) -> ()
-  | Record (name, fields) ->
-    line out "  | `%s_pointer p ->" name;
-    line out "    Access.%s.get ~dbh p >>= fun t ->" (String.capitalize name);
-    line out "    return (List.concat [";
-    List.iter fields (function
-    | n, Record_name r
-    | n, Volume_name r ->
-      line out "      [(`%s_pointer Record_%s.(t.g_value.%s) : \
-                            Universal.pointer)];" r name n;
-    | n, Option (Record_name r)
-    | n, Option (Volume_name r) ->
-      line out "      Option.value_map ~default:[] Record_%s.(t.g_value.%s) \
-                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
-        name n r;
-    | n, Array (Record_name r)
-    | n, Array (Volume_name r) ->
-      line out "      List.map (Array.to_list Record_%s.(t.g_value.%s)) (fun e -> \
-                       \ `%s_pointer e);" name n r;
-    | _ -> ());
-    line out "    ])";
-  | Function (name, args, result) ->
-    line out "  | `%s_pointer p ->" name;
-    line out "    Access.%s.get ~dbh p >>= fun t ->" (String.capitalize name);
-    line out "    return (List.concat [";
-    List.iter args (function
-    | n, Record_name r
-    | n, Volume_name r ->
-      line out "      [(`%s_pointer Function_%s.(t.g_evaluation.%s) : \
-                            Universal.pointer)];" r name n;
-    | n, Option (Record_name r)
-    | n, Option (Volume_name r) ->
-      line out "      Option.value_map ~default:[] Function_%s.(t.g_evaluation.%s) \
-                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
-        name n r;
-    | n, Array (Record_name r)
-    | n, Array (Volume_name r) ->
-      line out "      List.map (Array.to_list Function_%s.(t.g_evaluation.%s)) \
-                     \  (fun e -> `%s_pointer e);" name n r;
-    | _ -> ());
-    line out "      Option.value_map ~default:[] Function_%s.(t.g_result) \
-                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
-      name result;
-    line out "    ])";
-  | Volume (name, _) -> 
-    line out "  | `%s_pointer p -> return []" name;
-  );
-  line out "    end";
-  line out "end";
-
+  ocaml_dependency_graph_module ~out all_nodes;
   
   ocaml_meta_module ~out dsl ~raw_dsl;
   ()
