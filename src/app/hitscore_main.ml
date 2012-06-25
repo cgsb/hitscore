@@ -803,8 +803,50 @@ module Verify = struct
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))
+
 end
 
+module Dependencies = struct
+
+  let show ~configuration ?max_depth type_name id =
+    with_database configuration (fun ~dbh ->
+      let p_initial =
+        sprintf "(%s_pointer ((id %s)))" type_name id
+        |! Sexp.of_string
+        |! Universal.pointer_of_sexp
+      in
+      let rec show_deps current_depth p =
+        Dependency_graph.get_children ~dbh p
+        >>= fun list_of_children ->
+        while_sequential list_of_children (fun child ->
+          printf "%s\\--> %s\n"
+            String.(make (current_depth * 2) ' ')
+            (Universal.sexp_of_pointer child |! Sexp.to_string_hum);
+          if max_depth = Some current_depth then
+            return ()
+          else 
+            show_deps (current_depth + 1) child)
+        >>= fun _ ->
+        return () in
+      show_deps 0 p_initial
+    )
+    
+  let () =
+    define_command ~names:["dependencies"; "deps"]
+      ~description:"Show the dependencies of a value/evaluation/volume"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s [-max-depth <n>] <type> <id>\n" exec cmd)
+      ~run:(fun configuration exec cmd -> function
+      | [ type_name; id ] ->
+        show ~configuration type_name id
+      | [ "-max-depth"; md; type_name; id ] ->
+        show ~configuration ~max_depth:Int.(of_string md) type_name id
+      | l -> error (`invalid_command_line
+                       (sprintf "don't know what to do with: %s"
+                          String.(concat ~sep:", " l))))
+
+
+end
 
 module Flowcell = struct
 
