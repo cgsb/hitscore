@@ -808,18 +808,18 @@ end
 
 module Dependencies = struct
 
-  let show ~configuration ?(reverse=false) ?max_depth type_name id =
+  let show ~configuration ?(traversal="both") ?max_depth type_name id =
     with_database configuration (fun ~dbh ->
       let p_initial =
         sprintf "(%s_pointer ((id %s)))" type_name id
         |! Sexp.of_string
         |! Universal.pointer_of_sexp
       in
-      let rec show_deps current_depth p =
-        begin if reverse then
-            Dependency_graph.get_parents ~dbh p
-        else 
+      let rec show_deps go_down current_depth p =
+        begin if go_down then
             Dependency_graph.get_children ~dbh p
+          else
+            Dependency_graph.get_parents ~dbh p
         end
         >>= fun list_of_relatives ->
         while_sequential list_of_relatives (fun child ->
@@ -829,24 +829,35 @@ module Dependencies = struct
           if max_depth = Some current_depth then
             return ()
           else 
-            show_deps (current_depth + 1) child)
+            show_deps go_down (current_depth + 1) child)
         >>= fun _ ->
         return () in
-      show_deps 0 p_initial
+      begin match traversal with
+      | "both" ->
+        printf "Down:\n";
+        show_deps true 0 p_initial >>= fun () ->
+        printf "Up:\n";
+        show_deps false 0 p_initial
+      | "up" -> 
+        show_deps false 0 p_initial
+      | "down" ->
+        show_deps true 0 p_initial
+      | s ->
+        failwithf "ERROR: can't understand %s" s  ()
+      end
     )
     
   let () =
     define_command ~names:["dependencies"; "deps"]
       ~description:"Show the dependencies of a value/evaluation/volume"
       ~usage:(fun o exec cmd ->
-        fprintf o "Usage: %s <profile> %s [-max-depth <n>] <type> <id>\n" exec cmd)
+        fprintf o "Usage: %s <profile> %s {up,down,both} [-max-depth <n>] \
+                        <type> <id>\n" exec cmd)
       ~run:(fun configuration exec cmd -> function
-      | [ type_name; id ] ->
-        show ~configuration type_name id
-      | [ "-reverse"; type_name; id ] ->
-        show ~configuration ~reverse:true type_name id
-      | [ "-max-depth"; md; type_name; id ] ->
-        show ~configuration ~max_depth:Int.(of_string md) type_name id
+      | [ traversal; type_name; id ] ->
+        show ~configuration ~traversal type_name id
+      | [ "-max-depth"; md; traversal; type_name; id ] ->
+        show ~configuration ~traversal ~max_depth:Int.(of_string md) type_name id
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))
