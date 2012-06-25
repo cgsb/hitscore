@@ -20,8 +20,7 @@ let () =
                        ~f:(fun o -> digraph dsl (output_string o))))
   | _ ->
     eprintf "usage: \n\
-       sexp2db {dbverify, dbpostgres, dbdraw, ...} <sexp_file>\n\
-       sexp2db all <sexp_file> <outprefix>\n";
+       hitscoregen {codegen-ocaml, digraph} <sexp-file> <output-file>\n";
     ()
 
 
