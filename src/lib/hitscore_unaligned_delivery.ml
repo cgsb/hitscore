@@ -92,7 +92,7 @@ module Unaligned_delivery:
       >>= fun fpointer ->
       fpointer#get >>= fun f ->
       f#set_started >>= fun () ->
-      layout#add_client_fastqs_dir ~directory:links_dir ()
+      layout#add_client_fastqs_dir ~directory:(canonical_path links_dir) ()
       >>= fun result ->
       f#set_succeeded result#pointer
       >>= fun () ->
@@ -107,7 +107,7 @@ module Unaligned_delivery:
     >>= while_sequential ~f:(fun delivery ->
       map_option delivery#g_result (fun r ->
         r#get >>= fun res ->
-        if res#directory = path then (
+        if res#directory = canonical_path path then (
           delivery#unaligned#get >>= fun unaligned ->
           Common.path_of_volume ~configuration ~dbh unaligned#directory#pointer
           >>= fun unaligned_path ->
@@ -151,7 +151,7 @@ module Unaligned_delivery:
       >>= fun () ->
       ksprintf (Common.add_log ~dbh) "(delivery_reparation %S \
         (date %S) (lanes %s) (logins %s) (unaligned %S))"
-        path Time.(now () |! to_string)
+        (canonical_path path) Time.(now () |! to_string)
         (String.concat ~sep:" " (List.map lane_indexes (sprintf "%d")))
         (String.concat ~sep:" " logins)
         unaligned
