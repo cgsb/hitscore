@@ -740,6 +740,7 @@ let ocaml_module raw_dsl dsl output_string =
   line out "end";
   line out "open Layout";
   
+  doc out "Universal types wrapping everything in the Layout.";
   line out "module Universal = struct";
   line out "type pointer = [";
   List.iter all_nodes (function
@@ -827,6 +828,7 @@ let ocaml_module raw_dsl dsl output_string =
 
   line out "end";
 
+  doc out "Object-based access to the layout";
   line out "module Classy = struct";
   line out "open Access";
   ocaml_classy_access ~out dsl;
@@ -888,8 +890,11 @@ let ocaml_module raw_dsl dsl output_string =
   line out "end";
 
 
+  doc out "Explore the dependencies in the Layout";
   line out "module Dependency_graph = struct";
 
+  doc out "Report the list of pointers referenced by a given
+          function or record (volumes always return [\\[\\]]).";
   line out "  let get_children ~dbh (universal_pointer: Universal.pointer) =";
   line out "    begin match universal_pointer with";
   List.iter all_nodes (function
