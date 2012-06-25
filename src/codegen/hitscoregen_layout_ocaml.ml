@@ -887,6 +887,63 @@ let ocaml_module raw_dsl dsl output_string =
   
   line out "end";
 
+
+  line out "module Dependency_graph = struct";
+
+  line out "  let get_children ~dbh (universal_pointer: Universal.pointer) =";
+  line out "    begin match universal_pointer with";
+  List.iter all_nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    line out "  | `%s_pointer p ->" name;
+    line out "    Access.%s.get ~dbh p >>= fun t ->" (String.capitalize name);
+    line out "    return (List.concat [";
+    List.iter fields (function
+    | n, Record_name r
+    | n, Volume_name r ->
+      line out "      [(`%s_pointer Record_%s.(t.g_value.%s) : \
+                            Universal.pointer)];" r name n;
+    | n, Option (Record_name r)
+    | n, Option (Volume_name r) ->
+      line out "      Option.value_map ~default:[] Record_%s.(t.g_value.%s) \
+                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
+        name n r;
+    | n, Array (Record_name r)
+    | n, Array (Volume_name r) ->
+      line out "      List.map (Array.to_list Record_%s.(t.g_value.%s)) (fun e -> \
+                       \ `%s_pointer e);" name n r;
+    | _ -> ());
+    line out "    ])";
+  | Function (name, args, result) ->
+    line out "  | `%s_pointer p ->" name;
+    line out "    Access.%s.get ~dbh p >>= fun t ->" (String.capitalize name);
+    line out "    return (List.concat [";
+    List.iter args (function
+    | n, Record_name r
+    | n, Volume_name r ->
+      line out "      [(`%s_pointer Function_%s.(t.g_evaluation.%s) : \
+                            Universal.pointer)];" r name n;
+    | n, Option (Record_name r)
+    | n, Option (Volume_name r) ->
+      line out "      Option.value_map ~default:[] Function_%s.(t.g_evaluation.%s) \
+                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
+        name n r;
+    | n, Array (Record_name r)
+    | n, Array (Volume_name r) ->
+      line out "      List.map (Array.to_list Function_%s.(t.g_evaluation.%s)) \
+                     \  (fun e -> `%s_pointer e);" name n r;
+    | _ -> ());
+    line out "      Option.value_map ~default:[] Function_%s.(t.g_result) \
+                          ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
+      name result;
+    line out "    ])";
+  | Volume (name, _) -> 
+    line out "  | `%s_pointer p -> return []" name;
+  );
+  line out "    end";
+  line out "end";
+
+  
   ocaml_meta_module ~out dsl ~raw_dsl;
   ()
 
