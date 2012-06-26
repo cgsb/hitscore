@@ -201,7 +201,8 @@ start ~dbh ~configuration       (* common arguments *)
         Hitscore_layout.Layout.Enumeration_process_status.t
      | `running
      | `started_but_not_running of
-         [> `system_command_error of
+         [> `pbs_completed
+         | `system_command_error of
              string *
                [> `exited of int
                | `exn of exn
@@ -210,7 +211,15 @@ start ~dbh ~configuration       (* common arguments *)
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
-     | `work_directory_not_configured ])
+     | `pbs_qstat of
+         [> `errors of
+             [> `wrong_line_format of Core.Std.String.t ]
+               Core.Std.List.t
+                  | `job_state_not_found
+                  | `no_header of Core.Std.String.t
+                  | `unknown_status of string
+                  | `wrong_header_format of Core.Std.String.t ]
+             | `work_directory_not_configured ])
       Sequme_flow.t
 
       
@@ -419,19 +428,32 @@ module type FASTX_QUALITY_STATS = sig
       status and it presence in the PBS queue. *)
   val status :
     dbh:Hitscore_db_backend.Backend.db_handle ->
-    configuration:Configuration.local_configuration ->
+    configuration:Hitscore_configuration.Configuration.local_configuration ->
     Hitscore_layout.Layout.Function_fastx_quality_stats.pointer ->
     ([> `not_started of
-        Layout.Enumeration_process_status.t
+        Hitscore_layout.Layout.Enumeration_process_status.t
      | `running
      | `started_but_not_running of
-         [> `system_command_error of
-             string * [> `exited of int | `exn of exn
-                      | `signaled of int | `stopped of int ] ] ],
+         [> `pbs_completed
+         | `system_command_error of
+             string *
+               [> `exited of int
+               | `exn of exn
+               | `signaled of int
+               | `stopped of int ] ] ],
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
-     | `work_directory_not_configured ]) Sequme_flow.t
+     | `pbs_qstat of
+         [> `errors of
+             [> `wrong_line_format of Core.Std.String.t ]
+               Core.Std.List.t
+         | `job_state_not_found
+         | `no_header of Core.Std.String.t
+         | `unknown_status of string
+         | `wrong_header_format of Core.Std.String.t ]
+     | `work_directory_not_configured ])
+      Sequme_flow.t
       
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :

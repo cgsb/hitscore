@@ -50,33 +50,17 @@ let string_of_error = function
     sprintf "Cannot find the delivery for %s (%d results)\n" p l
   | `lane_not_found_in_any_flowcell lanep ->
     sprintf "Cannot find lane %d in any flowcell\n" lanep.Layout.Record_lane.id
-      (*
-  | `layout_inconsistency (where, what) ->
-    let int32_list il = (List.map il Int32.to_string |! String.concat ~sep:", ") in
-    sprintf "LAYOUT-INCONSISTENCY-ERROR for %s: %s!\n"
-      (match where with
-      | `Function s -> "Function " ^ s
-      | `Record s -> "Record " ^ s
-      | `File_system -> "File_system")
-      (match what with
-      | `insert_cache_did_not_return_one_id (s, il)
-      | `insert_tuple_did_not_return_one_id (s, il)
-      | `insert_value_did_not_return_one_id (s, il)
-      | `insert_did_not_return_one_id (s, il)
-      | `add_did_not_return_one             (s, il) ->
-        sprintf "Wrong 'insert' did not return one only thing from the DB (%s, [%s])"
-          s (int32_list il)
-      | `select_did_not_return_one_tuple (s, i) ->
-        sprintf "Wrong 'select' did not return one tuple: %s (%d)" s i
-
-      | `no_last_modified_timestamp inaccessible_hiseq_raw_pointer ->
-        sprintf "no_last_modified_timestamp for inaccessible_hiseq_raw_pointer: %ld"
-          inaccessible_hiseq_raw_pointer.Layout.Record_inaccessible_hiseq_raw.id
-      | `search_flowcell_by_name_not_unique (fcid, _) ->
-        sprintf "search_flowcell_by_name_not_unique: %s" fcid
-      | `successful_status_with_no_result id ->
-        sprintf "successful_status_with_no_result: %ld" id)
-      *)
+  | `pbs_qstat e ->
+    sprintf "error(s) while getting qstat info: %s"
+      begin match e with
+      | `errors l ->
+        List.map l ~f:(function `wrong_line_format s -> sprintf "wrong line: %S" s)
+        |! String.concat ~sep:", "
+      | `job_state_not_found -> "job_state_not_found"
+      | `no_header s -> sprintf "no header in %S" s
+      | `unknown_status s -> sprintf "unknown status: %S" s
+      | `wrong_header_format s -> sprintf "wrong_header_format: %S" s
+      end
   | `new_failure (_, _) ->
     sprintf "NEW FAILURE\n"
   | `pg_exn e ->

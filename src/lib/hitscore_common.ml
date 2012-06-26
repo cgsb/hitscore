@@ -175,13 +175,25 @@ module type COMMON = sig
         
     val qstat :
       t ->
-      configuration:Configuration.local_configuration ->
+      configuration:Hitscore_configuration.Configuration.local_configuration ->
       ([> `running
        | `started_but_not_running of
-           [> `system_command_error of
-               string * [> `exited of int | `exn of exn
-                        | `signaled of int | `stopped of int ] ] ],
-        [> `work_directory_not_configured ])
+           [> `pbs_completed
+           | `system_command_error of
+               string *
+                 [> `exited of int
+                 | `exn of exn
+                 | `signaled of int
+                 | `stopped of int ] ] ],
+       [> `pbs_qstat of
+           [> `errors of
+               [> `wrong_line_format of Core.Std.String.t ]
+                 Core.Std.List.t
+           | `job_state_not_found
+           | `no_header of Core.Std.String.t
+           | `unknown_status of string
+           | `wrong_header_format of Core.Std.String.t ]
+       | `work_directory_not_configured ])
         Sequme_flow.t
 
     val qdel :
@@ -244,7 +256,8 @@ module type COMMON = sig
           Hitscore_layout.Layout.Enumeration_process_status.t
        | `running
        | `started_but_not_running of
-           [> `system_command_error of
+           [> `pbs_completed
+           | `system_command_error of
                string *
                  [> `exited of int
                  | `exn of exn
@@ -253,6 +266,14 @@ module type COMMON = sig
        [> `Layout of
            Hitscore_layout.Layout.error_location *
              Hitscore_layout.Layout.error_cause
+       | `pbs_qstat of
+           [> `errors of
+               [> `wrong_line_format of Core.Std.String.t ]
+                 Core.Std.List.t
+           | `job_state_not_found
+           | `no_header of Core.Std.String.t
+           | `unknown_status of string
+           | `wrong_header_format of Core.Std.String.t ]
        | `work_directory_not_configured ])
         Sequme_flow.t
 
@@ -480,14 +501,35 @@ module Common : COMMON = struct
       ksprintf system_command "qsub %s > %s/jobid" pbs_script_path run_path
         
     let qstat t ~configuration =
-      pbs_runtime_path t ~configuration >>= fun run_path ->
-      ksprintf system_command "cat %s/jobid && qstat `cat %s/jobid`" 
-        run_path run_path
-      |! double_bind
-          ~ok:(fun () -> return (`running))
-          ~error:(function
-          | `system_command_error _ as e -> return (`started_but_not_running e)
-          | `work_directory_not_configured as e -> error e)
+      let work_m =
+        pbs_runtime_path t ~configuration >>= fun run_path ->
+        ksprintf get_system_command_output "cat %s/jobid" run_path
+        >>= fun (strout, strerr) ->
+        ksprintf get_system_command_output "qstat -f1 `cat %s/jobid`" run_path
+        >>= fun (strout, strerr) ->
+        of_result (Sequme_pbs.parse_qstat strout)
+        >>= fun qstat_raw ->
+        of_result (Sequme_pbs.get_status qstat_raw)
+      in
+      double_bind work_m
+        ~ok:(function
+        | `Running
+        | `Queued
+        | `Held
+        | `Exiting
+        | `Moved
+        | `Waiting
+        | `Suspended -> return `running
+        | `Completed -> return (`started_but_not_running `pbs_completed))
+        ~error:(function
+        | `system_command_error _ as e ->
+          return (`started_but_not_running e)
+        | `errors _
+        | `no_header _
+        | `wrong_header_format _
+        | `job_state_not_found
+        | `unknown_status _  as e -> error (`pbs_qstat e)
+        | `work_directory_not_configured as e -> error e)
 
     let qdel t ~configuration =
       pbs_runtime_path t ~configuration >>= fun run_path ->
