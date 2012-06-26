@@ -815,13 +815,8 @@ module Dependencies = struct
         |! Sexp.of_string
         |! Universal.pointer_of_sexp
       in
-      let rec show_deps go_down current_depth p =
-        begin if go_down then
-            Dependency_graph.get_children ~dbh p
-          else
-            Dependency_graph.get_parents ~dbh p
-        end
-        >>= fun list_of_relatives ->
+      let rec show_deps how current_depth p =
+        how ~dbh p >>= fun list_of_relatives ->
         while_sequential list_of_relatives (fun child ->
           printf "%s\\--> %s\n"
             String.(make (current_depth * 2) ' ')
@@ -829,19 +824,21 @@ module Dependencies = struct
           if max_depth = Some current_depth then
             return ()
           else 
-            show_deps go_down (current_depth + 1) child)
+            show_deps how (current_depth + 1) child)
         >>= fun _ ->
         return () in
       begin match traversal with
       | "both" ->
         printf "Down:\n";
-        show_deps true 0 p_initial >>= fun () ->
+        show_deps Dependency_graph.get_children 0 p_initial >>= fun () ->
         printf "Up:\n";
-        show_deps false 0 p_initial
+        show_deps Dependency_graph.get_parents 0 p_initial
       | "up" -> 
-        show_deps false 0 p_initial
+        show_deps Dependency_graph.get_parents 0 p_initial
       | "down" ->
-        show_deps true 0 p_initial
+        show_deps Dependency_graph.get_children 0 p_initial
+      | "follow-function" ->
+        show_deps Dependency_graph.follow_function_once 0 p_initial
       | s ->
         failwithf "ERROR: can't understand %s" s  ()
       end
