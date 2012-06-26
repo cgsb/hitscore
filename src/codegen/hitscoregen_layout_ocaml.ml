@@ -675,7 +675,7 @@ let ocaml_dependency_graph_module ~out all_nodes =
 
   doc out "Get the records and functions that point to a given record
     of volume (functions always return [\\[\\]]).";
-  line out "let get_parents ~dbh unip =";
+  line out "let get_parents ~dbh (unip : Universal.pointer) =";
   line out "  begin match unip with";
   List.iter all_nodes (function
   | Enumeration (_, _) -> ()
@@ -849,12 +849,53 @@ let ocaml_dependency_graph_module ~out all_nodes =
         recognized_parents := list_name :: !recognized_parents;
       );
     | Volume (name, _) -> ());
-    line out "    return (List.concat [%s] |! List.dedup)"
+    line out "    return (List.concat [%s] |! List.dedup : Universal.pointer list)"
       (String.concat ~sep:";\n" !recognized_parents)
   );
   line out "  end";
 
+  doc out "Get the {i grand-grand-*-children} of a given [Universal.pointer].";
+  line out "let rec get_descendants ~dbh (p : Universal.pointer) =";
+  line out "  get_children ~dbh p >>= fun children ->";
+  line out "  while_sequential children (get_descendants ~dbh)";
+  line out "  >>= fun grand_and_more_children ->";
+  line out "  return (children @ List.concat grand_and_more_children)";
 
+  doc out "Get the {i grand-grand-*-parents} of a given [Universal.pointer].";
+  line out "let rec get_ascendants ~dbh (p : Universal.pointer) =";
+  line out "  get_parents ~dbh p >>= fun parents ->";
+  line out "  while_sequential parents (get_ascendants ~dbh)";
+  line out "  >>= fun grand_and_more_parents ->";
+  line out "  return (parents @ List.concat grand_and_more_parents)";
+
+  doc out "Do one step in the retrieval of the {i family} of the result of a
+    function, that is, get all the ascendants of the descendants of the
+    result of a function with the result itself and without the function
+    itself (returns [\\[\\]] for record-values and volumes).";
+  line out "let follow_function_once ~dbh f =";
+  line out "  begin match f with";
+  List.iter all_nodes (function
+  | Enumeration (_, _) -> ()
+  | Record (name, _) ->
+    line out "  | `%s_pointer p -> return []" name;
+  | Function (name, args, result) ->
+    line out "  | `%s_pointer p ->" name;
+    line out "     Access.%s.get ~dbh p >>= fun { Function_%s.g_result; _ } ->"
+      (String.capitalize name) name;
+    line out "     map_option  g_result ~f:(fun r -> \
+                     get_descendants ~dbh (`%s_pointer r) \n\
+                     >>= fun desc -> return (`%s_pointer r :: desc))" result result;
+    line out "     >>| Option.value ~default:[]";
+    line out "     >>= fun result_family ->";
+    line out "     while_sequential result_family (get_ascendants ~dbh)";
+    line out "     >>| List.concat";
+    line out "     >>| List.filter ~f:((<>) f)";
+    line out "     >>= fun ascend ->";
+    line out "     return (List.dedup (ascend @ result_family))"
+  | Volume (name, _) -> 
+    line out "  | `%s_pointer p -> return []" name;
+  );
+  line out "  end";
   
   line out "end"
 
