@@ -808,13 +808,10 @@ end
 
 module Dependencies = struct
 
-  let show ~configuration ?(traversal="both") ?max_depth type_name id =
+  let show ~configuration ?(traversal="both") ?max_depth id =
     with_database configuration (fun ~dbh ->
-      let p_initial =
-        sprintf "(%s_pointer ((id %s)))" type_name id
-        |! Sexp.of_string
-        |! Universal.pointer_of_sexp
-      in
+      Access.identify ~dbh (Int.of_string id) >>= fun p_initial ->
+      printf "%s\n" (Universal.sexp_of_pointer p_initial |! Sexp.to_string_hum);
       let rec show_deps how current_depth p =
         how ~dbh p >>= fun list_of_relatives ->
         while_sequential list_of_relatives (fun child ->
@@ -849,12 +846,12 @@ module Dependencies = struct
       ~description:"Show the dependencies of a value/evaluation/volume"
       ~usage:(fun o exec cmd ->
         fprintf o "Usage: %s <profile> %s {up,down,both} [-max-depth <n>] \
-                        <type> <id>\n" exec cmd)
+                         <id>\n" exec cmd)
       ~run:(fun configuration exec cmd -> function
-      | [ traversal; type_name; id ] ->
-        show ~configuration ~traversal type_name id
-      | [ "-max-depth"; md; traversal; type_name; id ] ->
-        show ~configuration ~traversal ~max_depth:Int.(of_string md) type_name id
+      | [ traversal; id ] ->
+        show ~configuration ~traversal id
+      | [ "-max-depth"; md; traversal; id ] ->
+        show ~configuration ~traversal ~max_depth:Int.(of_string md) id
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))
