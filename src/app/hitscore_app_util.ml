@@ -157,9 +157,18 @@ let string_of_error = function
     | `query  (_, e) -> 
       sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
     end
+  | `id_not_found i ->
+    sprintf "Id %d not found in DB" i
+  | `unknown_evaluation_type s ->
+    sprintf "unknown_evaluation_type %s" s
+  | `unknown_value_type s ->
+    sprintf "unknown_value_type %s" s
+  | `unknown_volume_kind s ->
+    sprintf "unknown_volume_kind %s" s
   | `Layout (where, what) ->
     sprintf "LAYOUT-ERROR (%s): %s"
       (match where with
+      | `Identification -> "Identification"
       | `Dump -> "Dump"
       | `File_system -> "File-system"
       | `Function f -> sprintf  "function %S" f

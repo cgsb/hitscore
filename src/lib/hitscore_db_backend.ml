@@ -380,6 +380,12 @@ module Sql_query = struct
   let delete_volume_sexp id =
     sprintf "DELETE FROM volume WHERE id = %d" id
 
+  let identify_value_type id =
+    sprintf "SELECT type FROM record WHERE id = %d" id
+  let identify_evaluation_type id =
+    sprintf "SELECT type FROM function WHERE id = %d" id
+  let identify_volume_kind id =
+    sprintf "SELECT kind FROM volume WHERE id = %d" id
 
 
 end

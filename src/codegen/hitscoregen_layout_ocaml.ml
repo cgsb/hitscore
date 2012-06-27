@@ -98,6 +98,19 @@ let ocaml_encapsulate_layout_errors out ~error_location f =
                               (e : error_cause))))" error_location;
   ()
       
+let ocaml_identify_something ~out ~error_location something =
+  line out "let identify_%s ~dbh id =" something;
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.identify_%s id in" something;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun r ->";
+    line out "  begin match r with";
+    line out "  | [] -> return None";
+    line out "  | [[Some one]] -> return (Some one)";
+    line out "  | more -> error (`result_not_unique more)";
+    line out "  end"
+  )
+
 let ocaml_record_access_module ~out name fields =
   line out "module %s = struct" (String.capitalize name);
   line out "  open Record_%s" name;
@@ -191,7 +204,6 @@ let ocaml_record_access_module ~out name fields =
     line out "  else return ()";
   );
 
-  
   line out "end";
 
   ()
@@ -380,6 +392,7 @@ let ocaml_file_system_access_module ~out dsl =
     line out "    return ())";
     line out "  else return ()";
   );
+
   line out "end"
 
 let ocaml_classy_access ~out dsl =
@@ -929,6 +942,7 @@ let ocaml_module raw_dsl dsl output_string =
 
   line out "type error_location = [";
   line out "| `Dump";
+  line out "| `Identification";
   line out "| `Function of string";
   line out "| `Record of string";
   line out "| `File_system";
@@ -1113,7 +1127,42 @@ let ocaml_module raw_dsl dsl output_string =
   line out "    return ()\n  )";
 
 
-  line out "end";
+  ocaml_identify_something ~out ~error_location:"`Identification" "value_type";
+  ocaml_identify_something ~out ~error_location:"`Identification" "evaluation_type";
+  ocaml_identify_something ~out ~error_location:"`Identification" "volume_kind";
+  line out "let identify ~dbh id: (Universal.pointer, _) Sequme_flow.t =";
+  line out "  identify_value_type ~dbh id >>= fun value_type_opt ->";
+  line out "  begin match value_type_opt with";
+  List.iter all_nodes (function
+  | Record (name, _) ->
+    line out "  | Some %S -> return (`%s_pointer Record_%s.(unsafe_cast id))"
+      name name name;
+  | _ -> ());
+  line out "  | Some n -> error (`unknown_value_type n)";
+  line out "  | None ->";
+  line out "    identify_evaluation_type ~dbh id >>= fun evaluation_type_opt ->";
+  line out "    begin match evaluation_type_opt with";
+  List.iter all_nodes (function
+  | Function (name, _, _) ->
+    line out "    | Some %S -> return (`%s_pointer Function_%s.(unsafe_cast id))"
+      name name name;
+  | _ -> ());
+  line out "    | Some n -> error (`unknown_evaluation_type n)";
+  line out "    | None ->";
+  line out "      identify_volume_kind ~dbh id >>= fun volume_kind_opt ->";
+  line out "      begin match volume_kind_opt with";
+  List.iter all_nodes (function
+  | Volume (name, _) ->
+    line out "      | Some %S -> return (`%s_pointer File_system.(unsafe_cast id))"
+      name name;
+  | _ -> ());
+  line out "      | Some n -> error (`unknown_volume_kind n)";
+  line out "      | None -> error (`id_not_found id)";
+  line out "      end";
+  line out "    end";
+  line out "  end";
+
+  line out "end"; (* module Access *)
 
   doc out "Object-based access to the layout";
   line out "module Classy = struct";
