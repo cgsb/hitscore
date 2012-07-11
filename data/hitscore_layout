@@ -6,8 +6,10 @@
            (project        string option))
 
 (enumeration role
-             visitor user auditor administrator) 
+             visitor user auditor administrator pi) 
 
+(record affiliation
+        (path string array))
 ;; Almost static input data:
 (record person
        (print_name      string option)
@@ -20,6 +22,7 @@
        (nickname        string option)
        (roles           role array)
        (password_hash   string option)
+       (affiliations affiliation array)
        notable
        )
 
@@ -100,6 +103,13 @@
         (flowcell_a flowcell option)
         (flowcell_b flowcell option)
         notable)
+
+(record hiseq_statistics
+        (run hiseq_run)
+        (clustered timestamp option)
+        (started timestamp option)
+        (finished timestamp option)
+        (returned timestamp option))
 
 (record invoicing
         (pi person)
