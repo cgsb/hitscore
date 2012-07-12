@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 8ad0151a848acabd18420e1da2f036c3)
-version = "1.0"
+# DO NOT EDIT (digest: 97f0252afb819eff7016a346c8581a82)
+version = "1.1"
 description = "CGSB Core Library"
 requires =
 "threads core pgocaml sexplib.syntax biocaml sequme hitscoregen lwt lwt.unix"

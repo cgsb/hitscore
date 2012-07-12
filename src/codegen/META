@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: ca44db787c900aeb90e76e67f9b983c1)
-version = "1.0"
+# DO NOT EDIT (digest: c4af6069f35999e568813692abad87fb)
+version = "1.1"
 description = "CGSB Core Library"
 requires = "threads core"
 archive(byte) = "hitscoregen.cma"
