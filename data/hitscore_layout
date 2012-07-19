@@ -106,10 +106,14 @@
 
 (record hiseq_statistics
         (run hiseq_run)
-        (clustered timestamp option)
-        (started timestamp option)
-        (finished timestamp option)
-        (returned timestamp option))
+        (a_clustered timestamp option)
+        (a_started timestamp option)
+        (a_finished timestamp option)
+        (a_returned timestamp option)
+        (b_clustered timestamp option)
+        (b_started timestamp option)
+        (b_finished timestamp option)
+        (b_returned timestamp option))
 
 (record invoicing
         (pi person)
