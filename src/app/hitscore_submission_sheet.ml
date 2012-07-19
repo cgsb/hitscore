@@ -961,7 +961,9 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         ~real:(fun dbh ->
           Access.Stock_library.add_value ~dbh 
             ~name:libname ?project ?description:short_desc
-            ?sample ?protocol:prot_opt ?application:app ~stranded
+            ?sample ?protocol:prot_opt
+            ~application:(match app with None -> [||] | Some s -> [|s|])
+            ~stranded
             ~truseq_control ?rnaseq_control:rsc
             ~barcode_type:bt ~barcodes:(Array.of_list bcs)
             ~custom_barcodes

@@ -58,7 +58,7 @@
         (description string option)
         (sample      sample option)
         (protocol  protocol option)
-        (application    string option)
+        (application    string array)
         (stranded       bool)
         (truseq_control bool)
         (rnaseq_control string option)
