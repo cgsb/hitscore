@@ -1247,6 +1247,9 @@ module Hiseq_run = struct
         ?flowcell_a ?flowcell_b ?note ()
       >>= fun hsr ->
       printf "Added Hiseq run %d\n" hsr#id;
+      layout#add_hiseq_statistics ~run:hsr#pointer ()
+      >>= fun hs ->
+      printf "Added Hiseq stats %d\n" hs#id;
       return ())
 
   let () =
