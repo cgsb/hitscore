@@ -32,7 +32,7 @@ module System = struct
 end
 
 module XML = struct
-  include Xmlm
+  include Biocaml_internal_xmlm
   let in_tree i = 
     let el tag childs = `E (tag, childs)  in
     let data d = `D d in
