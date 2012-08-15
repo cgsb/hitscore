@@ -918,22 +918,21 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let stranded = Option.value ~default:false strd in
       let truseq_control = Option.value ~default:false tsc in
 
+      let positions = ref cbp in
       while_sequential cbs (fun sequence -> (* custom barcode seqs *)
-        let position_in_r1 =
-          List.find_map cbp (function | `on_r1 i -> Some i | _ -> None) in
-        let position_in_r2 =
-          List.find_map cbp (function | `on_r2 i -> Some i | _ -> None) in
-        let position_in_index =
-          List.find_map cbp (function | `on_i i -> Some i | _ -> None) in
+        begin match List.hd !positions with
+        | Some (`on_r1 i) -> return (sprintf "(r1 %d)" i, Some i, None, None)
+        | Some (`on_r2 i) -> return (sprintf "(r2 %d)" i, None, None, Some i)
+        | Some (`on_i i) ->  return (sprintf "(index %d)" i, None, Some i, None)
+        | None -> failwithf "Custom barcodes should have one position each!"
+        end
+        >>= fun (poslog, position_in_r1, position_in_index, position_in_r2) ->
+        positions := List.tl_exn !positions;
         run ~dbh ~fake:(fun x -> Layout.Record_custom_barcode.unsafe_cast x)
           ~real:(fun dbh ->
             Access.Custom_barcode.add_value ~dbh
               ?position_in_r1 ?position_in_r2 ?position_in_index ~sequence)
-          ~log:(sprintf "(add_custom_barcode %s (r1 %s) (r2 %s) (index %s))"
-                  sequence
-                  (Option.value_map position_in_r1 ~default:"None" ~f:(sprintf "%d")) 
-                  (Option.value_map position_in_r2 ~default:"None" ~f:(sprintf "%d")) 
-                  (Option.value_map position_in_index ~default:"None" ~f:(sprintf "%d"))))
+          ~log:(sprintf "(add_custom_barcode %s %s)" sequence poslog))
       >>| Array.of_list
       >>= fun custom_barcodes ->
 
