@@ -935,6 +935,14 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           ~log:(sprintf "(add_custom_barcode %s %s)" sequence poslog))
       >>| Array.of_list
       >>= fun custom_barcodes ->
+      let custom_barcodes_log =
+        if Array.length custom_barcodes > 0 then
+          sprintf "(custom_barcodes %s)"
+            (String.concat_array ~sep:" "
+               (Array.map custom_barcodes ~f:(fun c ->
+                 Int.to_string c.Layout.Record_custom_barcode.id)))
+        else
+          "(no_custom_barcodes)" in
 
       map_option preparator (fun email ->
         begin match List.Assoc.find contacts email with
@@ -971,7 +979,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             ?preparator
             ?note:None)
         ~log:Option.(
-          sprintf "(add_stock_library %s%s %s %s %s)" 
+          sprintf "(add_stock_library %s%s %s %s %s %s)" 
             (value_map project ~default:"" ~f:(sprintf "%s."))
             libname
             (value_map sample ~default:"no_sample"
@@ -979,7 +987,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             (value_map prot_opt ~default:"no_protocol"
                ~f:(fun { Layout.Record_protocol.id} -> sprintf " (protocol %d)" id))
             (value_map preparator ~default:"no_preparator"
-               ~f:(fun { Layout.Record_person.id} -> sprintf " (preparator %d)" id)))
+               ~f:(fun { Layout.Record_person.id} -> sprintf " (preparator %d)" id))
+            custom_barcodes_log)
       >>= fun stock_library ->
 
       map_option bio_wnb (fun well_number ->
