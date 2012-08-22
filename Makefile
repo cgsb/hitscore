@@ -39,13 +39,18 @@ BINDIR=$(shell printf "`cat setup.data`\necho \$$bindir\n" | sed 's/ = /=/' | sh
 install-version: _build/src/app/hitscore_main.native setup.data
 	cp $< $(BINDIR)/hitscore-$(PKG_VERSION)
 
-build:
+setup:
+	oasis setup
+
+build: setup.data
 	ocaml setup.ml -build
 
-install:
-	ocaml setup.ml -reinstall
+install: uninstall
+	ocaml setup.ml -install
 
 uninstall:
+	ocamlfind remove hitscoregen
+	ocamlfind remove hitscore
 	ocaml setup.ml -uninstall
 
 libdoc:
@@ -61,7 +66,7 @@ cleandoc:
 	rm -fr _doc/
 
 clean:
-	ocaml setup.ml -clean
+	rm -fr _build
 
 
 # clean everything and uninstall
@@ -69,5 +74,6 @@ fresh: clean uninstall
 
 # clean setup files, rebuilding may require additional tools
 distclean: clean
+	rm -f setup.data setup.log
 	ocaml setup.ml -distclean
 
