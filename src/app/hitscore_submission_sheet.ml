@@ -963,6 +963,18 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         end)
       >>= fun preparator ->
 
+      (* let's check the barcodes: *)
+      let all_known_barcodes =
+        match bt with
+        | `illumina -> Assemble_sample_sheet.illumina_barcodes
+        | `bioo -> Assemble_sample_sheet.bioo_barcodes
+        | _ -> []
+      in
+      List.iter bcs (fun i ->
+        if List.for_all all_known_barcodes ((fun (ii, b) -> i <> ii))
+        then perror "Barcode %d is not known" i;);
+          
+      
       run ~dbh ~fake:(fun x -> Layout.Record_stock_library.unsafe_cast x)
         ~real:(fun dbh ->
           Access.Stock_library.add_value ~dbh 
