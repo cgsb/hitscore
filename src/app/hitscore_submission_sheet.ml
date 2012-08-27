@@ -1,5 +1,4 @@
 open Core.Std
-let (|>) x f = f x
 
 open Hitscore_app_util
 open Hitscore
@@ -97,7 +96,7 @@ let parse_run_type s =
     None
     
 let parse_date s =
-  match String.split ~on:'/' s |> List.map ~f:(String.strip) with
+  match String.split ~on:'/' s |! List.map ~f:(String.strip) with
   | [ month; day; year ] ->
     begin try
             Some (ksprintf Time.of_string
@@ -195,10 +194,10 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
     
 let parse_pools ~phix sanitized =
   let sections =
-    Array.mapi sanitized ~f:(fun i a -> (i, a)) |> Array.to_list |>
+    Array.mapi sanitized ~f:(fun i a -> (i, a)) |! Array.to_list |!
         List.filter ~f:(function
         | (_, head :: _) when String.is_prefix ~prefix:"Pool" head -> true
-        | _ -> false) |>
+        | _ -> false) |!
             List.map ~f:(fun (i, a) -> i)
   in
   List.map sections (fun section ->
@@ -540,12 +539,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
   printf "========= Loading %S =========\n" file;
   with_database ~configuration:hsc (fun ~dbh ->
     let layout = Classy.make dbh in
-    let loaded = Csv.load ~separator:',' file |> Array.of_list in
+    let loaded = Csv.load ~separator:',' file |! Array.of_list in
     (* Csv is not Lwt-compliant... we don't care for now. *)
     let sanitized =
       let sanitize s =
-        (String.split_on_chars ~on:[' '; '\t'; '\n'; '\r'] s) |>
-            List.filter ~f:((<>) "") |>
+        (String.split_on_chars ~on:[' '; '\t'; '\n'; '\r'] s) |!
+            List.filter ~f:((<>) "") |!
                 String.concat ~sep:" "
       in
       Array.map loaded ~f:(List.map ~f:sanitize)
@@ -683,10 +682,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   (Option.value ~default:"" sample_name), species)
         | _ -> None)
       in
-      let l1 = List.dedup assoc_sample_org |> List.sort ~cmp:compare in
+      let l1 = List.dedup assoc_sample_org |! List.sort ~cmp:compare in
       let l2 =
         let compare  = (fun a b -> compare (fst a) (fst b)) in
-        List.dedup assoc_sample_org ~compare |> List.sort ~cmp:compare in
+        List.dedup assoc_sample_org ~compare |! List.sort ~cmp:compare in
       if l1 <> l2 then
         List.iter l2 (fun (s, h) ->
           match List.filter l1 ~f:(fun (x, _) -> x = s) with
