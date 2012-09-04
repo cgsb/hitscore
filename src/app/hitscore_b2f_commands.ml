@@ -31,10 +31,11 @@ let get_or_make_sample_sheet ~dbh ~hsc ~kind ?force_new flowcell =
 
 let get_hiseq_raw ~dbh s =
   let layout = Classy.make dbh in
-  begin match String.split ~on:'_' (Filename.basename s) with
+  let basename = Filename.basename s in
+  begin match String.split ~on:'_' basename with
   | [_ ; _ ; _; almost_fc] ->
     layout#hiseq_raw#all
-    >>| List.filter ~f:(fun hr -> hr#hiseq_dir_name = s)
+    >>| List.filter ~f:(fun hr -> hr#hiseq_dir_name = basename)
     >>= fun search_result ->
     return (search_result, String.drop_prefix almost_fc 1)
   | _ ->
