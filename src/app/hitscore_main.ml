@@ -444,6 +444,44 @@ module Backend_management = struct
 
 end
 
+module Edit_database = struct
+
+  let edit ~configuration db_id =
+    with_database configuration (fun ~dbh ->
+      Access.identify ~dbh db_id >>= fun p_initial ->
+      Access.get_universal ~dbh p_initial >>= fun universal ->
+      let sexp = Universal.sexp_of_value universal in
+      let file = Filename.temp_file "hitscore_edition" ".scm" in
+      write_file file ~content:(String.concat [
+        sprintf ";; WARNING: you are editing the value of %S\n" 
+          (Universal.sexp_of_pointer p_initial |! Sexp.to_string_hum);
+        sprintf ";; modifications to g_* fields are highly discouraged !!!\n";
+        Sexp.to_string_hum sexp])
+      >>= fun () ->
+      ksprintf system_command "$EDITOR %s" file
+      >>= fun () ->
+      read_file file
+      >>| String.rstrip
+      >>= fun new_content ->
+      let new_sexp = Sexp.of_string new_content |! Universal.value_of_sexp in
+      Access.update_universal ~dbh new_sexp
+      >>= fun () ->
+      printf "Done.\n";
+
+      return ()
+    )
+
+
+  let () =
+    define_command ~names:["edit"]
+      ~description:"Edit something in the database (with $EDITOR)"
+      ~usage:(fun o exec cmd ->
+        fprintf o "usage: %s <profile> %s <db-id>" exec cmd)
+      ~run:(fun configuration exec cmd -> function
+      | [id] -> edit ~configuration Int.(of_string id)
+      | _ ->
+        error (`invalid_command_line "expecting one only argument: the ID"))
+end
 
 module Hiseq_raw = struct
 

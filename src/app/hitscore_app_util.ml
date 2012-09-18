@@ -61,6 +61,7 @@ let string_of_error = function
       | `unknown_status s -> sprintf "unknown status: %S" s
       | `wrong_header_format s -> sprintf "wrong_header_format: %S" s
       end
+  | `cannot_update_evaluation t -> sprintf "cannot_update_evaluation %S" t
   | `new_failure (_, _) ->
     sprintf "NEW FAILURE\n"
   | `pg_exn e ->
@@ -90,6 +91,8 @@ let string_of_error = function
     sprintf "INVALID-CONFIGURATION: Work directory not set.\n"
   | `write_file_error (f,e) ->
     sprintf "SYS-FILE-ERROR: Write to %S error: %s\n" f (Exn.to_string e)
+  | `read_file_error (f,e) ->
+    sprintf "SYS-FILE-ERROR: Read from %S error: %s\n" f (Exn.to_string e)
   | `system_command_error (cmd, e) ->
     sprintf "SYS-CMD-ERROR: Command: %S --> %s\n" cmd
       (match e with
