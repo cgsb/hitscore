@@ -1188,6 +1188,18 @@ let ocaml_module raw_dsl dsl output_string =
   | _ -> ()
   );
 
+  line out "let update_universal ~dbh uvalue =\n  match uvalue with";
+  List.iter all_nodes (function
+  | Record (name, _) ->
+    line out "  | `%s_value v -> %s.update ~dbh v" name (String.capitalize name)
+  | Function (name, _, _) ->
+    line out "  | `%s_evaluation v -> error (`cannot_update_evaluation %S)"
+      name name
+  | Volume (name, _) -> 
+    line out "  | `%s_volume v -> Volume.update ~dbh v" name 
+  | _ -> ()
+  );
+
   
   line out "end"; (* module Access *)
 
