@@ -375,6 +375,16 @@ let ocaml_file_system_access_module ~out dsl =
                     >>= of_volume))";
   );
 
+  doc out "Update the 'value' of the volume.";
+  line out "let update ~dbh t =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "let kind = Enumeration_volume_kind.to_string t.g_kind in";
+    line out "  let query = Sql_query.update_volume_sexp \
+                            ~kind t.g_id (sexp_of_content t.g_content) in";
+    line out "  Backend.query ~dbh query";
+    line out "  >>= fun _ -> return ()";
+  );
+
   line out "let delete_volume_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.delete_volume_sexp v.g_id in";
