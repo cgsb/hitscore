@@ -1162,6 +1162,23 @@ let ocaml_module raw_dsl dsl output_string =
   line out "    end";
   line out "  end";
 
+  line out
+    "let get_universal ~dbh upointer: (Universal.value, _) Sequme_flow.t =";
+  line out "  match upointer with";
+  List.iter all_nodes (function
+  | Record (name, _) ->
+    line out "  | `%s_pointer p -> %s.get ~dbh p >>= fun v -> `%s_value v |! return"
+      name (String.capitalize name) name
+  | Function (name, _, _) ->
+    line out "  | `%s_pointer p -> %s.get ~dbh p >>= fun v -> `%s_evaluation v |! return"
+      name (String.capitalize name) name
+  | Volume (name, _) -> 
+    line out "  | `%s_pointer p -> Volume.get ~dbh p >>= fun v -> `%s_volume v |! return"
+      name  name
+  | _ -> ()
+  );
+
+  
   line out "end"; (* module Access *)
 
   doc out "Object-based access to the layout";
