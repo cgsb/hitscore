@@ -18,9 +18,9 @@ rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_layout.ml"
 
 
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 845c08238bf338b6f6f76ee6160928f3) *)
+(* DO NOT EDIT (digest: 66a4a3656a3ae946b0f327e88ac2158d) *)
 module OASISGettext = struct
-# 21 "/home/smondet/usr/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/oasis/OASISGettext.ml"
+(* # 21 "/tmp/install-ocaml-5814/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/oasis/OASISGettext.ml" *)
 
   let ns_ str =
     str
@@ -43,7 +43,7 @@ module OASISGettext = struct
 end
 
 module OASISExpr = struct
-# 21 "/home/smondet/usr/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/oasis/OASISExpr.ml"
+(* # 21 "/tmp/install-ocaml-5814/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/oasis/OASISExpr.ml" *)
 
 
 
@@ -135,7 +135,7 @@ end
 
 # 117 "myocamlbuild.ml"
 module BaseEnvLight = struct
-# 21 "/home/smondet/usr/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/base/BaseEnvLight.ml"
+(* # 21 "/tmp/install-ocaml-5814/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/base/BaseEnvLight.ml" *)
 
   module MapString = Map.Make(String)
 
@@ -233,7 +233,7 @@ end
 
 # 215 "myocamlbuild.ml"
 module MyOCamlbuildFindlib = struct
-# 21 "/home/smondet/usr/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml"
+(* # 21 "/tmp/install-ocaml-5814/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml" *)
 
   (** OCamlbuild extension, copied from 
     * http://brion.inria.fr/gallium/index.php/Using_ocamlfind_with_ocamlbuild
@@ -344,7 +344,7 @@ module MyOCamlbuildFindlib = struct
 end
 
 module MyOCamlbuildBase = struct
-# 21 "/home/smondet/usr/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
+(* # 21 "/tmp/install-ocaml-5814/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
 
   (** Base functions for writing myocamlbuild.ml
       @author Sylvain Le Gall
@@ -360,7 +360,7 @@ module MyOCamlbuildBase = struct
   type name = string 
   type tag = string 
 
-# 56 "/home/smondet/usr/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
+(* # 56 "/tmp/install-ocaml-5814/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
 
   type t =
       {
