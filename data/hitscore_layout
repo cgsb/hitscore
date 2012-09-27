@@ -43,14 +43,16 @@
         (doc protocol_directory)
         notable)
 
-(enumeration barcode_provider 
-             none bioo bioo_96 illumina nugen custom)
+(enumeration barcode_type 
+             bioo bioo_96 illumina nugen custom)
 
-(record custom_barcode
+(record barcode
+        (kind barcode_type)
+        (index int option)
         (position_in_r1 int option)
         (position_in_r2 int option)
         (position_in_index int option)
-        (sequence string))
+        (sequence string option))
 
 (record stock_library
         (name           string)
@@ -62,9 +64,7 @@
         (stranded       bool)
         (truseq_control bool)
         (rnaseq_control string option)
-        (barcode_type barcode_provider)
-        (barcodes int array)
-        (custom_barcodes custom_barcode array)
+        (barcoding barcode array array)
         (p5_adapter_length int option )
         (p7_adapter_length int option)
         (preparator person option)

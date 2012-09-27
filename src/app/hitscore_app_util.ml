@@ -41,7 +41,7 @@ end
 let string_of_error = function
   | `barcode_not_found (i, p) ->
     sprintf "ERROR: Barcode not found: %d (%s)\n" i
-      (Layout.Enumeration_barcode_provider.to_string p)
+      (Layout.Enumeration_barcode_type.to_string p)
   | `fatal_error  `trees_to_unix_paths_should_return_one ->
     sprintf "FATAL_ERROR: trees_to_unix_paths_should_return_one\n"
   | `io_exn e ->

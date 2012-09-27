@@ -33,31 +33,32 @@ module Assemble_sample_sheet:
     let barcode_sequences barcode_type barcodes =
       let barcode_assoc = 
         match barcode_type with
-        | `none | `custom | `nugen | `bioo_96 -> []
-        | `illumina -> illumina_barcodes
-        | `bioo -> bioo_barcodes in          
+        | Some `illumina -> illumina_barcodes
+        | Some `bioo -> bioo_barcodes
+        | _ -> []
+      in          
       let module M = struct
         exception Local_barcode_not_found of int
         let f () =
           try Ok (
             if barcode_assoc <> [] then
-              Array.map barcodes ~f:(fun idx ->
+              List.map barcodes ~f:(fun idx ->
                 match List.Assoc.find barcode_assoc idx with
                 | Some b -> b
                 | None -> raise (Local_barcode_not_found idx))
             else 
-              [| "" |])
+              [ "" ])
           with
           | Local_barcode_not_found i ->
-            Error (`barcode_not_found (i, barcode_type))
+            Error (`barcode_not_found (i, Option.value_exn barcode_type))
       end in
       M.f ()
 
     let all_barcode_sequences barcode_type =
       match barcode_type with
-      | `none | `custom | `nugen | `bioo_96 -> [| |]
-      | `illumina -> Array.of_list illumina_barcodes
-      | `bioo -> Array.of_list bioo_barcodes 
+      | Some `illumina -> Array.of_list illumina_barcodes
+      | Some `bioo -> Array.of_list bioo_barcodes 
+      | _ -> [| |]
 
     type sample_sheet = {
       content: Buffer.t;
@@ -124,45 +125,65 @@ module Assemble_sample_sheet:
                 >>= fun {g_value = { library; _ }} ->
                 let open Layout.Record_stock_library in
                 Access.Stock_library.get ~dbh library
-                >>= fun {g_value = { name; barcode_type; barcodes; _ }} ->
+                >>= fun {g_value = { name; barcoding ; _ }} ->
+                begin match barcoding with
+                | [| and_array |] ->
+                  let open Layout.Record_barcode in
+                  while_sequential (Array.to_list and_array) (fun one ->
+                    Access.Barcode.get ~dbh one
+                    >>= begin function
+                    | {g_value = { kind; index = Some b; _}; _} ->
+                      return (Some (kind, b))
+                    | _ -> return None
+                    end)
+                  >>| List.filter_opt
+                  >>| List.unzip
+                | _ -> return ([], [])
+                end
+                >>= fun (types, indexes) ->
                 let barcode_type =
-                (* if only one lib, then no barcoding *)
-                  if Array.length libraries <= 1 then `none else barcode_type in
-                begin match (barcode_sequences barcode_type barcodes) with
+                  (* if only one lib, then no barcoding *)
+                  if Array.length libraries <= 1 then None
+                  else match List.dedup types with
+                  | [one_barcode_type] -> Some one_barcode_type
+                  | more -> None
+                in
+                begin match (barcode_sequences barcode_type indexes) with
                 | Ok bars ->
                   return (name, bars)
                 | Error e -> error e
                 end)
               >>= fun name_bars ->
-              List.filter name_bars ~f:(fun (name, bars) -> bars <> [| "" |])
-              |! (function
-                | [] ->
-                  let name = 
-                    match name_bars with
-                    | [ (one_name, _) ] -> one_name
-                    | _ -> sprintf "PoolLane%d" (lane_idx + 1)
-                  in
-                  print out "%s,%d,%s,,,,N,,,Lane%d\n"
-                    flowcell_name (lane_idx + 1) name (lane_idx + 1);
-                  return ()
-                | l ->
-                  print out "%s,%d,UndeterminedLane%d,,Undetermined,,N,,,Lane%d\n"
-                    flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
-                  let potential_dup =
-                    List.find_a_dup 
-                      (List.map l (fun s -> Array.to_list (snd s)) |! List.concat)
-                      ~compare in
-                  begin match potential_dup with
-                  | Some b -> error (`duplicated_barcode b)
-                  | None -> return ()
-                  end
-                  >>= fun () ->
-                  while_sequential l ~f:(fun (name, bars) -> 
-                    Array.iter bars ~f:(fun b ->
-                      print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
-                        flowcell_name (lane_idx + 1) name b (lane_idx + 1));
-                    return ())
-                  >>= fun _ -> return ())
+              let filtered =
+                List.filter name_bars ~f:(fun (name, bars) -> bars <> [""]) in
+              begin match filtered with
+              | [] ->
+                let name = 
+                  match name_bars with
+                  | [ (one_name, _) ] -> one_name
+                  | _ -> sprintf "PoolLane%d" (lane_idx + 1)
+                in
+                print out "%s,%d,%s,,,,N,,,Lane%d\n"
+                  flowcell_name (lane_idx + 1) name (lane_idx + 1);
+                return ()
+              | l ->
+                print out "%s,%d,UndeterminedLane%d,,Undetermined,,N,,,Lane%d\n"
+                  flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
+                let potential_dup =
+                  List.find_a_dup ~compare
+                    (List.map l (fun s -> snd s) |! List.concat) in
+                begin match potential_dup with
+                | Some b -> error (`duplicated_barcode b)
+                | None -> return ()
+                end
+                >>= fun () ->
+                while_sequential l ~f:(fun (name, bars) -> 
+                  List.iter bars ~f:(fun b ->
+                    print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
+                      flowcell_name (lane_idx + 1) name b (lane_idx + 1));
+                  return ())
+                >>= fun _ -> return ()
+              end
 
             | `all_barcodes ->
               begin match libraries with
@@ -171,25 +192,31 @@ module Assemble_sample_sheet:
                   flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
                 return ()
               | some ->
-                let elected_barcode_type =
-                  while_sequential (Array.to_list some) (fun il ->
-                    let open Layout.Record_input_library in
-                    Access.Input_library.get ~dbh il
-                    >>= fun {g_value = { library; _ }} ->
-                    let open Layout.Record_stock_library in
-                    Access.Stock_library.get ~dbh library
-                    >>= fun {g_value = { barcode_type; _ }} ->
-                    return barcode_type)
-                  >>= fun bt_list ->
-                  List.fold_left bt_list ~init:`none ~f:(fun prev current -> 
-                    match prev with
-                    | `illumina -> `illumina
-                    | `bioo -> `bioo
-                    | `none | `custom | `nugen | `bioo_96 ->
-                      current) 
-                  |! return in
-                elected_barcode_type >>= fun bt ->
-                begin match (all_barcode_sequences bt) with
+                while_sequential (Array.to_list some) begin fun il ->
+                  let open Layout.Record_input_library in
+                  Access.Input_library.get ~dbh il
+                  >>= fun {g_value = { library; _ }} ->
+                  let open Layout.Record_stock_library in
+                  Access.Stock_library.get ~dbh library
+                  >>= fun {g_value = { barcoding; _ }} ->
+                  while_sequential
+                    (List.concat (Array.(map ~f:to_list barcoding |! to_list)))
+                    begin fun b ->
+                      let open Layout.Record_barcode in
+                      Access.Barcode.get ~dbh b
+                      >>= fun {g_value = {kind ; _}} ->
+                      return kind
+                    end
+                end
+                >>| List.concat 
+                >>| List.filter ~f:(fun k -> k = `bioo || k = `illumina)
+                >>| List.dedup
+                >>= begin function
+                | [one_barcode_type] -> return (Some one_barcode_type)
+                | _ -> return (None)
+                end
+                >>= fun elected_barcode_type ->
+                begin match (all_barcode_sequences elected_barcode_type) with
                 | [| |] ->
                   print out "%s,%d,SingleSample%d,,,,N,,,Lane%d\n"
                     flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
@@ -198,7 +225,8 @@ module Assemble_sample_sheet:
                   Array.iter some  ~f:(fun (i, b) ->
                     print out "%s,%d,Lane%d_%s_%02d_%s,,%s,,N,,,Lane%d\n"
                       flowcell_name (lane_idx + 1) (lane_idx + 1) 
-                      (Layout.Enumeration_barcode_provider.to_string bt)
+                      (Layout.Enumeration_barcode_type.to_string
+                         (Option.value_exn elected_barcode_type))
                       i b b (lane_idx + 1));
                   return ()
                 end
