@@ -85,6 +85,7 @@
 )
 
 (record lane
+        (pool_name string option)
         (seeding_concentration_pM real option)
         (total_volume real option)
         (libraries input_library array)

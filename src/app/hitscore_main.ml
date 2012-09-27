@@ -955,6 +955,7 @@ module Flowcell = struct
       >>= fun () ->
       let libraries = [| input_phix |] in
       Access.Lane.add_value ~dbh
+        ~pool_name:"PhiX"
         ~libraries  ?total_volume:None ?seeding_concentration_pM:None
         ~pooled_percentages:[| 100. |]
         ~requested_read_length_1:r1 ?requested_read_length_2:r2
@@ -970,7 +971,7 @@ module Flowcell = struct
 
   let new_empty_lane ~dbh r1 r2 =
     Access.Lane.add_value ~dbh
-      ~libraries:[||]
+      ~libraries:[||] ?pool_name:None
       ?total_volume:None ?seeding_concentration_pM:None
       ~pooled_percentages:[| |]
       ~requested_read_length_1:r1 ?requested_read_length_2:r2

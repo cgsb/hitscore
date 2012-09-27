@@ -1179,13 +1179,14 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | None -> (if not dry_run then failwith "cannot go further"); (42, None) in
 
       let contacts = List.map contacts snd |! Array.of_list in
+      let pool_name = String.(chop_prefix_exn pool ~prefix:"Pool" |! strip) in
       run ~dbh ~fake:(fun x -> Layout.Record_lane.unsafe_cast x)
         ~real:Option.(fun dbh ->
           Access.Lane.add_value ~dbh ~libraries:input_libraries ~pooled_percentages
             ?seeding_concentration_pM:(spm >>| Int64.of_int >>| Float.of_int64)
             ?total_volume:(tv >>| Int64.of_int >>| Float.of_int64)
             ~requested_read_length_1 ?requested_read_length_2
-            ~contacts)
+            ~pool_name ~contacts)
         ~log:(sprintf "(add_lane (libraries (%s)) (percentages %s) \
                           (contacts (%s)))"
                 (String.concat ~sep:" " 
