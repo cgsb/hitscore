@@ -1,4 +1,0 @@
-
-(** The version of the library *)
-let version = "$(pkg_version)"
-

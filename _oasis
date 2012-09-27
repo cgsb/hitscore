@@ -7,8 +7,6 @@ Authors:     Ashish Agarwal, Sebastien Mondet
 License:     PROP
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
-FilesAB: src/lib/hitscore_conf_values.ml.ab
-
 
 Library hitscoregen
   Path: src/codegen/

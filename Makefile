@@ -42,7 +42,25 @@ install-version: _build/src/app/hitscore_main.native setup.data
 setup:
 	oasis setup
 
-build: setup.data
+src/lib/hitscore_conf_values.ml::
+	echo "(** Values about the Hitscore versions and state*)" > $@
+	echo "open Core.Std" >> $@
+	echo "(** OASIS version *)" >> $@
+	echo "let version =\""$(PKG_VERSION)"\"" >> $@
+	echo "(** Number of commits since version tag *)" >> $@
+	echo -n "let patch_level = " >> $@
+	git --no-pager log --oneline v$(PKG_VERSION)..HEAD -- | wc -l  >> $@
+	echo "" >> $@
+	echo "(** Branch *)" >> $@
+	echo -n "let branch = String.strip \"" >> $@
+	git branch | grep '*' | cut -d" " -f 2 >> $@
+	echo "\"" >> $@
+	echo "(** Git id of the last commit *)" >> $@
+	echo -n "let last_commit = String.strip \"" >> $@
+	git --no-pager log --oneline  HEAD^1..HEAD -- | cut -d" " -f 1 -s >> $@
+	echo "\"" >> $@
+
+build: setup.data src/lib/hitscore_conf_values.ml
 	ocaml setup.ml -build
 
 install: uninstall
