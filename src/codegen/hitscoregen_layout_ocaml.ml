@@ -451,6 +451,13 @@ end";
            (record_get s)
            (sprintf "%s_element" s)
            (sprintf "Record_%s" s))
+    | Array (Array (Record_name s)) ->
+      sprintf "Array.map %s.(%s) ~f:(fun a -> Array.map a ~f:(fun p -> %s))"
+        modname field
+        (make_pointer_object "p"
+           (record_get s)
+           (sprintf "%s_element" s)
+           (sprintf "Record_%s" s))
     | Volume_name s ->
       make_pointer_object 
         (sprintf "%s.(%s)" modname field)
@@ -665,9 +672,14 @@ let ocaml_dependency_graph_module ~out all_nodes =
     | n, Array (Volume_name r) ->
       line out "      List.map (Array.to_list Record_%s.(t.g_value.%s)) (fun e -> \
                        \ `%s_pointer e);" name n r;
+    | n, Array (Array (Record_name r))
+    | n, Array (Array (Volume_name r)) ->
+      line out "      List.map (Array.to_list Record_%s.(t.g_value.%s)) (fun a -> \
+                       \ List.map (Array.to_list a) (fun e ->
+                       \ `%s_pointer e)) |! List.concat;" name n r;
     | _, t when type_is_pointer t = `no -> ()
     | n, t ->
-      failwithf "type too complex: (%s: %s)" n (string_of_dsl_type t) ()
+      failwithf "get_children: type too complex: (%s: %s)" n (string_of_dsl_type t) ()
     );
     line out "    ])";
   | Function (name, args, result) ->
@@ -741,6 +753,16 @@ let ocaml_dependency_graph_module ~out all_nodes =
         line out ">>| List.filter_map ~f:(fun t -> ";
         line out "      let open Record_%s in" name_parent;
         line out "      if Array.exists t.g_value.%s ((=) p)" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Array (Array (Record_name r)) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if Array.exists t.g_value.%s (Array.exists ~f:((=) p))" n;
         line out "      then Some (`%s_pointer (pointer t))" name_parent;
         line out "      else None)";
         let list_name = sprintf "all_%s_%s" name_parent n in
@@ -835,6 +857,16 @@ let ocaml_dependency_graph_module ~out all_nodes =
         line out ">>| List.filter_map ~f:(fun t -> ";
         line out "      let open Record_%s in" name_parent;
         line out "      if Array.exists t.g_value.%s ((=) p)" n;
+        line out "      then Some (`%s_pointer (pointer t))" name_parent;
+        line out "      else None)";
+        let list_name = sprintf "all_%s_%s" name_parent n in
+        line out ">>= fun %s ->" list_name;
+        recognized_parents := list_name :: !recognized_parents;
+      | n, Array (Array (Volume_name r)) when r = name ->
+        line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
+        line out ">>| List.filter_map ~f:(fun t -> ";
+        line out "      let open Record_%s in" name_parent;
+        line out "      if Array.exists t.g_value.%s (Array.exists ~:f((=) p))" n;
         line out "      then Some (`%s_pointer (pointer t))" name_parent;
         line out "      else None)";
         let list_name = sprintf "all_%s_%s" name_parent n in
@@ -1236,9 +1268,14 @@ let ocaml_module raw_dsl dsl output_string =
     | n, Array (Volume_name _) ->
       line out "    while_sequential (Array.to_list %s#%s) \
                        (fun o -> o#get) >>= fun _ ->" name n;
+    | n, Array (Array (Record_name _))
+    | n, Array (Array (Volume_name _)) ->
+      line out "    while_sequential (Array.to_list %s#%s) \
+                       (fun a -> while_sequential (Array.to_list a) \
+                                  (fun o -> o#get)) >>= fun _ ->" name n;
     | _, t when type_is_pointer t = `no -> ()
     | n, t ->
-      failwithf "type too complex: (%s: %s)" n (string_of_dsl_type t) ()
+      failwithf "verify_layout: type too complex: (%s: %s)" n (string_of_dsl_type t) ()
     ) in 
   line out "let all_pointers ~dbh =";
   line out "  let layout = Classy.make dbh in";
