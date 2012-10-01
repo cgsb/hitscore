@@ -148,7 +148,7 @@ let v12_to_v13 file_in file_out =
                 (function Atom s -> Int.of_string s | _ -> assert false);
               None
             | List [Atom "custom_barcodes"; List l] ->
-              barcodes :=
+              custom_barcodes :=
                 List.map l (function
                 | List [List [Atom "id"; Atom s]] -> Int.of_string s
                 | s ->
@@ -160,6 +160,10 @@ let v12_to_v13 file_in file_out =
               (* eprintf "sexp: %s\n" (to_string s); *)
               Some s
           ) in
+          eprintf "type: %s, custom_ones: %d normal: %d\n"
+            (V12.Layout.Enumeration_barcode_provider.to_string !barcode_type)
+            (List.length !custom_barcodes)
+            (List.length !barcodes);
           let barcoding =
             let custom_ones = !custom_barcodes in
             let classic_ones =
@@ -186,8 +190,9 @@ let v12_to_v13 file_in file_out =
             classic_ones @ custom_ones
           in
           let barcoding_sexp =
-            List.map barcoding (fun i -> Atom (Int.to_string i)) in
-          List (List [Atom "barcoding"; List barcoding_sexp] :: record)
+            List.map barcoding
+              (fun i -> List [List [Atom "id"; Atom (Int.to_string i)]]) in
+          List (List [Atom "barcoding"; List [List barcoding_sexp]] :: record)
         end)]
       | List l -> List l
     in
