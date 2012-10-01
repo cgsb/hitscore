@@ -665,27 +665,34 @@ let ocaml_dependency_graph_module ~out all_nodes =
     | n, Array (Volume_name r) ->
       line out "      List.map (Array.to_list Record_%s.(t.g_value.%s)) (fun e -> \
                        \ `%s_pointer e);" name n r;
-    | _ -> ());
+    | _, t when type_is_pointer t = `no -> ()
+    | n, t ->
+      failwithf "type too complex: (%s: %s)" n (string_of_dsl_type t) ()
+    );
     line out "    ])";
   | Function (name, args, result) ->
     line out "  | `%s_pointer p ->" name;
     line out "    Access.%s.get ~dbh p >>= fun t ->" (String.capitalize name);
     line out "    return (List.concat [";
-    List.iter args (function
-    | n, Record_name r
-    | n, Volume_name r ->
-      line out "      [(`%s_pointer Function_%s.(t.g_evaluation.%s) : \
+    List.iter args
+      begin function
+      | n, Record_name r
+      | n, Volume_name r ->
+        line out "      [(`%s_pointer Function_%s.(t.g_evaluation.%s) : \
                             Universal.pointer)];" r name n;
-    | n, Option (Record_name r)
-    | n, Option (Volume_name r) ->
-      line out "      Option.value_map ~default:[] Function_%s.(t.g_evaluation.%s) \
+      | n, Option (Record_name r)
+      | n, Option (Volume_name r) ->
+        line out "      Option.value_map ~default:[] Function_%s.(t.g_evaluation.%s) \
                           ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
-        name n r;
-    | n, Array (Record_name r)
-    | n, Array (Volume_name r) ->
-      line out "      List.map (Array.to_list Function_%s.(t.g_evaluation.%s)) \
+          name n r;
+      | n, Array (Record_name r)
+      | n, Array (Volume_name r) ->
+        line out "      List.map (Array.to_list Function_%s.(t.g_evaluation.%s)) \
                      \  (fun e -> `%s_pointer e);" name n r;
-    | _ -> ());
+      | _, t when type_is_pointer t = `no -> ()
+      | n, t ->
+        failwithf "type too complex: (%s: %s)" n (string_of_dsl_type t) ()
+      end;
     line out "      Option.value_map ~default:[] Function_%s.(t.g_result) \
                           ~f:(fun o -> [(`%s_pointer  o : Universal.pointer)]);"
       name result;
@@ -739,7 +746,10 @@ let ocaml_dependency_graph_module ~out all_nodes =
         let list_name = sprintf "all_%s_%s" name_parent n in
         line out ">>= fun %s ->" list_name;
         recognized_parents := list_name :: !recognized_parents;
-      | _ -> ())
+      | _, t when type_is_pointer t <> `yes name -> ()
+      | n, t ->
+        failwithf "get_parents: type too complex: (%s: %s)" n (string_of_dsl_type t) ()
+      )
     | Function (name_parent, args, result) ->
       List.iter args (function
       | n, Record_name r when r = name ->
@@ -772,7 +782,11 @@ let ocaml_dependency_graph_module ~out all_nodes =
         let list_name = sprintf "all_%s_%s" name_parent n in
         line out ">>= fun %s ->" list_name;
         recognized_parents := list_name :: !recognized_parents;
-      | _ -> ());
+      | _, t when type_is_pointer t <> `yes name -> ()
+      | n, t ->
+        failwithf "get function parents: type too complex: (%s: %s)"
+          n (string_of_dsl_type t) ()
+      );
       if result = name then (
         line out "Access.%s.get_all ~dbh" (String.capitalize name_parent);
         line out ">>| List.filter_map ~f:(fun t -> ";
@@ -1222,7 +1236,10 @@ let ocaml_module raw_dsl dsl output_string =
     | n, Array (Volume_name _) ->
       line out "    while_sequential (Array.to_list %s#%s) \
                        (fun o -> o#get) >>= fun _ ->" name n;
-    | _ -> ()) in 
+    | _, t when type_is_pointer t = `no -> ()
+    | n, t ->
+      failwithf "type too complex: (%s: %s)" n (string_of_dsl_type t) ()
+    ) in 
   line out "let all_pointers ~dbh =";
   line out "  let layout = Classy.make dbh in";
   List.iter all_nodes (function
