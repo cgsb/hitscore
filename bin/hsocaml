@@ -17,7 +17,12 @@ cat <<EOF > $file_to_use
 #thread
 #require "lwt.unix"
 #require "lwt.top"
-#require "hitscore"
+#require "threads, core, pgocaml, sexplib.syntax, biocaml, sequme"
+#directory "_build/src/codegen"
+#directory "_build/src/lib"
+#load "hitscoregen.cma"
+#load "hitscore.cma"
+
 open Core.Std
 open Hitscore
 let () = printf "--> Open Core.Std\n"
