@@ -763,6 +763,45 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     let erroneous_pointer f =
       if dry_run then f (-1)
       else failwith "erroneous_pointer during wet-run!" in
+    let check_and_copy_files volume filenames =
+      if dry_run
+      then begin 
+        List.iter filenames (fun n ->
+          if (Sys.file_exists n) <> `Yes
+          then
+            perror "File %S should be in the current directory!" n;
+        );
+        dry_buffer :=
+          (0,
+           sprintf "(create dir for %d and move %s there)"
+             volume.Layout.File_system.id
+             (String.concat ~sep:" " (List.map filenames (sprintf "%S")))
+          ) :: !dry_buffer;
+        return volume
+      end else begin
+        let open Sequme_flow_sys in
+        Common.path_of_volume ~dbh ~configuration:hsc volume
+        >>= fun path ->
+        let cmd = sprintf "mkdir -p %S" path in
+        if verbose then printf "$-> %S\n%!" cmd;
+        system_command cmd
+        >>= fun () ->
+        while_sequential filenames (fun f ->
+          if Sys.file_exists f = `Yes
+          then begin
+            let cmd = sprintf "cp %S %S/" f path in
+            if verbose then printf "$-> %S\n%!" cmd;
+            system_command cmd
+          end else begin
+            perror "File %S should REALLY be in the current directory!" f;
+            return ()
+          end)
+        >>= fun (_: unit list) ->
+        return volume
+      end
+    in
+
+      
 
     (* Adding contacts *)
     while_sequential contacts (function
@@ -857,38 +896,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                       hr_tag
                       (String.concat ~sep:" " (List.map filenames (sprintf "%S"))))
             >>= fun volume ->
-            if dry_run
-            then begin 
-              dry_buffer :=
-                (0,
-                 sprintf "(create dir for %d and move %s there)"
-                   volume.Layout.File_system.id
-                   (String.concat ~sep:" " (List.map filenames (sprintf "%S")))
-                ) :: !dry_buffer;
-              return volume
-            end
-            else begin
-              let open Sequme_flow_sys in
-              Common.path_of_volume ~dbh ~configuration:hsc volume
-              >>= fun path ->
-              let cmd = sprintf "mkdir -p %S" path in
-              if verbose then printf "$-> %S\n%!" cmd;
-              system_command cmd
-              >>= fun () ->
-              while_sequential filenames (fun f ->
-                if Sys.file_exists f = `Yes
-                then begin
-                  let cmd = sprintf "cp %S %S/" f path in
-                  if verbose then printf "$-> %S\n%!" cmd;
-                  system_command cmd
-                end else begin
-                  perror "Lib: %s, Protocol: %s: File %S should REALLY be in the current directory!"
-                    libname name f;
-                  return ()
-                end)
-              >>= fun (_: unit list) ->
-              return volume
-            end
+            check_and_copy_files volume filenames
           | None ->
             perror "Lib: %s, Protocol %S is not in the DB and has no file." 
               libname name;
@@ -1112,6 +1120,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                       "(add_volume bioanalyzer_directory %s (files (%s)))"
                       hr_tag (String.concat ~sep:" " (List.map dir (sprintf "%S"))))
             >>= fun x ->
+            check_and_copy_files x dir
+            >>= fun _ ->
             bio_directories := (dir, x) :: !bio_directories;
             return x
         in
@@ -1153,6 +1163,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                       "(add_volume agarose_gel_directory %s (files (%s)))"
                       hr_tag (String.concat ~sep:" " (List.map dir (sprintf "%S"))))
             >>= fun x ->
+            check_and_copy_files x dir >>= fun _ ->
             arg_directories := (dir, x) :: !arg_directories;
             return x
         in
