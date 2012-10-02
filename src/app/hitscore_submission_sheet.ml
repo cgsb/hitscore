@@ -510,7 +510,11 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
         let arg_max  = column32 row col_Agarose_Gel___Max_Fragment_Size in
         let arg_img  = column rawrow col_Agarose_Gel___Image_File in
         let protocol_name  = mandatory row col_Protocol_Name in
-        let protocol_file  = mandatory rawrow col_Protocol_File in
+        let protocol_files  =
+          mandatory rawrow col_Protocol_File
+          >>= fun s ->
+          String.split ~on:',' s |! List.map ~f:String.strip |! return
+        in
         let preparator     = mandatory row col_Library_Preparator_Email in
         let notes          = column rawrow col_Notes in
         let key_value_list =
@@ -526,7 +530,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
                      bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                      arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                      protocol_name , 
-                     protocol_file , 
+                     protocol_files , 
                      preparator    , 
                      notes         , 
                      key_value_list)))
@@ -608,7 +612,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                   arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                   protocol_name , 
-                  protocol_file , 
+                  protocol_files , 
                   preparator    , 
                   notes         , 
                   key_value_list) -> 
@@ -654,7 +658,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             sprintf "[Agarose Gel %s]" (bioarg (arg_wnb, arg_avg, arg_min, arg_max));
             vm arg_img ~default:"[NO IMG]" ~f:(sprintf "\n      [img: %S]"); nl;
             vm protocol_name  ~default:"[NO PROTOCOL]" ~f:(sprintf "[Protocol: %s]"); 
-            vm protocol_file  ~default:"[NO P-FILE]" ~f:(sprintf "[P-File: %s]"); nl; 
+            vm protocol_files ~default:"[NO P-FILE]"
+              ~f:(fun l -> sprintf "[P-Files: %s]" (String.concat ~sep:", " l)); nl; 
             vm preparator     ~default:"[NO PREPARATOR]" ~f:(sprintf "[Prep by %s]"); nl; 
             vm notes          ~default:"" ~f:(sprintf "[Note: %S]");
            ]
@@ -676,7 +681,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     p5, p7,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                     arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                    protocol_name, protocol_file, preparator, notes, 
+                    protocol_name, protocol_files, preparator, notes, 
                     key_value_list) ->
           Some (sprintf "%s.%S"
                   (Option.value ~default:"_" project)
@@ -708,7 +713,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     p5, p7,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                     arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                    protocol_name, protocol_file, preparator, notes, 
+                    protocol_name, protocol_files, preparator, notes, 
                     key_value_list) -> Some ln)
       in
       let check_lib libname =
@@ -815,7 +820,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                 arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                 protocol_name , 
-                protocol_file , 
+                protocol_files , 
                 preparator    , 
                 notes         , 
                 key_value_list) ->
@@ -826,8 +831,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         >>= fun search ->
         begin match search with
         | [] ->
-          begin match protocol_file with
-          | Some filename ->
+          begin match protocol_files with
+          | Some filenames ->
             let hr_tag = 
               let buf = Buffer.create 42 in
               let yes s = Buffer.add_char buf s in
@@ -835,14 +840,16 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '-' | '_' as c -> yes c 
               | _ -> ());
               Buffer.contents buf  in
+            let files = List.map filenames Layout.File_system.Tree.file in
             run ~dbh
               ~fake:(fun x -> Layout.File_system.unsafe_cast x)
               ~real:(fun dbh ->
                 layout#add_tree_volume ~kind:`protocol_directory
-                  ~hr_tag ~files:[ Layout.File_system.Tree.file filename ] ()
+                  ~hr_tag ~files ()
                 >>| (fun p -> p#pointer))
-              ~log:(sprintf "(add_volume protocol_directory %s (files %S))"
-                      hr_tag filename)
+              ~log:(sprintf "(add_volume protocol_directory %s (files %s))"
+                      hr_tag
+                      (String.concat ~sep:" " (List.map filenames (sprintf "%S"))))
           | None ->
             perror "Lib: %s, Protocol %S is not in the DB and has no file." 
               libname name;
@@ -1161,7 +1168,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                           bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                           arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                           protocol_name , 
-                          protocol_file , 
+                          protocol_files , 
                           preparator    , 
                           notes         , 
                           key_value_list) ->
