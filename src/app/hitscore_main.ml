@@ -993,27 +993,30 @@ module Flowcell = struct
           failwithf "Cannot understand arg: %S (should be an integer)" x () in
       `lane i)
 
-  let register hsc name args =
+  let make_lanes ~dbh lanes =
+    checks_and_read_lengths ~dbh 
+      (List.filter_map lanes (function `lane i -> Some i | _ -> None))
+    >>= fun (r1, r2) ->
+    printf "It is a %S flowcell\n"
+      (match r2 with 
+      | Some s -> sprintf "PE %dx%d" r1 s
+      | None -> sprintf "SE %d" r1);
+    while_sequential lanes ~f:(function
+    | `phix ->  new_input_phix ~dbh r1 r2 
+    | `lane id -> return (Layout.Record_lane.unsafe_cast id)
+    | `empty -> new_empty_lane ~dbh r1 r2)
+    
+  let register ~configuration ?(modify=false) name args =
     if List.length args <> 8 then
       failwith "Expecting 8 arguments after the flowcell name.";
     let lanes = parse_args args in
-    with_database hsc (fun ~dbh ->
+    with_database ~configuration (fun ~dbh ->
       let layout = Classy.make dbh in
       layout#flowcell#all >>| List.filter ~f:(fun s -> s#serial_name = name)
       >>= function
       | [] ->
         printf "Registering %s\n" name;
-        checks_and_read_lengths ~dbh 
-          (List.filter_map lanes (function `lane i -> Some i | _ -> None))
-        >>= fun (r1, r2) ->
-        printf "It is a %S flowcell\n"
-          (match r2 with 
-          | Some s -> sprintf "PE %dx%d" r1 s
-          | None -> sprintf "SE %d" r1);
-        while_sequential lanes ~f:(function
-        | `phix ->  new_input_phix ~dbh r1 r2 
-        | `lane id -> return (Layout.Record_lane.unsafe_cast id)
-        | `empty -> new_empty_lane ~dbh r1 r2)
+        make_lanes ~dbh lanes
         >>= fun lanes ->
         Access.Flowcell.add_value ~dbh ~serial_name:name ~lanes:(Array.of_list lanes)
         >>= fun flowcell ->
@@ -1022,9 +1025,20 @@ module Flowcell = struct
                                (List.map lanes (fun i ->
                                  sprintf "%d" i.Layout.Record_lane.id)
                                  |! String.concat ~sep:" "))
-      | [one] ->
+      | [one] when not modify ->
         printf "ERROR: Flowcell name %S already used.\n" name;
         return ()
+      | [one]  when modify ->
+        printf "Modifying %s\n" name;
+        make_lanes ~dbh lanes
+        >>= fun lanes ->
+        one#set_lanes (Array.of_list lanes)
+        >>= fun () ->
+        Common.add_log ~dbh (sprintf "(update_flowcell %d %s (lanes %s))"
+                               one#g_id name
+                               (List.map lanes (fun i ->
+                                 sprintf "%d" i.Layout.Record_lane.id)
+                                 |! String.concat ~sep:" "))
       | l ->
         printf "BIG-ERROR: Flowcell name %S already used %d times!!!\n" 
           name (List.length l);
@@ -1038,10 +1052,20 @@ module Flowcell = struct
       ~usage:(fun o exec cmd ->
         fprintf o "Usage: %s <profile> %s <flowcell-name> <L1> <L2> .. <L8>\n"
           exec cmd;
-        fprintf o "where Lx is 'PhiX', 'Empty', or an orphan lane's id.\n")
-      ~run:(fun config exec cmd -> function
+        fprintf o "where: Lx is 'PhiX', 'Empty', or an orphan lane's id.\n";
+        fprintf o "and:\n  … %s -empty NAMECXX\n is equivalent to\n\
+          \  … %s NAMECXX Empty Empty Empty Empty Empty Empty Empty Empty\n\
+          " cmd cmd;
+        fprintf o "and:\n  … %s -modify NAMECXX <L1> .. <L8>\n\
+          will update the flowcell even if it already exists\n" cmd;
+      )
+      ~run:(fun configuration exec cmd -> function
       | [] -> error (`invalid_command_line "no arguments provided")
-      | name :: lanes -> register config name lanes)
+      | ["-empty"; name] ->
+        register ~configuration name (List.init 8 (fun _ -> "Empty"))
+      | "-modify" :: name :: lanes -> register ~configuration ~modify:true name lanes
+      | name :: lanes -> register ~configuration name lanes
+      )
 end
 
 module Query = struct
