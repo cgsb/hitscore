@@ -841,6 +841,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               | _ -> ());
               Buffer.contents buf  in
             let files = List.map filenames Layout.File_system.Tree.file in
+            List.iter filenames (fun n ->
+              if (Sys.file_exists n) <> `Yes
+              then
+                perror "Lib: %s, Protocol: %s: File %S should be in the current directory!"
+                  libname name n;
+            );
             run ~dbh
               ~fake:(fun x -> Layout.File_system.unsafe_cast x)
               ~real:(fun dbh ->
@@ -850,6 +856,39 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               ~log:(sprintf "(add_volume protocol_directory %s (files %s))"
                       hr_tag
                       (String.concat ~sep:" " (List.map filenames (sprintf "%S"))))
+            >>= fun volume ->
+            if dry_run
+            then begin 
+              dry_buffer :=
+                (0,
+                 sprintf "(create dir for %d and move %s there)"
+                   volume.Layout.File_system.id
+                   (String.concat ~sep:" " (List.map filenames (sprintf "%S")))
+                ) :: !dry_buffer;
+              return volume
+            end
+            else begin
+              let open Sequme_flow_sys in
+              Common.path_of_volume ~dbh ~configuration:hsc volume
+              >>= fun path ->
+              let cmd = sprintf "mkdir -p %S" path in
+              if verbose then printf "$-> %S\n%!" cmd;
+              system_command cmd
+              >>= fun () ->
+              while_sequential filenames (fun f ->
+                if Sys.file_exists f = `Yes
+                then begin
+                  let cmd = sprintf "cp %S %S/" f path in
+                  if verbose then printf "$-> %S\n%!" cmd;
+                  system_command cmd
+                end else begin
+                  perror "Lib: %s, Protocol: %s: File %S should REALLY be in the current directory!"
+                    libname name f;
+                  return ()
+                end)
+              >>= fun (_: unit list) ->
+              return volume
+            end
           | None ->
             perror "Lib: %s, Protocol %S is not in the DB and has no file." 
               libname name;
