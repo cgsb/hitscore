@@ -1351,7 +1351,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
 
     printf "=== Lanes ready to use: ===\n";
     List.iter named_lanes ~f:(fun (name, id) ->
-      printf "%s --> %d\n" name id.Layout.Record_lane.id
+      let with_phix =
+        match List.Assoc.find phix name with
+        | None -> "(no phix)"
+        | Some p -> sprintf "(phix: %d%%)" p in
+      printf "%s --> %d %s\n" name id.Layout.Record_lane.id with_phix
     );
     printf "Charged to %s.\n" (String.concat ~sep:", " 
                                  (List.map invoicing (fun (e, _, _) -> e)));
