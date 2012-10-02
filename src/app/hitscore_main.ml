@@ -680,10 +680,13 @@ module Verify = struct
           add_error (sprintf "%s is not a directory" path)
         | `not_there _ ->
           if try_fix then
-            bind_on_error (ksprintf system_command "mkdir -p '%s'" path)
-              (fun e ->
-                add_error (sprintf "Cannot create %s: %s" path
-                             (string_of_error e)))
+            bind_on_error (
+              ksprintf system_command "mkdir -p '%s'" path
+              >>= fun () ->
+              Access_rights.set_posix_acls ~dbh ~configuration (`dir path)
+            ) (fun e ->
+              add_error (sprintf "Cannot create %s: %s" path
+                           (string_of_error e)))
           else 
             add_error (sprintf "%s is missing" path)
         end
