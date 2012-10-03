@@ -171,6 +171,45 @@
           (flowcell flowcell)
           )
 
+(volume lane_fastq_files lane_fastq_files)
+(record lane_fastq
+        (fastq_files lane_fastq_files))
+
+(function lane_fastq make_lane_fastqs
+          (raw_data hiseq_raw)
+          (availability inaccessible_hiseq_raw)
+          (lane int)
+          (version string)
+          (tiles string option)
+          )
+
+(volume demultiplexed_library_files demultiplexed_library)
+(record demultiplexed_library
+        (library stock_library option)
+        (files demultiplexed_library_files))
+
+(record demultiplexed_lane
+        (libraries demultiplexed_library array)
+        )
+
+(function demultiplexed_lane demultiplex
+          (lane lane)
+          (files lane_fastq)
+          )
+(volume library_statistics_files library_statistics)
+(record library_statistics
+        (files library_statistics_files))
+(function library_statistics fastx_of_library
+          (library demultiplexed_library)
+          (option_Q int))
+
+(record lane_delivery
+        (path string))
+
+(function lane_delivery deliver_lane
+          (lane demultiplexed_lane)
+          (invoice invoicing))
+
 (volume bcl_to_fastq_unaligned_opaque bcl_to_fastq)
 (record bcl_to_fastq_unaligned 
         (directory bcl_to_fastq_unaligned_opaque))
