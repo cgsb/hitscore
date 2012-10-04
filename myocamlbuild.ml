@@ -18,7 +18,7 @@ rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_layout.ml"
 
 
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 66a4a3656a3ae946b0f327e88ac2158d) *)
+(* DO NOT EDIT (digest: 3238548899c91ae5ccb8a12f3c0fd7c5) *)
 module OASISGettext = struct
 (* # 21 "/tmp/install-ocaml-5814/oasis-6c6b33b2f6b7fe84edd384641ba334ce/src/oasis/OASISGettext.ml" *)
 
@@ -502,13 +502,19 @@ let package_default =
        [("hitscoregen", ["src/codegen"]); ("hitscore", ["src/lib"])];
      lib_c = [];
      flags = [];
-     includes = [("src/lib", ["src/codegen"]); ("src/app", ["src/lib"])];
+     includes =
+       [
+          ("src/server", ["src/lib"]);
+          ("src/lib", ["src/codegen"]);
+          ("src/client", ["src/lib"]);
+          ("src/app", ["src/lib"])
+       ];
      }
   ;;
 
 let dispatch_default = MyOCamlbuildBase.dispatch_default package_default;;
 
-# 493 "myocamlbuild.ml"
+# 499 "myocamlbuild.ml"
 (* OASIS_STOP *)
 (* Ocamlbuild_plugin.dispatch dispatch_default;; *)
 

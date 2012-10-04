@@ -55,6 +55,20 @@ Executable hitscore
   CompiledObject: best
   Install: true
 
+Executable hitscored
+  Path: src/server
+  MainIs: server_main.ml
+  BuildDepends: threads, hitscore, core_extended
+  CompiledObject: best
+  Install: true
+
+Executable gencore
+  Path: src/client
+  MainIs: client_main.ml
+  BuildDepends: threads, hitscore, core_extended
+  CompiledObject: best
+  Install: true
+
   
 Document hitscoredoc
   Title:      Documentation of the Hitscore library
