@@ -17,7 +17,7 @@ Library hitscoregen
 Executable hitscoregen
   Path: src/codegen
   MainIs: hitscoregen.ml
-  BuildDepends: threads, core
+  BuildDepends: threads, core, sexplib.syntax
   CompiledObject: best
   Install: false
 
