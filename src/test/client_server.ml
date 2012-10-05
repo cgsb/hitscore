@@ -32,7 +32,7 @@ let test_hello () =
     sleep 1. >>= fun () ->
     cmdf "%s info" !client_executable
   | `killer ->
-    sleep 2. >>= fun () ->
+    sleep 4. >>= fun () ->
     cmdf "kill `cat /tmp/test_hello.pid`"
     >>= fun () ->
     msg "Killed The Server!"
@@ -51,7 +51,7 @@ type error = [
 ] with sexp_of
   
 let display_errors e =
-  eprintf "ERROR:\n%s\n%!" (Sexp.to_string_hum (sexp_of_error e))
+  eprintf "TEST-ERROR:\n%s\n%!" (Sexp.to_string_hum (sexp_of_error e))
   
 
 let () =

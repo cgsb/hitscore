@@ -5,6 +5,7 @@ open Hitscore
 open Core.Std
 open Sequme_flow
 open Sequme_flow_app_util
+module Flow_net = Sequme_flow_net
 
 let with_profile () =
   let open Command_line.Spec in
@@ -41,22 +42,46 @@ let init ~configuration_file ~profile ~log_file ~pid_file =
   log "Loaded profile %S from %S" profile configuration_file >>= fun () ->
   return configuration
 
+type connection_state = {
+  configuration: Configuration.local_configuration;
+  connection:  Sequme_flow_net.connection;
+  user: [ `none ];
+}
+
+let handle_up_message ~state = function
+  | `log s ->
+    log "Client wants to log: %S" s
+    >>= fun () ->
+    begin match state.user with
+    | `none ->
+      let str =
+        Communication.Protocol.string_of_down ~mode:`s_expression
+          (`user_message "you can't!") in
+      Sequme_flow_io.bin_send (Flow_net.out_channel state.connection) str
+    end
+
+type error_in_connection =
+[ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
+| `bin_send of [ `exn of exn | `message_too_long of string ]
+| `io_exn of exn
+| `message_serialization of
+    Communication.Protocol.serialization_mode * string * exn
+] with sexp_of
+
+let handle_connection_error ~state e =
+  let to_log = Sexp.to_string_hum (sexp_of_error_in_connection e) in
+  log "Error in connection:\n   %s\n   SSL: %s" to_log (Ssl.get_error_string ())
+  >>= fun () ->
+  Flow_net.shutdown state.connection
+
 let handle_connection ~configuration connection =
+  let state = { connection; configuration; user = `none } in
   bind_on_error
-    (Sequme_flow_io.bin_recv connection#in_channel
+    (Sequme_flow_io.bin_recv (Flow_net.in_channel connection)
      >>= fun msg ->
-     log "Received: %S from client." msg
-     >>= fun () ->
-     Sequme_flow_io.bin_send connection#out_channel (sprintf "%s back ..." msg))
-    (function
-    | `bin_recv (`exn e) | `bin_send (`exn e) | `io_exn e ->
-      log "ERROR: (bin)I/O: %s (Ssl: %s)" (Exn.to_string e)
-        (Ssl.get_error_string ())
-    | `bin_recv (`wrong_length (l, s)) ->
-      log "ERROR: bin-recv: `wrong_length %d" l
-    | `bin_send (`message_too_long (s)) ->
-      log "ERROR: bin-send: message_too_long: %s" s
-    )
+     of_result (Communication.Protocol.up_of_string ~mode:`s_expression msg)
+     >>= handle_up_message ~state)
+    (handle_connection_error ~state)
 
 let start_server ~port ~configuration ~cert_key =
   let on_error = function

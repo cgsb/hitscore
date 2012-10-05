@@ -4,13 +4,16 @@ open Hitscore
 open Core.Std
 open Sequme_flow
 open Sequme_flow_app_util
+module Flow_net = Sequme_flow_net
 
 
 
 let send_and_recv connection =
-  Sequme_flow_io.bin_send connection#out_channel "Hello !!"
+  let message = `log "I'm connected !!" in
+  Sequme_flow_io.bin_send (Flow_net.out_channel connection)
+    (Communication.Protocol.string_of_up ~mode:`s_expression message)
   >>= fun () ->
-  Sequme_flow_io.bin_recv connection#in_channel
+  Sequme_flow_io.bin_recv (Flow_net.in_channel connection)
   >>= fun response ->
   msg "Got %S from server"  response
 
@@ -29,7 +32,7 @@ let info_command =
     )
     (fun args ->
       run_flow ~on_error:(fun e ->
-        eprintf "End with ERRORS: %s"
+        eprintf "Client ends with Errors: %s"
           (Sexp.to_string_hum (sexp_of_info_error e)))
         begin
           Sequme_flow_net.init_tls ();
@@ -40,7 +43,7 @@ let info_command =
           dbg "Anonymously Connected on 4002 " >>= fun () ->
           send_and_recv connection
           >>= fun () ->
-          connection#shutdown
+          Flow_net.shutdown connection
           >>= fun () ->
           dbg "command not implemented"
         end)
