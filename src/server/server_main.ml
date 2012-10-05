@@ -22,6 +22,7 @@ let with_profile () =
             default_path)
 
 let init ~configuration_file ~profile ~log_file =
+  Sequme_flow_net.init_tls ();
   Sequme_flow_sys.read_file configuration_file
   >>= fun contents ->
   of_result Configuration.(
@@ -36,11 +37,52 @@ let init ~configuration_file ~profile ~log_file =
   log "Loaded profile %S from %S" profile configuration_file >>= fun () ->
   return configuration
 
+let handle_connection ~configuration connection =
+  bind_on_error
+    (Sequme_flow_io.bin_recv connection#in_channel
+     >>= fun msg ->
+     log "Received: %S from client." msg
+     >>= fun () ->
+     Sequme_flow_io.bin_send connection#out_channel (sprintf "%s back ..." msg))
+    (function
+    | `bin_recv (`exn e) | `bin_send (`exn e) | `io_exn e ->
+      log "ERROR: (bin)I/O: %s (Ssl: %s)" (Exn.to_string e)
+        (Ssl.get_error_string ())
+    | `bin_recv (`wrong_length (l, s)) ->
+      log "ERROR: bin-recv: `wrong_length %d" l
+    | `bin_send (`message_too_long (s)) ->
+      log "ERROR: bin-send: message_too_long: %s" s
+    )
+
+let start_server ~port ~configuration ~cert_key =
+  let on_error = function
+    | `accept_exn e ->
+      log "ERROR: Accept-exception: %s" (Exn.to_string e)
+    | `io_exn e ->
+      log "ERROR: I/O-exception: %s" (Exn.to_string e)
+    | `not_an_ssl_socket ->
+      log "ERROR: Not an SSL socket"
+    | `tls_accept_error e  ->
+      log "ERROR: TLS-accept-exception: %s" (Exn.to_string e)
+    | `bin_send  (`exn e) ->
+      log "ERROR: bin-send-exception: %s" (Exn.to_string e)
+    | `bin_send (`message_too_long s) ->
+      log "ERROR: bin-send: message too long (%d bytes)" (String.length s)
+    | `wrong_subject_format s ->
+      log "ERROR: TLS: wrong_subject_format: %s" s
+  in
+  Sequme_flow_net.tls_server ~on_error ~port ~cert_key
+    (handle_connection ~configuration) >>= fun () ->
+  log "Server started on port: %d" port
+
+    
 type error = 
 [ `configuration_parsing_error of exn
 | `io_exn of exn
 | `profile_not_found of string
-| `read_file_error of string * exn ]
+| `read_file_error of string * exn
+| `socket_creation_exn of exn
+| `tls_context_exn of exn ]
 with sexp_of
 
 let string_of_error e =
@@ -55,15 +97,21 @@ let command =
       ++ step (fun k log_file -> k ~log_file)
       ++ flag "log-file" ~aliases:["-L"] (optional_with_default "-" string)
         ~doc:"<path> Log to file <path> (or “-” for stdout; the default)"
-      ++ anon (sequence "ARGS" string)
+      ++ flag "cert" (required string) ~doc:"SSL certificate"
+      ++ flag "key" (required string) ~doc:"SSL private key"
+      ++ anon ("PORT" %: int)
     )
-    (fun ~profile ~configuration_file ~log_file args ->
+    (fun ~profile ~configuration_file ~log_file cert key port ->
       run_flow ~on_error:(fun e ->
         eprintf "End with ERRORS: %s" (string_of_error e))
         begin
           init ~profile ~configuration_file ~log_file
           >>= fun configuration ->
-          dbg "Command not implemented!"
+          start_server ~cert_key:(cert, key) ~port ~configuration
+          >>= fun () ->
+          wrap_io (fun () -> Lwt.(let (t,_) = wait () in t)) ()
+          >>= fun _ ->
+          return ()
         end)
 
     
