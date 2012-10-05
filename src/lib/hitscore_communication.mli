@@ -15,6 +15,12 @@ sig
                                 the user *)
   ]
 
+  type serialization_mode = [ `binary | `s_expression ]
+
+  val string_of_up: mode:serialization_mode -> up -> string 
+  val up_of_string_exn: mode:serialization_mode -> string -> up 
+  val string_of_down: mode:serialization_mode -> down -> string 
+  val down_of_string_exn: mode:serialization_mode -> string -> down 
 end
 
 (** Utility functions related to authentication with passwords and
