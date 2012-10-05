@@ -12,38 +12,6 @@ let add_empty name =
 
 
 
-let v11_to_v12 file_in file_out =
-  let open Sexplib.Sexp in
-  let dump_v11 =
-    In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
-
-  let () = V11.Layout.dump_of_sexp dump_v11 |! ignore in
-
-
-  let dump_v12 =
-    let rec parse = function
-      | Atom a -> Atom a
-      | List [Atom "version"; Atom old_version]
-          when old_version = V11.Info.version ->
-        eprintf "Changed version.\n"; List [Atom "version"; Atom V12.Info.version ]
-      | List l -> List (List.map l ~f:parse)
-    in
-    dump_v11
-    |! parse
-
-  in
-
-  let () =
-    try
-      V12.Layout.dump_of_sexp dump_v12 |! ignore
-    with e ->
-      eprintf "Could not reparse in V12: %s\n" (Exn.to_string e)
-  in
-
-  Out_channel.(with_file file_out ~f:(fun o ->
-    output_string o (Sexplib.Sexp.to_string_hum dump_v12)));
-  ()
-
 let map_g_values list_of_values ~f =
   let open Sexp in
   (List.map list_of_values (function
@@ -218,11 +186,50 @@ let v12_to_v13 file_in file_out =
     output_string o (Sexplib.Sexp.to_string_hum dump_v13)));
   ()
 
+let v13_to_v14 file_in file_out =
+  let open Sexplib.Sexp in
+  let dump_v13 =
+    In_channel.(with_file file_in ~f:input_all) |! Sexplib.Sexp.of_string in
+
+  let () = V13.Layout.dump_of_sexp dump_v13 |! ignore in
+
+  let dump_v14 =
+    let parse = function
+      | Atom a -> Atom a
+      | List [Atom "version"; Atom old_version]
+          when old_version = V13.Info.version ->
+        eprintf "Changed version.\n"; List [Atom "version"; Atom V14.Info.version ]
+      | List [Atom "person"; List l ] ->
+        List [Atom "person"; List (map_g_values l (add_empty "auth_tokens"))]
+      | List l -> List l
+    in
+    begin match dump_v13 with
+    | Atom  a -> assert false
+    | List l ->
+      let sorted = List.sort l ~cmp:(fun a b ->
+        match a,b with
+        | List [Atom va; _], List [Atom vb; _] -> - (compare va vb)
+        | _ -> assert false) in
+      List (List.map sorted ~f:parse) |! add_empty "authentication_token"
+    end
+  in
+
+  let () =
+    try
+      V14.Layout.dump_of_sexp dump_v14 |! ignore
+    with e ->
+      eprintf "Could not reparse in V14: %s\n" (Exn.to_string e)
+  in
+
+  Out_channel.(with_file file_out ~f:(fun o ->
+    output_string o (Sexplib.Sexp.to_string_hum dump_v14)));
+  ()
+
 let () =
   match Array.to_list Sys.argv with
-  | exec :: "v11-v12" :: file_in :: file_out :: [] ->
-    v11_to_v12 file_in file_out
   | exec :: "v12-v13" :: file_in :: file_out :: [] ->
     v12_to_v13 file_in file_out
+  | exec :: "v13-v14" :: file_in :: file_out :: [] ->
+    v13_to_v14 file_in file_out
   | _ ->
-    eprintf "usage: %s {v11-v12,v12-v13} <dump-in> <dump-out>\n" Sys.argv.(0)
+    eprintf "usage: %s {v12-v13,v13-v14} <dump-in> <dump-out>\n" Sys.argv.(0)
