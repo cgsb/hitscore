@@ -22,10 +22,11 @@ let cmdf fmt =
     system_command s)
     fmt
 
+    
 let test_hello () =
   for_concurrent [`server; `client; `client; `killer ] begin function
   | `server ->
-    cmdf "%s -cert cert.pem -key privkey-unsec.pem \
+    cmdf "%s -sexp-messages -cert cert.pem -key privkey-unsec.pem \
              -pid-file /tmp/test_hello.pid -profile dev 4002"
       !server_executable
   | `client  ->

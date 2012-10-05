@@ -45,19 +45,29 @@ let init ~configuration_file ~profile ~log_file ~pid_file =
 type connection_state = {
   configuration: Configuration.local_configuration;
   connection:  Sequme_flow_net.connection;
+  serialization_mode: Communication.Protocol.serialization_mode;
   user: [ `none ];
 }
 
+let recv_message state =
+  Sequme_flow_io.bin_recv (Flow_net.in_channel state.connection)
+  >>= fun msg ->
+  let mode = state.serialization_mode in
+  of_result (Communication.Protocol.up_of_string ~mode msg)
+
+let send_message state msg =
+  let mode = state.serialization_mode in
+  let str =
+    Communication.Protocol.string_of_down ~mode msg in
+  Sequme_flow_io.bin_send (Flow_net.out_channel state.connection) str
+  
 let handle_up_message ~state = function
   | `log s ->
     log "Client wants to log: %S" s
     >>= fun () ->
     begin match state.user with
     | `none ->
-      let str =
-        Communication.Protocol.string_of_down ~mode:`s_expression
-          (`user_message "you can't!") in
-      Sequme_flow_io.bin_send (Flow_net.out_channel state.connection) str
+      send_message state (`user_message "you can't!")
     end
 
 type error_in_connection =
@@ -74,16 +84,17 @@ let handle_connection_error ~state e =
   >>= fun () ->
   Flow_net.shutdown state.connection
 
-let handle_connection ~configuration connection =
-  let state = { connection; configuration; user = `none } in
+let handle_connection ~configuration ~mode connection =
+  let state =
+    { connection; configuration;
+      serialization_mode = mode;
+      user = `none } in
   bind_on_error
-    (Sequme_flow_io.bin_recv (Flow_net.in_channel connection)
-     >>= fun msg ->
-     of_result (Communication.Protocol.up_of_string ~mode:`s_expression msg)
+    (recv_message state
      >>= handle_up_message ~state)
     (handle_connection_error ~state)
 
-let start_server ~port ~configuration ~cert_key =
+let start_server ~port ~configuration ~cert_key ~mode =
   let on_error = function
     | `accept_exn e ->
       log "ERROR: Accept-exception: %s" (Exn.to_string e)
@@ -101,7 +112,7 @@ let start_server ~port ~configuration ~cert_key =
       log "ERROR: TLS: wrong_subject_format: %s" s
   in
   Sequme_flow_net.tls_server ~on_error ~port ~cert_key
-    (handle_connection ~configuration) >>= fun () ->
+    (handle_connection ~mode ~configuration) >>= fun () ->
   log "Server started on port: %d" port
 
     
@@ -132,17 +143,23 @@ let command =
       ++ flag "pid-file" (optional_with_default default_pid_file string)
         ~doc:(sprintf
                 "<path> write PID to a file (default: %s)" default_pid_file)
+      ++ step (fun k ->
+        function
+        | true -> k ~mode:`s_expression
+        | false -> k ~mode:`binary)
+      ++ flag "sexp-messages" no_arg
+        ~doc:" exchange S-Expressions instead of binary blobs (for debugging)"
       ++ flag "cert" (required string) ~doc:"SSL certificate"
       ++ flag "key" (required string) ~doc:"SSL private key"
       ++ anon ("PORT" %: int)
     )
-    (fun ~profile ~configuration_file ~log_file ~pid_file cert key port ->
+    (fun ~profile ~configuration_file ~log_file ~pid_file ~mode cert key port ->
       run_flow ~on_error:(fun e ->
         eprintf "End with ERRORS: %s" (string_of_error e))
         begin
           init ~profile ~configuration_file ~log_file ~pid_file
           >>= fun configuration ->
-          start_server ~cert_key:(cert, key) ~port ~configuration
+          start_server ~cert_key:(cert, key) ~port ~configuration ~mode
           >>= fun () ->
           wrap_io (fun () -> Lwt.(let (t,_) = wait () in t)) ()
           >>= fun _ ->
