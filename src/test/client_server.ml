@@ -23,15 +23,17 @@ let cmdf fmt =
     fmt
 
     
-let test_hello () =
+let test_hello ~sexp_messages () =
+  let option_sexp_messages = if sexp_messages then "-sexp-messages" else "" in
   for_concurrent [`server; `client; `client; `killer ] begin function
   | `server ->
-    cmdf "%s -sexp-messages -cert cert.pem -key privkey-unsec.pem \
+    cmdf "%s %s -cert cert.pem -key privkey-unsec.pem \
              -pid-file /tmp/test_hello.pid -profile dev 4002"
       !server_executable
+      option_sexp_messages
   | `client  ->
     sleep 1. >>= fun () ->
-    cmdf "%s info" !client_executable
+    cmdf "%s info %s" !client_executable option_sexp_messages
   | `killer ->
     sleep 4. >>= fun () ->
     cmdf "kill `cat /tmp/test_hello.pid`"
@@ -59,7 +61,13 @@ let () =
   Command_line.run_flow  ~on_error:(display_errors)
     (init ()
      >>= fun () ->
-     test_hello ())
+     test_hello ~sexp_messages:true ()
+     >>= fun () ->
+     sleep 2.
+     >>= fun () ->
+     test_hello ~sexp_messages:false ()
+
+    )
 
 
   
