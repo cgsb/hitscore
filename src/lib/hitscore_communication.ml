@@ -19,7 +19,7 @@ module Protocol = struct
   with bin_io, sexp
     
     
-  type serialization_mode = [ `binary | `s_expression ]
+  type serialization_mode = [ `binary | `s_expression ] with sexp
 
   let string_of_message ~mode ~bin_writer ~sexp_of msg =
     match mode with
@@ -54,6 +54,15 @@ module Protocol = struct
   let down_of_string_exn ~mode down =
     message_of_string ~mode ~bin_reader:bin_reader_down ~of_sexp:down_of_sexp down
 
+  type serialization_error = 
+  [ `message_serialization of serialization_mode * string * exn ]
+
+  let up_of_string ~mode up =
+    try Ok (up_of_string_exn ~mode up)
+    with e -> Error (`message_serialization (mode, up, e))
+  let down_of_string ~mode down =
+    try Ok (down_of_string_exn ~mode down)
+    with e -> Error (`message_serialization (mode, down, e))
 end
 
 
