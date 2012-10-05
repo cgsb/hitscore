@@ -63,6 +63,16 @@ module Protocol = struct
   let down_of_string ~mode down =
     try Ok (down_of_string_exn ~mode down)
     with e -> Error (`message_serialization (mode, down, e))
+
+  let serialization_mode_flag () =
+    let open Sequme_flow_app_util.Command_line in
+    let open Spec in
+    step (fun k ->
+      function
+      | true -> k ~mode:`s_expression
+      | false -> k ~mode:`binary)
+    ++ flag "sexp-messages" no_arg
+      ~doc:" exchange S-Expressions instead of binary blobs (for debugging)"
 end
 
 

@@ -25,6 +25,12 @@ sig
   val string_of_down: mode:serialization_mode -> down -> string 
   val down_of_string_exn: mode:serialization_mode -> string -> down 
   val down_of_string: mode:serialization_mode -> string -> (down, [> serialization_error]) Core.Result.t 
+
+  (** Add a ["-sexp-messages"] flag that adds the [~mode] argument to the
+  command-line specification. *)
+  val serialization_mode_flag: unit ->
+    (mode:[> `binary | `s_expression ] -> 'a, 'a)
+      Sequme_flow_app_util.Command_line.Spec.t
 end
 
 (** Utility functions related to authentication with passwords and

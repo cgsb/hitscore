@@ -143,12 +143,7 @@ let command =
       ++ flag "pid-file" (optional_with_default default_pid_file string)
         ~doc:(sprintf
                 "<path> write PID to a file (default: %s)" default_pid_file)
-      ++ step (fun k ->
-        function
-        | true -> k ~mode:`s_expression
-        | false -> k ~mode:`binary)
-      ++ flag "sexp-messages" no_arg
-        ~doc:" exchange S-Expressions instead of binary blobs (for debugging)"
+      ++ Communication.Protocol.serialization_mode_flag ()
       ++ flag "cert" (required string) ~doc:"SSL certificate"
       ++ flag "key" (required string) ~doc:"SSL private key"
       ++ anon ("PORT" %: int)
