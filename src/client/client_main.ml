@@ -8,10 +8,10 @@ module Flow_net = Sequme_flow_net
 
 
 
-let send_and_recv connection =
+let send_and_recv ~mode connection =
   let message = `log "I'm connected !!" in
   Sequme_flow_io.bin_send (Flow_net.out_channel connection)
-    (Communication.Protocol.string_of_up ~mode:`s_expression message)
+    (Communication.Protocol.string_of_up ~mode message)
   >>= fun () ->
   Sequme_flow_io.bin_recv (Flow_net.in_channel connection)
   >>= fun response ->
@@ -28,9 +28,10 @@ let info_command =
   let open Command_line in
   basic ~summary:"Get information"
     Spec.(
-      anon (sequence "ARGS" string)
+      Communication.Protocol.serialization_mode_flag ()
+      ++ anon (sequence "ARGS" string)
     )
-    (fun args ->
+    (fun ~mode args ->
       run_flow ~on_error:(fun e ->
         eprintf "Client ends with Errors: %s"
           (Sexp.to_string_hum (sexp_of_info_error e)))
@@ -41,7 +42,7 @@ let info_command =
             (`tls (`anonymous, `allow_self_signed))
           >>= fun connection ->
           dbg "Anonymously Connected on 4002 " >>= fun () ->
-          send_and_recv connection
+          send_and_recv ~mode connection
           >>= fun () ->
           Flow_net.shutdown connection
           >>= fun () ->
