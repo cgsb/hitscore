@@ -10,7 +10,11 @@
 
 (record affiliation
         (path string array))
-;; Almost static input data:
+
+(record authentication_token
+        (name string)
+        (hash string))
+
 (record person
        (print_name      string option)
        (given_name      string)
@@ -22,6 +26,7 @@
        (nickname        string option)
        (roles           role array)
        (password_hash   string option)
+       (auth_tokens authentication_token array)
        (affiliations affiliation array)
        notable
        )
