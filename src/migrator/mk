@@ -5,12 +5,16 @@ OCAMLFINDOPT='ocamlfind ocamlopt -syntax camlp4o -thread -package hitscore,sexpl
 make_module () {
 
     local name=_migrator/$1.ml
-    local tag=$2
+    local tag=v${2}-dev
     local version=$2
     local tmp=/tmp/mmm.ml
     git checkout $tag
     if [ $? -ne 0 ] ; then
         git checkout v$version
+        if [ $? -ne 0 ] ; then
+            echo "Can't checkout $tag nor v$version"
+            exit 1
+        fi
     fi
 
     rm -fr _build/src/codegen $name $tmp
