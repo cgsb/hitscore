@@ -23,13 +23,19 @@ let cmdf fmt =
     fmt
 
 let test_hello () =
-  for_concurrent [`server; `client; `client; ] begin function
+  for_concurrent [`server; `client; `client; `killer ] begin function
   | `server ->
-    cmdf "%s -cert cert.pem -key privkey-unsec.pem -profile dev 4002"
+    cmdf "%s -cert cert.pem -key privkey-unsec.pem \
+             -pid-file /tmp/test_hello.pid -profile dev 4002"
       !server_executable
   | `client  ->
     sleep 1. >>= fun () ->
     cmdf "%s info" !client_executable
+  | `killer ->
+    sleep 2. >>= fun () ->
+    cmdf "kill `cat /tmp/test_hello.pid`"
+    >>= fun () ->
+    msg "Killed The Server!"
   end
   >>= fun _ ->
   return ()

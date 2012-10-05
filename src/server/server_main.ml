@@ -21,7 +21,11 @@ let with_profile () =
     ~doc:(sprintf "<path> alternate configuration file (default %s)"
             default_path)
 
-let init ~configuration_file ~profile ~log_file =
+let init ~configuration_file ~profile ~log_file ~pid_file =
+
+  let pid = Unix.getpid () in
+  Sequme_flow_sys.write_file pid_file ~content:(Core.Pid.to_string pid)
+  >>= fun () ->
   Sequme_flow_net.init_tls ();
   Sequme_flow_sys.read_file configuration_file
   >>= fun contents ->
@@ -81,6 +85,7 @@ type error =
 | `io_exn of exn
 | `profile_not_found of string
 | `read_file_error of string * exn
+| `write_file_error of string * exn
 | `socket_creation_exn of exn
 | `tls_context_exn of exn ]
 with sexp_of
@@ -91,21 +96,26 @@ let string_of_error e =
     
 let command =
   let open Command_line in
+  let default_pid_file = "/tmp/hitscored.pid" in
   basic ~summary:"Hitscore's server application"
     Spec.(
       with_profile ()
       ++ step (fun k log_file -> k ~log_file)
       ++ flag "log-file" ~aliases:["-L"] (optional_with_default "-" string)
         ~doc:"<path> Log to file <path> (or “-” for stdout; the default)"
+      ++ step (fun k pid_file -> k ~pid_file)
+      ++ flag "pid-file" (optional_with_default default_pid_file string)
+        ~doc:(sprintf
+                "<path> write PID to a file (default: %s)" default_pid_file)
       ++ flag "cert" (required string) ~doc:"SSL certificate"
       ++ flag "key" (required string) ~doc:"SSL private key"
       ++ anon ("PORT" %: int)
     )
-    (fun ~profile ~configuration_file ~log_file cert key port ->
+    (fun ~profile ~configuration_file ~log_file ~pid_file cert key port ->
       run_flow ~on_error:(fun e ->
         eprintf "End with ERRORS: %s" (string_of_error e))
         begin
-          init ~profile ~configuration_file ~log_file
+          init ~profile ~configuration_file ~log_file ~pid_file
           >>= fun configuration ->
           start_server ~cert_key:(cert, key) ~port ~configuration
           >>= fun () ->
