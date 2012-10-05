@@ -69,6 +69,14 @@ Executable gencore
   CompiledObject: best
   Install: true
 
+Executable client_server_test
+  Path: src/test
+  MainIs: client_server.ml
+  BuildDepends: threads, hitscore, core_extended
+  CompiledObject: best
+  Install: false
+
+
   
 Document hitscoredoc
   Title:      Documentation of the Hitscore library

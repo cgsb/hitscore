@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 1942f50ce227bb7af83c6e008492b8ec)
+# DO NOT EDIT (digest: f8806df01481028f2b2ed35f3b82a087)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -100,6 +100,29 @@
 <src/client/*.ml{,i}>: pkg_sequme
 <src/client/*.ml{,i}>: pkg_lwt
 <src/client/*.ml{,i}>: pkg_lwt.unix
+# Executable client_server_test
+<src/test/client_server.{native,byte}>: use_hitscore
+<src/test/client_server.{native,byte}>: use_hitscoregen
+<src/test/client_server.{native,byte}>: pkg_threads
+<src/test/client_server.{native,byte}>: pkg_core_extended
+<src/test/client_server.{native,byte}>: pkg_core
+<src/test/client_server.{native,byte}>: pkg_pgocaml
+<src/test/client_server.{native,byte}>: pkg_sexplib.syntax
+<src/test/client_server.{native,byte}>: pkg_biocaml
+<src/test/client_server.{native,byte}>: pkg_sequme
+<src/test/client_server.{native,byte}>: pkg_lwt
+<src/test/client_server.{native,byte}>: pkg_lwt.unix
+<src/test/*.ml{,i}>: use_hitscore
+<src/test/*.ml{,i}>: use_hitscoregen
+<src/test/*.ml{,i}>: pkg_threads
+<src/test/*.ml{,i}>: pkg_core_extended
+<src/test/*.ml{,i}>: pkg_core
+<src/test/*.ml{,i}>: pkg_pgocaml
+<src/test/*.ml{,i}>: pkg_sexplib.syntax
+<src/test/*.ml{,i}>: pkg_biocaml
+<src/test/*.ml{,i}>: pkg_sequme
+<src/test/*.ml{,i}>: pkg_lwt
+<src/test/*.ml{,i}>: pkg_lwt.unix
 # OASIS_STOP
 
 <src/*/*.ml{,i}>: syntax_camlp4o
