@@ -24,8 +24,8 @@ Executable hitscoregen
 Library hitscore
   Path: src/lib
   FindlibName: hitscore
-  BuildDepends: threads, core, pgocaml, sexplib.syntax,
-               biocaml, sequme, hitscoregen, lwt, lwt.unix
+  BuildDepends: threads, core, pgocaml, sexplib.syntax, bin_prot.syntax,
+               biocaml, sequme, hitscoregen, lwt, lwt.unix, cryptokit
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore
@@ -44,6 +44,7 @@ Library hitscore
           , Hitscore_unaligned_delivery
           , Hitscore_delete_intensities
           , Hitscore_common
+          , Hitscore_communication
           , Hitscore_broker
           , Hitscore_generic_fastqs
           , Hitscore_fastx_quality_stats

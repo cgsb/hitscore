@@ -39,6 +39,8 @@ module Coerce_b2f_unaligned =
 module Fastx_quality_stats =
   Hitscore_fastx_quality_stats. Fastx_quality_stats
 
+module Communication = Hitscore_communication
+  
 include Hitscore_broker
 
 let db_connect ?log t =
