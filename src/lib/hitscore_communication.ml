@@ -36,10 +36,16 @@ module Protocol = struct
   let message_of_string ~mode ~bin_reader ~of_sexp msg =
     match mode with
     | `binary ->
-      Bin_prot.Utils.bin_read_stream ~max_size:(String.length msg)
+      let read_pos = ref 0 in
+      Bin_prot.Utils.bin_read_stream ~max_size:(String.length msg * 30)
         ~read:(fun buf ~pos ~len ->
-          Bin_prot.Common.blit_string_buf msg buf
-            ~src_pos:pos ~dst_pos:pos ~len)
+          (* eprintf "======== READ: %d %d (%S)\n%!" pos len *)
+          (* (String.sub msg ~pos:!read_pos ~len); *)
+          let s = 
+            Bin_prot.Common.blit_string_buf msg buf
+              ~src_pos:!read_pos ~dst_pos:pos ~len in
+          read_pos := !read_pos + len;
+          s)
         bin_reader
     | `s_expression ->
       Sexp.of_string msg |! of_sexp

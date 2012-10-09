@@ -80,7 +80,7 @@ type error_in_connection =
 
 let handle_connection_error ~state e =
   let to_log = Sexp.to_string_hum (sexp_of_error_in_connection e) in
-  log "Error in connection:\n   %s\n   SSL: %s" to_log (Ssl.get_error_string ())
+  log "Error in connection:\n%s\nSSL: %s" to_log (Ssl.get_error_string ())
   >>= fun () ->
   Flow_net.shutdown state.connection
 
