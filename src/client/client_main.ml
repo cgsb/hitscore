@@ -14,13 +14,19 @@ let send_and_recv ~mode connection =
     (Communication.Protocol.string_of_up ~mode message)
   >>= fun () ->
   Sequme_flow_io.bin_recv (Flow_net.in_channel connection)
-  >>= fun response ->
-  msg "Got %S from server"  response
+  >>= fun m ->
+  of_result (Communication.Protocol.down_of_string ~mode m)
+  >>= begin function
+  | `user_message response ->
+    msg "Got %S from server"  response
+  end
 
 type info_error =
 [ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
 | `bin_send of [ `exn of exn | `message_too_long of string ]
 | `io_exn of exn
+| `message_serialization of
+    Communication.Protocol.serialization_mode * string * exn
 | `tls_context_exn of exn ]
 with sexp_of
   
