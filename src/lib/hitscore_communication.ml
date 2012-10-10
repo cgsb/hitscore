@@ -52,8 +52,15 @@ module Protocol = struct
       
   let string_of_up ~mode up =
     string_of_message ~mode ~bin_writer:bin_writer_up ~sexp_of:sexp_of_up up
+  let hum_string_of_up up =
+    string_of_message ~mode:`s_expression
+      ~bin_writer:bin_writer_up ~sexp_of:sexp_of_up up
+
   let string_of_down ~mode down =
     string_of_message ~mode ~bin_writer:bin_writer_down ~sexp_of:sexp_of_down down
+  let hum_string_of_down down =
+    string_of_message ~mode:`s_expression
+      ~bin_writer:bin_writer_down ~sexp_of:sexp_of_down down
 
   let up_of_string_exn ~mode up =
     message_of_string ~mode ~bin_reader:bin_reader_up ~of_sexp:up_of_sexp up
