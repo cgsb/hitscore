@@ -42,4 +42,12 @@ module Authentication : sig
   (** Hash a password with a [Person.t] id using the “official” function. *)
   val hash_password : int -> string -> string
 
+  (** Do a chained user/password check for a given person: first
+      against a potential password stored in the layout, then again the
+      PAM service [pam_service] (default [""]). *)
+  val check_chained :
+    ?pam_service:string ->
+    person:< g_id : int; login : string option;
+             password_hash : string option; .. > ->
+    password:string -> unit -> (bool, 'a) Sequme_flow.t
 end

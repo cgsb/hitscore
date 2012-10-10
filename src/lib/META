@@ -1,9 +1,9 @@
 # OASIS_START
-# DO NOT EDIT (digest: f70e53e9b5770de4a497303ad8962446)
+# DO NOT EDIT (digest: 3d7cc1740968787e226e76f2fe862d0d)
 version = "1.4"
 description = "CGSB Core Library"
 requires =
-"threads core pgocaml sexplib.syntax bin_prot.syntax biocaml sequme hitscoregen lwt lwt.unix cryptokit"
+"threads core pgocaml sexplib.syntax bin_prot.syntax biocaml sequme hitscoregen lwt lwt.unix cryptokit simple_pam"
 archive(byte) = "hitscore.cma"
 archive(byte, plugin) = "hitscore.cma"
 archive(native) = "hitscore.cmxa"

@@ -25,7 +25,7 @@ Library hitscore
   Path: src/lib
   FindlibName: hitscore
   BuildDepends: threads, core, pgocaml, sexplib.syntax, bin_prot.syntax,
-               biocaml, sequme, hitscoregen, lwt, lwt.unix, cryptokit
+               biocaml, sequme, hitscoregen, lwt, lwt.unix, cryptokit, simple_pam
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore

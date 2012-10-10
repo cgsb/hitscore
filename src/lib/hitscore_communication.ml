@@ -96,6 +96,20 @@ module Authentication = struct
     let to_hash = sprintf "gencore:%d:%s" person_id password in
     transform_string (Hexa.encode ()) (hash_string (Hash.sha256 ()) to_hash)
 
+  let check_chained ?(pam_service="") ~person ~password () =
+    if person#password_hash = Some (hash_password person#g_id password)
+    then return true
+    else begin
+      match person#login with
+      | Some s ->
+        let wrap_pam f a = try f a; Ok true with e -> Ok false in
+        let auth () =
+          wrap_pam (Simple_pam.authenticate pam_service s) (password) 
+        in
+        Lwt_preemptive.detach auth ()
+      | None  -> return false
+    end
+
 
 
 end
