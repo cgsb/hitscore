@@ -398,9 +398,9 @@ module type BACKEND = sig
   | `connection of exn
   | `disconnection of exn
   | `query of (string * exn)
-  ]
-  type result_item = string option list
-  type result = result_item list
+  ] with sexp_of
+  type result_item = string option list with sexp
+  type result = result_item list with sexp
 
   val connect :
     ?host:string ->
@@ -458,9 +458,9 @@ module Backend : BACKEND = struct
   | `connection of exn
   | `disconnection of exn
   | `query of (string * exn)
-  ]
-  type result_item = string option list
-  type result = result_item list
+  ] with sexp_of
+  type result_item = string option list with sexp
+  type result = result_item list with sexp
     
   let connect ?host ?port ?database ?user ?password ?log () :
       (db_handle, [> `db_backend_error of [> error ] ]) Sequme_flow.t =

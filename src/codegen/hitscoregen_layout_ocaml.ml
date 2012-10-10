@@ -1002,7 +1002,7 @@ let ocaml_module raw_dsl dsl output_string =
   line out "| `Function of string";
   line out "| `Record of string";
   line out "| `File_system";
-  line out "]";
+  line out "] with sexp";
   line out "type error_cause = [";
   line out "| `db_backend_error of Backend.error"; 
   line out "| `wrong_add_value";
@@ -1013,7 +1013,7 @@ let ocaml_module raw_dsl dsl output_string =
   line out "| `parse_evaluation_error of \
                   Hitscore_db_backend.Backend.result_item * exn";
   line out "| `wrong_version of string * string";
-  line out "]";
+  line out "] with sexp_of";
 
 
   
