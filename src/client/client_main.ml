@@ -103,6 +103,8 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file =
     Sequme_flow_sys.write_file configuration_file
       ~content:(Configuration.to_string config)
     >>= fun () ->
+    cmdf "chmod 400 %S" configuration_file
+    >>= fun () ->
     msg "The configuration file as been successfully written, Happy Hacking!"
   | `error `wrong_authentication ->
     msg "The server has rejected your authentication; \
