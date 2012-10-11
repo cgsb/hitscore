@@ -11,13 +11,26 @@ module Protocol = struct
   type up = [
   | `log of string
   | `new_token of string * string * string * string
+  | `authenticate of string * string * string
+  | `get_simple_info
   ]
+  with bin_io, sexp
+
+  type person_simple_info = {
+    psi_print_name: string option;
+    psi_full_name: string * string option * string option * string;
+    psi_emails: string list;
+    psi_login: string option;
+    psi_affiliations: string list list;
+  }
   with bin_io, sexp
 
   type down = [
   | `user_message of string
   | `token_updated
   | `token_created
+  | `authentication_successful
+  | `simple_info of person_simple_info
   | `error of [
     | `not_implemented
     | `server_error of string
@@ -25,7 +38,6 @@ module Protocol = struct
   ]
   ]
   with bin_io, sexp
-    
     
   type serialization_mode = [ `binary | `s_expression ] with sexp
 
