@@ -11,7 +11,8 @@ module Configuration = struct
   type configuration_v0 = {
     host: string;
     port: int;
-    auth_token: string;
+    auth_token_name: string;
+    auth_token:  string;
   } with sexp
   type t = [
   | `gencore of [
@@ -19,8 +20,8 @@ module Configuration = struct
   ]
   ] with sexp
     
-  let make ~host ~port ~auth_token =
-    `gencore (`v0 {host; port; auth_token})
+  let make ~host ~port ~auth_token ~auth_token_name =
+    `gencore (`v0 {host; port; auth_token; auth_token_name})
 
   let to_string c =
     Sexp.to_string_hum (sexp_of_t c)
@@ -99,9 +100,13 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file =
     >>= fun () ->
     cmdf "mkdir -p %S" Filename.(dirname configuration_file)
     >>= fun () ->
-    let config = Configuration.make ~host ~port ~auth_token:token in
+    let config =
+      Configuration.make ~host ~port ~auth_token:token
+        ~auth_token_name:token_name in
+    cmdf "chmod 600 %S" configuration_file
+    >>= fun () ->
     Sequme_flow_sys.write_file configuration_file
-      ~content:(Configuration.to_string config)
+      ~content:(Configuration.to_string config ^ "\n")
     >>= fun () ->
     cmdf "chmod 400 %S" configuration_file
     >>= fun () ->
