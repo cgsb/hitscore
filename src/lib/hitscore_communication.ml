@@ -10,11 +10,19 @@ module Protocol = struct
 
   type up = [
   | `log of string
+  | `new_token of string * string * string * string
   ]
   with bin_io, sexp
 
   type down = [
   | `user_message of string
+  | `token_updated
+  | `token_created
+  | `error of [
+    | `not_implemented
+    | `server_error of string
+    | `wrong_authentication
+  ]
   ]
   with bin_io, sexp
     

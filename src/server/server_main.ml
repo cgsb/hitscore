@@ -4,9 +4,11 @@ open Hitscore
 
 open Core.Std
 open Sequme_flow
+open Sequme_flow_list
 open Sequme_flow_app_util
 module Flow_net = Sequme_flow_net
 
+  
 let with_profile () =
   let open Command_line.Spec in
   let default_path =
@@ -46,7 +48,7 @@ type connection_state = {
   configuration: Configuration.local_configuration;
   connection:  Sequme_flow_net.connection;
   serialization_mode: Communication.Protocol.serialization_mode;
-  user: [ `none ];
+  user: [ `none  ];
 }
 
 let recv_message state =
@@ -61,6 +63,11 @@ let send_message state msg =
     Communication.Protocol.string_of_down ~mode msg in
   Sequme_flow_io.bin_send (Flow_net.out_channel state.connection) str
   
+let with_layout ~state f =
+  with_database ~configuration:state.configuration (fun ~dbh ->
+    let layout = Classy.make dbh in
+    f layout)
+
 let handle_up_message ~state = function
   | `log s ->
     log "Client wants to log: %S" s
@@ -69,11 +76,60 @@ let handle_up_message ~state = function
     | `none ->
       send_message state (`user_message "you can't!")
     end
+  | `new_token (user, password, token_name, token) ->
+    with_layout ~state (fun layout ->
+      layout#person#all
+      >>| List.find ~f:(fun p ->
+        p#login = Some user || p#email = user
+        || Array.exists p#secondary_emails ~f:((=) user))
+      >>= begin function
+      | Some person ->
+        Communication.Authentication.check_chained
+          ~pam_service:"login" ~person ~password ()
+        >>= begin function
+        | true ->
+          while_sequential (Array.to_list person#auth_tokens) (fun at -> at#get)
+          >>| List.find ~f:(fun t -> t#name = token_name)
+          >>= begin function
+          | Some t ->
+            t#set_hash
+              (Communication.Authentication.hash_password person#g_id token)
+            >>= fun () ->
+            send_message state (`token_updated)
+          | None ->
+            layout#add_authentication_token ()
+              ~name:token_name
+              ~hash:(Communication.Authentication.hash_password
+                       person#g_id token)
+            >>= fun atp ->
+            person#set_auth_tokens
+              Array.(append (map person#auth_tokens ~f:(fun p -> p#pointer))
+                       [| atp#pointer |])
+            >>= fun () ->
+            send_message state (`token_created)
+          end
+        | false ->
+          send_message state (`error `wrong_authentication)
+        end
+      | None ->
+        send_message state (`error `wrong_authentication)
+      end)
+    >>< begin function
+    | Ok () -> return ()
+    | Error e ->
+      send_message state
+        (`error (`server_error "please complain, with detailed explanations"))
+      >>= fun () ->
+      error e
+    end
+        
 
 type error_in_connection =
 [ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
 | `bin_send of [ `exn of exn | `message_too_long of string ]
 | `io_exn of exn
+| `Layout of Hitscore.Layout.error_location * Hitscore.Layout.error_cause
+| `db_backend_error of [ Hitscore.Backend.error ]
 | `message_serialization of
     Communication.Protocol.serialization_mode * string * exn
 ] with sexp_of

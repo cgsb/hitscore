@@ -7,12 +7,20 @@ sig
   (** Messages from the client to the server. *)
   type up = [
   | `log of string (** Ask the server to keep something in the logs. *)
+  | `new_token of string * string * string * string
   ]
 
   (** Messages from the server to the client. *)
   type down = [
   | `user_message of string (** Ask the client to display a message to
                                 the user *)
+  | `token_updated
+  | `token_created
+  | `error of [
+    | `not_implemented
+    | `server_error of string
+    | `wrong_authentication
+  ]
   ]
 
   type serialization_mode = [ `binary | `s_expression ] with sexp
