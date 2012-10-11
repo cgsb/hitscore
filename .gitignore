@@ -11,3 +11,6 @@ setup.log
 /src/lib/hitscore_conf_values.ml
 /hitscore_main.native
 /hitscoregen.native
+/client_main.native
+/client_server.native
+/server_main.native
