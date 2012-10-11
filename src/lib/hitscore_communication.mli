@@ -10,6 +10,7 @@ sig
   | `new_token of string * string * string * string
   | `authenticate of string * string * string
   | `get_simple_info
+  | `terminate
   ]
 
   type person_simple_info = {

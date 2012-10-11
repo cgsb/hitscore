@@ -13,6 +13,7 @@ module Protocol = struct
   | `new_token of string * string * string * string
   | `authenticate of string * string * string
   | `get_simple_info
+  | `terminate
   ]
   with bin_io, sexp
 
