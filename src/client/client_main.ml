@@ -26,8 +26,16 @@ module Configuration = struct
 
   let to_string c =
     Sexp.to_string_hum (sexp_of_t c)
-  let of_string s =
+  let of_string_exn s =
     Sexp.of_string s |! t_of_sexp
+  let of_string s =
+    try Ok (of_string_exn s) with e -> Error (`parse_configuration e)
+
+  let of_file file =
+    Sequme_flow_sys.read_file file
+    >>| String.strip
+    >>= fun s ->
+    of_result (of_string s)
 
   let host = function
     | `gencore (`v0 {host; _})  -> host
@@ -65,6 +73,7 @@ type common_error =
 [ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
 | `bin_send of [ `exn of exn | `message_too_long of string ]
 | `io_exn of exn
+| `parse_configuration of exn
 | `system_command_error of
     string *
       [ `exited of int
@@ -248,9 +257,7 @@ let info_command =
         eprintf "Client ends with Errors: %s"
           (Sexp.to_string_hum (sexp_of_info_error e)))
         begin
-          Sequme_flow_sys.read_file configuration_file
-          >>| String.strip
-          >>| Configuration.of_string
+          Configuration.of_file configuration_file
           >>= fun configuration ->
           connect ~host:(Configuration.host configuration)
             ~port:(Configuration.port configuration)
