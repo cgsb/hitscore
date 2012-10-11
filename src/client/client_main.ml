@@ -27,6 +27,15 @@ module Configuration = struct
     Sexp.to_string_hum (sexp_of_t c)
   let of_string s =
     Sexp.of_string s |! t_of_sexp
+
+  let host = function
+    | `gencore (`v0 {host; _})  -> host
+  let port = function
+    | `gencore (`v0 {port; _})  -> port
+  let token = function
+    | `gencore (`v0 {auth_token; _})  -> auth_token
+  let token_name = function
+    | `gencore (`v0 {auth_token_name; _})  -> auth_token_name
 end
   
 type connection_state = {
@@ -50,11 +59,10 @@ let recv_message ~state =
     
 let cmdf fmt = ksprintf Sequme_flow_sys.system_command fmt
   
-type init_error =
+type common_error =
 [ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
 | `bin_send of [ `exn of exn | `message_too_long of string ]
 | `io_exn of exn
-| `no_password
 | `system_command_error of
     string *
       [ `exited of int
@@ -62,12 +70,19 @@ type init_error =
       | `signaled of int
       | `stopped of int ]
 | `write_file_error of string * exn
+| `read_file_error of string * exn
 | `message_serialization of
     Communication.Protocol.serialization_mode * string * exn
 | `unexpected_message of Communication.Protocol.down
 | `tls_context_exn of exn ]
 with sexp_of
   
+type init_error = [
+| common_error
+| `no_password
+]
+with sexp_of
+
 let connect ~host ~port =
   Sequme_flow_net.init_tls ();
   Sequme_flow_net.connect
@@ -93,6 +108,8 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file =
   recv_message ~state
   >>= begin function
   | `user_message _
+  | `simple_info _
+  | `authentication_successful
   | `error `not_implemented as m -> error (`unexpected_message m)
   | `token_updated 
   | `token_created ->
@@ -119,38 +136,54 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file =
          or if the problem persists call for help."
   end
   
-let init_command =
-  let open Command_line in
-  let login = Unix.getlogin () in
-  let default_token_name =
-    let host = Unix.gethostname () in
-    sprintf "%s@%s" login host in
-  let default_config_file =
-    let home = Sys.getenv "HOME" |! Option.value ~default:"/tmp/" in
-    Filename.concat home ".config/gencore/client.conf" in
-  basic ~summary:"Configure the application and get an authentication token"
-    Spec.(
-      Communication.Protocol.serialization_mode_flag ()
-      ++ flag "-token-name"  (optional_with_default default_token_name string)
-        ~doc:(sprintf 
-                "<name> Give a name to the authentication token (default: %s)"
-                default_token_name)
-      ++ step (fun k configuration_file -> k ~configuration_file)
+module Flag = struct
+
+  let with_config_file () =
+    let default_config_file =
+      let home = Sys.getenv "HOME" |! Option.value ~default:"/tmp/" in
+      Filename.concat home ".config/gencore/client.conf" in
+    Command_line.Spec.(
+      step (fun k configuration_file -> k ~configuration_file)
       ++ flag "-configuration-file" ~aliases:["c"]
         (optional_with_default default_config_file string)
         ~doc:(sprintf "<path> Use this configuration file (default: %s)"
                 default_config_file)
+    )
+    
+  let with_user_name () =
+    let login = Unix.getlogin () in
+    Command_line.Spec.(
+      step (fun k user_name -> k ~user_name)
       ++ flag "-user" ~aliases:["U"] (optional_with_default login string)
         ~doc:(sprintf "<name/email> Set the username (default: %s)" login)
+    )
+
+end
+
+let init_command =
+  let open Command_line in
+  let default_token_name =
+    let login = Unix.getlogin () in
+    let host = Unix.gethostname () in
+    sprintf "%s@%s" login host in
+  basic ~summary:"Configure the application and get an authentication token"
+    Spec.(
+      Communication.Protocol.serialization_mode_flag ()
+      ++ Flag.with_config_file ()
+      ++ Flag.with_user_name ()
+      ++ flag "-token-name"  (optional_with_default default_token_name string)
+        ~doc:(sprintf 
+                "<name> Give a name to the authentication token (default: %s)"
+                default_token_name)
       ++ anon ("HOST" %: string)
       ++ anon ("PORT" %: int)
     )
-    (fun ~mode token_name ~configuration_file user_name host port ->
+    (fun ~mode  ~configuration_file ~user_name token_name host port ->
       run_flow ~on_error:(fun e ->
         eprintf "Client ends with Errors: %s"
           (Sexp.to_string_hum (sexp_of_init_error e)))
         begin
-          connect ~host:"localhost" ~port:4002
+          connect ~host ~port
           >>= fun connection ->
           let state = state connection ~mode ~user_name in
           run_init_protocol ~state ~token_name ~host ~port ~configuration_file
@@ -158,9 +191,91 @@ let init_command =
           Flow_net.shutdown connection
         end)
     
+type info_error = [
+| common_error
+]
+with sexp_of
+  
+let info ~state =
+  msg "Getting info …" >>= fun () ->
+  send_message state `get_simple_info >>= fun () ->
+  dbg "Waiting?" >>= fun () ->
+  recv_message state
+  >>= begin function
+  | `simple_info psi ->
+    let open Communication.Protocol in
+    msg "Got your information:\n%s"
+      (String.concat ~sep:"" [
+        Option.value_map ~default:""
+          psi.psi_print_name ~f:(sprintf "Print name: %s\n");
+        begin
+          let (g, m, n, f) = psi.psi_full_name in
+          sprintf "Full name(s): %s %s%s%s\n"
+            g (Option.value ~default:" " m)
+            (Option.value_map ~default:"" n ~f:(sprintf "“%s” ")) f
+        end;
+        "Emails: "; String.concat ~sep:", " psi.psi_emails; "\n";
+        Option.value_map ~default:"" psi.psi_login ~f:(sprintf "Login: %s\n");
+        begin
+          let aff = String.concat ~sep:"/" in
+          match psi.psi_affiliations with
+          | [] -> ""
+          | [one] -> sprintf "Affiliation: %s\n" (aff one)
+          | some ->
+            sprintf "Affiliations: %s\n"
+              (String.concat ~sep:", " (List.map some aff))
+        end
+      ])
+  | m -> error (`unexpected_message m)
+  end
+    
+let info_command =
+  let open Command_line in
+  basic ~summary:"Get information about you form the server \
+                  (in other words, test the authentication ;)"
+    Spec.(
+      Communication.Protocol.serialization_mode_flag ()
+      ++ Flag.with_config_file ()
+      ++ Flag.with_user_name ()
+    ) (fun ~mode ~configuration_file ~user_name ->
+      run_flow ~on_error:(function
+      | `stop -> printf "Stopping\n%!"
+      | #info_error as e ->
+        eprintf "Client ends with Errors: %s"
+          (Sexp.to_string_hum (sexp_of_info_error e)))
+        begin
+          Sequme_flow_sys.read_file configuration_file
+          >>| String.strip
+          >>| Configuration.of_string
+          >>= fun configuration ->
+          connect ~host:(Configuration.host configuration)
+            ~port:(Configuration.port configuration)
+          >>= fun connection ->
+          let state = state connection ~mode ~user_name ~configuration in
+          send_message state
+            (`authenticate (user_name,
+                            Configuration.token_name configuration,
+                            Configuration.token configuration))
+          >>= fun () ->
+          recv_message state
+          >>= begin function
+          | `authentication_successful -> msg "Authentication successful !¡!"
+          | `error `wrong_authentication ->
+            msg "Authentication failed …" >>= fun () ->
+            error `stop
+          | e -> error (`unexpected_message e)
+          end
+          >>= fun () ->
+          info ~state
+          >>= fun () ->
+          Flow_net.shutdown connection
+        end)
+
+    
 let () =
   Command_line.(
     run ~version:"0"
       (group ~summary:"Gencore's command-line application" [
         ("init", init_command);
+        ("info", info_command);
       ]))

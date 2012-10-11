@@ -48,7 +48,7 @@ type connection_state = {
   configuration: Configuration.local_configuration;
   connection:  Sequme_flow_net.connection;
   serialization_mode: Communication.Protocol.serialization_mode;
-  user: [ `none  ];
+  mutable user: [ `none | `token_authenticated of Layout.Record_person.t ];
 }
 
 let recv_message state =
@@ -68,61 +68,132 @@ let with_layout ~state f =
     let layout = Classy.make dbh in
     f layout)
 
-let handle_up_message ~state = function
+let find_user layout user =
+  layout#person#all
+  >>| List.find ~f:(fun p ->
+    p#login = Some user || p#email = user
+            || Array.exists p#secondary_emails ~f:((=) user))
+  
+let handle_new_token ~state ~user ~password ~token_name ~token =
+  with_layout ~state (fun layout ->
+    find_user layout user
+    >>= begin function
+    | Some person ->
+      Communication.Authentication.check_chained
+        ~pam_service:"login" ~person ~password ()
+      >>= begin function
+      | true ->
+        while_sequential (Array.to_list person#auth_tokens) (fun at -> at#get)
+        >>| List.find ~f:(fun t -> t#name = token_name)
+        >>= begin function
+        | Some t ->
+          t#set_hash
+            (Communication.Authentication.hash_password person#g_id token)
+          >>= fun () ->
+          send_message state (`token_updated)
+        | None ->
+          layout#add_authentication_token ()
+            ~name:token_name
+            ~hash:(Communication.Authentication.hash_password
+                     person#g_id token)
+          >>= fun atp ->
+          person#set_auth_tokens
+            Array.(append (map person#auth_tokens ~f:(fun p -> p#pointer))
+                     [| atp#pointer |])
+          >>= fun () ->
+          send_message state (`token_created)
+        end
+      | false ->
+        send_message state (`error `wrong_authentication)
+      end
+    | None ->
+      send_message state (`error `wrong_authentication)
+    end)
+  >>< begin function
+  | Ok () -> return ()
+  | Error e ->
+    send_message state
+      (`error (`server_error "please complain, with detailed explanations"))
+    >>= fun () ->
+    error e
+  end
+  
+let authenticate ~state ~user ~token_name ~token =
+  with_layout ~state (fun layout ->
+    find_user layout user
+    >>= begin function
+    | Some person ->
+      while_sequential (Array.to_list person#auth_tokens) (fun at -> at#get)
+      >>| List.find ~f:(fun t -> t#name = token_name)
+      >>= begin function
+      | Some t ->
+        if t#hash = Communication.Authentication.hash_password person#g_id token
+        then begin
+          state.user <- `token_authenticated person#g_t;
+          send_message state (`authentication_successful)
+        end
+        else send_message state (`error `wrong_authentication)
+      | None -> 
+        send_message state (`error `wrong_authentication)
+      end
+    | None ->
+      send_message state (`error `wrong_authentication)
+    end)
+  >>< begin function
+  | Ok () -> return ()
+  | Error e ->
+    send_message state
+      (`error (`server_error "please complain, with detailed explanations"))
+    >>= fun () ->
+    error e
+  end
+      
+let retrieve_simple_info ~state =
+  begin match state.user with
+  | `none -> send_message state (`error `wrong_authentication)
+  | `token_authenticated t ->
+    with_layout ~state (fun layout ->
+      let classy_person = new Classy.person_element layout#dbh t in 
+      let open Communication.Protocol in 
+      while_sequential (Array.to_list classy_person#affiliations) (fun a ->
+        a#get >>= fun aff ->
+        return (Array.to_list aff#path))
+      >>= fun psi_affiliations ->
+      send_message state (`simple_info {
+        psi_print_name = classy_person#print_name;
+        psi_full_name =
+          (classy_person#given_name, classy_person#middle_name,
+           classy_person#nickname, classy_person#family_name);
+        psi_emails =
+          classy_person#email :: Array.to_list classy_person#secondary_emails;
+        psi_login = classy_person#login;
+        psi_affiliations;
+      })
+    )
+  end
+
+let rec handle_up_message ~state =
+  recv_message state
+  >>= begin function
   | `log s ->
     log "Client wants to log: %S" s
     >>= fun () ->
     begin match state.user with
     | `none ->
       send_message state (`user_message "you can't!")
+    | `token_authenticated p ->
+      log "and the client was right …"
     end
   | `new_token (user, password, token_name, token) ->
-    with_layout ~state (fun layout ->
-      layout#person#all
-      >>| List.find ~f:(fun p ->
-        p#login = Some user || p#email = user
-        || Array.exists p#secondary_emails ~f:((=) user))
-      >>= begin function
-      | Some person ->
-        Communication.Authentication.check_chained
-          ~pam_service:"login" ~person ~password ()
-        >>= begin function
-        | true ->
-          while_sequential (Array.to_list person#auth_tokens) (fun at -> at#get)
-          >>| List.find ~f:(fun t -> t#name = token_name)
-          >>= begin function
-          | Some t ->
-            t#set_hash
-              (Communication.Authentication.hash_password person#g_id token)
-            >>= fun () ->
-            send_message state (`token_updated)
-          | None ->
-            layout#add_authentication_token ()
-              ~name:token_name
-              ~hash:(Communication.Authentication.hash_password
-                       person#g_id token)
-            >>= fun atp ->
-            person#set_auth_tokens
-              Array.(append (map person#auth_tokens ~f:(fun p -> p#pointer))
-                       [| atp#pointer |])
-            >>= fun () ->
-            send_message state (`token_created)
-          end
-        | false ->
-          send_message state (`error `wrong_authentication)
-        end
-      | None ->
-        send_message state (`error `wrong_authentication)
-      end)
-    >>< begin function
-    | Ok () -> return ()
-    | Error e ->
-      send_message state
-        (`error (`server_error "please complain, with detailed explanations"))
-      >>= fun () ->
-      error e
-    end
-        
+    handle_new_token ~state ~user ~password ~token_name ~token
+  | `authenticate (user, token_name, token) ->
+    authenticate ~state ~user ~token ~token_name
+  | `get_simple_info ->
+    log "get_simple_info" >>= fun () ->
+    retrieve_simple_info ~state
+  end
+  >>= fun () ->
+  handle_up_message ~state
 
 type error_in_connection =
 [ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
@@ -146,8 +217,7 @@ let handle_connection ~configuration ~mode connection =
       serialization_mode = mode;
       user = `none } in
   bind_on_error
-    (recv_message state
-     >>= handle_up_message ~state)
+    (handle_up_message ~state)
     (handle_connection_error ~state)
 
 let start_server ~port ~configuration ~cert_key ~mode =
