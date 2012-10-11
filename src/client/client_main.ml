@@ -192,6 +192,7 @@ let init_command =
           run_init_protocol ~state ~token_name ~host ~port ~configuration_file
             ~user_name
           >>= fun () ->
+          send_message state `terminate >>= fun () ->
           Flow_net.shutdown connection
         end)
     
@@ -271,6 +272,7 @@ let info_command =
           >>= fun () ->
           info ~state
           >>= fun () ->
+          send_message state `terminate >>= fun () ->
           Flow_net.shutdown connection
         end)
 

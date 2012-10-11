@@ -191,6 +191,9 @@ let rec handle_up_message ~state =
   | `get_simple_info ->
     log "get_simple_info" >>= fun () ->
     retrieve_simple_info ~state
+  | `terminate ->
+    log "Terminating connection" >>= fun () ->
+    error `stop
   end
   >>= fun () ->
   handle_up_message ~state
@@ -206,8 +209,12 @@ type error_in_connection =
 ] with sexp_of
 
 let handle_connection_error ~state e =
-  let to_log = Sexp.to_string_hum (sexp_of_error_in_connection e) in
-  log "Error in connection:\n%s\nSSL: %s" to_log (Ssl.get_error_string ())
+  begin match e with
+  | `stop -> return ()
+  | #error_in_connection as subset ->
+    let to_log = Sexp.to_string_hum (sexp_of_error_in_connection subset) in
+    log "Error in connection:\n%s\nSSL: %s" to_log (Ssl.get_error_string ())
+  end
   >>= fun () ->
   Flow_net.shutdown state.connection
 
