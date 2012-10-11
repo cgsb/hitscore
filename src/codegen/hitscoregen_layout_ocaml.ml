@@ -597,6 +597,7 @@ end";
       access_mod class_name types_mod class_name access_mod class_name types_mod
   in
   line out "class ['error] layout dbh = object";
+  line out "method dbh = dbh";
   line out "method file_system = %s"
     (make_collection "Volume" "File_system" "volume_element");
   add_method ~method_name:"add_volume"
