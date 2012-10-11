@@ -11,6 +11,7 @@ module Configuration = struct
   type configuration_v0 = {
     host: string;
     port: int;
+    user_name: string;
     auth_token_name: string;
     auth_token:  string;
   } with sexp
@@ -20,8 +21,8 @@ module Configuration = struct
   ]
   ] with sexp
     
-  let make ~host ~port ~auth_token ~auth_token_name =
-    `gencore (`v0 {host; port; auth_token; auth_token_name})
+  let make ~host ~port ~auth_token ~auth_token_name ~user_name =
+    `gencore (`v0 {host; port; auth_token; auth_token_name; user_name})
 
   let to_string c =
     Sexp.to_string_hum (sexp_of_t c)
@@ -32,6 +33,8 @@ module Configuration = struct
     | `gencore (`v0 {host; _})  -> host
   let port = function
     | `gencore (`v0 {port; _})  -> port
+  let user_name = function
+    | `gencore (`v0 {user_name; _})  -> user_name
   let token = function
     | `gencore (`v0 {auth_token; _})  -> auth_token
   let token_name = function
@@ -41,11 +44,10 @@ end
 type connection_state = {
   connection:  Sequme_flow_net.connection;
   serialization_mode: Communication.Protocol.serialization_mode;
-  user_name: string;
   configuration: Configuration.t option;
 }
-let state  ~mode ~user_name ?configuration connection =
-  { connection; serialization_mode = mode; user_name; configuration}
+let state  ~mode ?configuration connection =
+  { connection; serialization_mode = mode; configuration}
 
 let send_message ~state message =
   Sequme_flow_io.bin_send (Flow_net.out_channel state.connection)
@@ -93,17 +95,18 @@ let create_token () =
   Random.self_init ();
   String.init 128 (fun i -> Random.int 64 + 32 |! Char.of_int_exn)
 
-let run_init_protocol ~state ~token_name ~host ~port ~configuration_file =
+let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
+    ~user_name =
   Read_line.password ()
-    ~prompt:(sprintf "Password for %s (like the one for the website): "
-               state.user_name)
+    ~prompt:(sprintf "Password for %S (like the one for the website): "
+               user_name)
   >>= begin function
   | Some s -> return s
   | None -> error `no_password
   end
   >>= fun password ->
   let token = create_token () in
-  send_message ~state (`new_token (state.user_name, password, token_name, token))
+  send_message ~state (`new_token (user_name, password, token_name, token))
   >>= fun () ->
   recv_message ~state
   >>= begin function
@@ -119,7 +122,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file =
     >>= fun () ->
     let config =
       Configuration.make ~host ~port ~auth_token:token
-        ~auth_token_name:token_name in
+        ~auth_token_name:token_name ~user_name in
     cmdf "chmod 600 %S" configuration_file
     >>= fun () ->
     Sequme_flow_sys.write_file configuration_file
@@ -185,8 +188,9 @@ let init_command =
         begin
           connect ~host ~port
           >>= fun connection ->
-          let state = state connection ~mode ~user_name in
+          let state = state connection ~mode in
           run_init_protocol ~state ~token_name ~host ~port ~configuration_file
+            ~user_name
           >>= fun () ->
           Flow_net.shutdown connection
         end)
@@ -236,8 +240,7 @@ let info_command =
     Spec.(
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
-      ++ Flag.with_user_name ()
-    ) (fun ~mode ~configuration_file ~user_name ->
+    ) (fun ~mode ~configuration_file ->
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"
       | #info_error as e ->
@@ -251,9 +254,9 @@ let info_command =
           connect ~host:(Configuration.host configuration)
             ~port:(Configuration.port configuration)
           >>= fun connection ->
-          let state = state connection ~mode ~user_name ~configuration in
+          let state = state connection ~mode ~configuration in
           send_message state
-            (`authenticate (user_name,
+            (`authenticate (Configuration.user_name configuration,
                             Configuration.token_name configuration,
                             Configuration.token configuration))
           >>= fun () ->
