@@ -17,7 +17,7 @@ cat <<EOF > $file_to_use
 #thread
 #require "lwt.unix"
 #require "lwt.top"
-#require "threads, core, pgocaml, sexplib.syntax, biocaml, sequme, cryptokit"
+#require "threads, core, pgocaml, sexplib.syntax, biocaml, sequme, cryptokit, simple_pam"
 #directory "_build/src/codegen"
 #directory "_build/src/lib"
 #load "hitscoregen.cma"
