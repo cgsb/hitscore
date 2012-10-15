@@ -187,6 +187,8 @@ let string_of_error = function
         | `query  (_, e) -> 
           sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
         end
+      | `parse_timestamp s ->
+        sprintf "error parsing timestamp: %S" s
       | `parse_evaluation_error (sol, e)
       | `parse_value_error (sol, e)
       | `parse_volume_error (sol, e) ->

@@ -171,6 +171,18 @@ let ocaml_record_access_module ~out name fields =
     line out "    of_result Result.(Sql_query.parse_value row >>= of_value))";
   );
 
+  doc out "Get the last modified [Time.t] of all the values.";
+  line out "let last_modified ~dbh =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.last_modified_value ~record_name:%S in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= begin function\n\
+             \  | [[Some one]] ->\n\
+             \    (try return (Time.of_string one) with e-> error (`parse_timestamp one))\n\
+             \  | more_or_less -> error (`result_not_unique more_or_less)\n\
+             \  end";
+  ); 
+
   doc out "Update the 'value' (one {b should not} modify the [g_*] \
     fields, this function won't touch them anyway).";
   line out "let update ~dbh t =";
@@ -1007,6 +1019,7 @@ let ocaml_module raw_dsl dsl output_string =
   line out "type error_cause = [";
   line out "| `db_backend_error of Backend.error"; 
   line out "| `wrong_add_value";
+  line out "| `parse_timestamp of string";
   line out "| `parse_sexp_error of Hitscore_std.Sexp.t * exn";
   line out "| `parse_value_error of Hitscore_db_backend.Backend.result_item * exn";
   line out "| `parse_volume_error of Hitscore_db_backend.Backend.result_item * exn";

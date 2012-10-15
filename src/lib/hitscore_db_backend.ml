@@ -201,6 +201,11 @@ module Sql_query = struct
   let check_volume: t =
     "SELECT (id, kind, sexp) FROM volume WHERE id = 0"
         
+  let last_modified_value ~record_name : t =
+    sprintf 
+      "select last_modified from record where type = %s ORDER BY 1 DESC LIMIT 1"
+      (escape_sql record_name)
+      
   let add_value_sexp ~record_name sexp : t =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
