@@ -46,6 +46,8 @@ Library hitscore
           , Hitscore_common
           , Hitscore_communication
           , Hitscore_broker
+          , Hitscore_data_access_types
+          , Hitscore_data_access
           , Hitscore_generic_fastqs
           , Hitscore_fastx_quality_stats
 

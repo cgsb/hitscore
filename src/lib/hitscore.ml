@@ -41,6 +41,9 @@ module Fastx_quality_stats =
 
 module Communication = Hitscore_communication
   
+module Data_access = Hitscore_data_access
+module Data_access_types = Hitscore_data_access_types
+
 include Hitscore_broker
 
 let db_connect ?log t =
