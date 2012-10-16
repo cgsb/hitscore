@@ -144,6 +144,7 @@ module Sql_query = struct
     v_id: int;
     v_kind: string;
     v_sexp: Sexp.t;
+    v_last_modified: Timestamp.t;
   }
       
   let escape_sql s = Bytea.to_db_input s
@@ -196,10 +197,11 @@ module Sql_query = struct
   let create_volume: t =
     sprintf "CREATE TABLE volume (\n\
       \  id %s,\n\
+      \  last_modified bytea NOT NULL,\n\
       \  kind bytea NOT NULL,\n\
       \  sexp bytea NOT NULL)"  id_type
   let check_volume: t =
-    "SELECT (id, kind, sexp) FROM volume WHERE id = 0"
+    "SELECT (id, last_modified, kind, sexp) FROM volume WHERE id = 0"
         
   let last_modified_value ~record_name : t =
     sprintf 
@@ -229,10 +231,11 @@ module Sql_query = struct
       str_type now status_str str_sexp
     
   let add_volume_sexp ~kind sexp : t =
+    let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
     let str_type = escape_sql kind in
-    sprintf "INSERT INTO volume (kind, sexp)\n\
-      \ VALUES (%s,%s) RETURNING id" str_type str_sexp
+    sprintf "INSERT INTO volume (last_modified, kind, sexp)\n\
+      \ VALUES (%s, %s,%s) RETURNING id" now str_type str_sexp
       
   let insert_value v : t =
     let id            = v.r_id in
@@ -266,8 +269,9 @@ module Sql_query = struct
   let insert_volume v : t =
     let str_sexp = Sexp.to_string_hum v.v_sexp |! escape_sql in
     let str_type = escape_sql v.v_kind in
-    sprintf "INSERT INTO volume (id, kind, sexp)\n\
-      \ VALUES (%d, %s,%s)" v.v_id str_type str_sexp
+    let last_modified = Timestamp.to_string v.v_last_modified |! escape_sql in
+    sprintf "INSERT INTO volume (id, last_modified, kind, sexp)\n\
+      \ VALUES (%d, %s, %s, %s)" v.v_id last_modified str_type str_sexp
 
   let single_id_of_result = function
     | [[ Some i ]] -> (try Some (Int.of_string i) with e -> None)
@@ -293,10 +297,11 @@ module Sql_query = struct
              WHERE id = %d AND type = %s" now str_sexp id str_type
      
   let update_volume_sexp ~kind id sexp : t =
+    let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
     let str_type = escape_sql kind in
-    sprintf "UPDATE volume SET sexp = %s\n\
-      \ WHERE id = %d AND kind = %s"  str_sexp id str_type
+    sprintf "UPDATE volume SET last_modified = %s, sexp = %s\n\
+      \ WHERE id = %d AND kind = %s" now str_sexp id str_type
 
   let set_evaluation_started ~function_name id =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
@@ -365,11 +370,12 @@ module Sql_query = struct
 
   let parse_volume sol =
     match sol with
-    | [ Some i; Some k; Some sexp ] ->
+    | [ Some i; Some lm; Some k; Some sexp ] ->
       Result.(
         try_with (fun () -> Int.of_string i) >>= fun v_id ->
         try_with (fun () -> Sexp.of_string (unescape sexp)) >>= fun v_sexp ->
-        return {v_id; v_kind = unescape k; v_sexp})
+        parse_timestamp lm >>= fun v_last_modified ->
+        return {v_id; v_last_modified; v_kind = unescape k; v_sexp})
       |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
     | _ -> Error (`parse_volume_error (sol, Failure "Wrong format"))
 

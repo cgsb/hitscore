@@ -63,8 +63,9 @@ let ocaml_file_system_module out dsl =
   
   doc out "A volume is then …";
   line out "type t =\n  %s"
-    "{ g_id:int; g_kind: Enumeration_volume_kind.t; \
-       \  g_content: content; } with sexp";
+    "{ g_id:int; g_last_modified : Timestamp.t; \
+     \  g_kind: Enumeration_volume_kind.t; \
+     \  g_content: content; } with sexp";
   doc out "Get the toplevel directory corresponding to a volume-kind.";
   line out " let toplevel_of_kind = function";
   List.iter dsl.nodes (function
@@ -136,7 +137,8 @@ let ocaml_record_access_module ~out name fields =
 
   line out "let of_value r = ";
   line out "  let open Sql_query in";
-  line out "  try Ok {g_id = r.r_id; g_created = r.r_created; \n\
+  line out "  try Ok {g_id = r.r_id;  \n\
+      \  g_created = r.r_created; \n\
       \  g_last_modified = r.r_last_modified; g_value = value_of_sexp r.r_sexp }\n\
       \  with e -> Error (`parse_sexp_error (r.r_sexp, e))";
 
@@ -372,11 +374,12 @@ let ocaml_file_system_access_module ~out dsl =
   
   line out "let of_volume r = ";
   line out "  let open Sql_query in";
-  line out "  try Ok {g_id = r.v_id; \
+  line out "  try Ok {g_id = r.v_id; g_last_modified = r.v_last_modified;\
       \   g_kind = Enumeration_volume_kind.of_string_exn r.v_kind; \n\
       \   g_content = content_of_sexp r.v_sexp } \
       \  with e -> Error (`parse_sexp_error (r.v_sexp, e))";
   line out "let to_volume t = {Sql_query. v_id = t.g_id; ";
+  line out "    v_last_modified = t.g_last_modified; ";
   line out "    v_kind = Enumeration_volume_kind.to_string t.g_kind;";
   line out "    v_sexp = sexp_of_content t.g_content } ";
 
