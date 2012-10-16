@@ -569,3 +569,35 @@ module Backend : BACKEND = struct
     >>= fun _ ->
     return ()
 end
+
+
+module Util = struct
+
+  let make_collection_cache ~allowed_age ~maximal_age collection =
+    let cache = ref None in
+    let reget () =
+      collection#all
+      >>= fun all ->
+      cache := Some (Time.now (), all);
+      return all
+    in
+    begin fun () ->
+      match !cache with
+      | Some (birthdate, v)
+          when Time.(to_float (now ()) -. to_float birthdate) <= allowed_age ->
+        return v
+      | Some (birthdate, v)
+          when Time.(to_float (now ()) -. to_float birthdate) >= maximal_age ->
+        reget ()
+      | Some (birthdate, v) ->
+        collection#last_modified >>= fun t ->
+        if birthdate < t
+        then begin
+          reget ()
+        end
+        else return v
+      | None ->
+        reget ()
+    end
+
+end
