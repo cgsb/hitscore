@@ -194,6 +194,7 @@ let v13_to_v14 file_in file_out =
   let () = V13.Layout.dump_of_sexp dump_v13 |! ignore in
 
   let dump_v14 =
+    let now = Time.(now () |! to_string) in
     let parse = function
       | Atom a -> Atom a
       | List [Atom "version"; Atom old_version]
@@ -201,6 +202,13 @@ let v13_to_v14 file_in file_out =
         eprintf "Changed version.\n"; List [Atom "version"; Atom V14.Info.version ]
       | List [Atom "person"; List l ] ->
         List [Atom "person"; List (map_g_values l (add_empty "auth_tokens"))]
+      | List [Atom "file_system"; List l ] ->
+        let f = function
+          | Atom s -> failwithf "atom : %s" s ()
+          | List l  ->
+            List ((List [Atom "g_last_modified"; Atom now]) :: l)
+        in
+        List [Atom "file_system"; List (List.map l ~f)]
       | List l -> List l
     in
     begin match dump_v13 with
