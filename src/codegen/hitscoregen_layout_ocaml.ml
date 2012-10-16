@@ -679,9 +679,31 @@ end";
 
   line out "end";
 
+  line out "class ['error] layout_cache ~allowed_age ~maximal_age (layout: 'error layout) =";
+  let make_cc name =
+    line out
+      "val %s_cache = Util.make_collection_cache ~allowed_age ~maximal_age layout#%s"
+      name name;
+    line out "method %s = %s_cache ()" name name;
+  in
+  line out "object";
+  line out "method dbh = layout#dbh";
+  make_cc "file_system";
+  List.iter dsl.nodes (function
+  | Enumeration (name, fields) -> ()
+  | Record (name, fields) ->
+    make_cc name;
+  | Function (name, args, result) ->
+    make_cc name;
+  | Volume (_, _) -> ()
+  );
+  line out "end";
 
   line out "let make (dbh : Backend.db_handle) = new layout dbh";
 
+  line out "let make_cache ~allowed_age ~maximal_age ~dbh =";
+  line out "  let layout = new layout dbh in";
+  line out "  new layout_cache layout ~allowed_age ~maximal_age";
   
   ()
 
