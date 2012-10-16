@@ -206,6 +206,11 @@ module Sql_query = struct
       "select last_modified from record where type = %s ORDER BY 1 DESC LIMIT 1"
       (escape_sql record_name)
       
+  let last_modified_evaluation ~function_name : t =
+    sprintf "select greatest (inserted, started, completed)
+             from function where type = %s ORDER BY 1 DESC LIMIT 1"
+      (escape_sql function_name)
+
   let add_value_sexp ~record_name sexp : t =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in

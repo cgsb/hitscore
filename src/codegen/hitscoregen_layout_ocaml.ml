@@ -313,6 +313,17 @@ let ocaml_function_access_module ~out name result_type args =
     line out "  >>= fun _ -> return ()";
   );
   
+  doc out "Get the last modified [Time.t] of all the evaluations.";
+  line out "let last_modified ~dbh =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.last_modified_evaluation ~function_name:%S in" name;
+    line out "  Backend.query ~dbh query";
+    line out "  >>= begin function\n\
+             \  | [[Some one]] ->\n\
+             \    (try return (Time.of_string one) with e-> error (`parse_timestamp one))\n\
+             \  | more_or_less -> error (`result_not_unique more_or_less)\n\
+             \  end";
+  ); 
   line out "let delete_evaluation_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.delete_evaluation_sexp \
