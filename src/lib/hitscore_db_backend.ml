@@ -213,6 +213,10 @@ module Sql_query = struct
              from function where type = %s ORDER BY 1 DESC LIMIT 1"
       (escape_sql function_name)
 
+  let last_modified_volume () : t =
+    "select last_modified from volume ORDER BY 1 DESC LIMIT 1"
+      
+
   let add_value_sexp ~record_name sexp : t =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in

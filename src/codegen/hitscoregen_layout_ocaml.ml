@@ -411,6 +411,17 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  >>= fun _ -> return ()";
   );
 
+  doc out "Get the last modified [Time.t] of all the volumes.";
+  line out "let last_modified ~dbh =";
+  ocaml_encapsulate_layout_errors out ~error_location (fun out ->
+    line out "  let query = Sql_query.last_modified_volume () in";
+    line out "  Backend.query ~dbh query";
+    line out "  >>= begin function\n\
+             \  | [[Some one]] ->\n\
+             \    (try return (Time.of_string one) with e-> error (`parse_timestamp one))\n\
+             \  | more_or_less -> error (`result_not_unique more_or_less)\n\
+             \  end";
+  ); 
   line out "let delete_volume_unsafe ~dbh v =";
   ocaml_encapsulate_layout_errors out ~error_location (fun out ->
     line out "  let query = Sql_query.delete_volume_sexp v.g_id in";
