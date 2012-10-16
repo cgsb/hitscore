@@ -618,11 +618,13 @@ class ['pointer, 'pointed, 'error ] collection
   (layout_get: 'pointer -> ('pointed, 'error) Sequme_flow.t)
   (layout_get_all: unit -> ('pointed list, 'error) Sequme_flow.t)
   (unsafe_cast: int -> 'pointer)
+  (last_modified: unit -> (Timestamp.t, 'error) Sequme_flow.t)
  =
 object
 method all = (layout_get_all ())
 method get p = layout_get p
 method get_unsafe i = layout_get (unsafe_cast i)
+method last_modified = last_modified ()
 end";
   let make_collection access_mod types_mod class_name =
     sprintf 
@@ -630,8 +632,10 @@ end";
       \  ((fun p -> %s.get ~dbh p >>| new %s dbh): \
          %s.pointer -> ('error %s, 'error) Sequme_flow.t)\n\
       \  (fun () -> %s.get_all ~dbh >>| List.map ~f:(new %s dbh)) \n\
-      %s.unsafe_cast"
-      access_mod class_name types_mod class_name access_mod class_name types_mod
+      \  %s.unsafe_cast\n\
+      \  (fun () -> %s.last_modified ~dbh)"
+      access_mod class_name types_mod class_name access_mod
+      class_name types_mod access_mod
   in
   line out "class ['error] layout dbh = object";
   line out "method dbh = dbh";
