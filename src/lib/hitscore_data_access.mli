@@ -26,12 +26,10 @@ end
 
 val make_classy_libraries_information:
   configuration:Hitscore_configuration.Configuration.local_configuration ->
-  dbh:Hitscore_db_backend.Backend.db_handle ->
-  (([> `Layout of
-      Hitscore_layout.Layout.error_location *
-        Hitscore_layout.Layout.error_cause
-    | `root_directory_not_configured ] as 'a)
-      Hitscore_data_access_types.classy_libraries_information, 'a) Hitscore_std.t
+  layout_cache: (
+    ([> `Layout of Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
+     | `root_directory_not_configured ] as 'a) Hitscore_layout.Classy.layout_cache) ->
+  ('a Hitscore_data_access_types.classy_libraries_information, 'a) Hitscore_std.t
 
 val filter_classy_libraries_information :
   qualified_names:string list ->

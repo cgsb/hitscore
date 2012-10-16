@@ -122,22 +122,21 @@ let rec volume_path ~configuration vols v =
      volume_path ~configuration vols vv)
   end
 
-let make_classy_libraries_information ~configuration ~dbh =
+let make_classy_libraries_information ~configuration ~layout_cache =
   let creation_started_on = Time.now () in
-  let layout = Classy.make dbh in
-  layout#hiseq_raw#all >>= fun hiseq_raws ->
-  layout#assemble_sample_sheet#all >>= fun ssassemblies ->
-  layout#sample_sheet#all >>= fun sample_sheets ->
-  layout#bcl_to_fastq#all >>= fun b2fs ->
-  layout#bcl_to_fastq_unaligned#all >>= fun b2fus ->
-  layout#file_system#all >>= fun volumes ->
-  layout#prepare_unaligned_delivery#all >>= fun udeliveries ->
-  layout#client_fastqs_dir#all >>= fun client_dirs ->
-  layout#generic_fastqs#all >>= fun generic_fastqs ->
-  layout#fastx_quality_stats#all >>= fun fxqss ->
-  layout#fastx_quality_stats_result#all >>= fun fxqs_rs ->
-  layout#person#all >>= fun persons ->
-  layout#protocol#all >>= fun protocols ->
+  layout_cache#hiseq_raw >>= fun hiseq_raws ->
+  layout_cache#assemble_sample_sheet >>= fun ssassemblies ->
+  layout_cache#sample_sheet >>= fun sample_sheets ->
+  layout_cache#bcl_to_fastq >>= fun b2fs ->
+  layout_cache#bcl_to_fastq_unaligned >>= fun b2fus ->
+  layout_cache#file_system >>= fun volumes ->
+  layout_cache#prepare_unaligned_delivery >>= fun udeliveries ->
+  layout_cache#client_fastqs_dir >>= fun client_dirs ->
+  layout_cache#generic_fastqs >>= fun generic_fastqs ->
+  layout_cache#fastx_quality_stats >>= fun fxqss ->
+  layout_cache#fastx_quality_stats_result >>= fun fxqs_rs ->
+  layout_cache#person >>= fun persons ->
+  layout_cache#protocol >>= fun protocols ->
 
   while_sequential b2fs (fun b2f ->
     let b2fu = getopt_by_id b2fus b2f#g_result in
@@ -198,7 +197,7 @@ let make_classy_libraries_information ~configuration ~dbh =
   >>| List.filter_opt
   >>= fun unaligned_volumes ->
   
-  layout#flowcell#all >>= while_sequential ~f:(fun fc ->
+  layout_cache#flowcell >>= while_sequential ~f:(fun fc ->
     while_sequential (Array.to_list fc#lanes) (fun lp ->
       lp#get >>= fun lane ->
       while_sequential (Array.to_list lane#contacts) (fun c ->
@@ -251,10 +250,10 @@ let make_classy_libraries_information ~configuration ~dbh =
                    method hiseq_raws = hiseq_raws end))
   >>= fun flowcells ->
 
-  layout#bioanalyzer#all
+  layout_cache#bioanalyzer
   >>= while_sequential ~f:(fun ba ->
     map_option Option.(ba#files >>= fun v -> get_by_id volumes v#id) (fun vol ->
-      Common.all_paths_of_volume ~configuration ~dbh vol#g_pointer)
+      Common.all_paths_of_volume ~configuration ~dbh:layout_cache#dbh vol#g_pointer)
     >>= fun paths ->
     return (object
       method bioanalyzer = ba
@@ -262,10 +261,10 @@ let make_classy_libraries_information ~configuration ~dbh =
     end))
   >>= fun bioanalyzers ->
 
-  layout#agarose_gel#all
+  layout_cache#agarose_gel
   >>= while_sequential ~f:(fun ag ->
     map_option Option.(ag#files >>= fun v -> get_by_id volumes v#id) (fun vol ->
-      Common.all_paths_of_volume ~configuration ~dbh vol#g_pointer)
+      Common.all_paths_of_volume ~configuration ~dbh:layout_cache#dbh vol#g_pointer)
     >>= fun paths ->
     return (object
       method agarose_gel = ag
@@ -273,11 +272,11 @@ let make_classy_libraries_information ~configuration ~dbh =
     end))
   >>= fun agarose_gels ->
   
-  layout#sample#all >>= fun samples ->
-  layout#organism#all >>= fun organisms ->
-  layout#barcode#all >>= fun barcodes ->
-  layout#invoicing#all >>= fun invoices ->
-  layout#stock_library#all
+  layout_cache#sample >>= fun samples ->
+  layout_cache#organism >>= fun organisms ->
+  layout_cache#barcode >>= fun barcodes ->
+  layout_cache#invoicing >>= fun invoices ->
+  layout_cache#stock_library
   >>= while_sequential ~f:(fun sl ->
     let optid =  Option.map ~f:(fun o -> o#id) in
     let sample = List.find_map samples (fun s ->
@@ -315,7 +314,7 @@ let make_classy_libraries_information ~configuration ~dbh =
       List.find protocols (fun p ->
         Some p#g_pointer = Option.map sl#protocol (fun x -> x#pointer)) in
     map_option Option.(prot >>= fun v -> get_by_id volumes v#doc#id) (fun vol ->
-      Common.all_paths_of_volume ~configuration ~dbh vol#g_pointer)
+      Common.all_paths_of_volume ~configuration ~dbh:layout_cache#dbh vol#g_pointer)
     >>= fun protocol_paths ->
     return (object
       method stock = sl (* library *)
