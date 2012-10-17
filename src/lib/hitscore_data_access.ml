@@ -105,6 +105,10 @@ end
 let filter_map l ~filter ~map =
   List.filter_map l ~f:(fun x -> if filter x then Some (map x) else None)
 let get_by_id l i = List.find l (fun o -> o#g_id = i)
+let get_by_id_or_error l i =
+  match List.find l (fun o -> o#g_id = i) with Some s -> return s
+  | None -> error (`Layout (`Identification, `result_not_unique []))
+
 let getopt_by_id l i =
   List.find l (fun o -> Some o#g_id = Option.map i (fun i -> i#id))
 
@@ -120,6 +124,25 @@ let rec volume_path ~configuration vols v =
     (get_by_id vols p.id
      >>= fun vv ->
      volume_path ~configuration vols vv)
+  end
+
+let rec all_paths_of_volume ~configuration volumes volume_id =
+  let open Layout.File_system in
+  get_by_id_or_error volumes volume_id >>= fun volume ->
+  begin match volume#g_content with
+  | Tree (hr_tag, trees) ->
+    let relative_paths = Common.trees_to_unix_relative_paths trees in
+    let vol =
+      Common.volume_unix_directory ~id:(volume#g_id)
+        ~kind:volume#g_kind ?hr_tag in
+    begin match Configuration.path_of_volume_fun configuration with
+    | Some vol_path ->
+      return (List.map relative_paths (Filename.concat (vol_path vol)))
+    | None -> 
+      error `root_directory_not_configured
+    end
+  | Link pointer ->
+    all_paths_of_volume ~configuration volumes pointer.id
   end
 
 let make_classy_libraries_information ~configuration ~layout_cache =
@@ -197,13 +220,18 @@ let make_classy_libraries_information ~configuration ~layout_cache =
   >>| List.filter_opt
   >>= fun unaligned_volumes ->
   
-  layout_cache#flowcell >>= while_sequential ~f:(fun fc ->
+  layout_cache#flowcell >>= fun flowcells ->
+  layout_cache#lane >>= fun lanes ->
+  layout_cache#input_library >>= fun input_libraries ->
+
+  while_sequential flowcells ~f:(fun fc ->
     while_sequential (Array.to_list fc#lanes) (fun lp ->
-      lp#get >>= fun lane ->
+      get_by_id_or_error lanes lp#id >>= fun lane ->
       while_sequential (Array.to_list lane#contacts) (fun c ->
         List.find_exn persons ~f:(fun p -> p#g_id = c#id) |! return)
       >>= fun contacts ->
-      while_sequential (Array.to_list lane#libraries) (fun l -> l#get)
+      while_sequential (Array.to_list lane#libraries)
+        (fun l -> get_by_id_or_error input_libraries l#id)
       >>= fun libs ->
       return (object method oo = lane
                      method inputs = libs
@@ -253,7 +281,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
   layout_cache#bioanalyzer
   >>= while_sequential ~f:(fun ba ->
     map_option Option.(ba#files >>= fun v -> get_by_id volumes v#id) (fun vol ->
-      Common.all_paths_of_volume ~configuration ~dbh:layout_cache#dbh vol#g_pointer)
+      all_paths_of_volume ~configuration volumes vol#g_id)
     >>= fun paths ->
     return (object
       method bioanalyzer = ba
@@ -264,7 +292,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
   layout_cache#agarose_gel
   >>= while_sequential ~f:(fun ag ->
     map_option Option.(ag#files >>= fun v -> get_by_id volumes v#id) (fun vol ->
-      Common.all_paths_of_volume ~configuration ~dbh:layout_cache#dbh vol#g_pointer)
+      all_paths_of_volume ~configuration volumes vol#g_id)
     >>= fun paths ->
     return (object
       method agarose_gel = ag
@@ -314,7 +342,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
       List.find protocols (fun p ->
         Some p#g_pointer = Option.map sl#protocol (fun x -> x#pointer)) in
     map_option Option.(prot >>= fun v -> get_by_id volumes v#doc#id) (fun vol ->
-      Common.all_paths_of_volume ~configuration ~dbh:layout_cache#dbh vol#g_pointer)
+      all_paths_of_volume ~configuration volumes vol#g_id)
     >>= fun protocol_paths ->
     return (object
       method stock = sl (* library *)
