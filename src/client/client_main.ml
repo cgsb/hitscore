@@ -122,6 +122,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
   | `user_message _
   | `simple_info _
   | `authentication_successful
+  | `libraries _
   | `error `not_implemented as m -> error (`unexpected_message m)
   | `token_updated 
   | `token_created ->

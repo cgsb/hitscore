@@ -172,6 +172,9 @@ let retrieve_simple_info ~state =
     )
   end
 
+let list_libraries ~state spec =
+  send_message state (`error `not_implemented)
+    
 let rec handle_up_message ~state =
   recv_message state
   >>= begin function
@@ -191,6 +194,7 @@ let rec handle_up_message ~state =
   | `get_simple_info ->
     log "get_simple_info" >>= fun () ->
     retrieve_simple_info ~state
+  | `get_libraries spec -> list_libraries ~state spec
   | `terminate ->
     log "Terminating connection" >>= fun () ->
     error `stop

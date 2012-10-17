@@ -8,11 +8,23 @@ open Hitscore_configuration
 
 module Protocol = struct
 
+  type library_field_name = [
+  | `name
+  | `project
+  | `description
+  | `barcoding
+  | `sample
+  | `fastq_files
+  | `read_number
+  ]
+  with bin_io,sexp
+    
   type up = [
   | `log of string
   | `new_token of string * string * string * string
   | `authenticate of string * string * string
   | `get_simple_info
+  | `get_libraries of library_field_name list
   | `terminate
   ]
   with bin_io, sexp
@@ -26,12 +38,19 @@ module Protocol = struct
   }
   with bin_io, sexp
 
+  type typed_return = [
+  | `string of string
+  | `empty
+  ]
+  with bin_io, sexp
+    
   type down = [
   | `user_message of string
   | `token_updated
   | `token_created
   | `authentication_successful
   | `simple_info of person_simple_info
+  | `libraries of (library_field_name * string) list list
   | `error of [
     | `not_implemented
     | `server_error of string

@@ -5,11 +5,23 @@ module Protocol :
 sig
 
   (** Messages from the client to the server. *)
+
+  type library_field_name = [
+  | `name
+  | `project
+  | `description
+  | `barcoding
+  | `sample
+  | `fastq_files
+  | `read_number
+  ]
+    
   type up = [
-  | `log of string (** Ask the server to keep something in the logs. *)
+  | `log of string
   | `new_token of string * string * string * string
   | `authenticate of string * string * string
   | `get_simple_info
+  | `get_libraries of library_field_name list
   | `terminate
   ]
 
@@ -21,14 +33,18 @@ sig
     psi_affiliations: string list list;
   }
 
-  (** Messages from the server to the client. *)
+  type typed_return = [
+  | `string of string
+  | `empty
+  ]
+    
   type down = [
-  | `user_message of string (** Ask the client to display a message to
-                                the user *)
+  | `user_message of string
   | `token_updated
   | `token_created
   | `authentication_successful
   | `simple_info of person_simple_info
+  | `libraries of (library_field_name * string) list list
   | `error of [
     | `not_implemented
     | `server_error of string
