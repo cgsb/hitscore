@@ -24,6 +24,14 @@ let with_profile () =
     ~doc:(sprintf "<path> alternate configuration file (default %s)"
             default_path)
 
+type 'a global_state = {
+  configuration: Configuration.local_configuration;
+  libraries_info:
+    user: Layout.Record_person.pointer option ->
+    qualified_names:string list ->
+    ('a Hitscore_data_access_types.filtered_classy_libraries_information, 'a) t
+}
+
 let init ~configuration_file ~profile ~log_file ~pid_file =
 
   let pid = Unix.getpid () in
@@ -42,10 +50,20 @@ let init ~configuration_file ~profile ~log_file ~pid_file =
   end
   >>= fun () ->
   log "Loaded profile %S from %S" profile configuration_file >>= fun () ->
-  return configuration
+  let libraries_info ~user =
+    let people_filter people =
+      match user, people with
+      | Some p, more :: than_zero ->
+        return (List.exists people (fun x -> Layout.Record_person.(x.id = p.id)))
+      | _ -> return false
+    in
+    Data_access.init_classy_libraries_information_loop ~loop_withing_time:5.
+    ~people_filter ~log:(log "[LinInfo] %s") ~allowed_age:20.
+    ~maximal_age:900. ~configuration in
+  return { configuration; libraries_info }
 
-type connection_state = {
-  configuration: Configuration.local_configuration;
+type 'a connection_state = {
+  global: 'a global_state;
   connection:  Sequme_flow_net.connection;
   serialization_mode: Communication.Protocol.serialization_mode;
   mutable user: [ `none | `token_authenticated of Layout.Record_person.t ];
@@ -64,7 +82,7 @@ let send_message state msg =
   Sequme_flow_io.bin_send (Flow_net.out_channel state.connection) str
   
 let with_layout ~state f =
-  with_database ~configuration:state.configuration (fun ~dbh ->
+  with_database ~configuration:state.global.configuration (fun ~dbh ->
     let layout = Classy.make dbh in
     f layout)
 
@@ -173,7 +191,50 @@ let retrieve_simple_info ~state =
   end
 
 let list_libraries ~state spec =
-  send_message state (`error `not_implemented)
+  let barcoding_to_string l =
+    let one b = 
+      match b#kind, b#index with
+      | `bioo, Some i -> sprintf "Bioo-%d" i
+      | `illumina, Some i -> sprintf "Illumina-%d" i
+      | _ -> "TODO" in
+    match l with
+    | [[o]] -> one o
+    | [l] -> String.concat ~sep:" AND " (List.map l one)
+    | l ->
+      String.concat ~sep:") OR (" (List.map l (fun la ->
+        String.concat ~sep:" AND " (List.map la one))) |! sprintf "(%s)"
+  in
+  begin match state.user with
+  | `none -> send_message state (`error `wrong_authentication)
+  | `token_authenticated t ->
+    state.global.libraries_info
+      ~user:(Some Layout.Record_person.(pointer t))
+      ~qualified_names:[]
+    >>= fun classy_libs ->
+    while_sequential classy_libs#libraries (fun l ->
+      while_sequential spec (fun field ->
+        let opt o = return (Option.value ~default:"" o) in
+        begin match field with
+        | `name -> return l#stock#name
+        | `project -> opt l#stock#project
+        | `description -> opt l#stock#description
+        | `barcoding -> return (barcoding_to_string l#barcoding)
+        | `sample ->
+          opt Option.(l#sample >>= fun s ->
+                      return (s#sample#name,
+                              s#organism >>= fun o ->
+                              o#name >>= fun oname ->
+                              return (sprintf " (%s)" oname))
+                      >>= fun (n, o) ->
+                      return (n ^ value ~default:"" o))
+        | `fastq_files
+        | `read_number -> return ""
+        end
+        >>= fun v ->
+        return (field, v)))
+    >>= fun result ->
+    send_message state (`libraries result)
+  end
     
 let rec handle_up_message ~state =
   recv_message state
@@ -210,6 +271,7 @@ type error_in_connection =
 | `db_backend_error of [ Hitscore.Backend.error ]
 | `message_serialization of
     Communication.Protocol.serialization_mode * string * exn
+| `root_directory_not_configured
 ] with sexp_of
 
 let handle_connection_error ~state e =
@@ -222,16 +284,16 @@ let handle_connection_error ~state e =
   >>= fun () ->
   Flow_net.shutdown state.connection
 
-let handle_connection ~configuration ~mode connection =
+let handle_connection ~global ~mode connection =
   let state =
-    { connection; configuration;
+    { connection; global;
       serialization_mode = mode;
       user = `none } in
   bind_on_error
     (handle_up_message ~state)
     (handle_connection_error ~state)
 
-let start_server ~port ~configuration ~cert_key ~mode =
+let start_server ~port ~global ~cert_key ~mode =
   let on_error = function
     | `accept_exn e ->
       log "ERROR: Accept-exception: %s" (Exn.to_string e)
@@ -249,7 +311,7 @@ let start_server ~port ~configuration ~cert_key ~mode =
       log "ERROR: TLS: wrong_subject_format: %s" s
   in
   Sequme_flow_net.tls_server ~on_error ~port ~cert_key
-    (handle_connection ~mode ~configuration) >>= fun () ->
+    (handle_connection ~mode ~global) >>= fun () ->
   log "Server started on port: %d" port
 
     
@@ -290,8 +352,8 @@ let command =
         eprintf "End with ERRORS: %s" (string_of_error e))
         begin
           init ~profile ~configuration_file ~log_file ~pid_file
-          >>= fun configuration ->
-          start_server ~cert_key:(cert, key) ~port ~configuration ~mode
+          >>= fun global ->
+          start_server ~cert_key:(cert, key) ~port ~global ~mode
           >>= fun () ->
           wrap_io (fun () -> Lwt.(let (t,_) = wait () in t)) ()
           >>= fun _ ->

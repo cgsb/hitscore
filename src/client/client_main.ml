@@ -3,6 +3,7 @@
 open Hitscore
 open Core.Std
 open Sequme_flow
+open Sequme_flow_list
 open Sequme_flow_app_util
 module Flow_net = Sequme_flow_net
 
@@ -133,7 +134,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
     let config =
       Configuration.make ~host ~port ~auth_token:token
         ~auth_token_name:token_name ~user_name in
-    cmdf "chmod 600 %S" configuration_file
+    cmdf "chmod -f 600 %S; true" configuration_file
     >>= fun () ->
     Sequme_flow_sys.write_file configuration_file
       ~content:(Configuration.to_string config ^ "\n")
@@ -206,6 +207,33 @@ let init_command =
           Flow_net.shutdown connection
         end)
     
+let connect_and_authenticate ~configuration_file ~mode =
+  Configuration.of_file configuration_file
+  >>= fun configuration ->
+  connect ~host:(Configuration.host configuration)
+    ~port:(Configuration.port configuration)
+  >>= fun connection ->
+  let state = state connection ~mode ~configuration in
+  send_message state
+    (`authenticate (Configuration.user_name configuration,
+                    Configuration.token_name configuration,
+                    Configuration.token configuration))
+  >>= fun () ->
+  recv_message state
+  >>= begin function
+  | `authentication_successful -> msg "Authentication successful !¡!"
+  | `error `wrong_authentication ->
+    msg "Authentication failed …" >>= fun () ->
+    error `stop
+  | e -> error (`unexpected_message e)
+  end
+  >>= fun () ->
+  return state
+
+let terminate_and_disconnect ~state =
+  send_message state `terminate >>= fun () ->
+  Flow_net.shutdown state.connection
+
 type info_error = [
 | common_error
 ]
@@ -258,32 +286,61 @@ let info_command =
         eprintf "Client ends with Errors: %s"
           (Sexp.to_string_hum (sexp_of_info_error e)))
         begin
-          Configuration.of_file configuration_file
-          >>= fun configuration ->
-          connect ~host:(Configuration.host configuration)
-            ~port:(Configuration.port configuration)
-          >>= fun connection ->
-          let state = state connection ~mode ~configuration in
-          send_message state
-            (`authenticate (Configuration.user_name configuration,
-                            Configuration.token_name configuration,
-                            Configuration.token configuration))
-          >>= fun () ->
-          recv_message state
-          >>= begin function
-          | `authentication_successful -> msg "Authentication successful !¡!"
-          | `error `wrong_authentication ->
-            msg "Authentication failed …" >>= fun () ->
-            error `stop
-          | e -> error (`unexpected_message e)
-          end
-          >>= fun () ->
+          connect_and_authenticate ~configuration_file ~mode
+          >>= fun state ->
           info ~state
           >>= fun () ->
-          send_message state `terminate >>= fun () ->
-          Flow_net.shutdown connection
+          terminate_and_disconnect ~state
         end)
 
+type list_libraries_error = [
+| common_error
+] with sexp_of
+
+let list_libraries ~state ~spec =
+  let arguments =
+    match spec with
+    | `all ->
+      [ `name; `project; `description; `barcoding; `sample;
+        `fastq_files; `read_number;]
+  in
+  send_message state (`get_libraries arguments) >>= fun () ->
+  dbg "Waiting?" >>= fun () ->
+  recv_message state
+  >>= begin function
+  | `libraries table ->
+    let output fmt = ksprintf (fun s -> wrap_io Lwt_io.print s) fmt in
+    while_sequential table (fun row ->
+      while_sequential row (fun (_, v) ->
+        output "%S,%!" v)
+      >>= fun _ ->
+      output "\n"
+    )
+    >>= fun _ ->
+    return ()
+  | m -> error (`unexpected_message m)
+  end
+
+let list_libraries_command =
+  let open Command_line in
+  basic ~summary:"List the libraries you belong to"
+    Spec.(
+      Communication.Protocol.serialization_mode_flag ()
+      ++ Flag.with_config_file ()
+    ) (fun ~mode ~configuration_file ->
+      run_flow ~on_error:(function
+      | `stop -> printf "Stopping\n%!"
+      | #info_error as e ->
+        eprintf "Client ends with Errors: %s\n"
+          (Sexp.to_string_hum (sexp_of_list_libraries_error e)))
+        begin
+          connect_and_authenticate ~configuration_file ~mode
+          >>= fun state ->
+          list_libraries ~state ~spec:`all
+          >>= fun () ->
+          terminate_and_disconnect ~state
+        end)
+  
     
 let () =
   Command_line.(
@@ -291,4 +348,5 @@ let () =
       (group ~summary:"Gencore's command-line application" [
         ("init", init_command);
         ("info", info_command);
+        ("list-libraries", list_libraries_command);
       ]))
