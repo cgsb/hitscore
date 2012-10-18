@@ -57,9 +57,9 @@ let init ~configuration_file ~profile ~log_file ~pid_file =
         return (List.exists people (fun x -> Layout.Record_person.(x.id = p.id)))
       | _ -> return false
     in
-    Data_access.init_classy_libraries_information_loop ~loop_withing_time:5.
-    ~people_filter ~log:(log "[LinInfo] %s") ~allowed_age:20.
-    ~maximal_age:900. ~configuration in
+    Data_access.init_classy_libraries_information_loop ~loop_withing_time:25.
+    ~people_filter ~log:(log "[LinInfo] %s") ~allowed_age:60.
+    ~maximal_age:1200. ~configuration in
   return { configuration; libraries_info }
 
 type 'a connection_state = {
@@ -190,7 +190,7 @@ let retrieve_simple_info ~state =
     )
   end
 
-let list_libraries ~state spec =
+let list_libraries ~state query spec =
   let barcoding_to_string l =
     let one b = 
       match b#kind, b#index with
@@ -207,11 +207,26 @@ let list_libraries ~state spec =
   begin match state.user with
   | `none -> send_message state (`error `wrong_authentication)
   | `token_authenticated t ->
+    log "qnames: %s" (String.concat ~sep:", " query) >>= fun () ->
     state.global.libraries_info
       ~user:(Some Layout.Record_person.(pointer t))
       ~qualified_names:[]
     >>= fun classy_libs ->
-    while_sequential classy_libs#libraries (fun l ->
+    let libraries =
+      let pcre_matches rex str =
+        try ignore (Pcre.exec ~rex str); true with Not_found -> false in
+      if query = []
+      then classy_libs#libraries
+      else
+        List.map query (fun qs ->
+          let rex = Pcre.regexp qs in
+          List.filter classy_libs#libraries (fun l ->
+            pcre_matches rex
+              (sprintf "%s.%s"
+                 (Option.value ~default:"" l#stock#project) l#stock#name)))
+        |! List.concat
+    in
+    while_sequential libraries (fun l ->
       while_sequential spec (fun field ->
         let opt o = return (Option.value ~default:"" o) in
         begin match field with
@@ -255,7 +270,7 @@ let rec handle_up_message ~state =
   | `get_simple_info ->
     log "get_simple_info" >>= fun () ->
     retrieve_simple_info ~state
-  | `get_libraries spec -> list_libraries ~state spec
+  | `get_libraries (names, spec) -> list_libraries ~state names spec
   | `terminate ->
     log "Terminating connection" >>= fun () ->
     error `stop

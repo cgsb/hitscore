@@ -373,7 +373,10 @@ let filter_classy_libraries_information
   while_sequential info#libraries ~f:(fun l ->
     if qualified_names = []
     || List.exists qualified_names
-      ~f:(fun qn -> qn = qualified_name l#stock#project l#stock#name)
+      ~f:(fun qn ->
+        eprintf "compate %S and %S\n%!"
+          qn (qualified_name l#stock#project l#stock#name);
+        qn = qualified_name l#stock#project l#stock#name)
     then begin
       let people =
         List.map l#submissions (fun sub -> sub#lane#contacts)

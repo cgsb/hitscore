@@ -21,7 +21,7 @@ sig
   | `new_token of string * string * string * string
   | `authenticate of string * string * string
   | `get_simple_info
-  | `get_libraries of library_field_name list
+  | `get_libraries of string list * library_field_name list
   | `terminate
   ]
 

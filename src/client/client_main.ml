@@ -297,14 +297,14 @@ type list_libraries_error = [
 | common_error
 ] with sexp_of
 
-let list_libraries ~state ~spec =
+let list_libraries ~state ~query ~spec =
   let arguments =
     match spec with
     | `all ->
       [ `name; `project; `description; `barcoding; `sample;
         `fastq_files; `read_number;]
   in
-  send_message state (`get_libraries arguments) >>= fun () ->
+  send_message state (`get_libraries (query, arguments)) >>= fun () ->
   dbg "Waiting?" >>= fun () ->
   recv_message state
   >>= begin function
@@ -327,7 +327,8 @@ let list_libraries_command =
     Spec.(
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
-    ) (fun ~mode ~configuration_file ->
+      ++ anon (sequence "QUERY-REGULAR-EXPRESSIONS" string)
+    ) (fun ~mode ~configuration_file query ->
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"
       | #info_error as e ->
@@ -336,7 +337,7 @@ let list_libraries_command =
         begin
           connect_and_authenticate ~configuration_file ~mode
           >>= fun state ->
-          list_libraries ~state ~spec:`all
+          list_libraries ~state ~spec:`all ~query
           >>= fun () ->
           terminate_and_disconnect ~state
         end)
@@ -348,5 +349,5 @@ let () =
       (group ~summary:"Gencore's command-line application" [
         ("init", init_command);
         ("info", info_command);
-        ("list-libraries", list_libraries_command);
+        ("libraries", list_libraries_command);
       ]))
