@@ -95,3 +95,11 @@ type 'a classy_libraries_information = <
   creation_started_on : Hitscore_std.Time.t;
   libraries : 'a classy_library list;
 >
+
+type 'a filtered_classy_libraries_information = <
+  static_info : 'a classy_libraries_information;
+  filtered_on : Hitscore_std.Time.t;
+  configuration : Hitscore_configuration.Configuration.local_configuration;
+  libraries : 'a classy_library list;
+  qualified_names : string list;
+>

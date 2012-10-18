@@ -367,6 +367,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
 let qualified_name po n =
   sprintf "%s%s" Option.(value_map ~default:"" ~f:(sprintf "%s.") po) n
 
+      
 let filter_classy_libraries_information  
     ~qualified_names ~configuration ~people_filter info =
   while_sequential info#libraries ~f:(fun l ->
@@ -385,4 +386,96 @@ let filter_classy_libraries_information
     end
     else return None)
   >>| List.filter_opt
+  >>= fun filtered ->
+  let filtered_time = Time.now () in
+  return (object
+    method static_info = info
+    method filtered_on = filtered_time
+    method configuration = configuration
+    method qualified_names = qualified_names
+    method libraries = filtered
+  end)
+    
+let db_connect ?log t =
+  let open Configuration in
+  let host, port, database, user, password =
+    db_host t, db_port t, db_database t, db_username t, db_password t in
+  Backend.connect ?host ?port ?database ?user ?password ?log ()
+
+let init_classy_libraries_information_loop ~log ~loop_withing_time
+    ~people_filter ~allowed_age ~maximal_age ~configuration =
+  let info_mem = ref None in
+  let logf fmt = ksprintf log fmt in
+  let condition = Lwt_condition.create () in
+  let should_reconnect = ref false in
+  let rec update ~configuration ~layout_cache =
+    let m =
+      let starting_time = Time.now () in
+      if !should_reconnect
+      then begin
+        Backend.reconnect layout_cache#dbh
+        >>= fun _ ->
+        logf "Libraries classy info: reconnected."
+        >>= fun () ->
+        should_reconnect := false;
+        return ()
+      end
+      else return ()
+      >>= fun _ ->
+      make_classy_libraries_information ~configuration ~layout_cache
+      >>= fun info ->
+      info_mem := Some info;
+      Lwt_condition.broadcast condition info;
+      return ()
+      >>= fun () ->
+      logf  "{libraries} Classy info updated:\n\
+               \          %s --> %s\n\
+               \          %g secs\n%!"
+        Time.(starting_time |! to_string)
+        Time.(now () |! to_string)
+        Time.(to_float (now ()) -. to_float starting_time);
+    in
+    double_bind m
+      ~ok:return
+      ~error:(fun e ->
+        wrap_io Lwt_io.eprintf "Updating the classy info gave an error; \
+                                reconnecting …\n"
+        >>= fun () ->
+        should_reconnect := true;
+        logf "Libraries classy info gave an error"
+          (* (match e with *)
+          (* | `Layout (_, e) -> Template.string_of_layout_error e *)
+          (* | `db_backend_error _ as e -> Template.string_of_layout_error e *)
+          (* | `io_exn e -> sprintf "I/O: %s" (Exn.to_string e) *)
+          (* | `auth_state_exn e -> sprintf "Auth: %s" (Exn.to_string e) *)
+          (* | `root_directory_not_configured -> *)
+          (*   sprintf "root_directory_not_configured" *)
+          (* | _ -> "UNKNOWN") *)
+        >>= fun () ->
+        return ())
+    >>= fun () ->
+    wrap_io Lwt_unix.sleep loop_withing_time
+    >>= fun () ->
+    update ~configuration ~layout_cache in
+  Lwt.ignore_result (
+    db_connect configuration >>= fun dbh ->
+    let layout_cache =
+      Classy.make_cache ~allowed_age ~maximal_age ~dbh in
+    update ~configuration ~layout_cache
+  );
+  begin fun ~qualified_names ->
+    begin match !info_mem with
+    | None ->
+      wrap_io Lwt_condition.wait condition
+      >>= fun info ->
+      return info
+    | Some info ->
+      return info
+    end
+    >>= fun info ->
+    filter_classy_libraries_information
+      ~people_filter ~qualified_names ~configuration info
+  end
+
+
 

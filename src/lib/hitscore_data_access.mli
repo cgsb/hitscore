@@ -40,5 +40,24 @@ val filter_classy_libraries_information :
                       Hitscore_layout.Layout.error_location *
                         Hitscore_layout.Layout.error_cause ] as 'a) Hitscore_std.t) ->
   'a classy_libraries_information ->
-  ('a Hitscore_data_access_types.classy_library list, 'a) Hitscore_std.t
-
+  ('a Hitscore_data_access_types.filtered_classy_libraries_information, 'a) Hitscore_std.t
+    
+val init_classy_libraries_information_loop :
+  log:(string ->
+       (unit,
+        [> `Layout of
+            Hitscore_layout.Layout.error_location *
+              Hitscore_layout.Layout.error_cause
+        | `db_backend_error of
+            [> Hitscore_db_backend.Backend.error ]
+        | `io_exn of exn
+        | `root_directory_not_configured ]
+          as 'a) Hitscore_std.t) ->
+  loop_withing_time:float ->
+  people_filter:(Hitscore_layout.Layout.Record_person.pointer list ->
+                 (bool, [> `io_exn of exn ] as 'b) Hitscore_std.t) ->
+  allowed_age:float ->
+  maximal_age:float ->
+  configuration:Hitscore_configuration.Configuration.local_configuration ->
+  qualified_names:string Hitscore_std.List.t ->
+  ('a Hitscore_data_access_types.filtered_classy_libraries_information, 'b) Hitscore_std.t
