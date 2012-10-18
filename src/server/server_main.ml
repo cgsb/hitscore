@@ -24,12 +24,11 @@ let with_profile () =
     ~doc:(sprintf "<path> alternate configuration file (default %s)"
             default_path)
 
-type 'a global_state = {
+type ('a, 'b) global_state = {
   configuration: Configuration.local_configuration;
   libraries_info:
-    user: Layout.Record_person.pointer option ->
-    qualified_names:string list ->
-    ('a Hitscore_data_access_types.filtered_classy_libraries_information, 'a) t
+    unit ->
+    ('a Hitscore_data_access_types.classy_libraries_information, 'b) t
 }
 
 let init ~configuration_file ~profile ~log_file ~pid_file =
@@ -50,20 +49,14 @@ let init ~configuration_file ~profile ~log_file ~pid_file =
   end
   >>= fun () ->
   log "Loaded profile %S from %S" profile configuration_file >>= fun () ->
-  let libraries_info ~user =
-    let people_filter people =
-      match user, people with
-      | Some p, more :: than_zero ->
-        return (List.exists people (fun x -> Layout.Record_person.(x.id = p.id)))
-      | _ -> return false
-    in
-    Data_access.init_classy_libraries_information_loop ~loop_withing_time:25.
-    ~people_filter ~log:(log "[LinInfo] %s") ~allowed_age:60.
-    ~maximal_age:1200. ~configuration in
+  let libraries_info =
+    Data_access.init_classy_libraries_information_loop
+      ~loop_withing_time:25. ~log:(log "[LinInfo] %s") ~allowed_age:60.
+      ~maximal_age:1200. ~configuration in
   return { configuration; libraries_info }
 
-type 'a connection_state = {
-  global: 'a global_state;
+type ('a, 'b) connection_state = {
+  global: ('a, 'b) global_state;
   connection:  Sequme_flow_net.connection;
   serialization_mode: Communication.Protocol.serialization_mode;
   mutable user: [ `none | `token_authenticated of Layout.Record_person.t ];
@@ -208,19 +201,26 @@ let list_libraries ~state query spec =
   | `none -> send_message state (`error `wrong_authentication)
   | `token_authenticated t ->
     log "qnames: %s" (String.concat ~sep:", " query) >>= fun () ->
-    state.global.libraries_info
-      ~user:(Some Layout.Record_person.(pointer t))
-      ~qualified_names:[]
+    state.global.libraries_info ()
     >>= fun classy_libs ->
     let libraries =
+      let persons_libraries =
+        List.filter classy_libs#libraries
+          (fun l ->
+            let people =
+              List.map l#submissions (fun sub -> sub#lane#contacts)
+              |! List.concat
+              |! List.map ~f:(fun p -> p#g_t) in
+            List.exists people ((=) t))
+      in
       let pcre_matches rex str =
         try ignore (Pcre.exec ~rex str); true with Not_found -> false in
       if query = []
-      then classy_libs#libraries
+      then persons_libraries
       else
         List.map query (fun qs ->
           let rex = Pcre.regexp qs in
-          List.filter classy_libs#libraries (fun l ->
+          List.filter persons_libraries (fun l ->
             pcre_matches rex
               (sprintf "%s.%s"
                  (Option.value ~default:"" l#stock#project) l#stock#name)))

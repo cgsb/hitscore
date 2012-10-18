@@ -54,10 +54,9 @@ val init_classy_libraries_information_loop :
         | `root_directory_not_configured ]
           as 'a) Hitscore_std.t) ->
   loop_withing_time:float ->
-  people_filter:(Hitscore_layout.Layout.Record_person.pointer list ->
-                 (bool, [> `io_exn of exn ] as 'b) Hitscore_std.t) ->
   allowed_age:float ->
   maximal_age:float ->
   configuration:Hitscore_configuration.Configuration.local_configuration ->
-  qualified_names:string Hitscore_std.List.t ->
-  ('a Hitscore_data_access_types.filtered_classy_libraries_information, 'b) Hitscore_std.t
+  unit ->
+  ('a Hitscore_data_access_types.classy_libraries_information,
+   [> `io_exn of exn]) Hitscore_std.t

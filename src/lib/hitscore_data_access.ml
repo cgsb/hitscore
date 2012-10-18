@@ -373,16 +373,13 @@ let filter_classy_libraries_information
   while_sequential info#libraries ~f:(fun l ->
     if qualified_names = []
     || List.exists qualified_names
-      ~f:(fun qn ->
-        eprintf "compate %S and %S\n%!"
-          qn (qualified_name l#stock#project l#stock#name);
-        qn = qualified_name l#stock#project l#stock#name)
+      ~f:(fun qn -> qn = qualified_name l#stock#project l#stock#name)
     then begin
       let people =
         List.map l#submissions (fun sub -> sub#lane#contacts)
         |! List.concat
         |! List.map ~f:(fun p -> p#g_pointer) in
-       people_filter people
+      people_filter people
       >>= function
       | true -> return (Some l)
       | false -> return None
@@ -406,7 +403,7 @@ let db_connect ?log t =
   Backend.connect ?host ?port ?database ?user ?password ?log ()
 
 let init_classy_libraries_information_loop ~log ~loop_withing_time
-    ~people_filter ~allowed_age ~maximal_age ~configuration =
+    ~allowed_age ~maximal_age ~configuration =
   let info_mem = ref None in
   let logf fmt = ksprintf log fmt in
   let condition = Lwt_condition.create () in
@@ -466,7 +463,7 @@ let init_classy_libraries_information_loop ~log ~loop_withing_time
       Classy.make_cache ~allowed_age ~maximal_age ~dbh in
     update ~configuration ~layout_cache
   );
-  begin fun ~qualified_names ->
+  begin fun () ->
     begin match !info_mem with
     | None ->
       wrap_io Lwt_condition.wait condition
@@ -475,9 +472,6 @@ let init_classy_libraries_information_loop ~log ~loop_withing_time
     | Some info ->
       return info
     end
-    >>= fun info ->
-    filter_classy_libraries_information
-      ~people_filter ~qualified_names ~configuration info
   end
 
 
