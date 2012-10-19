@@ -31,16 +31,6 @@ val make_classy_libraries_information:
      | `root_directory_not_configured ] as 'a) Hitscore_layout.Classy.layout_cache) ->
   ('a Hitscore_data_access_types.classy_libraries_information, 'a) Hitscore_std.t
 
-val filter_classy_libraries_information :
-  qualified_names:string list ->
-  configuration:Hitscore_configuration.Configuration.local_configuration ->
-  people_filter:(Hitscore_layout.Layout.Record_person.pointer list ->
-                 (bool,
-                  [> `Layout of
-                      Hitscore_layout.Layout.error_location *
-                        Hitscore_layout.Layout.error_cause ] as 'a) Hitscore_std.t) ->
-  'a classy_libraries_information ->
-  ('a Hitscore_data_access_types.filtered_classy_libraries_information, 'a) Hitscore_std.t
     
 val init_classy_libraries_information_loop :
   log:(string ->

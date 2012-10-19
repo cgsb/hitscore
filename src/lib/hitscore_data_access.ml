@@ -368,34 +368,6 @@ let qualified_name po n =
   sprintf "%s%s" Option.(value_map ~default:"" ~f:(sprintf "%s.") po) n
 
       
-let filter_classy_libraries_information  
-    ~qualified_names ~configuration ~people_filter info =
-  while_sequential info#libraries ~f:(fun l ->
-    if qualified_names = []
-    || List.exists qualified_names
-      ~f:(fun qn -> qn = qualified_name l#stock#project l#stock#name)
-    then begin
-      let people =
-        List.map l#submissions (fun sub -> sub#lane#contacts)
-        |! List.concat
-        |! List.map ~f:(fun p -> p#g_pointer) in
-      people_filter people
-      >>= function
-      | true -> return (Some l)
-      | false -> return None
-    end
-    else return None)
-  >>| List.filter_opt
-  >>= fun filtered ->
-  let filtered_time = Time.now () in
-  return (object
-    method static_info = info
-    method filtered_on = filtered_time
-    method configuration = configuration
-    method qualified_names = qualified_names
-    method libraries = filtered
-  end)
-    
 let db_connect ?log t =
   let open Configuration in
   let host, port, database, user, password =
