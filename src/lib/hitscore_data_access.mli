@@ -50,3 +50,10 @@ val init_classy_libraries_information_loop :
   unit ->
   ('a Hitscore_data_access_types.classy_libraries_information,
    [> `io_exn of exn]) Hitscore_std.t
+
+val make_classy_persons_information:
+  layout_cache: (
+    ([> `Layout of Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
+     | `root_directory_not_configured ] as 'a) Hitscore_layout.Classy.layout_cache) ->
+  ('a Hitscore_data_access_types.classy_persons_information, 'a) Hitscore_std.t
+    

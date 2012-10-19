@@ -96,3 +96,17 @@ type 'a classy_libraries_information = <
   libraries : 'a classy_library list;
 >
 
+open Hitscore_layout
+type 'a person = <
+  lanes: 'a Classy.lane_element list;
+  libraries: 'a Classy.stock_library_element list;
+  tokens: 'a Classy.authentication_token_element list;
+  t: 'a Classy.person_element;
+>
+
+type 'a classy_persons_information = <
+  persons: 'a person list;
+  creation_start_time: Core.Time.t;
+  creation_end_time: Core.Time.t;
+>
+

@@ -447,4 +447,42 @@ let init_classy_libraries_information_loop ~log ~loop_withing_time
   end
 
 
+let make_classy_persons_information  ~(layout_cache: _ Classy.layout_cache) =
+  let creation_started_on = Time.now () in
+  layout_cache#person >>= fun persons ->
+  layout_cache#affiliation >>= fun affiliations ->
+  layout_cache#authentication_token >>= fun tokens ->
+  layout_cache#lane >>= fun lanes ->
+  layout_cache#input_library >>= fun input_libraries ->
+  layout_cache#stock_library >>= fun stock_libraries ->
+  while_sequential persons
+    begin fun person ->
+      let lanes_involved =
+        List.filter lanes (fun l ->
+          Array.exists l#contacts (fun p -> p#id = person#g_id)) in
+      let libraries =
+        List.map lanes_involved (fun l ->
+          List.filter input_libraries (fun il ->
+            Array.exists l#libraries (fun lib -> lib#id = il#g_id))
+          |! List.filter_map ~f:(fun il ->
+            List.find stock_libraries (fun sl -> sl#g_id = il#library#id)))
+        |! List.concat
+      in
+      let tokens =
+        List.filter tokens (fun t ->
+          Array.exists person#auth_tokens (fun at -> at#id = t#g_id)) in
+      return (object
+        method lanes = lanes_involved
+        method libraries = libraries
+        method tokens = tokens
+        method t = person
+      end : _ person)
+    end
+  >>= fun persons ->
+  let creation_finished_on = Time.now () in
+  return (object
+    method persons = persons
+    method creation_start_time = creation_started_on
+    method creation_end_time = creation_finished_on
+  end: _ classy_persons_information)
 
