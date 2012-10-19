@@ -374,8 +374,8 @@ let db_connect ?log t =
     db_host t, db_port t, db_database t, db_username t, db_password t in
   Backend.connect ?host ?port ?database ?user ?password ?log ()
 
-let init_classy_libraries_information_loop ~log ~loop_withing_time
-    ~allowed_age ~maximal_age ~configuration =
+let init_some_retrieval_loop ~log ~log_prefix ~loop_withing_time
+    ~allowed_age ~maximal_age ~configuration ~f =
   let info_mem = ref None in
   let logf fmt = ksprintf log fmt in
   let condition = Lwt_condition.create () in
@@ -394,15 +394,16 @@ let init_classy_libraries_information_loop ~log ~loop_withing_time
       end
       else return ()
       >>= fun _ ->
-      make_classy_libraries_information ~configuration ~layout_cache
+      f ~configuration ~layout_cache
       >>= fun info ->
       info_mem := Some info;
       Lwt_condition.broadcast condition info;
       return ()
       >>= fun () ->
-      logf  "{libraries} Classy info updated:\n\
+      logf  "%s updated:\n\
                \          %s --> %s\n\
                \          %g secs\n%!"
+        log_prefix
         Time.(starting_time |! to_string)
         Time.(now () |! to_string)
         Time.(to_float (now ()) -. to_float starting_time);
@@ -410,11 +411,11 @@ let init_classy_libraries_information_loop ~log ~loop_withing_time
     double_bind m
       ~ok:return
       ~error:(fun e ->
-        wrap_io Lwt_io.eprintf "Updating the classy info gave an error; \
-                                reconnecting …\n"
+        wrap_io (Lwt_io.eprintf "%S Updating gave an error; reconnecting …\n")
+          log_prefix
         >>= fun () ->
         should_reconnect := true;
-        logf "Libraries classy info gave an error"
+        logf "%s info gave an error" log_prefix
           (* (match e with *)
           (* | `Layout (_, e) -> Template.string_of_layout_error e *)
           (* | `db_backend_error _ as e -> Template.string_of_layout_error e *)
@@ -446,8 +447,12 @@ let init_classy_libraries_information_loop ~log ~loop_withing_time
     end
   end
 
+let init_classy_libraries_information_loop =
+  init_some_retrieval_loop ~f:(make_classy_libraries_information)
+    ~log_prefix:"libraries-classy-info"
 
-let make_classy_persons_information  ~(layout_cache: _ Classy.layout_cache) =
+let make_classy_persons_information
+    ~configuration  ~(layout_cache: _ Classy.layout_cache) =
   let creation_started_on = Time.now () in
   layout_cache#person >>= fun persons ->
   layout_cache#affiliation >>= fun affiliations ->
@@ -485,4 +490,8 @@ let make_classy_persons_information  ~(layout_cache: _ Classy.layout_cache) =
     method creation_start_time = creation_started_on
     method creation_end_time = creation_finished_on
   end: _ classy_persons_information)
+
+let init_classy_persons_information_loop =
+  init_some_retrieval_loop ~f:(make_classy_persons_information)
+    ~log_prefix:"persons-classy-info"
 
