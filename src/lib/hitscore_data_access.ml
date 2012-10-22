@@ -374,7 +374,7 @@ let db_connect ?log t =
     db_host t, db_port t, db_database t, db_username t, db_password t in
   Backend.connect ?host ?port ?database ?user ?password ?log ()
 
-let init_some_retrieval_loop ~log ~log_prefix ~loop_withing_time
+let init_some_retrieval_loop ~log ~log_prefix ~loop_waiting_time
     ~allowed_age ~maximal_age ~configuration ~f =
   let info_mem = ref None in
   let logf fmt = ksprintf log fmt in
@@ -427,7 +427,7 @@ let init_some_retrieval_loop ~log ~log_prefix ~loop_withing_time
         >>= fun () ->
         return ())
     >>= fun () ->
-    wrap_io Lwt_unix.sleep loop_withing_time
+    wrap_io Lwt_unix.sleep loop_waiting_time
     >>= fun () ->
     update ~configuration ~layout_cache in
   Lwt.ignore_result (

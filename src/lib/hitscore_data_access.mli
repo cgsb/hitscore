@@ -43,7 +43,7 @@ val init_classy_libraries_information_loop :
         | `io_exn of exn
         | `root_directory_not_configured ]
           as 'a) Hitscore_std.t) ->
-  loop_withing_time:float ->
+  loop_waiting_time:float ->
   allowed_age:float ->
   maximal_age:float ->
   configuration:Hitscore_configuration.Configuration.local_configuration ->
@@ -69,7 +69,7 @@ val init_classy_persons_information_loop :
         | `io_exn of exn
         | `root_directory_not_configured ]
           as 'a) Hitscore_std.t) ->
-  loop_withing_time:float ->
+  loop_waiting_time:float ->
   allowed_age:float ->
   maximal_age:float ->
   configuration:Hitscore_configuration.Configuration.local_configuration ->

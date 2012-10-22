@@ -51,7 +51,7 @@ let init ~configuration_file ~profile ~log_file ~pid_file =
   log "Loaded profile %S from %S" profile configuration_file >>= fun () ->
   let libraries_info =
     Data_access.init_classy_libraries_information_loop
-      ~loop_withing_time:25. ~log:(log "[LinInfo] %s") ~allowed_age:60.
+      ~loop_waiting_time:25. ~log:(log "[LinInfo] %s") ~allowed_age:60.
       ~maximal_age:1200. ~configuration in
   return { configuration; libraries_info }
 
