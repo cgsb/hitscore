@@ -158,7 +158,7 @@ module Flag = struct
       Filename.concat home ".config/gencore/client.conf" in
     Command_line.Spec.(
       step (fun k configuration_file -> k ~configuration_file)
-      ++ flag "-configuration-file" ~aliases:["c"]
+      +> flag "-configuration-file" ~aliases:["c"]
         (optional_with_default default_config_file string)
         ~doc:(sprintf "<path> Use this configuration file (default: %s)"
                 default_config_file)
@@ -168,7 +168,7 @@ module Flag = struct
     let login = Unix.getlogin () in
     Command_line.Spec.(
       step (fun k user_name -> k ~user_name)
-      ++ flag "-user" ~aliases:["U"] (optional_with_default login string)
+      +> flag "-user" ~aliases:["U"] (optional_with_default login string)
         ~doc:(sprintf "<name/email> Set the username (default: %s)" login)
     )
 
@@ -185,12 +185,12 @@ let init_command =
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
       ++ Flag.with_user_name ()
-      ++ flag "-token-name"  (optional_with_default default_token_name string)
+      +> flag "-token-name"  (optional_with_default default_token_name string)
         ~doc:(sprintf 
                 "<name> Give a name to the authentication token (default: %s)"
                 default_token_name)
-      ++ anon ("HOST" %: string)
-      ++ anon ("PORT" %: int)
+      +> anon ("HOST" %: string)
+      +> anon ("PORT" %: int)
     )
     (fun ~mode  ~configuration_file ~user_name token_name host port ->
       run_flow ~on_error:(fun e ->
@@ -327,7 +327,7 @@ let list_libraries_command =
     Spec.(
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
-      ++ anon (sequence "QUERY-REGULAR-EXPRESSIONS" string)
+      +> anon (sequence ("QUERY-REGULAR-EXPRESSIONS" %: string))
     ) (fun ~mode ~configuration_file query ->
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"

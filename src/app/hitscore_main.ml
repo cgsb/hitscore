@@ -38,7 +38,7 @@ module Configuration_file = struct
 
   let default () =
     sprintf "%s/.config/hitscore/config.sexp"
-      (Option.value_exn_message "This environment has no $HOME !"
+      (Option.value_exn ~message:"This environment has no $HOME !"
          (Sys.getenv "HOME"))
 
   let iter = List.iter

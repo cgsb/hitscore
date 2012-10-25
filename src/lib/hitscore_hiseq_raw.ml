@@ -92,7 +92,7 @@ let clusters_summary xml =
         | "PrcIntensityAfter20CyclesPF", nb   as x -> c x
         | "PrcIntensityAfter20CyclesPFSD", nb as x -> c x
         | _ -> ());
-      let v = Option.value_exn_message in
+      let v m o = Option.value_exn ~message:m o in
       result.(!current_key - 1) <- Some {
         Hitscore_interfaces.Hiseq_raw_information.
         clusters_raw       = v "Missing clusters_raw      " !clusters_raw      ;

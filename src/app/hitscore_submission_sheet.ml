@@ -43,10 +43,13 @@ let failwithf fmt =
   ksprintf (fun s -> error (`pss_failure s)) fmt
 
 let find_section sanitized section =
+  let check o =
+    Option.value_exn o ~message:(sprintf "Can't the find %S section." section)
+  in
   Array.findi sanitized (fun _ -> function
   | s :: _ when s = section -> true
   | _ -> false)
-  |! Option.value_exn_message (sprintf "Can't the find %S section." section)
+  |! check
   |! fst
 
 let list_of_filteri f =
@@ -228,7 +231,7 @@ let parse_pools ~phix sanitized =
         | None -> pool_libs
         | Some p ->
           let libnb = List.length pool_libs |! float in
-          ("PhiX", float_of_int p)
+          ("PhiX", Float.of_int p)
           :: (List.map pool_libs
                 ~f:(fun (lib, plib) -> 
                   (lib, plib -. (float p /. libnb))))

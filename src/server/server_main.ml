@@ -13,13 +13,13 @@ let with_profile () =
   let open Command_line.Spec in
   let default_path =
     sprintf "%s/.config/hitscore/config.sexp"
-      (Option.value_exn_message "This environment has no $HOME !"
+      (Option.value_exn ~message:"This environment has no $HOME !"
          (Sys.getenv "HOME")) in
   step (fun k profile -> k ~profile)
-  ++ flag "profile" ~aliases:["-p"] (required string)
+  +> flag "profile" ~aliases:["-p"] (required string)
     ~doc:"<profile> The configuration profile name to use"
   ++ step (fun k configuration_file -> k ~configuration_file)
-  ++ flag "configuration-file" ~aliases:["-c"]
+  +> flag "configuration-file" ~aliases:["-c"]
     (optional_with_default default_path string)
     ~doc:(sprintf "<path> alternate configuration file (default %s)"
             default_path)
@@ -351,16 +351,16 @@ let command =
     Spec.(
       with_profile ()
       ++ step (fun k log_file -> k ~log_file)
-      ++ flag "log-file" ~aliases:["-L"] (optional_with_default "-" string)
+      +> flag "log-file" ~aliases:["-L"] (optional_with_default "-" string)
         ~doc:"<path> Log to file <path> (or “-” for stdout; the default)"
       ++ step (fun k pid_file -> k ~pid_file)
-      ++ flag "pid-file" (optional_with_default default_pid_file string)
+      +> flag "pid-file" (optional_with_default default_pid_file string)
         ~doc:(sprintf
                 "<path> write PID to a file (default: %s)" default_pid_file)
       ++ Communication.Protocol.serialization_mode_flag ()
-      ++ flag "cert" (required string) ~doc:"SSL certificate"
-      ++ flag "key" (required string) ~doc:"SSL private key"
-      ++ anon ("PORT" %: int)
+      +> flag "cert" (required string) ~doc:"SSL certificate"
+      +> flag "key" (required string) ~doc:"SSL private key"
+      +> anon ("PORT" %: int)
     )
     (fun ~profile ~configuration_file ~log_file ~pid_file ~mode cert key port ->
       run_flow ~on_error:(fun e ->

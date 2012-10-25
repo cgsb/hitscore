@@ -124,7 +124,7 @@ module Protocol = struct
       function
       | true -> k ~mode:`s_expression
       | false -> k ~mode:`binary)
-    ++ flag "sexp-messages" no_arg
+    +> flag "sexp-messages" no_arg
       ~doc:" exchange S-Expressions instead of binary blobs (for debugging)"
 end
 
