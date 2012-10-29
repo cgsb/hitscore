@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: cc8744aaa4e05aea5cd4d1b2ce67bd2f)
+# DO NOT EDIT (digest: 35ffb197a595a3eb88c204532f07c2fb)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -15,13 +15,12 @@
 "_darcs": not_hygienic
 # Library hitscoregen
 "src/codegen/hitscoregen.cmxs": use_hitscoregen
+<src/codegen/*.ml{,i}>: pkg_sexplib.syntax
 # Executable hitscoregen
 <src/codegen/hitscoregen.{native,byte}>: pkg_threads
 <src/codegen/hitscoregen.{native,byte}>: pkg_core
-<src/codegen/hitscoregen.{native,byte}>: pkg_sexplib.syntax
 <src/codegen/*.ml{,i}>: pkg_threads
 <src/codegen/*.ml{,i}>: pkg_core
-<src/codegen/*.ml{,i}>: pkg_sexplib.syntax
 # Library hitscore
 "src/lib/hitscore.cmxs": use_hitscore
 <src/lib/*.ml{,i}>: use_hitscoregen
