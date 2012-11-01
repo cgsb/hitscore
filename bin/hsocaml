@@ -72,6 +72,8 @@ ocaml_init=/tmp/ocaml_init_hs.ml
 
 cat <<EOF > $ocaml_init
 
+#use "topfind";;
+
 Toploop.use_silently Format.err_formatter "$file_to_use";;
 
 EOF
