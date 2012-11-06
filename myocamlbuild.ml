@@ -18,9 +18,9 @@ rule "hitscoregen: data/hitscore_layout -> src/lib/hitscore_layout.ml"
 
 
 (* OASIS_START *)
-(* DO NOT EDIT (digest: e84b7d8cf313f24e56deed479858b93f) *)
+(* DO NOT EDIT (digest: 1b5c7891b3a5a96c32278cb5b9777c05) *)
 module OASISGettext = struct
-# 21 "/home/t1/.opam/system/build/oasis.0.3.0/src/oasis/OASISGettext.ml"
+# 21 "/home/smondet/.opam/system/build/oasis.0.3.0/src/oasis/OASISGettext.ml"
 
   let ns_ str =
     str
@@ -43,7 +43,7 @@ module OASISGettext = struct
 end
 
 module OASISExpr = struct
-# 21 "/home/t1/.opam/system/build/oasis.0.3.0/src/oasis/OASISExpr.ml"
+# 21 "/home/smondet/.opam/system/build/oasis.0.3.0/src/oasis/OASISExpr.ml"
 
 
 
@@ -135,7 +135,7 @@ end
 
 # 117 "myocamlbuild.ml"
 module BaseEnvLight = struct
-# 21 "/home/t1/.opam/system/build/oasis.0.3.0/src/base/BaseEnvLight.ml"
+# 21 "/home/smondet/.opam/system/build/oasis.0.3.0/src/base/BaseEnvLight.ml"
 
   module MapString = Map.Make(String)
 
@@ -233,7 +233,7 @@ end
 
 # 215 "myocamlbuild.ml"
 module MyOCamlbuildFindlib = struct
-# 21 "/home/t1/.opam/system/build/oasis.0.3.0/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml"
+# 21 "/home/smondet/.opam/system/build/oasis.0.3.0/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml"
 
   (** OCamlbuild extension, copied from 
     * http://brion.inria.fr/gallium/index.php/Using_ocamlfind_with_ocamlbuild
@@ -342,7 +342,7 @@ module MyOCamlbuildFindlib = struct
 end
 
 module MyOCamlbuildBase = struct
-# 21 "/home/t1/.opam/system/build/oasis.0.3.0/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
+# 21 "/home/smondet/.opam/system/build/oasis.0.3.0/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
 
   (** Base functions for writing myocamlbuild.ml
       @author Sylvain Le Gall
@@ -358,7 +358,7 @@ module MyOCamlbuildBase = struct
   type name = string 
   type tag = string 
 
-# 56 "/home/t1/.opam/system/build/oasis.0.3.0/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
+# 56 "/home/smondet/.opam/system/build/oasis.0.3.0/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
 
   type t =
       {
@@ -502,7 +502,6 @@ let package_default =
      flags = [];
      includes =
        [
-          ("src/test", ["src/lib"]);
           ("src/server", ["src/lib"]);
           ("src/lib", ["src/codegen"]);
           ("src/client", ["src/lib"]);
@@ -513,7 +512,7 @@ let package_default =
 
 let dispatch_default = MyOCamlbuildBase.dispatch_default package_default;;
 
-# 498 "myocamlbuild.ml"
+# 497 "myocamlbuild.ml"
 (* OASIS_STOP *)
 (* Ocamlbuild_plugin.dispatch dispatch_default;; *)
 
