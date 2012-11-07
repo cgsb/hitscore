@@ -57,6 +57,11 @@ val get_fastq_stats:
   'error demultiplexing ->
   Hitscore_interfaces.B2F_unaligned_information.library_stats option
   
+val choose_delivery_for_user:
+  'error demultiplexing ->
+  'error submission ->
+  ('error delivery * 'error Hitscore_layout.Classy.invoicing_element) option
+    
 val make_classy_persons_information:
   configuration:Hitscore_configuration.Configuration.local_configuration ->
   layout_cache: (

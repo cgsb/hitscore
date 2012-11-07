@@ -377,6 +377,20 @@ let get_fastq_stats lib sub dmux =
   List.find ds.(sub#lane_index - 1) (fun x ->
     x.Bui.name = lib#stock#name)
 
+let choose_delivery_for_user dmux sub =
+  let open Option in
+  List.filter_map dmux#deliveries (fun del ->
+    if del#oo#g_status <> `Succeeded
+    then None
+    else (
+      List.find sub#invoices (fun i -> i#g_id = del#oo#invoice#id)
+                                       >>= fun inv ->
+      Some (del, inv)))
+  |! List.reduce ~f:(fun (d1, i1) (d2, i2) ->
+    if d1#oo#g_completed < d2#oo#g_completed
+    then (d2, i2)
+    else (d1, i1))
+
       
 let db_connect ?log t =
   let open Configuration in
