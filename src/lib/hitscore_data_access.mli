@@ -51,6 +51,12 @@ val init_classy_libraries_information_loop :
   ('a Hitscore_data_access_types.classy_libraries_information,
    [> `io_exn of exn]) Hitscore_std.t
 
+val get_fastq_stats:
+  'error classy_library ->
+  'error submission ->
+  'error demultiplexing ->
+  Hitscore_interfaces.B2F_unaligned_information.library_stats option
+  
 val make_classy_persons_information:
   configuration:Hitscore_configuration.Configuration.local_configuration ->
   layout_cache: (

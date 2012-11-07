@@ -367,6 +367,16 @@ let make_classy_libraries_information ~configuration ~layout_cache =
 let qualified_name po n =
   sprintf "%s%s" Option.(value_map ~default:"" ~f:(sprintf "%s.") po) n
 
+let get_fastq_stats lib sub dmux =
+  let open Option in
+  dmux#unaligned
+  >>= fun u ->
+  u#dmux_summary
+  >>= fun ds ->
+  let module Bui = Hitscore_interfaces.B2F_unaligned_information in
+  List.find ds.(sub#lane_index - 1) (fun x ->
+    x.Bui.name = lib#stock#name)
+
       
 let db_connect ?log t =
   let open Configuration in
