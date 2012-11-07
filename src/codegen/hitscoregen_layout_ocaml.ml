@@ -546,6 +546,8 @@ end";
   line out "  method re_get : (unit, 'error) Sequme_flow.t = \n\
                   Volume.get ~dbh (File_system.pointer t) >>= fun new_t -> \n\
                   t <- new_t; return ()";
+  line out "  method unsafe_delete:  (unit, 'error) Sequme_flow.t = \n\
+                  Volume.delete_volume_unsafe ~dbh  t";
   line out "  end";
   List.iter dsl.nodes (function
   | Enumeration (name, fields) -> ()
@@ -579,6 +581,8 @@ end";
     line out "  method re_get : (unit, 'error) Sequme_flow.t = \n\
                   %s.(get ~dbh (%s.pointer t)) >>= fun new_t -> \n\
                   t <- new_t; return ()" modname types_module;
+    line out "  method unsafe_delete:  (unit, 'error) Sequme_flow.t = \n\
+                  %s.delete_value_unsafe ~dbh t" modname;
     line out "end"
   | Function (name, args, result) ->
     line out "class ['error] %s_element dbh t = object(self)" name;
@@ -608,6 +612,8 @@ end";
                   %s.(set_succeeded ~result ~dbh (%s.pointer t)) \n\
                   >>= fun () -> \n\
                   self#re_get" modname types_module;
+    line out "  method unsafe_delete:  (unit, 'error) Sequme_flow.t = \n\
+                  %s.delete_evaluation_unsafe ~dbh t" modname;
     line out "  end";
   | Volume (_, _) -> ()
   );
