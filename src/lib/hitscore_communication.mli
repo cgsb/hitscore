@@ -20,6 +20,8 @@ sig
   | `log of string
   | `new_token of string * string * string * string
   | `authenticate of string * string * string
+  | `list_tokens
+  | `revoke_token of string
   | `get_simple_info
   | `get_libraries of string list * library_field_name list
   | `terminate
@@ -45,6 +47,7 @@ sig
   | `authentication_successful
   | `simple_info of person_simple_info
   | `libraries of (library_field_name * string) list list
+  | `tokens of string list
   | `error of [
     | `not_implemented
     | `server_error of string

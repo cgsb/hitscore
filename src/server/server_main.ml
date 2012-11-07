@@ -24,11 +24,14 @@ let with_profile () =
     ~doc:(sprintf "<path> alternate configuration file (default %s)"
             default_path)
 
-type ('a, 'b) global_state = {
+type ('a, 'b, 'c, 'd) global_state = {
   configuration: Configuration.local_configuration;
   libraries_info:
     unit ->
-    ('a Hitscore_data_access_types.classy_libraries_information, 'b) t
+    ('a Hitscore_data_access_types.classy_libraries_information, 'b) t;
+  persons_info:
+    unit ->
+    ('c Hitscore_data_access_types.classy_persons_information, 'd) t
 }
 
 let init ~configuration_file ~profile ~log_file ~pid_file =
@@ -51,12 +54,16 @@ let init ~configuration_file ~profile ~log_file ~pid_file =
   log "Loaded profile %S from %S" profile configuration_file >>= fun () ->
   let libraries_info =
     Data_access.init_classy_libraries_information_loop
-      ~loop_waiting_time:25. ~log:(log "[LinInfo] %s") ~allowed_age:60.
+      ~loop_waiting_time:25. ~log:(log "[LibInfo] %s") ~allowed_age:60.
       ~maximal_age:1200. ~configuration in
-  return { configuration; libraries_info }
+  let persons_info =
+    Data_access.init_classy_persons_information_loop
+      ~loop_waiting_time:25. ~log:(log "[PplInfo] %s") ~allowed_age:60.
+      ~maximal_age:1200. ~configuration in
+  return { configuration; libraries_info; persons_info }
 
-type ('a, 'b) connection_state = {
-  global: ('a, 'b) global_state;
+type ('a, 'b, 'c, 'd) connection_state = {
+  global: ('a, 'b, 'c, 'd) global_state;
   connection:  Sequme_flow_net.connection;
   serialization_mode: Communication.Protocol.serialization_mode;
   mutable user: [ `none | `token_authenticated of Layout.Record_person.t ];
@@ -251,6 +258,47 @@ let list_libraries ~state query spec =
     send_message state (`libraries result)
   end
     
+let with_auth ~state =
+  begin match state.user with
+  | `none ->
+    send_message state (`error `wrong_authentication) >>= fun () ->
+    error `stop
+  | `token_authenticated t -> return t
+  end
+  
+let list_tokens ~state =
+  with_auth ~state >>= fun logged ->
+  state.global.persons_info () >>= fun info ->
+  let tokens =
+    List.filter_map info#persons (fun p ->
+      if p#t#g_id = logged.Layout.Record_person.g_id
+      then Some (List.map p#tokens (fun t -> t#name))
+      else None) |! List.concat  in
+  send_message state (`tokens tokens)
+    
+let revoke_token ~state token =
+  with_auth ~state >>= fun logged ->
+  state.global.persons_info () >>= fun info ->
+  let search =
+    List.find_map info#persons (fun p ->
+      if p#t#g_id = logged.Layout.Record_person.g_id
+      then Some (p, List.find p#tokens (fun t -> t#name = token))
+      else None) in
+  begin match search with
+  | Some (p, Some t) ->
+    let tokens =
+      Array.filter_map p#t#auth_tokens (fun ptok ->
+        if ptok#id = t#g_id then None else Some ptok#pointer) in   
+    p#t#set_auth_tokens tokens >>= fun () ->
+    t#unsafe_delete >>= fun () ->
+    send_message state (`token_updated)
+  | Some (_, None) ->
+    send_message state (`error (`server_error "token not found"))
+  | None ->
+    send_message state (`error (`server_error "person not found"))
+  end
+  
+  
 let rec handle_up_message ~state =
   recv_message state
   >>= begin function
@@ -265,6 +313,8 @@ let rec handle_up_message ~state =
     end
   | `new_token (user, password, token_name, token) ->
     handle_new_token ~state ~user ~password ~token_name ~token
+  | `list_tokens -> list_tokens ~state
+  | `revoke_token t -> revoke_token ~state t
   | `authenticate (user, token_name, token) ->
     authenticate ~state ~user ~token ~token_name
   | `get_simple_info ->

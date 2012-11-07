@@ -124,6 +124,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
   | `simple_info _
   | `authentication_successful
   | `libraries _
+  | `tokens _
   | `error `not_implemented as m -> error (`unexpected_message m)
   | `token_updated 
   | `token_created ->
@@ -342,6 +343,75 @@ let list_libraries_command =
           terminate_and_disconnect ~state
         end)
   
+type auth_list_tokens_error = common_error with sexp_of
+type auth_revoke_token_error = common_error with sexp_of
+
+let auth_command =
+  let open Command_line in
+  let list_tokens_command =
+    basic ~summary:"List your authentication token names"
+      Spec.(
+        Communication.Protocol.serialization_mode_flag ()
+        ++ Flag.with_config_file ()
+      ) (fun ~mode ~configuration_file ->
+        run_flow ~on_error:(function
+        | `stop -> printf "Stopping\n%!"
+        | #auth_list_tokens_error as e ->
+          eprintf "Client ends with Errors: %s\n"
+            (Sexp.to_string_hum (sexp_of_auth_list_tokens_error e)))
+          begin
+            let output fmt = ksprintf (fun s -> wrap_io Lwt_io.print s) fmt in
+            connect_and_authenticate ~configuration_file ~mode
+            >>= fun state ->
+            send_message state `list_tokens
+            >>= fun () ->
+            dbg "Sent query, waiting for response" >>= fun () ->
+            recv_message state
+            >>= begin function
+            | `tokens l ->
+              output "Tokens:\n" >>= fun () ->
+              while_sequential l (output "  * %S\n")
+              >>= fun _ ->
+              output "%!"
+            | m -> error (`unexpected_message m)
+            end
+            >>= fun () ->
+            terminate_and_disconnect ~state
+          end)
+  in
+  let revoke_token_command =
+    basic ~summary:"Revoke a given token by name"
+      Spec.(
+        Communication.Protocol.serialization_mode_flag ()
+        ++ Flag.with_config_file ()
+        +> anon ("NAME" %: string)
+      ) (fun ~mode ~configuration_file token_name ->
+        run_flow ~on_error:(function
+        | `stop -> printf "Stopping\n%!"
+        | #auth_revoke_token_error as e ->
+          eprintf "Client ends with Errors: %s\n"
+            (Sexp.to_string_hum (sexp_of_auth_list_tokens_error e)))
+          begin
+            connect_and_authenticate ~configuration_file ~mode
+            >>= fun state ->
+            send_message state (`revoke_token token_name)
+            >>= fun () ->
+            dbg "Sent query, waiting for response" >>= fun () ->
+            recv_message state
+            >>= begin function
+            | `token_updated ->
+              msg "Done"
+            | m -> error (`unexpected_message m)
+            end
+            >>= fun () ->
+            terminate_and_disconnect ~state
+          end)
+  in
+  group ~summary:"Manage you authentication tokens" [
+    ("list", list_tokens_command);
+    ("revoke", revoke_token_command);
+  ] 
+        
     
 let () =
   Command_line.(
@@ -350,4 +420,5 @@ let () =
         ("init", init_command);
         ("info", info_command);
         ("libraries", list_libraries_command);
+        ("auth", auth_command);
       ]))
