@@ -62,6 +62,16 @@ val choose_delivery_for_user:
   'error submission ->
   ('error delivery * 'error Hitscore_layout.Classy.invoicing_element) option
     
+val user_file_paths:
+  unaligned:'error unaligned ->
+  submission: 'error submission ->
+  'error classy_library ->
+  < fastq_r1s : string list;
+    fastq_r2s : string list;
+    fastx :
+      (< kind : string; path : string > list *
+       < kind : string; path : string > list) list >
+
 val make_classy_persons_information:
   configuration:Hitscore_configuration.Configuration.local_configuration ->
   layout_cache: (

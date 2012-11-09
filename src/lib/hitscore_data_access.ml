@@ -392,6 +392,77 @@ let choose_delivery_for_user dmux sub =
     else (d1, i1))
 
       
+let fastq_path unaligned_path lane_index lib_name barcode read =
+  sprintf "%s/Unaligned/Project_Lane%d/Sample_%s/%s_%s_L00%d_R%d_001.fastq.gz"
+    unaligned_path lane_index lib_name lib_name barcode
+    lane_index read
+
+let fastxqs_path fastxqs_path lane_index lib_name barcode read =
+  sprintf "%s/Unaligned/Project_Lane%d/Sample_%s/%s_%s_L00%d_R%d_001.fxqs"
+    fastxqs_path lane_index lib_name lib_name barcode
+    lane_index read
+
+let demuxable_barcode_sequences lane lib =
+  let module Barcodes = Hitscore_assemble_sample_sheet.Assemble_sample_sheet in
+  if List.length lane#inputs = 1
+  then ["NoIndex"]
+  else
+    begin match lib#barcoding with
+    | [and_list] ->
+      if List.for_all and_list (fun o ->
+        (o#kind = `illumina || o#kind = `bioo) && o#index <> None)
+      then
+        List.filter_map and_list (fun o ->
+          match o#kind with
+          | `illumina ->
+            List.Assoc.find
+              Barcodes.illumina_barcodes (Option.value_exn o#index)
+          | `bioo ->
+            List.Assoc.find Barcodes.bioo_barcodes (Option.value_exn o#index)
+          | _ -> None)
+      else []
+    | _ -> []
+    end
+
+let user_file_paths ~unaligned ~submission lib =
+  let barcodes = demuxable_barcode_sequences submission#lane lib in
+  let fastq_r1s =
+    List.map barcodes (fun seq ->
+      fastq_path unaligned#path submission#lane_index lib#stock#name seq 1) in
+  let fastq_r2s =
+    Option.value_map ~default:[]
+      submission#lane#oo#requested_read_length_2 ~f:(fun _ ->
+        List.map barcodes (fun seq ->
+          fastq_path unaligned#path submission#lane_index lib#stock#name seq 2))
+  in
+  let fastx =
+    List.map unaligned#fastx_paths (fun path ->
+      let fastxqs_r1s =
+        List.map barcodes (fun seq ->
+          (object
+            method kind = "R1"
+            method path =
+              fastxqs_path path submission#lane_index lib#stock#name seq 1
+           end))
+      in
+      let fastxqs_r2s =
+        Option.value_map ~default:[]
+          submission#lane#oo#requested_read_length_2 ~f:(fun _ ->
+            List.map barcodes (fun seq ->
+              (object
+                method kind = "R2"
+                method path =
+                  fastxqs_path path submission#lane_index lib#stock#name seq 2
+               end)))
+      in
+      (fastxqs_r1s, fastxqs_r2s)) in
+  (object
+    method fastq_r1s = fastq_r1s
+    method fastq_r2s = fastq_r2s
+    method fastx = fastx
+   end)
+
+      
 let db_connect ?log t =
   let open Configuration in
   let host, port, database, user, password =
