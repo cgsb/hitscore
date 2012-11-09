@@ -204,6 +204,28 @@ let list_libraries ~state query spec =
       String.concat ~sep:") OR (" (List.map l (fun la ->
         String.concat ~sep:" AND " (List.map la one))) |! sprintf "(%s)"
   in
+  let find_fastq_files lib =
+    while_sequential lib#submissions (fun sub ->
+      while_sequential sub#flowcell#hiseq_raws (fun hr ->
+        while_sequential hr#demultiplexings (fun dmux ->
+          map_option (Data_access.choose_delivery_for_user dmux sub)
+            (fun (del, inv) ->
+              let path = 
+                Option.(value_map ~default:"NO-DIR"
+                          ~f:(fun d-> d#directory) del#client_fastqs_dir) in
+              return path)
+          >>= fun delivery_path ->
+          map_option dmux#unaligned (fun un ->
+            let files =
+              Data_access.user_file_paths ~unaligned:un ~submission:sub lib in
+            return [files#fastq_r1s; files#fastq_r2s] 
+          ))
+        >>| List.filter_opt))
+    >>| List.concat
+    >>| List.concat 
+    >>| List.concat 
+    >>| List.concat 
+  in
   begin match state.user with
   | `none -> send_message state (`error `wrong_authentication)
   | `token_authenticated t ->
@@ -249,7 +271,9 @@ let list_libraries ~state query spec =
                               return (sprintf " (%s)" oname))
                       >>= fun (n, o) ->
                       return (n ^ value ~default:"" o))
-        | `fastq_files
+        | `fastq_files ->
+          find_fastq_files l
+          >>| String.concat ~sep:";"
         | `read_number -> return ""
         end
         >>= fun v ->
