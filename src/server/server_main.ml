@@ -205,9 +205,13 @@ let list_libraries ~state query spec =
         String.concat ~sep:" AND " (List.map la one))) |! sprintf "(%s)"
   in
   let find_fastq_files lib =
+    let module Bui = Hitscore_interfaces.B2F_unaligned_information in
     while_sequential lib#submissions (fun sub ->
       while_sequential sub#flowcell#hiseq_raws (fun hr ->
         while_sequential hr#demultiplexings (fun dmux ->
+          let read_number =
+            Data_access.get_fastq_stats lib sub dmux
+            |! Option.map ~f:(fun s -> s.Bui.cluster_count) in
           map_option (Data_access.choose_delivery_for_user dmux sub)
             (fun (del, inv) ->
               let path = 
@@ -218,11 +222,9 @@ let list_libraries ~state query spec =
           map_option dmux#unaligned (fun un ->
             let files =
               Data_access.user_file_paths ~unaligned:un ~submission:sub lib in
-            return [files#fastq_r1s; files#fastq_r2s] 
+            return (files#fastq_r1s, files#fastq_r2s, read_number) 
           ))
         >>| List.filter_opt))
-    >>| List.concat
-    >>| List.concat 
     >>| List.concat 
     >>| List.concat 
   in
@@ -258,6 +260,7 @@ let list_libraries ~state query spec =
     while_sequential libraries (fun l ->
       while_sequential spec (fun field ->
         let opt o = return (Option.value ~default:"" o) in
+        find_fastq_files l >>= fun fastq_data ->
         begin match field with
         | `name -> return l#stock#name
         | `project -> opt l#stock#project
@@ -272,9 +275,12 @@ let list_libraries ~state query spec =
                       >>= fun (n, o) ->
                       return (n ^ value ~default:"" o))
         | `fastq_files ->
-          find_fastq_files l
-          >>| String.concat ~sep:";"
-        | `read_number -> return ""
+          List.map fastq_data (fun (r1, r2, _) -> r1 @ r2)
+          |! List.concat |! String.concat ~sep:";" |! return
+        | `read_number ->
+          List.map fastq_data (fun (_, _, n) -> n)
+          |! List.filter_opt |! List.map ~f:(sprintf "%.0f")
+          |! String.concat ~sep:";" |! return
         end
         >>= fun v ->
         return (field, v)))
