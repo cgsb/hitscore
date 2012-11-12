@@ -496,7 +496,15 @@ module Backend : BACKEND = struct
       (fun e -> error (`db_backend_error (`disconnection e)))
 
   let reconnect ~dbh =
-    disconnect dbh >>= fun () ->
+    disconnect dbh
+    >>< begin function
+    | Ok () -> return ()
+    | Error _ ->
+      (* what we want here is to reconnect, so we ignore disconnection
+         errors and hope for the best *)
+      return ()
+    end
+    >>= fun () ->
     let { host; port; database; user; password; _ } = dbh in
     bind_on_error
       (catch_io (PG.connect
