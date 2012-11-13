@@ -304,6 +304,7 @@ let list_libraries ~state ~query ~spec =
     | `all ->
       [ `name; `project; `description; `barcoding; `sample;
         `fastq_files; `read_number;]
+    | `fastq_read _ -> [`fastq_files]
   in
   send_message state (`get_libraries (query, arguments)) >>= fun () ->
   dbg "Waiting?" >>= fun () ->
@@ -312,7 +313,17 @@ let list_libraries ~state ~query ~spec =
   | `libraries table ->
     let output fmt = ksprintf (fun s -> wrap_io Lwt_io.print s) fmt in
     while_sequential table (fun row ->
-      while_sequential row (fun (_, v) ->
+      while_sequential row (function
+      | (`fastq_files, s) ->
+        begin match spec with
+        | `all -> output "%S,%!" s
+        | `fastq_read n ->
+          begin match (List.nth (String.split s ~on:';') (n - 1)) with
+          | Some r -> output "%s" r
+          | None -> output "READ-%d-NOT-FOUND" n
+          end
+        end
+      | (_, v) ->
         output "%S,%!" v)
       >>= fun _ ->
       output "\n"
@@ -328,8 +339,11 @@ let list_libraries_command =
     Spec.(
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
+      ++ step (fun k fastq_read -> k ~fastq_read)
+      +> flag "-read" ~aliases:["R"] (optional int)
+        ~doc:(sprintf "<number> Get the FASTQ file path for read <number>")
       +> anon (sequence ("QUERY-REGULAR-EXPRESSIONS" %: string))
-    ) (fun ~mode ~configuration_file query ->
+    ) (fun ~mode ~configuration_file ~fastq_read query ->
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"
       | #info_error as e ->
@@ -338,7 +352,11 @@ let list_libraries_command =
         begin
           connect_and_authenticate ~configuration_file ~mode
           >>= fun state ->
-          list_libraries ~state ~spec:`all ~query
+          let spec = 
+            match fastq_read with
+            | Some n -> `fastq_read n
+            | None -> `all in
+          list_libraries ~state ~spec ~query
           >>= fun () ->
           terminate_and_disconnect ~state
         end)
