@@ -35,11 +35,6 @@ sig
     psi_affiliations: string list list;
   }
 
-  type typed_return = [
-  | `string of string
-  | `empty
-  ]
-    
   type down = [
   | `user_message of string
   | `token_updated

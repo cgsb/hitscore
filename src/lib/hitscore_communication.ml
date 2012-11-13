@@ -40,12 +40,6 @@ module Protocol = struct
   }
   with bin_io, sexp
 
-  type typed_return = [
-  | `string of string
-  | `empty
-  ]
-  with bin_io, sexp
-    
   type down = [
   | `user_message of string
   | `token_updated
