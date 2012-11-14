@@ -190,20 +190,7 @@ let retrieve_simple_info ~state =
     )
   end
 
-let list_libraries ~state query spec =
-  let barcoding_to_string l =
-    let one b = 
-      match b#kind, b#index with
-      | `bioo, Some i -> sprintf "Bioo-%d" i
-      | `illumina, Some i -> sprintf "Illumina-%d" i
-      | _ -> "TODO" in
-    match l with
-    | [[o]] -> one o
-    | [l] -> String.concat ~sep:" AND " (List.map l one)
-    | l ->
-      String.concat ~sep:") OR (" (List.map l (fun la ->
-        String.concat ~sep:" AND " (List.map la one))) |! sprintf "(%s)"
-  in
+let list_libraries ~state query =
   let find_fastq_files lib =
     let module Bui = Hitscore_interfaces.B2F_unaligned_information in
     while_sequential lib#submissions (fun sub ->
@@ -258,32 +245,28 @@ let list_libraries ~state query spec =
         |! List.concat
     in
     while_sequential libraries (fun l ->
-      while_sequential spec (fun field ->
-        let opt o = return (Option.value ~default:"" o) in
-        find_fastq_files l >>= fun fastq_data ->
-        begin match field with
-        | `name -> return l#stock#name
-        | `project -> opt l#stock#project
-        | `description -> opt l#stock#description
-        | `barcoding -> return (barcoding_to_string l#barcoding)
-        | `sample ->
-          opt Option.(l#sample >>= fun s ->
-                      return (s#sample#name,
-                              s#organism >>= fun o ->
-                              o#name >>= fun oname ->
-                              return (sprintf " (%s)" oname))
-                      >>= fun (n, o) ->
-                      return (n ^ value ~default:"" o))
-        | `fastq_files ->
-          List.map fastq_data (fun (r1, r2, _) -> r1 @ r2)
-          |! List.concat |! String.concat ~sep:";" |! return
-        | `read_number ->
-          List.map fastq_data (fun (_, _, n) -> n)
-          |! List.filter_opt |! List.map ~f:(sprintf "%.0f")
-          |! String.concat ~sep:";" |! return
-        end
-        >>= fun v ->
-        return (field, v)))
+      find_fastq_files l >>= fun fastq_data ->
+      let li_name = l#stock#name in
+      let li_project =  l#stock#project in
+      let li_description =  l#stock#description in
+      let li_barcoding =
+        List.map l#barcoding ~f:(List.map ~f:(fun b ->
+          match b#kind, b#index with
+          | `bioo, Some i -> sprintf "Bioo-%d" i
+          | `illumina, Some i -> sprintf "Illumina-%d" i
+          | _ -> "TODO")) in
+      let li_sample =
+        (Option.(l#sample >>= fun s -> return s#sample#name),
+         Option.(l#sample >>= fun s ->
+                 s#organism >>= fun o -> o#name)) in
+      let li_fastq_files =
+        List.filter_map fastq_data (function
+        | ([], _, c) -> None
+        | (r1 :: _, [], c) -> Some (r1, None, c)
+        | (r1 :: _, r2 :: _, c) -> Some (r1, Some r2, c)) in
+      return {Hitscore_communication.Protocol.
+              li_name; li_project; li_description;
+              li_barcoding; li_sample; li_fastq_files; })
     >>= fun result ->
     send_message state (`libraries result)
   end
@@ -350,7 +333,7 @@ let rec handle_up_message ~state =
   | `get_simple_info ->
     log "get_simple_info" >>= fun () ->
     retrieve_simple_info ~state
-  | `get_libraries (names, spec) -> list_libraries ~state names spec
+  | `get_libraries names_rexes -> list_libraries ~state names_rexes
   | `terminate ->
     log "Terminating connection" >>= fun () ->
     error `stop

@@ -298,36 +298,56 @@ type list_libraries_error = [
 | common_error
 ] with sexp_of
 
-let list_libraries ~state ~query ~spec =
-  let arguments =
-    match spec with
-    | `all ->
-      [ `name; `project; `description; `barcoding; `sample;
-        `fastq_files; `read_number;]
-    | `fastq_read _ -> [`fastq_files]
-  in
-  send_message state (`get_libraries (query, arguments)) >>= fun () ->
+let list_libraries ~state ~separator ~query ~spec =
+  send_message state (`get_libraries query) >>= fun () ->
   dbg "Waiting?" >>= fun () ->
   recv_message state
   >>= begin function
   | `libraries table ->
-    let output fmt = ksprintf (fun s -> wrap_io Lwt_io.print s) fmt in
+    let output fmt = ksprintf (fun s -> wrap_io (Lwt_io.printf "%s%!") s) fmt in
     while_sequential table (fun row ->
-      while_sequential row (function
-      | (`fastq_files, s) ->
-        begin match spec with
-        | `all -> output "%S,%!" s
-        | `fastq_read n ->
-          begin match (List.nth (String.split s ~on:';') (n - 1)) with
-          | Some r -> output "%s" r
-          | None -> output "READ-%d-NOT-FOUND" n
+      let open Hitscore_communication.Protocol in
+      let barcoding_to_string l =
+        let one s = s in
+        match l with
+        | [[o]] -> one o
+        | [l] -> String.concat ~sep:" AND " (List.map l one)
+        | l ->
+          String.concat ~sep:") OR (" (List.map l (fun la ->
+            String.concat ~sep:" AND " (List.map la one))) |! sprintf "(%s)"
+      in
+      begin match spec with
+      | `all ->
+        let row_string =
+          String.concat ~sep:separator [
+            row.li_name;
+            Option.value ~default:"" row.li_project;
+            Option.value ~default:"" row.li_description;
+            barcoding_to_string row.li_barcoding;
+            Option.value ~default:"" (fst row.li_sample);
+            Option.value ~default:"" (snd row.li_sample);
+            (let l = List.length row.li_fastq_files in
+             sprintf "%d FASTQ deliver%s: %s reads"
+               l (if l = 1 then "y" else "ies")
+               (List.map row.li_fastq_files
+                  (fun (_, _, fo) ->
+                    Option.value_map ~default:"?" fo ~f:(sprintf "%.0f"))
+                |! String.concat ~sep:", "));
+          ] in
+        output "%s" row_string
+      | `fastq_read (n, m) ->
+        begin match List.nth row.li_fastq_files (n - 1) with
+        | Some (r1, r2o, _) ->
+          begin match m, r2o with
+          | 1, _ -> output "%s" r1
+          | 2, Some r2 -> output "%s" r2
+          | _ -> output "NO-READ-%d" m
           end
+        | None -> output "%dth-READS-NOT-FOUND" n
         end
-      | (_, v) ->
-        output "%S,%!" v)
-      >>= fun _ ->
-      output "\n"
-    )
+      end
+      >>= fun () ->
+      output "\n")
     >>= fun _ ->
     return ()
   | m -> error (`unexpected_message m)
@@ -354,9 +374,9 @@ let list_libraries_command =
           >>= fun state ->
           let spec = 
             match fastq_read with
-            | Some n -> `fastq_read n
+            | Some n -> `fastq_read (1, n)
             | None -> `all in
-          list_libraries ~state ~spec ~query
+          list_libraries ~state ~spec ~separator:", " ~query
           >>= fun () ->
           terminate_and_disconnect ~state
         end)

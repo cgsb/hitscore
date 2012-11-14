@@ -8,17 +8,6 @@ open Hitscore_configuration
 
 module Protocol = struct
 
-  type library_field_name = [
-  | `name
-  | `project
-  | `description
-  | `barcoding
-  | `sample
-  | `fastq_files
-  | `read_number
-  ]
-  with bin_io,sexp
-    
   type up = [
   | `log of string
   | `new_token of string * string * string * string
@@ -26,7 +15,7 @@ module Protocol = struct
   | `list_tokens
   | `revoke_token of string
   | `get_simple_info
-  | `get_libraries of string list * library_field_name list
+  | `get_libraries of string list
   | `terminate
   ]
   with bin_io, sexp
@@ -40,13 +29,23 @@ module Protocol = struct
   }
   with bin_io, sexp
 
+  type library_info = {
+    li_name: string;
+    li_project: string option;
+    li_description: string option;
+    li_barcoding: string list list;
+    li_sample: string option * string option;
+    li_fastq_files: (string * string option * float option) list;
+  }
+  with bin_io,sexp
+
   type down = [
   | `user_message of string
   | `token_updated
   | `token_created
   | `authentication_successful
   | `simple_info of person_simple_info
-  | `libraries of (library_field_name * string) list list
+  | `libraries of library_info list
   | `tokens of string list
   | `error of [
     | `not_implemented
