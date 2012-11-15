@@ -48,15 +48,15 @@ src/lib/hitscore_conf_values.ml::
 	echo "(** OASIS version *)" >> $@
 	echo "let version =\""$(PKG_VERSION)"\"" >> $@
 	echo "(** Number of commits since version tag *)" >> $@
-	echo -n "let patch_level = " >> $@
+	echo "let patch_level = " >> $@
 	git --no-pager log --oneline v$(PKG_VERSION)..HEAD -- | wc -l  >> $@
 	echo "" >> $@
 	echo "(** Branch *)" >> $@
-	echo -n "let branch = String.strip \"" >> $@
+	echo "let branch = String.strip \"" >> $@
 	git branch | grep '*' | cut -d" " -f 2 >> $@
 	echo "\"" >> $@
 	echo "(** Git id of the last commit *)" >> $@
-	echo -n "let last_commit = String.strip \"" >> $@
+	echo "let last_commit = String.strip \"" >> $@
 	git --no-pager log --oneline  HEAD^1..HEAD -- | cut -d" " -f 1 -s >> $@
 	echo "\"" >> $@
 
