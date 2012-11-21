@@ -30,27 +30,26 @@ module Assemble_sample_sheet:
       41,"GCGCTA"; 42,"TAATCG"; 43,"TACAGC"; 44,"TATAAT"; 45,"TCATTC";
       46,"TCCCGA"; 47,"TCGAAG"; 48,"TCGGCA";] 
 
-    let barcode_sequences barcode_type barcodes =
-      let barcode_assoc = 
-        match barcode_type with
-        | Some `illumina -> illumina_barcodes
-        | Some `bioo -> bioo_barcodes
-        | _ -> []
-      in          
+    let barcode_sequences barcodes =
       let module M = struct
-        exception Local_barcode_not_found of int
+        exception Local_barcode_not_found of int * [ `bioo | `illumina ]
         let f () =
           try Ok (
-            if barcode_assoc <> [] then
-              List.map barcodes ~f:(fun idx ->
-                match List.Assoc.find barcode_assoc idx with
-                | Some b -> b
-                | None -> raise (Local_barcode_not_found idx))
-            else 
-              [ "" ])
+            List.map barcodes (function
+            | `bioo idx ->
+              begin match List.Assoc.find bioo_barcodes idx with
+              | Some b -> b
+              | None -> raise (Local_barcode_not_found (idx, `bioo))
+              end
+            | `illumina idx ->
+              begin match List.Assoc.find illumina_barcodes idx with
+              | Some b -> b
+              | None -> raise (Local_barcode_not_found (idx, `illumina))
+              end
+            | `illumina_compatible s -> s))
           with
-          | Local_barcode_not_found i ->
-            Error (`barcode_not_found (i, Option.value_exn barcode_type))
+          | Local_barcode_not_found (i, t) ->
+            Error (`barcode_not_found (i, (t :> Layout.Enumeration_barcode_type.t)))
       end in
       M.f ()
 
@@ -132,31 +131,30 @@ module Assemble_sample_sheet:
                   while_sequential (Array.to_list and_array) (fun one ->
                     Access.Barcode.get ~dbh one
                     >>= begin function
-                    | {g_value = { kind; index = Some b; _}; _} ->
-                      return (Some (kind, b))
+                    | {g_value = { kind = `bioo; index = Some b; _}; _} ->
+                      return (Some (`bioo b))
+                    | {g_value = { kind = `illumina; index = Some b; _}; _} ->
+                      return (Some (`illumina b))
+                    | {g_value = { kind = `custom; position_in_index = Some 1;
+                                   sequence = Some s; _}; _} when String.length s = 6 ->
+                      return (Some (`illumina_compatible s))
                     | _ -> return None
                     end)
                   >>| List.filter_opt
-                  >>| List.unzip
-                | _ -> return ([], [])
+                | _ -> return ([])
                 end
-                >>= fun (types, indexes) ->
-                let barcode_type =
+                >>= fun illuminaish_barcoding ->
+                let barcodes =
                   (* if only one lib, then no barcoding *)
-                  if Array.length libraries <= 1 then None
-                  else match List.dedup types with
-                  | [one_barcode_type] -> Some one_barcode_type
-                  | more -> None
-                in
-                begin match (barcode_sequences barcode_type indexes) with
+                  if Array.length libraries <= 1 then []
+                  else illuminaish_barcoding in
+                begin match (barcode_sequences barcodes) with
                 | Ok bars ->
                   return (name, bars)
                 | Error e -> error e
                 end)
               >>= fun name_bars ->
-              let filtered =
-                List.filter name_bars ~f:(fun (name, bars) -> bars <> [""]) in
-              begin match filtered with
+              begin match name_bars with
               | [] ->
                 let name = 
                   match name_bars with
