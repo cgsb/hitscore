@@ -482,7 +482,7 @@ let init_some_retrieval_loop ~log ~log_prefix ~loop_waiting_time
       then begin
         Backend.reconnect layout_cache#dbh
         >>= fun _ ->
-        logf "Libraries classy info: reconnected."
+        logf "%s: successfully reconnected." log_prefix
         >>= fun () ->
         should_reconnect := false;
         return ()
