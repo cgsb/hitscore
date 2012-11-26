@@ -510,15 +510,20 @@ let init_some_retrieval_loop ~log ~log_prefix ~loop_waiting_time
           log_prefix
         >>= fun () ->
         should_reconnect := true;
-        logf "%s info gave an error" log_prefix
-          (* (match e with *)
-          (* | `Layout (_, e) -> Template.string_of_layout_error e *)
-          (* | `db_backend_error _ as e -> Template.string_of_layout_error e *)
-          (* | `io_exn e -> sprintf "I/O: %s" (Exn.to_string e) *)
-          (* | `auth_state_exn e -> sprintf "Auth: %s" (Exn.to_string e) *)
-          (* | `root_directory_not_configured -> *)
-          (*   sprintf "root_directory_not_configured" *)
-          (* | _ -> "UNKNOWN") *)
+        logf "%s info gave an error:\n%s" log_prefix
+          (match e with
+          | `Layout (loc, cause) ->
+            sprintf "LAYOUT-ERROR: %s: %s"
+              (Layout.sexp_of_error_location loc |! Sexp.to_string)
+              (Layout.sexp_of_error_cause cause |! Sexp.to_string)
+          | `db_backend_error er -> 
+            sprintf "BACKEND-ERROR: %s"
+              (Backend.sexp_of_error er |! Sexp.to_string)
+          | `io_exn ex ->
+            sprintf "EXCEPTION: %s" Exn.(to_string ex)
+          | `root_directory_not_configured ->
+            "root_directory_not_configured"
+          | _ -> "Unknown")
         >>= fun () ->
         return ())
     >>= fun () ->
