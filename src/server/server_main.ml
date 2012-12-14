@@ -425,7 +425,7 @@ let command =
       +> flag "key" (required string) ~doc:"SSL private key"
       +> anon ("PORT" %: int)
     )
-    (fun ~profile ~configuration_file ~log_file ~pid_file ~mode cert key port ->
+    (fun ~profile ~configuration_file ~log_file ~pid_file ~mode cert key port () ->
       run_flow ~on_error:(fun e ->
         eprintf "End with ERRORS: %s" (string_of_error e))
         begin

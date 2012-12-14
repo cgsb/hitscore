@@ -193,7 +193,7 @@ let init_command =
       +> anon ("HOST" %: string)
       +> anon ("PORT" %: int)
     )
-    (fun ~mode  ~configuration_file ~user_name token_name host port ->
+    (fun ~mode  ~configuration_file ~user_name token_name host port () ->
       run_flow ~on_error:(fun e ->
         eprintf "Client ends with Errors: %s"
           (Sexp.to_string_hum (sexp_of_init_error e)))
@@ -280,7 +280,7 @@ let info_command =
     Spec.(
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
-    ) (fun ~mode ~configuration_file ->
+    ) (fun ~mode ~configuration_file () ->
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"
       | #info_error as e ->
@@ -363,7 +363,7 @@ let list_libraries_command =
       +> flag "-read" ~aliases:["R"] (optional int)
         ~doc:(sprintf "<number> Get the FASTQ file path for read <number>")
       +> anon (sequence ("QUERY-REGULAR-EXPRESSIONS" %: string))
-    ) (fun ~mode ~configuration_file ~fastq_read query ->
+    ) (fun ~mode ~configuration_file ~fastq_read query () ->
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"
       | #info_error as e ->
@@ -391,7 +391,7 @@ let auth_command =
       Spec.(
         Communication.Protocol.serialization_mode_flag ()
         ++ Flag.with_config_file ()
-      ) (fun ~mode ~configuration_file ->
+      ) (fun ~mode ~configuration_file () ->
         run_flow ~on_error:(function
         | `stop -> printf "Stopping\n%!"
         | #auth_list_tokens_error as e ->
@@ -423,7 +423,7 @@ let auth_command =
         Communication.Protocol.serialization_mode_flag ()
         ++ Flag.with_config_file ()
         +> anon ("NAME" %: string)
-      ) (fun ~mode ~configuration_file token_name ->
+      ) (fun ~mode ~configuration_file token_name  () ->
         run_flow ~on_error:(function
         | `stop -> printf "Stopping\n%!"
         | #auth_revoke_token_error as e ->
