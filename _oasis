@@ -34,6 +34,7 @@ Library hitscore
           , Hitscore_std
           , Hitscore_interfaces
           , Hitscore_layout
+          , Hitscore_user_data
           , Hitscore_db_backend
           , Hitscore_function_interfaces
           , Hitscore_assemble_sample_sheet

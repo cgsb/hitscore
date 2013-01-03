@@ -46,6 +46,8 @@ module Data_access_types = Hitscore_data_access_types
 
 include Hitscore_broker
 
+module User_data = Hitscore_user_data
+  
 let db_connect ?log t =
   let open Configuration in
   let host, port, database, user, password =
