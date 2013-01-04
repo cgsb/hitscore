@@ -1,15 +1,64 @@
 open Hitscore_std
 module Layout = Hitscore_layout
   
-type t = {
-  mutable uploads: String.Set.t;
-} with sexp
+module V0 = struct
 
-let to_string t = Sexp.to_string_hum (sexp_of_t t)
+  type t = [`dummy] with sexp
 
+  let to_string t = Sexp.to_string_hum (sexp_of_t t)
+    
+  let of_string s =
+    try Ok (t_of_sexp (Sexp.of_string s))
+    with e -> Error (`sexp_parsing_error e)
+
+  let create () = `dummy
+end
+
+module Current = struct
+  type t = {
+    mutable uploads: String.Set.t;
+  } with sexp
+    
+  let to_string t = Sexp.to_string_hum (sexp_of_t t)
+    
+  let of_string s =
+    try Ok (t_of_sexp (Sexp.of_string s))
+    with e -> Error (`sexp_parsing_error e)
+
+  let create () = {uploads = String.Set.empty}
+
+  let of_v0 v0 = create ()
+    
+end
+
+open Current
+  
+type versioned =
+| V0 of string
+| Current of string
+with sexp
+
+let to_string t = Sexp.to_string_hum (sexp_of_versioned t)
+  
 let of_string s =
-  try Ok (t_of_sexp (Sexp.of_string s))
+  try Ok (versioned_of_sexp (Sexp.of_string s))
   with e -> Error (`sexp_parsing_error e)
+
+let latest_of_string s =
+  let open Result in
+  of_string s
+  >>= begin function
+  | V0 s ->
+    V0.of_string s
+    >>= fun v0 ->
+    return (Current.of_v0 v0)
+  | Current s -> Current.of_string s
+  end
+  
+let create () = Current.create ()
+
+let serialize c = to_string (Current (Current.to_string c))
+  
 
 let on_user_data ~dbh ~person_id ~function_name f =
   let layout = Layout.Classy.make dbh in
@@ -17,14 +66,14 @@ let on_user_data ~dbh ~person_id ~function_name f =
     layout#person#get_unsafe person_id >>= fun person ->
     begin match person#user_data with
     | Some ud ->
-      of_result (of_string ud)
-    | None -> return { uploads = String.Set.empty }
+      of_result (latest_of_string ud)
+    | None -> return (create ())
     end
     >>= fun user_data ->
   (* Adding a duplicate is considered OK, we could use String.Set.mem. *)
     begin match f user_data with
     | `save o ->
-      person#set_user_data (Some (to_string user_data))
+      person#set_user_data (Some (serialize user_data))
       >>= fun () ->
       return o
     | `ok o -> return o

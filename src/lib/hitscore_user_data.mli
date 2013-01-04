@@ -1,10 +1,6 @@
 open Hitscore_std
 
   
-type t
-
-val to_string: t -> string
-val of_string: string -> (t, [> `sexp_parsing_error of exn]) Result.t
 
 (** Register an “uploaded” file: [add_upload ~dbh ~person_id:42 "filename.pdf"]
     (the function does not care about duplicates, it's a “set”).
