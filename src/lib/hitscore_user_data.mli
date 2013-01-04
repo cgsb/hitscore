@@ -32,3 +32,14 @@ val remove_upload :
        string *
          [> `Layout of Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
          | `sexp_parsing_error of exn ] ]) Hitscore_std.t
+
+(** Check if a filename as been registered for this user. *) 
+val find_upload :
+  dbh:Hitscore_db_backend.Backend.db_handle ->
+  person_id:int ->
+  filename:string ->
+  (bool,
+   [> `user_data of
+       string *
+         [> `Layout of Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
+         | `sexp_parsing_error of exn ] ]) Hitscore_std.t
