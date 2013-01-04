@@ -24,6 +24,7 @@ type local_configuration = {
   vol_directory: string;
   root_writers: string list;
   root_group: string option;
+  upload_directory: string;
   db_configuration: db_configuration option;
   work_path: string option;
   raw_data_path: string option;
@@ -34,8 +35,9 @@ type local_configuration = {
 let configure ?root_path ?(root_writers=[]) ?root_group
     ?(vol_directory="vol") ?db_configuration ?work_path
     ?raw_data_path ?(hiseq_directory="HiSeq")
+    ?(upload_directory="upload")
     ?(bcl_to_fastq=[]) () =
-  { root_path; root_writers; root_group; 
+  { root_path; root_writers; root_group; upload_directory;
     vol_directory; db_configuration; work_path;
     raw_data_path; hiseq_directory; bcl_to_fastq}
 
@@ -48,6 +50,10 @@ let vol_directory t = t.vol_directory
 let vol_path t =
   Option.(t.root_path >>| fun r -> sprintf "%s/%s" r t.vol_directory)
 
+let upload_directory t = t.upload_directory
+let upload_path t =
+  Option.(t.root_path >>| fun r -> Filename.concat r t.upload_directory)
+  
 let path_of_volume t volume =
   Option.(vol_path t >>| fun t -> sprintf "%s/%s" t volume)
 
@@ -148,7 +154,7 @@ let parse_sexp sexp =
               ksprintf fail "Incomplete DB configuration (profile: %s)" name)
       in
       (name, 
-       configure ?work_path ?vol_directory:None
+       configure ?work_path ?vol_directory:None ?upload_directory:None
          ?raw_data_path ?hiseq_directory ~bcl_to_fastq
          ?root_path ~root_writers ?root_group ?db_configuration)
     | _ -> fail "expecting a (profile ...)"

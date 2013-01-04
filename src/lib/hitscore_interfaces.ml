@@ -24,6 +24,7 @@ module type CONFIGURATION = sig
   val configure : ?root_path:string ->
     ?root_writers:string list -> ?root_group:string ->
     ?vol_directory:string ->
+    ?upload_directory:string ->
     ?db_configuration:db_configuration ->
     ?work_path:string ->
     ?raw_data_path:string ->
@@ -53,6 +54,12 @@ module type CONFIGURATION = sig
     
   (** Get the current path to the volumes (i.e. kind-of [$ROOT/vol/]). *)
   val vol_path: local_configuration -> string option
+
+  (** Get the name of the uploads directory (i.e. ["upload"] by default). *)
+  val upload_directory: local_configuration -> string
+    
+  (** Get the current path to the uploads (i.e. kind-of [$ROOT/upload/]). *)
+  val upload_path: local_configuration -> string option
 
   (** Make a path to a VFS volume. *)
   val path_of_volume: local_configuration -> string -> string option
