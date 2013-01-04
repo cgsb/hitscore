@@ -838,7 +838,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         run ~dbh
           ~fake:(fun x -> Layout.Record_person.unsafe_cast x)
           ~real:(fun dbh ->
-            Access.Person.add_value ~dbh ?password_hash:None
+            Access.Person.add_value ~dbh ?password_hash:None ?user_data:None
               ~affiliations:[| |] ~auth_tokens:[| |]
               ~email ~given_name ?middle_name ~family_name ~secondary_emails:[||]
               ?nickname ?login ?print_name ~roles:[| `user |] ?note:None)

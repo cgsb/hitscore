@@ -28,6 +28,7 @@
        (password_hash   string option)
        (auth_tokens authentication_token array)
        (affiliations affiliation array)
+       (user_data string option)
        notable
        )
 

@@ -201,7 +201,8 @@ let v13_to_v14 file_in file_out =
           when old_version = V13.Info.version ->
         eprintf "Changed version.\n"; List [Atom "version"; Atom V14.Info.version ]
       | List [Atom "person"; List l ] ->
-        List [Atom "person"; List (map_g_values l (add_empty "auth_tokens"))]
+        List [Atom "person"; List (map_g_values l (fun v ->
+          add_empty "auth_tokens" v |! add_empty "user_data"))]
       | List [Atom "file_system"; List l ] ->
         let f = function
           | Atom s -> failwithf "atom : %s" s ()
