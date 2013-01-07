@@ -397,6 +397,7 @@ type error =
 [ `configuration_parsing_error of exn
 | `io_exn of exn
 | `profile_not_found of string
+| `read_file_timeout of string * float
 | `read_file_error of string * exn
 | `write_file_error of string * exn
 | `socket_creation_exn of exn

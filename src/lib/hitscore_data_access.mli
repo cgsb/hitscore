@@ -6,11 +6,13 @@ module File_cache : sig
     string ->
     (Hitscore_interfaces.Hiseq_raw_information.clusters_info option array,
      [> `parse_clusters_summary of string
+     | `read_file_timeout of string * float
      | `read_file_error of string * exn ]) Hitscore_std.t
 
   val get_demux_summary: string ->
     (Hitscore_interfaces.B2F_unaligned_information.demux_summary,
      [> `parse_flowcell_demux_summary_error of exn
+     | `read_file_timeout of string * float
      | `read_file_error of string * exn ]) Hitscore_std.t
 
 
@@ -18,6 +20,7 @@ module File_cache : sig
     (fastx_quality_stats,
      [> `empty_fastx_quality_stats of string
      | `error_in_fastx_quality_stats_parsing of string * string list list
+     | `read_file_timeout of string * float
      | `read_file_error of string * exn ]) Hitscore_std.t
 
 end

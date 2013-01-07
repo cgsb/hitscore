@@ -82,6 +82,7 @@ type common_error =
       | `signaled of int
       | `stopped of int ]
 | `write_file_error of string * exn
+| `read_file_timeout of string * float
 | `read_file_error of string * exn
 | `message_serialization of
     Communication.Protocol.serialization_mode * string * exn

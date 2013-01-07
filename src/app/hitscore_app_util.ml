@@ -91,6 +91,8 @@ let string_of_error = function
     sprintf "INVALID-CONFIGURATION: Work directory not set.\n"
   | `write_file_error (f,e) ->
     sprintf "SYS-FILE-ERROR: Write to %S error: %s\n" f (Exn.to_string e)
+  | `read_file_timeout (f, t) ->
+    sprintf "SYS-FILE-ERROR: Read from %S timeout: %f\n" f t
   | `read_file_error (f,e) ->
     sprintf "SYS-FILE-ERROR: Read from %S error: %s\n" f (Exn.to_string e)
   | `system_command_error (cmd, e) ->
