@@ -181,7 +181,8 @@ let ocaml_record_access_module ~out name fields =
     line out "  >>= begin function\n\
              \  | [] | [[]] -> return Time.(of_float 0.)\n\
              \  | [[Some one]] ->\n\
-             \    (try return (Time.of_string one) with e-> error (`parse_timestamp one))\n\
+             \    (try return (Time.of_string (Sql_query.unescape one)) \
+             \     with e -> error (`parse_timestamp one))\n\
              \  | more_or_less -> error (`result_not_unique more_or_less)\n\
              \  end";
   ); 
@@ -324,7 +325,8 @@ let ocaml_function_access_module ~out name result_type args =
     line out "  >>= begin function\n\
              \  | [] | [[]] -> return Time.(of_float 0.)\n\
              \  | [[Some one]] ->\n\
-             \    (try return (Time.of_string one) with e-> error (`parse_timestamp one))\n\
+             \    (try return (Time.of_string (Sql_query.unescape one)) \
+             \     with e -> error (`parse_timestamp one))\n\
              \  | more_or_less -> error (`result_not_unique more_or_less)\n\
              \  end";
   ); 
@@ -421,7 +423,8 @@ let ocaml_file_system_access_module ~out dsl =
     line out "  >>= begin function\n\
              \  | [] | [[]] -> return Time.(of_float 0.)\n\
              \  | [[Some one]] ->\n\
-             \    (try return (Time.of_string one) with e-> error (`parse_timestamp one))\n\
+             \    (try return (Time.of_string (Sql_query.unescape one)) \
+             \     with e -> error (`parse_timestamp one))\n\
              \  | more_or_less -> error (`result_not_unique more_or_less)\n\
              \  end";
   ); 
