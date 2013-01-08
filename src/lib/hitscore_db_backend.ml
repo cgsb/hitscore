@@ -347,7 +347,8 @@ module Sql_query = struct
         parse_timestamp creat >>= fun r_created ->
         parse_timestamp last >>= fun r_last_modified ->
         try_with (fun () -> Sexp.of_string (unescape sexp)) >>= fun r_sexp ->
-        return {r_id; r_type = t; r_created; r_last_modified; r_sexp})
+        let r_type = unescape t in
+        return {r_id; r_type = r_type; r_created; r_last_modified; r_sexp})
       |! Result.map_error ~f:(fun e -> `parse_value_error (sol, e))
     | _ -> Error (`parse_value_error (sol, Failure "Wrong format"))
 
@@ -358,7 +359,7 @@ module Sql_query = struct
         Some status; Some sexp ] ->
       Result.(
         try_with (fun () -> Int.of_string id) >>= fun f_id ->
-        return typ >>= fun f_type ->
+        return typ >>| unescape >>= fun f_type ->
         try_with (fun () ->
           Option.map ~f:(fun s -> unescape s |! Int.of_string) result_opt
         ) >>= fun f_result ->
