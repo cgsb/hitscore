@@ -59,7 +59,11 @@ let create () = Current.create ()
 
 let serialize c = to_string (V1 (Current.to_string c))
   
+let _user_data_mutex = Lwt_mutex.create ()
 
+let protect_edition f =
+  Lwt_mutex.with_lock _user_data_mutex f
+  
 let on_user_data ~dbh ~person_id ~function_name f =
   let layout = Layout.Classy.make dbh in
   begin
@@ -70,7 +74,7 @@ let on_user_data ~dbh ~person_id ~function_name f =
     | None -> return (create ())
     end
     >>= fun user_data ->
-  (* Adding a duplicate is considered OK, we could use String.Set.mem. *)
+      (* Adding a duplicate is considered OK, we could use String.Set.mem. *)
     begin match f user_data with
     | `save o ->
       person#set_user_data (Some (serialize user_data))
@@ -87,18 +91,22 @@ let on_user_data ~dbh ~person_id ~function_name f =
 
     
 let add_upload ~dbh ~person_id ~filename =
-  on_user_data ~dbh ~person_id ~function_name:"add_upload"
-    begin fun user_data ->
-      user_data.uploads <- String.Set.add user_data.uploads filename;
-      `save ()
-    end
+  protect_edition begin fun () ->
+    on_user_data ~dbh ~person_id ~function_name:"add_upload"
+      begin fun user_data ->
+        user_data.uploads <- String.Set.add user_data.uploads filename;
+        `save ()
+      end
+  end
 
 let remove_upload ~dbh ~person_id ~filename =
-  on_user_data ~dbh ~person_id ~function_name:"remove_upload"
-    begin fun user_data ->
-      user_data.uploads <- String.Set.remove user_data.uploads filename;
-      `save ()
-    end
+  protect_edition begin fun () ->
+    on_user_data ~dbh ~person_id ~function_name:"remove_upload"
+      begin fun user_data ->
+        user_data.uploads <- String.Set.remove user_data.uploads filename;
+        `save ()
+      end
+  end
  
 let find_upload  ~dbh ~person_id ~filename =
   on_user_data ~dbh ~person_id ~function_name:"find_upload"
