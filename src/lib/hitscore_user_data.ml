@@ -35,7 +35,7 @@ open Current
   
 type versioned =
 | V0 of string
-| Current of string
+| V1 of string
 with sexp
 
 let to_string t = Sexp.to_string_hum (sexp_of_versioned t)
@@ -52,12 +52,12 @@ let latest_of_string s =
     V0.of_string s
     >>= fun v0 ->
     return (Current.of_v0 v0)
-  | Current s -> Current.of_string s
+  | V1 s -> Current.of_string s
   end
   
 let create () = Current.create ()
 
-let serialize c = to_string (Current (Current.to_string c))
+let serialize c = to_string (V1 (Current.to_string c))
   
 
 let on_user_data ~dbh ~person_id ~function_name f =
