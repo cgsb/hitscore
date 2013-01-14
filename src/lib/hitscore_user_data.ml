@@ -105,3 +105,9 @@ let find_upload  ~dbh ~person_id ~filename =
     begin fun user_data ->
       `ok (String.Set.mem user_data.uploads filename)
     end
+
+let all_uploads ~dbh ~person_id =
+  on_user_data ~dbh ~person_id ~function_name:"all_uploads"
+    begin fun user_data ->
+      `ok (Set.to_list user_data.uploads)
+    end
