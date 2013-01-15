@@ -1,6 +1,7 @@
 open Hitscore_std
 
-  
+(** (filename, original-filename, creation-date) *) 
+type upload_info = (string * string * Time.t) with sexp
 
 (** Register an “uploaded” file: [add_upload ~dbh ~person_id:42 "filename.pdf"]
     (the function does not care about duplicates, it's a “set”).
@@ -9,6 +10,7 @@ val add_upload :
   dbh:Hitscore_db_backend.Backend.db_handle ->
   person_id:int ->
   filename:string ->
+  original:string ->
   (unit,
    [> `user_data of
        string *
@@ -34,7 +36,7 @@ val find_upload :
   dbh:Hitscore_db_backend.Backend.db_handle ->
   person_id:int ->
   filename:string ->
-  (bool,
+  (upload_info option,
    [> `user_data of
        string *
          [> `Layout of Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
@@ -44,7 +46,7 @@ val find_upload :
 val all_uploads:
   dbh:Hitscore_db_backend.Backend.db_handle ->
   person_id:int ->
-  (string list,
+  (upload_info list,
    [> `user_data of
        string *
          [> `Layout of Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
