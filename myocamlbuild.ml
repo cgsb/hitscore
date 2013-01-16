@@ -523,6 +523,7 @@ dispatch begin (fun d ->
     Options.ocamldoc := S [A"ocamlfind"; 
                            A"ocamldoc";
                            A"-keep-code";
+                           A"-charset"; A"utf-8";
                            (* A"-css-style"; A"../doc/style.css"; *)
                            A"-t"; A "Hitscore Library";
                            A"-colorize-code"]
