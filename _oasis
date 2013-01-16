@@ -53,6 +53,7 @@ Library hitscore
           , Hitscore_data_access
           , Hitscore_generic_fastqs
           , Hitscore_fastx_quality_stats
+          , Hitscore_script
 
 Executable hitscore
   Path: src/app

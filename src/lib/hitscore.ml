@@ -48,22 +48,9 @@ include Hitscore_broker
 
 module User_data = Hitscore_user_data
   
-let db_connect ?log t =
-  let open Configuration in
-  let host, port, database, user, password =
-    db_host t, db_port t, db_database t, db_username t, db_password t in
-  Backend.connect ?host ?port ?database ?user ?password ?log ()
-    
-let db_disconnect t dbh = 
-  Backend.disconnect ~dbh
+module Script = Hitscore_script
 
-let with_database ~configuration ?log f =
-  let open Flow in
-  db_connect ?log configuration 
-  >>= fun dbh ->
-  let m = f ~dbh in
-  double_bind m
-    ~ok:(fun x -> db_disconnect configuration dbh >>= fun () -> return x)
-    ~error:(fun x -> db_disconnect configuration dbh >>= fun () -> error x)
+include Script.Database
+
 
 
