@@ -1048,7 +1048,20 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
 
       let all_barcode_pointers =
         custom_barcode_pointers @ normal_barcode_pointers in
-      
+
+      let library_indexes = (* barcodes used for checking barcoding consistency *)
+        List.filter_map bcs (fun index ->
+          List.find_map
+            all_known_barcodes
+            (fun (i, b) -> if i = index then Some b else None))
+        @ List.filter_map custom_barcodes
+          (fun (sequence, poslog, position_in_r1, position_in_index, position_in_r2) ->
+            if position_in_index = Some 1
+            then Some sequence
+            else None)
+      in
+
+
       let custom_barcodes_log =
         if List.length all_barcode_pointers > 0 then
           sprintf "(barcodes %s)"
@@ -1195,39 +1208,74 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       | _ -> warning "Lib %s: Incomplete Agarose Gel" libname;
       end;
 
-      stock := (libname, project, stock_library) :: !stock;
+      stock := (libname, project, stock_library, library_indexes) :: !stock;
       return ())
     >>= fun _ ->
+
+    layout#stock_library#all
+    >>= fun all_libs ->
+    while_sequential all_libs (fun lib ->
+      let bb = (List.map (Array.to_list lib#barcoding) Array.to_list) |! List.concat in
+      while_sequential bb (fun b ->
+        b#get
+        >>= fun bar ->
+        let seq =
+          match bar#kind with
+          | `bioo ->
+            List.find_map Assemble_sample_sheet.bioo_barcodes
+              (fun (ii, s) -> if bar#index = Some ii then Some s else None)
+          | `illumina ->
+            List.find_map Assemble_sample_sheet.illumina_barcodes
+              (fun (ii, s) -> if bar#index = Some ii then Some s else None)
+          | `custom ->
+            if bar#position_in_index = Some 1 then bar#sequence else None
+          | `bioo_96 | `nugen -> None
+        in
+        return seq
+      )
+      >>| List.filter_opt
+      >>= fun bars ->
+      return (lib, bars)
+    )
+    >>= fun all_barcoded_libs ->
 
     while_sequential (List.filter_opt pools) (fun (pool, spm, tv, nm, input_libs) ->
       while_sequential input_libs (fun (libname, percent) ->
         let find_stock =
           if libname = "PhiX" then (
-            layout#stock_library#all
-            >>| List.filter ~f:(fun s -> s#name = "PhiX_v3") >>= fun search ->
+            let search =
+              List.filter all_barcoded_libs ~f:(fun (s, _) -> s#name = "PhiX_v3")
+            in
             begin match search with
-            | [one] -> return (one#g_pointer, None, None, [])
+            | [one, _] -> return (one#g_pointer, None, None, [], [])
             | _ -> failwithf "Can't find PhiX_v3"
             end
           ) else (
             let f = function
               | `wrong libname -> None
               | `existing (ln, lib_t, conc, note, kv) ->
-                if libname = ln then Some (lib_t, conc, note, kv) else None
+                if libname = ln then
+                  let index_barcodes =
+                    List.find_map all_barcoded_libs (fun (l, bars) ->
+                      if l#g_pointer = lib_t then Some bars else None)
+                    |! Option.value ~default:[]
+                  in
+                  Some (lib_t, conc, note, kv, index_barcodes)
+                else None
               | `new_lib (ln, project, conc, note,
                           short_desc, sample_name, species, app, strd, tsc, rsc,
                           bt, bcs, cbs, cbp,
                           p5, p7,
                           bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                           arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                          protocol_name , 
-                          protocol_files , 
-                          preparator    , 
-                          notes         , 
+                          protocol_name ,
+                          protocol_files ,
+                          preparator    ,
+                          notes         ,
                           key_value_list) ->
                 if ln = libname then
-                  List.find_map !stock (fun (n, _, s) -> 
-                    if n = libname then Some (s, conc, note, key_value_list) 
+                  List.find_map !stock (fun (n, _, s, barcodes) ->
+                    if n = libname then Some (s, conc, note, key_value_list, barcodes)
                     else None)
                 else
                   None
@@ -1238,10 +1286,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               (* failwithf "cannot fake a whole stock library for %s..." libname *)
               return (erroneous_pointer Layout.Record_stock_library.unsafe_cast, None,
                       Some (sprintf "Completely fake stock library: %s for pool %s"
-                          libname pool), [])
-            | Some (s, conc, note, kv) -> return (s, conc, note, kv)
+                          libname pool), [], [])
+            | Some tuple -> return tuple
           ) in
-        find_stock >>= fun (the_lib, concentration, note, key_values) ->
+        find_stock >>= fun (the_lib, concentration, note, key_values, index_barcodes) ->
 
         let user_db_list =
           List.filter_map key_values (function
@@ -1265,18 +1313,42 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               ~submission_date:(Option.value submission_date ~default:(Time.now ()))
               ?volume_uL:None ?concentration_nM ~user_db ?note)
           ~log:Option.(sprintf "(add_input_library %d (submission_date %S)%s \
-                                (user_db (%s))%s)" 
+                                (user_db (%s))%s)"
                   (the_lib.Layout.Record_stock_library.id)
                   (value_map ~f:Time.to_string ~default:"NONE" submission_date)
                   (value_map concentration_nM
                      ~default:"" ~f:(sprintf " (concentration_nM %f)"))
-                  (String.concat ~sep:" " 
+                  (String.concat ~sep:" "
                      (List.map (Array.to_list user_db) ~f:(fun l ->
                        sprintf "%d" l.Layout.Record_key_value.id)))
                   (value_map note ~default:"" ~f:(sprintf " (note %S)")))
+        >>= fun input_lib_pointer ->
+        return (libname, input_lib_pointer, index_barcodes)
       )
-      >>| Array.of_list
-      >>= fun input_libraries ->
+      >>= fun meta_input_libs ->
+
+      (* Duplications: *)
+      let barcodes_of_the_lane =
+        List.map meta_input_libs (fun (name, _, barcodes) -> barcodes)
+        |! List.concat in
+      let rec loop barcodes =
+        begin match List.find_a_dup barcodes with
+        | Some s ->
+          let examples =
+            List.filter meta_input_libs (fun (name, _, barcodes) ->
+              List.mem barcodes s) in
+          perror "There are barcoding duplicates in %s:\n%s\n" pool
+            (List.map examples (fun (name, _, barcodes) ->
+              sprintf "  %S: %s\n%!" name (String.concat ~sep:", " barcodes)
+             ) |! String.concat ~sep:"");
+          loop (List.filter barcodes ((<>) s));
+        | None ->
+          if_verbose "No duplicates for %S\n" pool
+        end in
+      loop barcodes_of_the_lane;
+
+      let input_libraries =
+        List.map meta_input_libs (fun (_, pointer, _) -> pointer) |! Array.of_list in
 
       let pooled_percentages = List.map input_libs ~f:snd |! Array.of_list in
 
