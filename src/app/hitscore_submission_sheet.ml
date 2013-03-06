@@ -6,7 +6,7 @@ open Sequme_flow
 open Sequme_flow_list
 
 let find_contact ~dbh ~verbose first last email =
-  let if_verbose fmt = 
+  let if_verbose fmt =
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
   if_verbose "Person: %S %S %S\n" first last email;
   let layout = Classy.make dbh in
@@ -31,7 +31,7 @@ let find_contact ~dbh ~verbose first last email =
 
 let print = ksprintf
 let errbuf = Buffer.create 42
-let perror fmt = 
+let perror fmt =
   let  f = Buffer.add_string errbuf in
   print f ("ERROR:" ^^ fmt ^^ "\n")
 let warning fmt =
@@ -97,7 +97,7 @@ let parse_run_type s =
   | _ ->
     perror "Wrong read length spec (PE): %s" s;
     None
-    
+
 let parse_date s =
   match String.split ~on:'/' s |! List.map ~f:(String.strip) with
   | [ month; day; year ] ->
@@ -113,7 +113,7 @@ let parse_date s =
     perror "Cannot parse date: %s" s;
     None
 
- 
+
 let col_LibraryID = "LibraryID"
 let col_Project_Name = "Project Name"
 let col_Concentration__nM_  = "Concentration (nM)"
@@ -156,7 +156,7 @@ let search_person_by_email layout email =
   | _ -> failwithf "more than one person with email %S" email
 
 let stropt s = if s = "" then None else Some s
-    
+
 (* parse_contacts -> (email, pointer?, [fields])? *)
 let parse_contacts ~verbose ~layout ~dbh sanitized =
   let contact_rows =
@@ -169,7 +169,7 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
     search_person_by_email layout email
     >>= fun p ->
     return (email, Some p#g_pointer, [])
-      (* 
+      (*
          begin match Layout.Search.record_person_by_email ~dbh email with
          | Ok [ one ] ->
          if_verbose
@@ -190,11 +190,11 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
     | `to_fix (o, msg) ->
       perror "Contact to fix: %s" msg;
       return (email, None, (List.map l stropt))
-    | `none _ -> 
+    | `none _ ->
       return (email, None, (List.map l stropt)))
-  | l -> 
+  | l ->
     failwithf "Wrong contact line: %s" (strlist l))
-    
+
 let parse_pools ~phix sanitized =
   let sections =
     Array.mapi sanitized ~f:(fun i a -> (i, a)) |! Array.to_list |!
@@ -206,7 +206,7 @@ let parse_pools ~phix sanitized =
   List.map sections (fun section ->
     match sanitized.(section) with
     | pool :: "Seeding Concentration (10 - 20 pM):" :: scs
-      :: "Total Volume (uL):" :: tvs :: "Concentration (nM):" :: cs :: 
+      :: "Total Volume (uL):" :: tvs :: "Concentration (nM):" :: cs ::
         emptyness when List.for_all emptyness ((=) "") ->
       let seeding_pM, tot_vol, nm =
         let i32 = int ~msg:(sprintf "%s row: " pool) in
@@ -221,7 +221,7 @@ let parse_pools ~phix sanitized =
           | lib :: percent :: emptyness when List.for_all emptyness ((=) "") ->
             begin match try Some (Float.of_string percent) with e -> None with
             | Some p -> Some (lib, p)
-            | None -> 
+            | None ->
               perror "Wrong pool percentage %s in row [%s]" percent (strlist row);
               None
             end
@@ -233,7 +233,7 @@ let parse_pools ~phix sanitized =
           let libnb = List.length pool_libs |! float in
           ("PhiX", Float.of_int p)
           :: (List.map pool_libs
-                ~f:(fun (lib, plib) -> 
+                ~f:(fun (lib, plib) ->
                   (lib, plib -. (float p /. libnb))))
       in
       Some (pool, seeding_pM, tot_vol, nm, pool_libs_redistributed)
@@ -244,22 +244,22 @@ let parse_pools ~phix sanitized =
 let parse_invoicing sanitized =
   let parse_chart piemail stuff =
     let open Option in
-    let mandatory msg s = 
+    let mandatory msg s =
       if s = "" then (
         perror "Invoicing for %s: wrong %s: %s (mandatory field)" piemail msg s;
         None) else Some s in
     let optional s = if s = "" then None else Some s in
     let is_n_digits n msg s =
-      if String.length s = n && String.for_all s Char.is_digit 
+      if String.length s = n && String.for_all s Char.is_digit
       then Some s else (
         perror "Invoicing for %s: wrong %s: %S should be a \
-                       %d-digit string." piemail msg s n; 
+                       %d-digit string." piemail msg s n;
         None) in
     let is_n_alphanum n msg s =
-      if String.length s = n && String.for_all s Char.is_alphanum 
+      if String.length s = n && String.for_all s Char.is_alphanum
       then Some s else (
         perror "Invoicing for %s: wrong %s: %S should be a \
-                       %d-alphanums string." piemail msg s n; 
+                       %d-alphanums string." piemail msg s n;
         None) in
     match stuff with
     | an :: f :: o :: prog :: proj :: rest ->
@@ -273,7 +273,7 @@ let parse_invoicing sanitized =
        | q :: t ->
          perror "Wrong row for invoice for %s: %s" piemail
            (strlist stuff); None))
-    | _ -> 
+    | _ ->
       perror "Wrong chartfield for invoice for %s: %s" piemail
         (strlist stuff);
       (None, None, None, None, None, None)
@@ -293,7 +293,7 @@ let parse_invoicing sanitized =
       ~first_column_condition:(fun s -> not (String.is_prefix ~prefix:"Pool" s)) in
   (submission_date, run_type_parsed,
    List.filter_map invoicing_rows (function
-   | piemail :: percent :: chartstuff as row when 
+   | piemail :: percent :: chartstuff as row when
        List.length (String.split ~on:'@' piemail) = 2 ->
      begin match try Some (Float.of_string percent) with _ -> None with
      | Some p -> Some (piemail, p, parse_chart piemail chartstuff)
@@ -311,7 +311,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
     else (
       perror "Wrong library name: %S" n
     ) in
-  
+
   let check_existing_library (libname: string) rest =
     let project =
       match rest with
@@ -361,12 +361,12 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
 
   let filtered_rows =
     list_of_filteri (fun i ->
-      try 
+      try
         let row = sanitized.(section + i + 2)  in
         let is_declared_known l =
           List.length l <= 4
           || (let r = ref true in
-              List.iteri l ~f:(fun i x -> 
+              List.iteri l ~f:(fun i x ->
                 if 4 <= i && i < 31 then
                   match List.nth l i with
                   | None | Some "" -> ()
@@ -394,13 +394,13 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
     begin match exisiting with
     | Some lib_t ->
       let key_value_list =
-        List.map custom_keys 
+        List.map custom_keys
           (fun c -> (c, column loaded.(section + i + 2) c)) in
       return (
         match rest with
         | [] | [ _ ]
         |  _ :: "" :: []
-        |  _ :: "" :: "" :: _ -> 
+        |  _ :: "" :: "" :: _ ->
           `existing (libname, lib_t, None, None, key_value_list)
         |  _ :: conc :: []
         |  _ :: conc :: "" :: _ ->
@@ -429,11 +429,11 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
     let mandatory row col =
       match column row col with
       | Some s -> Some s
-      | None -> 
+      | None ->
         perror "Lib: %s, mandatory field not provided: %s" libname col; None in
-    let mandatory32 r c = 
+    let mandatory32 r c =
           mandatory r c >>= int ~msg:(sprintf "Lib: %s (%s)" libname c) in
-        let column32 r c = 
+        let column32 r c =
           column r c >>= int ~msg:(sprintf "Lib: %s (%s)" libname c) in
         let int = int ~msg:(sprintf "Lib %s: " libname) in
         let project = column row col_Project_Name in
@@ -444,14 +444,14 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
         let species = column row col_Species___Source in
         let application = mandatory row col_Application in
         let stranded = mandatory row col_Is_Stranded
-                       >>| String.lowercase 
+                       >>| String.lowercase
                        >>= function
                        | "true" | "yes" -> Some true
                        | "false" | "no" -> Some false
                        | _ -> None in
         let truseq_control =
-          column row col_TruSeq_Control 
-          >>| String.lowercase 
+          column row col_TruSeq_Control
+          >>| String.lowercase
           >>= fun s ->
           try Some (Bool.of_string s) with _ -> None
         in
@@ -473,14 +473,14 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
           match column row col_Barcode_Number with
           | None -> []
           | Some s ->
-            String.split ~on:',' s 
+            String.split ~on:',' s
             |! List.map ~f:String.strip
-            |! List.filter ~f:((<>) "") 
+            |! List.filter ~f:((<>) "")
             |! List.filter_map ~f:int
         in
         let custom_barcode_sequence =
-          (column row col_Custom_Barcode_Sequence 
-           >>= fun s -> 
+          (column row col_Custom_Barcode_Sequence
+           >>= fun s ->
            return (String.split ~on:',' s))
           |! value_map ~default:[] ~f:(List.map ~f:String.strip)
         in
@@ -491,9 +491,9 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
           |! value_map ~default:[] ~f:(List.map ~f:String.strip)
           |! List.filter_map ~f:(fun s ->
             match String.split ~on:':' s |! List.map ~f:String.strip with
-            | [ "r1" ; two ] -> int two >>= fun i -> Some (`on_r1 i) 
-            | [ "r2" ; two ] -> int two >>= fun i -> Some (`on_r2 i) 
-            | [ "i"  ; two ] -> int two >>= fun i -> Some (`on_i i ) 
+            | [ "r1" ; two ] -> int two >>= fun i -> Some (`on_r1 i)
+            | [ "r2" ; two ] -> int two >>= fun i -> Some (`on_r2 i)
+            | [ "i"  ; two ] -> int two >>= fun i -> Some (`on_i i )
             | _ ->
               perror "Lib %s: cannot understand custom-barcode-loc: %S" libname s;
               None)
@@ -527,19 +527,19 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
                      short_desc, sample_name, species,
                      application, stranded,
                      truseq_control, rnaseq_control,
-                     barcode_type, barcodes, 
+                     barcode_type, barcodes,
                      custom_barcode_sequence, custom_barcode_positions,
                      p5_adapter_length, p7_adapter_length,
                      bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                      arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                     protocol_name , 
-                     protocol_files , 
-                     preparator    , 
-                     notes         , 
+                     protocol_name ,
+                     protocol_files ,
+                     preparator    ,
+                     notes         ,
                      key_value_list)))
-    
+
 let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
-  let if_verbose fmt = 
+  let if_verbose fmt =
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
 
   Buffer.clear errbuf;
@@ -572,10 +572,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         perror "Invoicing sums up to %f" sum; in
     if verbose then (* print invoicing *) (
       if_verbose "Invoicing:\n";
-      List.iter invoicing (fun (email, p, chartstuff) -> 
+      List.iter invoicing (fun (email, p, chartstuff) ->
         if_verbose "  %s, %f\n" email p
       ););
-    
+
     let pools = parse_pools ~phix sanitized in
     let () = (* check pools *)
       List.iter pools (function
@@ -587,10 +587,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     if verbose then (* print pools *) (
       if_verbose "Pools:\n";
       List.iter pools (function
-      | Some (pool, spm, tv, nm, l) -> 
+      | Some (pool, spm, tv, nm, l) ->
         let f = Option.value_map ~default:"WRONG" ~f:(sprintf "%d") in
         if_verbose "  %s %s %s %s [%s]\n" pool (f spm) (f tv) (f nm)
-          (String.concat ~sep:", " 
+          (String.concat ~sep:", "
              (List.map l ~f:(fun (x,y) -> sprintf "%s:%.2f%%" x y)))
       | None -> ()));
 
@@ -600,11 +600,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       if_verbose "Libraries:\n";
       List.iter libraries (function
       | `wrong libname -> if_verbose "  wrong lib: %s\n" libname
-      | `existing (s, _, c, n, kv) -> 
+      | `existing (s, _, c, n, kv) ->
         if_verbose "  existing lib: %s%s%s {%s}\n" s
           (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%d nM)"))
           (Option.value_map n ~default:" (no note)" ~f:(sprintf " (note: %S)"))
-          (String.concat ~sep:", " 
+          (String.concat ~sep:", "
              (List.map kv ~f:(function
              | (k, Some v) -> sprintf "[%S -- %S]" k v
              | (k, None)   -> sprintf "[NO %S]" k)))
@@ -614,19 +614,19 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   p5, p7,
                   bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                   arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                  protocol_name , 
-                  protocol_files , 
-                  preparator    , 
-                  notes         , 
-                  key_value_list) -> 
+                  protocol_name ,
+                  protocol_files ,
+                  preparator    ,
+                  notes         ,
+                  key_value_list) ->
         let vm = Option.value_map in
         let nl = "\n" in
         let bioarg (bio_wnb, bio_avg, bio_min, bio_max) =
           (String.concat ~sep:", " [
-            vm bio_wnb ~default:"[NO WNB]" ~f:(sprintf "[wnb: %d]");  
-            vm bio_avg ~default:"[NO AVG]" ~f:(sprintf "[avg: %d]");  
-            vm bio_min ~default:"[NO MIN]" ~f:(sprintf "[min: %d]");  
-            vm bio_max ~default:"[NO MAX]" ~f:(sprintf "[max: %d]"); 
+            vm bio_wnb ~default:"[NO WNB]" ~f:(sprintf "[wnb: %d]");
+            vm bio_avg ~default:"[NO AVG]" ~f:(sprintf "[avg: %d]");
+            vm bio_min ~default:"[NO MIN]" ~f:(sprintf "[min: %d]");
+            vm bio_max ~default:"[NO MAX]" ~f:(sprintf "[max: %d]");
           ]) in
         if_verbose "  new lib: %s\n    %s\n" s
           (String.concat ~sep:"    " ([
@@ -642,7 +642,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             sprintf "Barcode [Type: %s"
               (Option.value_map ~default:"NONE"
                  ~f:Layout.Enumeration_barcode_type.to_string bt);
-            sprintf "(%s)]" (String.concat ~sep:", " 
+            sprintf "(%s)]" (String.concat ~sep:", "
                                (List.map bcs (Int.to_string)));
             if cbs <> [] then
               sprintf "[Custom: (%s)]" (String.concat ~sep:", " cbs)
@@ -660,13 +660,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             vm bio_xad ~default:"[NO XAD]" ~f:(sprintf "\n      [xad: %S]"); nl;
             sprintf "[Agarose Gel %s]" (bioarg (arg_wnb, arg_avg, arg_min, arg_max));
             vm arg_img ~default:"[NO IMG]" ~f:(sprintf "\n      [img: %S]"); nl;
-            vm protocol_name  ~default:"[NO PROTOCOL]" ~f:(sprintf "[Protocol: %s]"); 
+            vm protocol_name  ~default:"[NO PROTOCOL]" ~f:(sprintf "[Protocol: %s]");
             vm protocol_files ~default:"[NO P-FILE]"
-              ~f:(fun l -> sprintf "[P-Files: %s]" (String.concat ~sep:", " l)); nl; 
-            vm preparator     ~default:"[NO PREPARATOR]" ~f:(sprintf "[Prep by %s]"); nl; 
+              ~f:(fun l -> sprintf "[P-Files: %s]" (String.concat ~sep:", " l)); nl;
+            vm preparator     ~default:"[NO PREPARATOR]" ~f:(sprintf "[Prep by %s]"); nl;
             vm notes          ~default:"" ~f:(sprintf "[Note: %S]");
            ]
-           @ 
+           @
              (List.map key_value_list ~f:(function
              | (k, Some v) -> sprintf "\n    [%S -- %S]" k v
              | (k, None)   -> sprintf "\n    [NO %S]" k))
@@ -684,7 +684,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     p5, p7,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                     arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                    protocol_name, protocol_files, preparator, notes, 
+                    protocol_name, protocol_files, preparator, notes,
                     key_value_list) ->
           Some (sprintf "%s.%S"
                   (Option.value ~default:"_" project)
@@ -702,12 +702,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | [] -> failwith "should nt be there"
           | more ->
             perror "Sample %s is defined with too many organisms: %s" s
-              (String.concat ~sep:", " 
+              (String.concat ~sep:", "
                  (List.map ~f:snd
                     (List.Assoc.map more (Option.value ~default:"NONE")))));
 
       let lib_names =
-        List.filter_map libraries (function       
+        List.filter_map libraries (function
         | `wrong libname -> None
         | `existing (libname, lib_t, conc, note, kv) ->  Some libname
         | `new_lib (ln, project, conc, note,
@@ -716,11 +716,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     p5, p7,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                     arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                    protocol_name, protocol_files, preparator, notes, 
+                    protocol_name, protocol_files, preparator, notes,
                     key_value_list) -> Some ln)
       in
       let check_lib libname =
-        if List.find pools 
+        if List.find pools
           ~f:(function
           | Some (pool, spm, tv, nm, input_libs) ->
             (List.find input_libs ~f:(fun (n, _) -> libname = n)) <> None
@@ -768,7 +768,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       else failwith "erroneous_pointer during wet-run!" in
     let check_and_copy_files volume filenames =
       if dry_run
-      then begin 
+      then begin
         List.iter filenames (fun n ->
           if (Sys.file_exists n) <> `Yes
           then
@@ -804,16 +804,16 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       end
     in
 
-      
+
 
     (* Adding contacts *)
     while_sequential contacts (function
       | email, None, contents ->
-        let get nth name = 
+        let get nth name =
           match List.nth contents nth with
           | Some (Some s) -> s
-          | None | Some None -> 
-            perror "Contact %S: %s not provided" email name; 
+          | None | Some None ->
+            perror "Contact %S: %s not provided" email name;
             (name ^ "-fake")
         in
         let print_name =  List.nth contents 0 |! Option.value ~default:None in
@@ -854,17 +854,17 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
     let stock = ref [] in
     while_sequential libraries (function
     | `wrong libname -> return ()
-    | `existing _ -> return ()    
+    | `existing _ -> return ()
     | `new_lib (libname, project, conc, note,
                 short_desc, sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
                 p5, p7,
                 bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                 arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                protocol_name , 
-                protocol_files , 
-                preparator    , 
-                notes         , 
+                protocol_name ,
+                protocol_files ,
+                preparator    ,
+                notes         ,
                 key_value_list) ->
       (* let open Option in *)
       begin match protocol_name with
@@ -875,11 +875,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | [] ->
           begin match protocol_files with
           | Some filenames ->
-            let hr_tag = 
+            let hr_tag =
               let buf = Buffer.create 42 in
               let yes s = Buffer.add_char buf s in
               String.iter name (function
-              | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '-' | '_' as c -> yes c 
+              | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '-' | '_' as c -> yes c
               | _ -> ());
               Buffer.contents buf  in
             let files = List.map filenames Layout.File_system.Tree.file in
@@ -901,7 +901,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             >>= fun volume ->
             check_and_copy_files volume filenames
           | None ->
-            perror "Lib: %s, Protocol %S is not in the DB and has no file." 
+            perror "Lib: %s, Protocol %S is not in the DB and has no file."
               libname name;
             return (erroneous_pointer Layout.File_system.unsafe_cast)
           end
@@ -928,7 +928,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           run ~dbh
             ~fake:(fun x -> Layout.Record_organism.unsafe_cast x)
             ~real:(fun dbh ->
-              Access.Organism.add_value ~dbh 
+              Access.Organism.add_value ~dbh
                 ~name ?informal:None ?note:None)
             ~log:(sprintf "(add_organism %S)" name)
         | [one] -> return one#g_pointer
@@ -938,7 +938,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       map_option sample_name (fun name ->
         layout#sample#all >>| List.filter ~f:(fun s ->
           if s#name = name then
-            match s#project, project with 
+            match s#project, project with
             | None, None -> true
             | Some s, None ->
               warning "Sample %s has a project %S in DB but not in subsheet"
@@ -957,7 +957,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           Layout.Record_sample.(
             run ~dbh ~fake:(fun x -> unsafe_cast x)
               ~real:(fun dbh ->
-                Access.Sample.add_value ~dbh 
+                Access.Sample.add_value ~dbh
                   ~name ?organism ?project ?note:None)
               ~log:(sprintf "(add_sample %s%S%s)"
                       (Option.value_map project ~default:"" ~f:(sprintf "%S."))
@@ -968,7 +968,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | [one] -> return one#g_pointer
         | more ->
           failwithf "Searching the sample %S got %d results." name
-            (List.length more) 
+            (List.length more)
         end)
       >>= fun sample ->
 
@@ -1078,10 +1078,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         end)
       >>= fun preparator ->
 
-      
+
       run ~dbh ~fake:(fun x -> Layout.Record_stock_library.unsafe_cast x)
         ~real:(fun dbh ->
-          Access.Stock_library.add_value ~dbh 
+          Access.Stock_library.add_value ~dbh
             ~name:libname ?project ?description:short_desc
             ?sample ?protocol:prot_opt
             ~application:(match app with None -> [||] | Some s -> [|s|])
@@ -1093,7 +1093,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             ?preparator
             ?note:None)
         ~log:Option.(
-          sprintf "(add_stock_library %s%s %s %s %s %s)" 
+          sprintf "(add_stock_library %s%s %s %s %s %s)"
             (value_map project ~default:"" ~f:(sprintf "%s."))
             libname
             (value_map sample ~default:"no_sample"
@@ -1115,11 +1115,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             run ~dbh
               ~fake:(fun x -> Layout.File_system.unsafe_cast x)
               ~real:(fun dbh ->
-                Access.Volume.add_tree_volume ~dbh 
+                Access.Volume.add_tree_volume ~dbh
                   ~kind:`bioanalyzer_directory
                   ~hr_tag
                   ~files:(List.map dir ~f:(Layout.File_system.Tree.file)))
-              ~log:(sprintf 
+              ~log:(sprintf
                       "(add_volume bioanalyzer_directory %s (files (%s)))"
                       hr_tag (String.concat ~sep:" " (List.map dir (sprintf "%S"))))
             >>= fun x ->
@@ -1137,12 +1137,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           ~real:(fun dbh ->
             Access.Bioanalyzer.add_value ~dbh ~library:stock_library
               ~well_number
-              ?mean_fragment_size:(f32o bio_avg) 
-              ?min_fragment_size: (f32o bio_min) 
-              ?max_fragment_size: (f32o bio_max) 
+              ?mean_fragment_size:(f32o bio_avg)
+              ?min_fragment_size: (f32o bio_min)
+              ?max_fragment_size: (f32o bio_max)
               ?note:None
               ~files)
-          ~log:Option.(sprintf "(add_bioanalyzer %d%s%s)" 
+          ~log:Option.(sprintf "(add_bioanalyzer %d%s%s)"
                   (stock_library.Layout.Record_stock_library.id)
                   (value_map bio_wnb ~default:"" ~f:(sprintf " (well_number %d)"))
                   (sprintf " (files %d)" files.Layout.File_system.id)))
@@ -1158,11 +1158,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             run ~dbh
               ~fake:(fun x -> Layout.File_system.unsafe_cast x)
               ~real:(fun dbh ->
-                Access.Volume.add_tree_volume ~dbh 
+                Access.Volume.add_tree_volume ~dbh
                   ~kind:`agarose_gel_directory
                   ~hr_tag
                   ~files:(List.map dir ~f:(Layout.File_system.Tree.file)))
-              ~log:(sprintf 
+              ~log:(sprintf
                       "(add_volume agarose_gel_directory %s (files (%s)))"
                       hr_tag (String.concat ~sep:" " (List.map dir (sprintf "%S"))))
             >>= fun x ->
@@ -1178,12 +1178,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           ~real:(fun dbh ->
             Access.Agarose_gel.add_value ~dbh ~library:stock_library
               ~well_number
-              ?mean_fragment_size:(f32o arg_avg) 
-              ?min_fragment_size: (f32o arg_min) 
-              ?max_fragment_size: (f32o arg_max) 
+              ?mean_fragment_size:(f32o arg_avg)
+              ?min_fragment_size: (f32o arg_min)
+              ?max_fragment_size: (f32o arg_max)
               ?note:None
               ~files)
-          ~log:(sprintf "(add_agarose_gel %d%s%s)" 
+          ~log:(sprintf "(add_agarose_gel %d%s%s)"
                   (stock_library.Layout.Record_stock_library.id)
                   (Option.value_map arg_wnb ~default:""
                      ~f:(sprintf " (well_number %d)"))
@@ -1295,11 +1295,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             ~pool_name ~contacts)
         ~log:(sprintf "(add_lane (libraries (%s)) (percentages %s) \
                           (contacts (%s)))"
-                (String.concat ~sep:" " 
+                (String.concat ~sep:" "
                    (List.map (Array.to_list input_libraries) ~f:(fun l ->
                      sprintf "%d" l.Layout.Record_input_library.id)))
-                (Array.sexp_of_t Float.sexp_of_t pooled_percentages |! Sexp.to_string) 
-                (String.concat ~sep:" " 
+                (Array.sexp_of_t Float.sexp_of_t pooled_percentages |! Sexp.to_string)
+                (String.concat ~sep:" "
                    (List.map (Array.to_list contacts) ~f:(fun l ->
                      sprintf "%d" l.Layout.Record_person.id))))
       >>= fun lane ->
@@ -1326,7 +1326,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let account_number, fund, org, program, project, note = chartstuff in
       run ~dbh ~fake:(fun x -> Layout.Record_invoicing.unsafe_cast x)
         ~real:(fun dbh ->
-          Access.Invoicing.add_value ~dbh ~pi 
+          Access.Invoicing.add_value ~dbh ~pi
             ~percentage:p
             ~lanes:(Array.map (Array.of_list named_lanes) ~f:snd)
             ?account_number ?fund ?org ?program ?project
@@ -1334,7 +1334,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         ~log:Option.(sprintf "(add_invoicing (pi %d) (percentage %g) \
                             (lanes (%s))%s%s%s%s%s%s)"
                        pi.Layout.Record_person.id p
-                       (String.concat ~sep:" " 
+                       (String.concat ~sep:" "
                           (List.map named_lanes ~f:(fun (_, l) ->
                             sprintf "%d" l.Layout.Record_lane.id)))
                        (value_map account_number ~default:""
@@ -1360,6 +1360,6 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | Some p -> sprintf "(phix: %d%%)" p in
       printf "%s --> %d %s\n" name id.Layout.Record_lane.id with_phix
     );
-    printf "Charged to %s.\n" (String.concat ~sep:", " 
+    printf "Charged to %s.\n" (String.concat ~sep:", "
                                  (List.map invoicing (fun (e, _, _) -> e)));
     return ())
