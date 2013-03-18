@@ -28,7 +28,7 @@ module Assemble_sample_sheet:
       31,"CACGAT"; 32,"CACTCA"; 33,"CAGGCG"; 34,"CATGGC"; 35,"CATTTT";
       36,"CCAACA"; 37,"CGGAAT"; 38,"CTAGCT"; 39,"CTATAC"; 40,"CTCAGA";
       41,"GCGCTA"; 42,"TAATCG"; 43,"TACAGC"; 44,"TATAAT"; 45,"TCATTC";
-      46,"TCCCGA"; 47,"TCGAAG"; 48,"TCGGCA";] 
+      46,"TCCCGA"; 47,"TCGAAG"; 48,"TCGGCA";]
 
     let barcode_sequences barcodes =
       let module M = struct
@@ -56,7 +56,7 @@ module Assemble_sample_sheet:
     let all_barcode_sequences barcode_type =
       match barcode_type with
       | Some `illumina -> Array.of_list illumina_barcodes
-      | Some `bioo -> Array.of_list bioo_barcodes 
+      | Some `bioo -> Array.of_list bioo_barcodes
       | _ -> [| |]
 
     type sample_sheet = {
@@ -80,7 +80,7 @@ module Assemble_sample_sheet:
           return (one#g_pointer,
                   Array.mapi one#lanes
                     ~f:(fun i lane_p -> i, lane_p#pointer) |! Array.to_list)
-        | [] -> error (`wrong_request (`record_flowcell, 
+        | [] -> error (`wrong_request (`record_flowcell,
                                        `value_not_found flowcell_name))
         | l -> error (`layout_inconsistency
                          (`Record "flowcell",
@@ -115,7 +115,7 @@ module Assemble_sample_sheet:
           while_sequential lane_list ~f:(fun (lane_idx, l) ->
             let open Layout.Record_lane in
             Access.Lane.get ~dbh l
-            >>= fun {g_value = { libraries; _ }} -> 
+            >>= fun {g_value = { libraries; _ }} ->
             begin match kind with
             | `specific_barcodes ->
               while_sequential (Array.to_list libraries) ~f:(fun input ->
@@ -156,12 +156,18 @@ module Assemble_sample_sheet:
               >>= fun name_bars ->
               begin match name_bars with
               | [] ->
-                let name = 
+                let name =
                   match name_bars with
                   | [ (one_name, _) ] -> one_name
                   | _ -> sprintf "PoolLane%d" (lane_idx + 1)
                 in
                 print out "%s,%d,%s,,,,N,,,Lane%d\n"
+                  flowcell_name (lane_idx + 1) name (lane_idx + 1);
+                return ()
+              | [(name, _)] ->
+                (* A library alone in its lane does not get demultiplexed,
+                   but we use its name for the “undetermined” *)
+                print out "%s,%d,%s,,Undetermined,,N,,,Lane%d\n"
                   flowcell_name (lane_idx + 1) name (lane_idx + 1);
                 return ()
               | l ->
@@ -175,7 +181,7 @@ module Assemble_sample_sheet:
                 | None -> return ()
                 end
                 >>= fun () ->
-                while_sequential l ~f:(fun (name, bars) -> 
+                while_sequential l ~f:(fun (name, bars) ->
                   List.iter bars ~f:(fun b ->
                     print out "%s,%d,%s,,%s,,N,,,Lane%d\n"
                       flowcell_name (lane_idx + 1) name b (lane_idx + 1));
@@ -185,7 +191,7 @@ module Assemble_sample_sheet:
 
             | `all_barcodes ->
               begin match libraries with
-              | [| |] -> 
+              | [| |] ->
                 print out "%s,%d,SingleSample%d,,,,N,,,Lane%d\n"
                   flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
                 return ()
@@ -206,7 +212,7 @@ module Assemble_sample_sheet:
                       return kind
                     end
                 end
-                >>| List.concat 
+                >>| List.concat
                 >>| List.filter ~f:(fun k -> k = `bioo || k = `illumina)
                 >>| List.dedup
                 >>= begin function
@@ -222,7 +228,7 @@ module Assemble_sample_sheet:
                 | some ->
                   Array.iter some  ~f:(fun (i, b) ->
                     print out "%s,%d,Lane%d_%s_%02d_%s,,%s,,N,,,Lane%d\n"
-                      flowcell_name (lane_idx + 1) (lane_idx + 1) 
+                      flowcell_name (lane_idx + 1) (lane_idx + 1)
                       (Layout.Enumeration_barcode_type.to_string
                          (Option.value_exn elected_barcode_type))
                       i b b (lane_idx + 1));
@@ -233,10 +239,10 @@ module Assemble_sample_sheet:
               print out "%s,%d,UndeterminedLane%d,,Undetermined,,N,,,Lane%d\n"
                 flowcell_name (lane_idx + 1) (lane_idx + 1) (lane_idx + 1);
               return ()
-            end) 
-          >>= fun (_: unit list) -> 
+            end)
+          >>= fun (_: unit list) ->
           return (`new_one { content = out_buf; kind; flowcell; flowcell_name })
-        | Some (assembly, sample_sheet) -> 
+        | Some (assembly, sample_sheet) ->
           return (`old_one (assembly, sample_sheet))
       )
 
@@ -244,12 +250,12 @@ module Assemble_sample_sheet:
       let open Layout.File_system in
       let files = Tree.([file "SampleSheet.csv"]) in
       Access.Volume.add_tree_volume ~dbh
-        ~hr_tag:(sprintf "%s_%s" sample_sheet.flowcell_name 
+        ~hr_tag:(sprintf "%s_%s" sample_sheet.flowcell_name
                    (Layout.Enumeration_sample_sheet_kind.to_string
                       sample_sheet.kind))
         ~kind:`sample_sheet_csv ~files
       >>= fun file ->
-      Access.Volume.get ~dbh file 
+      Access.Volume.get ~dbh file
       >>= function
       | { g_id = id ; g_kind = kind;
           g_content = Tree (hr_tag, trees) } ->
@@ -290,7 +296,7 @@ module Assemble_sample_sheet:
           >>= fun (the_volume, path_vol, path_file) ->
           let commands_m =
             match Configuration.path_of_volume configuration path_vol with
-            | Some vol_dir -> 
+            | Some vol_dir ->
               ksprintf system_command "mkdir -p %s/" vol_dir >>= fun () ->
               write_file (sprintf "%s/%s" vol_dir path_file)
                 ~content:(Buffer.contents sample_sheet.content)
@@ -310,7 +316,7 @@ module Assemble_sample_sheet:
               >>= fun _ ->
               return (`new_success succeeded))
             ~error:(fun e ->
-              register_with_failure ~dbh ?note sample_sheet 
+              register_with_failure ~dbh ?note sample_sheet
               >>= fun failed ->
               Access.Log.add_value ~dbh
                 ~log:(sprintf "(assemble_sample_sheet_failure %d %s %s)"
@@ -330,7 +336,7 @@ module Assemble_sample_sheet:
               >>= fun _ ->
               return (`new_failure (failed, e)))
 
-        | `old_one (assembly, sample_sheet) -> 
+        | `old_one (assembly, sample_sheet) ->
           Access.Log.add_value ~dbh
             ~log:(sprintf "(assemble_sample_sheet_reuse %d %s %s)"
                     assembly.Layout.Function_assemble_sample_sheet.id
