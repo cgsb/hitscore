@@ -405,7 +405,7 @@ let fastxqs_path fastxqs_path lane_index lib_name barcode read =
 let demuxable_barcode_sequences lane lib =
   let module Barcodes = Hitscore_assemble_sample_sheet.Assemble_sample_sheet in
   if List.length lane#inputs = 1
-  then ["NoIndex"]
+  then ["NoIndex"; "Undetermined"]
   else
     begin match lib#barcoding with
     | [and_list] ->
