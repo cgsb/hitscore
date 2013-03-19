@@ -12,7 +12,7 @@ open Hitscore_data_access_types
 
 module Xml_tree = struct
   include Xmlm
-  let in_tree i = 
+  let in_tree i =
     let el tag childs = `E (tag, childs)  in
     let data d = `D d in
     input_doc_tree ~el ~data i
@@ -27,9 +27,9 @@ module File_cache = struct
            (string,
             Hitscore_interfaces.Hiseq_raw_information.clusters_info option array)
            String_map.t)
-      
+
   let get_clusters_info (path:string) =
-    let make file = 
+    let make file =
       read_file file >>= fun xml_s ->
       let xml =
         Xml_tree.(in_tree (make_input (`String (0, xml_s)))) in
@@ -41,14 +41,14 @@ module File_cache = struct
       make path >>= fun res ->
       _run_param_cache := String_map.add ~key:path ~data:res !_run_param_cache;
       return res
-        
+
   let _demux_summary_cache =
     ref (String_map.empty:
            (string,
             Hitscore_interfaces.B2F_unaligned_information.demux_summary) String_map.t)
-      
+
   let get_demux_summary path =
-    let make file = 
+    let make file =
       read_file file >>= fun xml_s ->
       let xml =
         Xml_tree.(in_tree (make_input (`String (0, xml_s)))) in
@@ -65,7 +65,7 @@ module File_cache = struct
 
   let _fastx_quality_stats_cache =
     ref (String_map.empty: (string, fastx_quality_stats) String_map.t)
-      
+
   let get_fastx_quality_stats path =
     match String_map.find !_fastx_quality_stats_cache path with
     | Some r -> return r
@@ -73,7 +73,7 @@ module File_cache = struct
       read_file path >>| String.split ~on:'\n'
       >>| List.map ~f:(fun l -> String.split ~on:'\t' l)
       >>| List.filter ~f:(function [] | [_] -> false | _ -> true)
-      >>= (function 
+      >>= (function
       | [] | _ :: [] -> error (`empty_fastx_quality_stats path)
       | h :: t ->
         try List.map t ~f:(List.map ~f:Float.of_string) |! return with
@@ -98,8 +98,8 @@ module File_cache = struct
         _fastx_quality_stats_cache :=
           String_map.add ~key:path ~data:l !_fastx_quality_stats_cache;
         return l
-          
-          
+
+
 end
 
 let filter_map l ~filter ~map =
@@ -118,7 +118,7 @@ let rec volume_path ~configuration vols v =
   Configuration.path_of_volume_fun configuration >>= fun path_fun ->
   begin match v#g_content with
   | Tree (hr_tag, trees) ->
-    let vol = Common.volume_unix_directory ~id:v#g_id ~kind:v#g_kind ?hr_tag in 
+    let vol = Common.volume_unix_directory ~id:v#g_id ~kind:v#g_kind ?hr_tag in
     return (path_fun vol)
   | Link p ->
     (get_by_id vols p.id
@@ -138,7 +138,7 @@ let rec all_paths_of_volume ~configuration volumes volume_id =
     begin match Configuration.path_of_volume_fun configuration with
     | Some vol_path ->
       return (List.map relative_paths (Filename.concat (vol_path vol)))
-    | None -> 
+    | None ->
       error `root_directory_not_configured
     end
   | Link pointer ->
@@ -189,7 +189,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
         List.filter volumes (fun v ->
           v#g_content = Layout.File_system.Link vol#g_pointer)
       in
-      let generics = 
+      let generics =
         List.map generic_vols (fun gv ->
           List.filter generic_fastqs (fun gf ->
             gf#directory#id = gv#g_id)) |! List.concat in
@@ -204,7 +204,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
           let open Option in
           get_by_id volumes fr#directory#id
           >>= volume_path ~configuration volumes) in
-          
+
       return (object
         method vol = vol
         method path = path
@@ -219,7 +219,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
       end)))
   >>| List.filter_opt
   >>= fun unaligned_volumes ->
-  
+
   layout_cache#flowcell >>= fun flowcells ->
   layout_cache#lane >>= fun lanes ->
   layout_cache#input_library >>= fun input_libraries ->
@@ -299,7 +299,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
       method paths = Option.value ~default:[] paths
     end))
   >>= fun agarose_gels ->
-  
+
   layout_cache#sample >>= fun samples ->
   layout_cache#organism >>= fun organisms ->
   layout_cache#barcode >>= fun barcodes ->
@@ -336,7 +336,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
           List.find barcodes (fun b -> b#g_id = i#id))) in
     let bios =
       List.filter bioanalyzers (fun b -> b#bioanalyzer#library#id = sl#g_id) in
-    let agels = 
+    let agels =
       List.filter agarose_gels (fun b -> b#agarose_gel#library#id = sl#g_id) in
     let prot =
       List.find protocols (fun p ->
@@ -359,7 +359,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
   let created = Time.now () in
   return (object (self)
     method creation_started_on = creation_started_on
-    method created_on = created 
+    method created_on = created
     method configuration = configuration
     method libraries = libraries
   end: _ classy_libraries_information)
@@ -391,7 +391,7 @@ let choose_delivery_for_user dmux sub =
     then (d2, i2)
     else (d1, i1))
 
-      
+
 let fastq_path unaligned_path lane_index lib_name barcode read =
   sprintf "%s/Unaligned/Project_Lane%d/Sample_%s/%s_%s_L00%d_R%d_001.fastq.gz"
     unaligned_path lane_index lib_name lib_name barcode
@@ -462,7 +462,7 @@ let user_file_paths ~unaligned ~submission lib =
     method fastx = fastx
    end)
 
-      
+
 let db_connect ?log t =
   let open Configuration in
   let host, port, database, user, password =
@@ -516,7 +516,7 @@ let init_some_retrieval_loop ~log ~log_prefix ~loop_waiting_time
             sprintf "LAYOUT-ERROR: %s: %s"
               (Layout.sexp_of_error_location loc |! Sexp.to_string)
               (Layout.sexp_of_error_cause cause |! Sexp.to_string)
-          | `db_backend_error er -> 
+          | `db_backend_error er ->
             sprintf "BACKEND-ERROR: %s"
               (Backend.sexp_of_error er |! Sexp.to_string)
           | `io_exn ex ->
