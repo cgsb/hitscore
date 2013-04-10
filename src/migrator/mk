@@ -33,7 +33,7 @@ make_module () {
     cat $tmp >> $name
 
     $OCAMLFINDOPT -c $name
-    
+
 }
 
 
@@ -41,9 +41,9 @@ if [ "$1" = "update" ]; then
     mkdir -p _migrator
     current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
                       -e 's/* \(.*\)/\1/'`
-    make_module v12 1.2
     make_module v13 1.3
     make_module v14 1.4
+    make_module v15 1.5
     git checkout $current_branch
     cd _migrator
     ln -sf ../src/migrator/migrator.ml
@@ -58,6 +58,6 @@ if [ "$1" = "-h" ]; then
 fi
 
 cd _migrator
-$OCAMLFINDOPT -linkpkg v12.cmx v13.cmx v14.cmx migrator.ml -o migrator
+$OCAMLFINDOPT -linkpkg v13.cmx v14.cmx v15.cmx migrator.ml -o migrator
 cd ..
 
