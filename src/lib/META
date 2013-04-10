@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 3583b9189d682f53b7c8f3aaf40a9728)
-version = "1.4"
+# DO NOT EDIT (digest: 38a23512f8604f0ef41e2cd7c5c7a8a1)
+version = "1.5-dev"
 description = "CGSB Core Library"
 requires =
 "threads core pgocaml biocaml sequme hitscoregen lwt lwt.unix cryptokit simple_pam"
