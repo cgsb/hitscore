@@ -1,7 +1,7 @@
 
 OASISFormat: 0.2
 Name:        hitscore
-Version:     1.4
+Version:     1.5-dev
 Synopsis:    CGSB Core Library
 Authors:     Ashish Agarwal, Sebastien Mondet
 License:     PROP
@@ -76,7 +76,7 @@ Executable gencore
   CompiledObject: best
   Install: true
 
-  
+
 Document hitscoredoc
   Title:      Documentation of the Hitscore library
   InstallDir: $docdir
