@@ -6,7 +6,7 @@
            (project        string option))
 
 (enumeration role
-             visitor user auditor administrator pi) 
+             visitor user auditor administrator pi)
 
 (record affiliation
         (path string array))
@@ -49,7 +49,7 @@
         (doc protocol_directory)
         notable)
 
-(enumeration barcode_type 
+(enumeration barcode_type
              bioo bioo_96 illumina nugen custom)
 
 (record barcode
@@ -166,10 +166,10 @@
         (deleted hiseq_raw array))
 
 (volume sample_sheet_csv samplesheets)
-(record sample_sheet 
+(record sample_sheet
         (file sample_sheet_csv)
         notable)
-        
+
 (enumeration sample_sheet_kind all_barcodes specific_barcodes no_demultiplexing)
 
 (function sample_sheet assemble_sample_sheet
@@ -178,7 +178,7 @@
           )
 
 (volume bcl_to_fastq_unaligned_opaque bcl_to_fastq)
-(record bcl_to_fastq_unaligned 
+(record bcl_to_fastq_unaligned
         (directory bcl_to_fastq_unaligned_opaque))
 
 (function bcl_to_fastq_unaligned bcl_to_fastq
@@ -218,7 +218,7 @@
 (record generic_fastqs (directory generic_fastqs_dir))
 (function generic_fastqs coerce_b2f_unaligned
           (input bcl_to_fastq_unaligned))
-          
+
 
 (volume fastx_quality_stats_dir fastx_quality_stats)
 (record fastx_quality_stats_result
@@ -228,13 +228,13 @@
           (option_Q int)
           (filter_names string option))
 
-;;  
+;;
 ;; (function file library_fastx_stats
 ;;           (library_fastqs file)
 ;;           (other_param int)
 ;;           (stats file)
 ;;           )
-;;  
+;;
 ;; (value deliverable
 ;;        (fastq_dir file)
 ;;        (stats_dir file)

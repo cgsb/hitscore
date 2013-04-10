@@ -6,14 +6,14 @@ open Sequme_flow
 open Sequme_flow_list
 open Sequme_flow_sys
 
-  
+
 let commands = ref []
 
 let define_command ~names ~description ~usage ~run =
   let meta_run a b c d =
     begin match Lwt_main.run (run a b c d) with
     | Ok () -> true
-    | Error (`invalid_command_line s) -> 
+    | Error (`invalid_command_line s) ->
       eprintf "Wrong arguments: %s!\n" s;
       false
     | Error  e ->
@@ -27,10 +27,10 @@ let short_help indent =
   String.concat ~sep:"\n"
     (List.map !commands
        (fun (names, desc, _, _) ->
-         sprintf "%s * %s:\n%s%s%s" indent (String.concat ~sep:"|" names) 
+         sprintf "%s * %s:\n%s%s%s" indent (String.concat ~sep:"|" names)
            indent indent desc))
 
-let find_command cmd = 
+let find_command cmd =
   List.find !commands (fun (names, _, _, _) -> List.exists names ((=) cmd))
 
 
@@ -54,10 +54,10 @@ module Configuration_file = struct
     iter (raw_data_path config) (printf "Raw-data path: %S\n");
     iter (hiseq_data_path config) (printf "  Hiseq raw-data: %S\n");
     iter (work_path config) (printf "Work directory: %S\n");
-    iter (db_host     config) (printf "DB host     : %S\n"); 
-    iter (db_port     config) (printf "   port     : %d\n"); 
-    iter (db_database config) (printf "   database : %S\n"); 
-    iter (db_username config) (printf "   username : %S\n"); 
+    iter (db_host     config) (printf "DB host     : %S\n");
+    iter (db_port     config) (printf "   port     : %d\n");
+    iter (db_database config) (printf "   database : %S\n");
+    iter (db_username config) (printf "   username : %S\n");
     iter (db_password config) (printf "   password : %S\n");
     List.iter (bcl_to_fastq_available_versions config) (fun version ->
       printf "Bcl-to-fastq %S\n" version;
@@ -75,7 +75,7 @@ module Configuration_file = struct
     iter (Sys.getenv "PGDATABASE") (printf "Env: PGDATABASE : %S\n");
     iter (Sys.getenv "PGPASSWORD") (printf "Env: PGPASSWORD : %S\n");
     ()
-    
+
   let print_all profiles =
     let open Configuration in
     List.iter (profile_names profiles) (fun n ->
@@ -97,10 +97,10 @@ module Configuration_file = struct
     print f "PGUSER  ";
     print f "PGPASSWORD\n";
 
-    iter (db_port config)       (print f "export PGPORT=%d ; \n"    ); 
-    iter (db_host     config)   (print f "export PGHOST=%s ; \n"    ); 
-    iter (db_database config)   (print f "export PGDATABASE=%s ; \n"); 
-    iter (db_username config)   (print f "export PGUSER=%s ; \n"    ); 
+    iter (db_port config)       (print f "export PGPORT=%d ; \n"    );
+    iter (db_host     config)   (print f "export PGHOST=%s ; \n"    );
+    iter (db_database config)   (print f "export PGDATABASE=%s ; \n");
+    iter (db_username config)   (print f "export PGUSER=%s ; \n"    );
     iter (db_password config)   (print f "export PGPASSWORD=%s ; \n");
     printf "Running %S with:\n%s\n\
             ========================================\
@@ -109,12 +109,12 @@ module Configuration_file = struct
     ()
 
   let () =
-    define_command 
+    define_command
       ~names:["print-configuration"; "pc"]
       ~description:"Display the current profile (and environment)."
       ~usage:(fun o exec cmd -> fprintf o "usage: %s <profile> %s\n" exec cmd)
       ~run:(fun config exec cmd -> function
-      | [] -> 
+      | [] ->
         printf "** Current configuration:\n";
         print_config config;
         printf "** Environment:\n";
@@ -123,7 +123,7 @@ module Configuration_file = struct
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))));
-    define_command 
+    define_command
       ~names:["with-env"; "wenv"]
       ~description:"Run a command (default \"bash\") with the current \
                   profile's environment."
@@ -135,7 +135,7 @@ module Configuration_file = struct
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))));
-    () 
+    ()
 end
 
 module All_barcodes_sample_sheet = struct
@@ -143,38 +143,38 @@ module All_barcodes_sample_sheet = struct
   let illumina_barcodes = Assemble_sample_sheet.illumina_barcodes
   let bioo_barcodes = Assemble_sample_sheet.bioo_barcodes
 
-  let make ~flowcell ~specification output_string = 
+  let make ~flowcell ~specification output_string =
     let config =
       List.map specification
         ~f:(function
-          | "I1" -> 1, "I", illumina_barcodes 
-          | "I2" -> 2, "I", illumina_barcodes 
-          | "I3" -> 3, "I", illumina_barcodes 
-          | "I4" -> 4, "I", illumina_barcodes 
-          | "I5" -> 5, "I", illumina_barcodes 
-          | "I6" -> 6, "I", illumina_barcodes 
-          | "I7" -> 7, "I", illumina_barcodes 
-          | "I8" -> 8, "I", illumina_barcodes 
-          | "B1" -> 1, "B", bioo_barcodes 
-          | "B2" -> 2, "B", bioo_barcodes 
-          | "B3" -> 3, "B", bioo_barcodes 
-          | "B4" -> 4, "B", bioo_barcodes 
-          | "B5" -> 5, "B", bioo_barcodes 
-          | "B6" -> 6, "B", bioo_barcodes 
-          | "B7" -> 7, "B", bioo_barcodes 
-          | "B8" -> 8, "B", bioo_barcodes 
-          | "N1" -> 1, "N", [ 0, "" ] 
-          | "N2" -> 2, "N", [ 0, "" ] 
-          | "N3" -> 3, "N", [ 0, "" ] 
-          | "N4" -> 4, "N", [ 0, "" ] 
-          | "N5" -> 5, "N", [ 0, "" ] 
-          | "N6" -> 6, "N", [ 0, "" ] 
-          | "N7" -> 7, "N", [ 0, "" ] 
-          | "N8" -> 8, "N", [ 0, "" ] 
+          | "I1" -> 1, "I", illumina_barcodes
+          | "I2" -> 2, "I", illumina_barcodes
+          | "I3" -> 3, "I", illumina_barcodes
+          | "I4" -> 4, "I", illumina_barcodes
+          | "I5" -> 5, "I", illumina_barcodes
+          | "I6" -> 6, "I", illumina_barcodes
+          | "I7" -> 7, "I", illumina_barcodes
+          | "I8" -> 8, "I", illumina_barcodes
+          | "B1" -> 1, "B", bioo_barcodes
+          | "B2" -> 2, "B", bioo_barcodes
+          | "B3" -> 3, "B", bioo_barcodes
+          | "B4" -> 4, "B", bioo_barcodes
+          | "B5" -> 5, "B", bioo_barcodes
+          | "B6" -> 6, "B", bioo_barcodes
+          | "B7" -> 7, "B", bioo_barcodes
+          | "B8" -> 8, "B", bioo_barcodes
+          | "N1" -> 1, "N", [ 0, "" ]
+          | "N2" -> 2, "N", [ 0, "" ]
+          | "N3" -> 3, "N", [ 0, "" ]
+          | "N4" -> 4, "N", [ 0, "" ]
+          | "N5" -> 5, "N", [ 0, "" ]
+          | "N6" -> 6, "N", [ 0, "" ]
+          | "N7" -> 7, "N", [ 0, "" ]
+          | "N8" -> 8, "N", [ 0, "" ]
           | s ->
             failwith (sprintf  "Can't understand %S" s)
         ) in
-    let head = 
+    let head =
       "FCID,Lane,SampleID,SampleRef,Index,Description,Control,Recipe,\
          Operator,SampleProject\n" in
     ksprintf output_string "%s" head;
@@ -187,12 +187,12 @@ module All_barcodes_sample_sheet = struct
     ()
 
   let () =
-    define_command 
+    define_command
       ~names:["all-barcodes-sample-sheet"; "abc"]
       ~description:"Make a sample sheet with all barcodes"
       ~usage:(fun o exec cmd ->
         fprintf o
-          "usage: %s <profile> %s <flowcell id>  <list lanes/barcode vendors>\n" 
+          "usage: %s <profile> %s <flowcell id>  <list lanes/barcode vendors>\n"
           exec cmd;
         fprintf o "  example: %s %s D03NAKCXX N1 I2 I3 B4 B5 I6 I7 N8\n" exec cmd;
         fprintf o "  where N1 means no barcode on lane 1, I2 means all \
@@ -209,10 +209,10 @@ end
 module PBS_script_generator = struct
 
   let make_script
-      ~root ~email ?queue ?(wall_hours=12) ?(nodes=0) ?(ppn=0) 
+      ~root ~email ?queue ?(wall_hours=12) ?(nodes=0) ?(ppn=0)
       ?(variables=[]) ?template name =
     let out_dir_name = sprintf "%s/%s" root name in
-    System.command_exn (sprintf "mkdir -p %s" out_dir_name); 
+    System.command_exn (sprintf "mkdir -p %s" out_dir_name);
     let script, script_contents =
       let buf = Buffer.create 42 in
       (Buffer.add_string buf, fun () -> Buffer.contents buf) in
@@ -240,20 +240,20 @@ module PBS_script_generator = struct
 
     pr script "echo \"Script $NAME Ends on `date -R`\"\n\n";
 
-    Out_channel.with_file (sprintf "%s/script_%s.pbs" out_dir_name name) 
+    Out_channel.with_file (sprintf "%s/script_%s.pbs" out_dir_name name)
       ~f:(fun o -> fprintf o "%s" (script_contents ()));
     ()
-    
+
 
 
   let parse_cmdline usage_prefix next_arg =
     Arg.current := next_arg;
-    let email = 
-      ref (sprintf "%s@nyu.edu" 
+    let email =
+      ref (sprintf "%s@nyu.edu"
              (Option.value ~default:"NOTSET" (Sys.getenv "LOGNAME"))) in
-    let queue = 
+    let queue =
       let groups =
-        System.command_to_string "groups" |! 
+        System.command_to_string "groups" |!
             String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
       match List.find groups ((=) "cgsb") with
       | Some _ -> ref (Some "cgsb-s")
@@ -264,23 +264,23 @@ module PBS_script_generator = struct
     let nodes = ref 0 in
     let ppn = ref 0 in
     let options = [
-      ( "-email", 
+      ( "-email",
         Arg.Set_string email,
         sprintf "<address>\n\tSet the email (default, inferred: %s)." !email);
-      ( "-queue", 
+      ( "-queue",
         Arg.String (fun s -> queue := Some s),
-        sprintf "<name>\n\tSet the queue (default, inferred: %s)." 
+        sprintf "<name>\n\tSet the queue (default, inferred: %s)."
           (Option.value ~default:"None"  !queue));
-      ( "-var", 
+      ( "-var",
         Arg.String (fun s -> variables := s :: !variables),
         "<NAME=val>\n\tAdd an environment variable.");
-      ( "-template", 
+      ( "-template",
         Arg.String (fun s -> template := Some s),
         "<path>\n\tGive a template file.");
-      ( "-root", 
+      ( "-root",
         Arg.Set_string root,
         sprintf "<path>\n\tSet the root directory (default: %s)." !root);
-      ( "-nodes-ppn", 
+      ( "-nodes-ppn",
         Arg.Tuple [ Arg.Set_int nodes; Arg.Set_int ppn],
         "<n> <m>\n\tSet the number of nodes and processes per node.");
     ] in
@@ -300,7 +300,7 @@ module PBS_script_generator = struct
     define_command
       ~names:[ "pbs"; "make-pbs" ]
       ~description:"Generate PBS scripts"
-      ~usage:(fun o exec cmd -> 
+      ~usage:(fun o exec cmd ->
         fprintf o
           "usage: %s <profile> %s [OPTIONS] <script-names>\nsee: %s %s -help\n"
           exec cmd exec cmd)
@@ -315,8 +315,8 @@ end
 module Gen_BclToFastq = struct
 
 
-  let casava_182_template unaligned = 
-    sprintf " 
+  let casava_182_template unaligned =
+    sprintf "
 . /share/apps/casava/1.8.2/intel/env.sh
 
 cd %s
@@ -331,7 +331,7 @@ make -j8 \
     let script, script_contents =
       let buf = Buffer.create 42 in
       (Buffer.add_string buf, fun () -> Buffer.contents buf) in
-    let cmd os fmt = 
+    let cmd os fmt =
       ksprintf (fun s -> os (sprintf "echo %S ; \n%s\n\
             if [ $? -ne 0 ]; then exit 1 ; fi\n" s s)) fmt in
     let conf_b2f mm =
@@ -343,13 +343,13 @@ make -j8 \
                   --sample-sheet %s \
                   --mismatches %d"
         basecalls unaligned sample_sheet mm;
-      PBS_script_generator.make_script  
+      PBS_script_generator.make_script
         ~root
-        ~email:(sprintf "%s@nyu.edu" 
-                  (Option.value ~default:"NOTSET" (Sys.getenv "LOGNAME"))) 
+        ~email:(sprintf "%s@nyu.edu"
+                  (Option.value ~default:"NOTSET" (Sys.getenv "LOGNAME")))
         ~queue:"cgsb-s"
         ~wall_hours:12
-        ~nodes:1 ~ppn:8 ~template:(casava_182_template unaligned) 
+        ~nodes:1 ~ppn:8 ~template:(casava_182_template unaligned)
         (sprintf "PBSRuntime_%s_M%d" name mm);
     in
     cmd script ". /share/apps/casava/1.8.2/intel/env.sh\n\n";
@@ -364,7 +364,7 @@ make -j8 \
     define_command
       ~names:["gb2f"; "gen-bcl-to-fastq"]
       ~usage:(fun o exec bcl2fastq ->
-        fprintf o  "usage: %s profile %s name basecalls-dir sample-sheet\n" 
+        fprintf o  "usage: %s profile %s name basecalls-dir sample-sheet\n"
           exec bcl2fastq)
       ~description:"Prepare a BclToFastq run"
       ~run:(fun config exec cmd -> function
@@ -385,13 +385,13 @@ module Backend_management = struct
       let dumps = Layout.sexp_of_dump dump |! Sexplib.Sexp.to_string_hum in
       Out_channel.(with_file file ~f:(fun o -> output_string o dumps));
       return ())
-      
+
   let load_file ?(verbose=false) configuration file =
     let log = if verbose then Some (eprintf "%s\n%!") else None in
     with_database ?log ~configuration (fun ~dbh ->
       In_channel.with_file file ~f:(fun i ->
         Sexplib.Sexp.input_sexp i |! Layout.dump_of_sexp |!
-            Access.insert_dump ~dbh)) 
+            Access.insert_dump ~dbh))
 
   let () =
     define_command
@@ -403,7 +403,7 @@ module Backend_management = struct
       | [file] -> to_file config file
       | ["-verbose"; file] -> to_file ~verbose:true config file
       | _ -> error (`invalid_command_line "no filename provided"));
-    
+
     define_command
       ~names:["load-file"]
       ~description:"Load a dump the database (S-Exp file)"
@@ -428,7 +428,7 @@ module Backend_management = struct
         with_database ~log:(eprintf "%s\n") ~configuration Backend.wipe_out
       | _ ->
         error (`invalid_command_line "please, explicitly say you're sure"));
-    define_command 
+    define_command
       ~names:["check-database"; "check-db"]
       ~description:"Check that the database is ready and fix it if it is not"
       ~usage:(fun o exec cmd ->
@@ -453,7 +453,7 @@ module Edit_database = struct
       let sexp = Universal.sexp_of_value universal in
       let file = Filename.temp_file "hitscore_edition" ".scm" in
       write_file file ~content:(String.concat [
-        sprintf ";; WARNING: you are editing the value of %S\n" 
+        sprintf ";; WARNING: you are editing the value of %S\n"
           (Universal.sexp_of_pointer p_initial |! Sexp.to_string_hum);
         sprintf ";; modifications to g_* fields are highly discouraged !!!\n";
         Sexp.to_string_hum sexp])
@@ -486,8 +486,8 @@ end
 module Hiseq_raw = struct
 
   let fs_checks directory run_params sum1 =
-    begin 
-      try 
+    begin
+      try
         let dir_stat = Unix.stat directory in
         match dir_stat.Unix.st_kind with
         | Unix.S_DIR -> ()
@@ -502,7 +502,7 @@ module Hiseq_raw = struct
     begin
       try
         Unix.stat run_params |! Pervasives.ignore
-      with 
+      with
       | Unix.Unix_error _ ->
         eprintf "Cannot stat %s\n" run_params;
         failwith "Hiseq_raw.register"
@@ -510,7 +510,7 @@ module Hiseq_raw = struct
     begin
       try
         Unix.stat sum1 |! Pervasives.ignore
-      with 
+      with
       | Unix.Unix_error _ ->
         eprintf "Cannot stat %s\n" sum1;
         failwith "Hiseq_raw.register"
@@ -522,18 +522,18 @@ module Hiseq_raw = struct
       failwith "Hiseq_raw.register"
     );
     let xml_run_params = Filename.concat directory "runParameters.xml" in
-    let xml_read1 = 
+    let xml_read1 =
       Filename.concat directory "Data/reports/Summary/read1.xml" in
     fs_checks directory xml_run_params xml_read1;
 
     let { Hitscore_interfaces.Hiseq_raw_information.
-          flowcell_name     ; 
-          read_length_1     ; 
-          read_length_index ; 
-          read_length_2     ; 
-          with_intensities  ; 
+          flowcell_name     ;
+          read_length_1     ;
+          read_length_index ;
+          read_length_2     ;
+          with_intensities  ;
           run_date          ; } =
-      let xml = 
+      let xml =
         In_channel.with_file xml_run_params ~f:(fun ic ->
           XML.(make_input (`Channel ic) |! in_tree)) in
       match Hiseq_raw.run_parameters (snd xml) with
@@ -558,18 +558,18 @@ module Hiseq_raw = struct
         in_db.Layout.Record_hiseq_raw.id;
       return ())
 
-  let get_info directory = 
+  let get_info directory =
     let xml_run_params = Filename.concat directory "runParameters.xml" in
-    let xml_read1 = 
+    let xml_read1 =
       Filename.concat directory "Data/reports/Summary/read1.xml" in
     let { Hitscore_interfaces.Hiseq_raw_information.
-          flowcell_name     ; 
-          read_length_1     ; 
-          read_length_index ; 
-          read_length_2     ; 
-          with_intensities  ; 
+          flowcell_name     ;
+          read_length_1     ;
+          read_length_index ;
+          read_length_2     ;
+          with_intensities  ;
           run_date          ; } =
-      let xml = 
+      let xml =
         In_channel.with_file xml_run_params ~f:(fun ic ->
           XML.(make_input (`Channel ic) |! in_tree)) in
       match Hiseq_raw.run_parameters (snd xml) with
@@ -580,7 +580,7 @@ module Hiseq_raw = struct
         failwithf "Error while parsing %s in runParameters.xml" s ()
     in
     let clustering =
-      let xml = 
+      let xml =
         In_channel.with_file xml_read1 ~f:(fun ic ->
           XML.(make_input (`Channel ic) |! in_tree)) in
       match Hiseq_raw.clusters_summary (snd xml) with
@@ -592,13 +592,13 @@ module Hiseq_raw = struct
       flowcell_name
       read_length_1
       (Option.value_map ~default:"" ~f:(sprintf "x%d") read_length_index)
-      (Option.value_map ~default:"" ~f:(sprintf "x%d") read_length_2)  
+      (Option.value_map ~default:"" ~f:(sprintf "x%d") read_length_2)
       (run_date |! Time.to_local_date |! Date.to_string)
       (if with_intensities then "with" else "without");
     let head = printf " |% 19s" in
     printf "Lane";
-    head "clusters_raw";      
-    head "clusters_raw_sd";   
+    head "clusters_raw";
+    head "clusters_raw_sd";
     head "clusters_pf";
     head "clusters_pf_sd";
     head "prc_pf_clusters";
@@ -611,8 +611,8 @@ module Hiseq_raw = struct
       | None -> printf "-- NOT AVAILABLE --"
       | Some c ->
         let cell = printf " |% 19.2f" in
-        cell c.clusters_raw;      
-        cell c.clusters_raw_sd;   
+        cell c.clusters_raw;
+        cell c.clusters_raw_sd;
         cell c.clusters_pf;
         cell c.clusters_pf_sd;
         cell c.prc_pf_clusters;
@@ -621,19 +621,19 @@ module Hiseq_raw = struct
     );
     ()
 
-  let () = 
-    define_command 
+  let () =
+    define_command
       ~names:["register-hiseq-raw"; "rhr"]
       ~description:"Register a HiSeq raw directory"
       ~usage:(fun o exec cmd ->
-        fprintf o "usage: %s <profile> %s [-host <host-addr>] <absolute-path>\n" 
+        fprintf o "usage: %s <profile> %s [-host <host-addr>] <absolute-path>\n"
           exec cmd;
         fprintf o "   (default host being bowery.es.its.nyu.edu)\n")
       ~run:(fun config exec cmd -> function
       | [path] -> register config path
       | ["-host"; host; path] -> register config ~host path
       | _ -> error (`invalid_command_line "unexpected arguments"));
-    define_command 
+    define_command
       ~names:["get-hiseq-raw-info"; "ghri"]
       ~description:"Get information from an HiSeq Raw directory"
       ~usage:(fun o exec cmd ->
@@ -687,7 +687,7 @@ module Verify = struct
             ) (fun e ->
               add_error (sprintf "Cannot create %s: %s" path
                            (string_of_error e)))
-          else 
+          else
             add_error (sprintf "%s is missing" path)
         end
         >>= fun () ->
@@ -744,7 +744,7 @@ module Verify = struct
         | more ->
           ksprintf add_error "Duplicate %s: %S . %S %s" what
             (Option.value ~default:"" project) name
-            (String.concat ~sep:"" 
+            (String.concat ~sep:""
                (List.map more (fun (n, p) ->
                  sprintf " ==  %S . %S" (Option.value ~default:"" p) n)));
       ) in
@@ -763,7 +763,7 @@ module Verify = struct
       return ())
     >>= fun () ->
     return !errors
-    
+
   let check_function ~name ~status ~fail ~fix_it all =
     let all_started = List.filter ~f:(fun b -> b#g_status = `Started) all in
     printf "Function %s:" name;
@@ -782,7 +782,7 @@ module Verify = struct
           return ())
         else
           return ()
-      | `not_started e -> 
+      | `not_started e ->
         printf "ERROR: The function %d is NOT STARTED: %S.\n" f#g_id
           (Layout.Enumeration_process_status.to_string e);
         return ()
@@ -806,7 +806,7 @@ module Verify = struct
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))
-    
+
   let wake_up ?(fix_it=false) ?(verbose=false) configuration =
     check_file_system configuration >>= fun fs_errors ->
     print_error_count "File-System Error(s)" fs_errors >>= fun () ->
@@ -861,7 +861,7 @@ module Dependencies = struct
             (Universal.sexp_of_pointer child |! Sexp.to_string_hum);
           if max_depth = Some current_depth then
             return ()
-          else 
+          else
             show_deps how (current_depth + 1) child)
         >>= fun _ ->
         return () in
@@ -871,7 +871,7 @@ module Dependencies = struct
         show_deps Dependency_graph.get_children 0 p_initial >>= fun () ->
         printf "Up:\n";
         show_deps Dependency_graph.get_parents 0 p_initial
-      | "up" -> 
+      | "up" ->
         show_deps Dependency_graph.get_parents 0 p_initial
       | "down" ->
         show_deps Dependency_graph.get_children 0 p_initial
@@ -881,7 +881,7 @@ module Dependencies = struct
         failwithf "ERROR: can't understand %s" s  ()
       end
     )
-    
+
   let () =
     define_command ~names:["dependencies"; "deps"]
       ~description:"Show the dependencies of a value/evaluation/volume"
@@ -902,7 +902,7 @@ end
 
 module Flowcell = struct
 
-  let check_lane_unused ~dbh lane = 
+  let check_lane_unused ~dbh lane =
     let layout = Classy.make dbh in
     layout#flowcell#all
     >>| List.filter ~f:(fun fc ->
@@ -930,7 +930,7 @@ module Flowcell = struct
     let first_r1, first_r2 =
       Option.value (List.hd lanes_r1_r2) ~default:(42, None) in
     let all_equal =
-      List.for_all lanes_r1_r2 
+      List.for_all lanes_r1_r2
         ~f:(fun (r1, r2) -> r1 = first_r1 && r2 = first_r2) in
     if not all_equal then (
       printf "ERROR: Requested read-lengths are not all equal: [\n%s]\n"
@@ -988,24 +988,24 @@ module Flowcell = struct
     List.map ~f:(function
     | "PhiX" | "phix" | "PHIX" -> `phix
     | "Empty" | "empty" | "EMPTY" -> `empty
-    | x -> 
+    | x ->
       let i = try Int.of_string x with e ->
           failwithf "Cannot understand arg: %S (should be an integer)" x () in
       `lane i)
 
   let make_lanes ~dbh lanes =
-    checks_and_read_lengths ~dbh 
+    checks_and_read_lengths ~dbh
       (List.filter_map lanes (function `lane i -> Some i | _ -> None))
     >>= fun (r1, r2) ->
     printf "It is a %S flowcell\n"
-      (match r2 with 
+      (match r2 with
       | Some s -> sprintf "PE %dx%d" r1 s
       | None -> sprintf "SE %d" r1);
     while_sequential lanes ~f:(function
-    | `phix ->  new_input_phix ~dbh r1 r2 
+    | `phix ->  new_input_phix ~dbh r1 r2
     | `lane id -> return (Layout.Record_lane.unsafe_cast id)
     | `empty -> new_empty_lane ~dbh r1 r2)
-    
+
   let register ~configuration ?(modify=false) name args =
     if List.length args <> 8 then
       failwith "Expecting 8 arguments after the flowcell name.";
@@ -1040,7 +1040,7 @@ module Flowcell = struct
                                  sprintf "%d" i.Layout.Record_lane.id)
                                  |! String.concat ~sep:" "))
       | l ->
-        printf "BIG-ERROR: Flowcell name %S already used %d times!!!\n" 
+        printf "BIG-ERROR: Flowcell name %S already used %d times!!!\n"
           name (List.length l);
         return ()
     )
@@ -1073,9 +1073,9 @@ module Query = struct
   let run_type r1 = function
     | Some r2 -> sprintf "PE %dx%d" r1 r2
     | None -> sprintf "SE %d" r1
-      
+
   let predefined_queries = [
-    ("orphan-lanes", 
+    ("orphan-lanes",
      (["List of lanes which are not referenced by any flowcell."],
       fun _ dbh args ->
         let layout = Classy.make dbh in
@@ -1127,7 +1127,7 @@ module Query = struct
           printf "[%s] %s\n" (Time.to_string l#g_last_modified) l#log);
         return ()));
 
-    ("orphan-input-libraries", 
+    ("orphan-input-libraries",
      (["List of libraries which are not referenced in any lane."],
       fun _ dbh args ->
         let layout = Classy.make dbh in
@@ -1165,7 +1165,7 @@ module Query = struct
         let invoices =
           List.filter all_invoices ~f:(fun inv ->
             Array.exists inv#lanes ~f:(fun il ->
-              List.exists lanes (fun fl -> il#id = fl#id))) in 
+              List.exists lanes (fun fl -> il#id = fl#id))) in
         printf "%d invoices:\n" (List.length invoices);
         while_sequential invoices (fun inv ->
           inv#pi#get >>= fun pi ->
@@ -1196,8 +1196,8 @@ module Query = struct
             path
         );
         return ()));
-  ] 
-    
+  ]
+
   let describe out =
     List.iter predefined_queries ~f:(fun (name, (desc, _)) ->
       fprintf out " * %S:\n        %s\n" name
@@ -1232,19 +1232,19 @@ module Prepare_delivery = struct
     then (eprintf "%s is not an absolute path" dir; failwith "STOP");
     with_database ~configuration (fun ~dbh ->
       Unaligned_delivery.run ~dbh ~configuration ?directory_tag
-        ~bcl_to_fastq:(Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string bb)) 
+        ~bcl_to_fastq:(Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string bb))
         ~invoice:(Layout.Record_invoicing.unsafe_cast (Int.of_string inv))
         ~destination:dir
       >>= fun preparation ->
-      eprintf "Done: Preparation: %d\n" 
+      eprintf "Done: Preparation: %d\n"
         preparation.Layout.Function_prepare_unaligned_delivery.id;
       return ())
 
   let do_repair configuration path =
     with_database configuration (fun ~dbh ->
       Unaligned_delivery.repair_path ~configuration ~dbh path)
-    
-      
+
+
   let () =
     define_command ~names:["deliver"] ~description:"Deliver links to clients"
       ~usage:(fun o exec cmd ->
@@ -1356,12 +1356,12 @@ module Fastx_qs = struct
     ] in
     let anon_args = ref [] in
     let anon s = anon_args := s :: !anon_args in
-    let usage = 
+    let usage =
       sprintf "Usage: %s [OPTIONS] <search-flowcell-run>\n\
         \  Where   direc\n\
         \  Options:" usage_prefix in
     let cmdline = Array.of_list (usage_prefix :: args) in
-    begin 
+    begin
       try Arg.parse_argv cmdline options anon usage;
           let filter_names = if !filter = [] then None else Some !filter in
           `go (List.rev !anon_args,
@@ -1411,7 +1411,7 @@ module Fastx_qs = struct
           find_a_link ~dbh b2fu#directory#pointer
           >>= fun existsing_link ->
           begin match existsing_link with
-          | None -> 
+          | None ->
             printf "Creating VFS link (coerce_b2f_unaligned)\n";
             Coerce_b2f_unaligned.run ~dbh ~configuration ~input:b2fu#g_pointer
             >>= fun f ->
@@ -1441,7 +1441,7 @@ module Fastx_qs = struct
       eprintf "%s" b; return ()
     end
 
-  let register_success configuration id = 
+  let register_success configuration id =
     with_database ~configuration (fun ~dbh ->
       let f = (Layout.Function_fastx_quality_stats.unsafe_cast id) in
       Fastx_quality_stats.succeed ~dbh ~configuration f
@@ -1463,28 +1463,28 @@ module Fastx_qs = struct
       Fastx_quality_stats.status ~dbh ~configuration f
       >>= function
       |  `running ->
-        printf "The function is STILL RUNNING.\n"; 
+        printf "The function is STILL RUNNING.\n";
         return ()
-      | `started_but_not_running e -> 
+      | `started_but_not_running e ->
         printf "The function is STARTED BUT NOT RUNNING!!!\n";
         if fix_it then (
           printf "Fixing …\n";
           Fastx_quality_stats.fail ~dbh f
             ~reason:"checking_status_reported_started_but_not_running"
           >>= fun _ -> return ())
-        else 
+        else
           return ()
       | `not_started e ->
         printf "The function is NOT STARTED: %S.\n"
           (Layout.Enumeration_process_status.to_string e);
         return ())
-    
-  let kill configuration id = 
+
+  let kill configuration id =
     with_database ~configuration (fun ~dbh ->
-      Fastx_quality_stats.kill ~dbh ~configuration 
+      Fastx_quality_stats.kill ~dbh ~configuration
         (Layout.Function_fastx_quality_stats.unsafe_cast id)
     >>= fun _ -> return ())
-        
+
   let () =
     define_command
       ~names:["fastx-quality-stats"; "fxqs"]
@@ -1500,7 +1500,7 @@ module Fastx_qs = struct
           \  * kill <id>.\n")
       ~run:(fun config exec cmd ->
         function
-        | "start" :: args -> 
+        | "start" :: args ->
           start config (sprintf "%s <config> %s start" exec cmd) args
         | "register-success" :: id :: [] ->
           register_success config (Int.of_string id)
@@ -1540,7 +1540,7 @@ let () =
       let args = List.filter l ~f:(fun x -> x <> "-wet-run" && x <> "-verbose") in
       begin match args with
       | [phix_raw ; pss ] ->
-        begin 
+        begin
           try
             let phix =
               List.filter_map (String.split ~on:',' phix_raw) ~f:(fun s ->
@@ -1560,7 +1560,7 @@ let () =
                   (sprintf "don't know what to do with: %s"
                      String.(concat ~sep:", " l)))
       end);
-  
+
   define_command
     ~names:["bcl-to-fastq"; "b2f"]
     ~description:"Run, monitor, … the bcl_to_fastq function"
@@ -1576,7 +1576,7 @@ let () =
     ~run:(fun config exec cmd ->
       let module B2F = Hitscore_b2f_commands in
       function
-      | "start" :: args -> 
+      | "start" :: args ->
         B2F.start config (sprintf "%s <config> %s start" exec cmd) args
       | "register-success" :: id :: [] ->
         B2F.register_success config id
@@ -1599,8 +1599,8 @@ let () =
 (* MAIN *)
 let () =
   let global_usage = function
-    | `error -> 
-      eprintf "ERROR: Main usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n" 
+    | `error ->
+      eprintf "ERROR: Main usage: %s <[config-file:]profile> <cmd> [OPTIONS | ARGS]\n"
         Sys.argv.(0);
       eprintf "       try `%s help'\n" Sys.argv.(0);
     | `ok ->
@@ -1646,9 +1646,9 @@ let () =
   | exec :: "-list-config" :: args ->
     let config_file =
       match args with
-      | [] -> Configuration_file.default () 
+      | [] -> Configuration_file.default ()
       | one :: [] -> one
-      | _ -> eprintf "Too MANY arguments.\n"; global_usage `error; 
+      | _ -> eprintf "Too MANY arguments.\n"; global_usage `error;
         failwith ""
     in
     let config = In_channel.(with_file config_file ~f:input_all) in
@@ -1659,10 +1659,10 @@ let () =
         eprintf "Error while parsing configuration: %s\n" (Exn.to_string e);
         failwith "STOP"
     in
-    
+
     Configuration_file.print_all hitscore_config
-   
-    
+
+
   | exec :: profile :: cmd :: args ->
     let config_file, profile_name =
       match String.split profile ~on:':' with
@@ -1687,15 +1687,15 @@ let () =
         | Error (`profile_not_found s) ->
           eprintf "Profile %S not found in config-file\n" s;
           failwith "STOP"
-    in      
+    in
     begin match find_command cmd with
     | Some (names, description, usage, run) ->
       begin match (run hitscore_config exec cmd args) with
       | true -> ()
       | false -> usage stderr exec cmd;
       end
-    | _ -> 
-      eprintf "Unknown Command: %S !\n" cmd; 
+    | _ ->
+      eprintf "Unknown Command: %S !\n" cmd;
       global_usage `error
     end
 
