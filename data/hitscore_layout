@@ -107,6 +107,7 @@
 
 (record hiseq_run
         (date timestamp)
+        (sequencer string)
         (flowcell_a flowcell option)
         (flowcell_b flowcell option)
         notable)

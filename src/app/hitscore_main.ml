@@ -1285,11 +1285,11 @@ module Intensities_deletion = struct
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))
-end 
+end
 
 module Hiseq_run = struct
 
-  let register configuration day_date fca fcb note =
+  let register configuration day_date fca fcb sequencer =
     with_database configuration (fun ~dbh ->
       let layout = Classy.make dbh in
       let flowcell id =
@@ -1310,7 +1310,7 @@ module Hiseq_run = struct
       flowcell fca >>= fun flowcell_a ->
       flowcell fcb >>= fun flowcell_b ->
       layout#add_hiseq_run ~date:(Time.of_string (day_date ^ " 10:00:00-04:00"))
-        ?flowcell_a ?flowcell_b ?note ()
+        ~sequencer ?flowcell_a ?flowcell_b ?note:None ()
       >>= fun hsr ->
       printf "Added Hiseq run %d\n" hsr#id;
       layout#add_hiseq_statistics ~run:hsr#pointer ()
@@ -1319,14 +1319,21 @@ module Hiseq_run = struct
       return ())
 
   let () =
+    let default_sequencers =  ["CGSB-HS2000-1"; "CGSBAD-HS2000-1" ]in
     define_command ~names:["register-hiseq-run"]
       ~description:"Register an HiSeq 2000 run"
       ~usage:(fun o exec cmd ->
-        fprintf o "Usage: %s <profile> %s <date> <fcidA> <fcidB> [<note>]\n" exec cmd;
-        fprintf o "  where fcid is a database id, a proper FCID, or '_'\n")
+        fprintf o "Usage: %s <profile> %s <date> <fcidA> <fcidB> <sequencer>\n"
+          exec cmd;
+        fprintf o "  where fcid is a database id, a proper FCID, or '_'\n\
+                  \  and sequencer is one of [%s]\n"
+          (String.concat ~sep:", " default_sequencers))
       ~run:(fun config exec cmd -> function
-      | [date; fca; fcb] -> register config date fca fcb None
-      | [date; fca; fcb; note] -> register config date fca fcb (Some note)
+      | [date; fca; fcb; sequencer] when List.mem default_sequencers sequencer ->
+        register config date fca fcb sequencer
+      | [date; fca; fcb; sequencer] ->
+        error (`invalid_command_line (sprintf
+                "don't know that sequencer: %s" sequencer))
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))
