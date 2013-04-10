@@ -1319,7 +1319,7 @@ module Hiseq_run = struct
       return ())
 
   let () =
-    let default_sequencers =  ["CGSB-HS2000-1"; "CGSBAD-HS2000-1" ]in
+    let default_sequencers = Configuration.default_sequencers in
     define_command ~names:["register-hiseq-run"]
       ~description:"Register an HiSeq 2000 run"
       ~usage:(fun o exec cmd ->

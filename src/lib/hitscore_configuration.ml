@@ -180,4 +180,6 @@ module Configuration = struct
     | Some c -> Ok (c ())
     | None -> Error (`profile_not_found name)
 
+  let default_sequencers =  ["CGSB-HS2000-1"; "CGSBAD-HS2000-1" ]
+
 end
