@@ -80,6 +80,6 @@ fresh: clean uninstall
 
 # clean setup files, rebuilding may require additional tools
 distclean: clean
-	rm -f setup.data setup.log
+	rm -f setup.data setup.log VERSION BUILD_DATE
 	ocaml setup.ml -distclean
 
