@@ -1624,9 +1624,7 @@ let () =
   | exec :: _ :: "--version" :: args
   | exec :: _ :: "version" :: args ->
     let open Hitscore_conf_values in
-    printf "Hitscore v. %s%s (%s)\n" version
-      (if branch <> "master" then "+dev" else sprintf "+%d" patch_level)
-      last_commit
+    printf "Hitscore v. %s (built on or after %s)\n" version build_date
   | exec :: "-h" :: args
   | exec :: "-help" :: args
   | exec :: "--help" :: args
