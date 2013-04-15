@@ -11,7 +11,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
 
   let pbs_fun =
     Common.PBS.make ~pbs_script_filename:"make_b2f.pbs" "b2f"
-      
+
   let start ~dbh ~configuration
       ~(sample_sheet: Layout.Record_sample_sheet.pointer)
       ~(hiseq_dir: Layout.Record_hiseq_raw.pointer)
@@ -24,6 +24,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       ?queue
       ?(hitscore_command="echo hitscore should: ")
       ?(make_command="make -j8")
+      ?(basecalls_path= "Data/Intensities/BaseCalls/")
       name =
 
     check_hiseq_raw_availability ~dbh ~hiseq_raw:hiseq_dir
@@ -36,7 +37,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       >>= function
       | [one] -> return one
       | [] -> error (`empty_sample_sheet_volume (file, sample_sheet))
-      | more -> error (`more_than_one_file_in_sample_sheet_volume 
+      | more -> error (`more_than_one_file_in_sample_sheet_volume
                           (file, sample_sheet, more)))
     >>= fun sample_sheet_path ->
     Layout.Record_hiseq_raw.(
@@ -44,7 +45,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       let hiseq_dir_name = hr.g_value.hiseq_dir_name in
       Common.hiseq_raw_full_path ~configuration hiseq_dir_name
       >>= fun hs_path ->
-      return (Filename.concat hs_path "Data/Intensities/BaseCalls/"))
+      return (Filename.concat hs_path basecalls_path))
     >>= fun basecalls ->
     let mismatch32 =
       match mismatch with `zero -> 0 | `one -> 1 | `two -> 2 in
@@ -72,7 +73,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
           sample_sheet.Layout.Record_sample_sheet.id in
       Access.Log.add_value ~dbh ~log >>= fun _ ->
       Access.Bcl_to_fastq.set_started ~dbh b2f >>= fun () ->
-      Access.Log.add_value ~dbh 
+      Access.Log.add_value ~dbh
         ~log:(sprintf "(set_bcl_to_fastq_started %d)" b2f.id) >>= fun _ ->
       return b2f
     )
@@ -96,16 +97,16 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
         ~add_commands:(fun ~checked ~non_checked ->
           List.iter pre_commands (ksprintf checked "%s");
           ksprintf checked "cd %s" unaligned;
-          ksprintf checked "%s 1> %s 2> %s" 
+          ksprintf checked "%s 1> %s 2> %s"
             make_command make_stdout_path make_stderr_path;
           ksprintf checked
             "test `cat %s/Basecall_Stats_*/Demultiplex_Stats.htm | wc -l` -gt 5"
             unaligned;
-          ksprintf checked 
+          ksprintf checked
             "%s register-success %d" hitscore_command id;
           non_checked "echo \"Done: $(date -R)\"")
       >>= fun pbs_script ->
-      let cmd fmt = ksprintf (fun s -> system_command s) fmt in 
+      let cmd fmt = ksprintf (fun s -> system_command s) fmt in
       Common.PBS.prepare_work_environment ~dbh ~configuration pbs
       >>= fun () ->
       let command_chain =
@@ -128,11 +129,11 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
         Access.Bcl_to_fastq.set_failed ~dbh started
         >>= fun () ->
         Access.Log.add_value ~dbh
-          ~log:(sprintf "(set_bcl_to_fastq_failed %d while_creating_starting)" 
+          ~log:(sprintf "(set_bcl_to_fastq_failed %d while_creating_starting)"
                   started.Layout.Function_bcl_to_fastq.id)
         >>= fun _ ->
         return (`failure (started, e)))
-      
+
   let succeed ~dbh ~configuration ~bcl_to_fastq =
     let module LFB2F = Layout.Function_bcl_to_fastq in
     LFB2F.(Access.Bcl_to_fastq.get ~dbh bcl_to_fastq
@@ -166,7 +167,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
         Access.Bcl_to_fastq.set_succeeded ~dbh ~result bcl_to_fastq
         >>= fun () ->
         Access.Log.add_value ~dbh
-          ~log:(sprintf "(set_bcl_to_fastq_succeeded %d (result %d))" 
+          ~log:(sprintf "(set_bcl_to_fastq_succeeded %d (result %d))"
                   bcl_to_fastq.Layout.Function_bcl_to_fastq.id
                   result.Layout.Record_bcl_to_fastq_unaligned.id)
         >>= fun  _ ->
@@ -184,7 +185,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
           ~log:(sprintf "(delete_orphan_volume (id %d))" volid)
         >>= fun _ ->
         Access.Log.add_value ~dbh
-          ~log:(sprintf "(set_bcl_to_fastq_failed %d)" 
+          ~log:(sprintf "(set_bcl_to_fastq_failed %d)"
                   bcl_to_fastq.Layout.Function_bcl_to_fastq.id)
         >>= fun _ ->
         return (`failure (bcl_to_fastq, e)))
