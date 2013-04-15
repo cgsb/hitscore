@@ -12,7 +12,7 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
 
   val illumina_barcodes : (int * string) list
   val bioo_barcodes : (int * string) list
-  
+
   (** Run the whole function to assemble a sample-sheet. Example:
       {[
       run ~dbh ~kind:`specific_barcodes ~configuration "FC11IDXXX" >>= function
@@ -71,7 +71,7 @@ end
 (** The module to run CASAVA's demultiplexer.  *)
 module type BCL_TO_FASTQ = sig
 
-           
+
   (** Start the demultiplexer. Example:
 {[
 start ~dbh ~configuration       (* common arguments *)
@@ -80,7 +80,7 @@ start ~dbh ~configuration       (* common arguments *)
       ~tiles:"s_1_11,s_[2-6]_1"
       ~mismatch:`zero           (* `one is the default *)
       ~version:`casava_181      (* `casava_182 is the default *)
-      ~user:"ab42" 
+      ~user:"ab42"
       ~wall_hours ~nodes ~ppn ~queue             (* -> PBS options *)
       ~hitscore_command:"/usr/bin/hitscore-0.8"  (* For use inside the PBS-script *)
       ~make_command:"/opt/bin/gmake"
@@ -88,7 +88,7 @@ start ~dbh ~configuration       (* common arguments *)
 >>= function
 | `success started_evaluation_pointer -> ...
 | `failure (failed_evaluation_pointer, reason) -> ...
-]} 
+]}
 
      There, the return type can be seen as
      [ ([ `success | `failure_after ], `failure_before) monad]
@@ -113,6 +113,7 @@ start ~dbh ~configuration       (* common arguments *)
     ?queue:string ->
     ?hitscore_command:string ->
     ?make_command:string ->
+    ?basecalls_path: string ->
     string ->
     ([> `failure of
         Hitscore_layout.Layout.Function_bcl_to_fastq.pointer *
@@ -222,7 +223,7 @@ start ~dbh ~configuration       (* common arguments *)
              | `work_directory_not_configured ])
       Sequme_flow.t
 
-      
+
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
     dbh:Hitscore_db_backend.Backend.db_handle ->
@@ -304,10 +305,10 @@ module type UNALIGNED_DELIVERY = sig
       Sequme_flow.t
 
 end
-  
+
 (** Deletion of intensity files. *)
 module type DELETE_INTENSITIES = sig
-    
+
   (** Register a successful deletion of intensity files and create the
       new Hiseq_raw record. *)
   val register :
@@ -326,7 +327,7 @@ end
 (** The module to create “untyped” fastq directories.  *)
 module type COERCE_B2F_UNALIGNED = sig
 
-    
+
   val run :
     dbh:Hitscore_db_backend.Backend.db_handle ->
     configuration:'a ->
@@ -364,7 +365,7 @@ module type FASTX_QUALITY_STATS = sig
          string * [> `exited of int | `exn of exn
                   | `signaled of int | `stopped of int ]])
        Sequme_flow.t
-      
+
   (** Start *)
   val start :
     dbh:Hitscore_db_backend.Backend.db_handle ->
@@ -412,7 +413,7 @@ module type FASTX_QUALITY_STATS = sig
          string * [> `exited of int | `exn of exn
                   | `signaled of int | `stopped of int ]
      | `work_directory_not_configured ]) Sequme_flow.t
-      
+
   (** Register the evaluation as failed with a optional reason to add
       to the [log] (record). *)
   val fail :
@@ -423,7 +424,7 @@ module type FASTX_QUALITY_STATS = sig
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause ]) Sequme_flow.t
-      
+
   (** Get the status of the evaluation by checking its data-base
       status and it presence in the PBS queue. *)
   val status :
@@ -454,7 +455,7 @@ module type FASTX_QUALITY_STATS = sig
          | `wrong_header_format of Core.Std.String.t ]
      | `work_directory_not_configured ])
       Sequme_flow.t
-      
+
   (** Kill the evaluation ([qdel]) and set it as failed. *)
   val kill :
     dbh:Hitscore_db_backend.Backend.db_handle ->

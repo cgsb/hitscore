@@ -39,7 +39,7 @@ let get_hiseq_raw ~dbh s =
     >>= fun search_result ->
     return (search_result, String.drop_prefix almost_fc 1)
   | _ ->
-    begin 
+    begin
       try
         let hst = Layout.Record_hiseq_raw.unsafe_cast (Int.of_string s) in
         layout#hiseq_raw#get hst
@@ -62,7 +62,7 @@ let get_hiseq_raw ~dbh s =
   | [] ->
     error (`cant_find_hiseq_raw_for_flowcell flowcell)
   | more ->
-    error (`found_more_than_one_hiseq_raw_for_flowcell 
+    error (`found_more_than_one_hiseq_raw_for_flowcell
               (List.length more, flowcell))
   end
 
@@ -75,7 +75,11 @@ let start_parse_cmdline usage_prefix args =
   let tiles = ref None in
   let force_new = ref false in
   let bases_mask = ref None in
+  let basecalls_path = ref None in
   let options = pbs_options @ [
+    ( "-basecalls", Arg.String (fun s -> basecalls_path := Some s),
+      "<regexp list>\n\tSet the relative path to the Base-Calls directory \
+       (default: Data/Intensities/BaseCalls).");
     ( "-tiles", Arg.String (fun s -> tiles := Some s),
       "<regexp list>\n\tSet the --tiles option of CASAVA (copied verbatim).");
     ( "-bases-mask", Arg.String (fun s -> bases_mask := Some s),
@@ -103,18 +107,17 @@ let start_parse_cmdline usage_prefix args =
   ] in
   let anon_args = ref [] in
   let anon s = anon_args := s :: !anon_args in
-  let usage = 
+  let usage =
     sprintf "Usage: %s [OPTIONS] <search-flowcell-run>\n\
         \  Where <search-flowcell-run> can be either a flowcell name, a HiSeq \n\
         \    directory path or a DB-identifier in the 'hiseq_raw' table\n\
         \  Options:" usage_prefix in
   let cmdline = Array.of_list (usage_prefix :: args) in
-  begin 
+  begin
     try Arg.parse_argv cmdline options anon usage;
-        `go (List.rev !anon_args, !sample_sheet_kind, !force_new,
-             !user, !queue, !nodes, !ppn,
-             !wall_hours, !version, !mismatch,
-             !hitscore_command, !make_command, !tiles, !bases_mask)
+      `go (List.rev !anon_args, !sample_sheet_kind, !force_new,
+        !user, !queue, !nodes, !ppn, !wall_hours, !version, !mismatch,
+        !hitscore_command, !make_command, !tiles, !bases_mask, !basecalls_path)
     with
     | Arg.Bad b -> `bad b
     | Arg.Help h -> `help h
@@ -123,8 +126,8 @@ let start_parse_cmdline usage_prefix args =
 let start hsc prefix cl_args =
   begin match (start_parse_cmdline prefix cl_args) with
   | `go (args, kind, force_new, user, queue, nodes, ppn,
-         wall_hours, version, mismatch, 
-         hitscore_command, make_command, tiles, bases_mask) ->
+         wall_hours, version, mismatch,
+         hitscore_command, make_command, tiles, bases_mask, basecalls_path) ->
     db_connect hsc
     >>= fun dbh ->
     begin match args with
@@ -134,16 +137,16 @@ let start hsc prefix cl_args =
       get_or_make_sample_sheet ~dbh ~hsc ~kind ~force_new flowcell
       >>= fun sample_sheet ->
       Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
-        ~sample_sheet ~hiseq_dir ~hitscore_command ?bases_mask
+        ~sample_sheet ~hiseq_dir ~hitscore_command ?bases_mask ?basecalls_path
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
       >>= fun started ->
       begin match started with
-      | `success s -> 
+      | `success s ->
         printf "Evaluation %d started.\n" s.Layout.Function_bcl_to_fastq.id;
         return ()
       | `failure (s, e) ->
-        printf "Evaluation %d FAILED to START.\n" 
+        printf "Evaluation %d FAILED to START.\n"
           s.Layout.Function_bcl_to_fastq.id;
         error e
       end
@@ -162,9 +165,9 @@ let start hsc prefix cl_args =
   end
 
 
-let register_success hsc id = 
+let register_success hsc id =
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id))
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
@@ -190,7 +193,7 @@ let register_success hsc id =
         error e)
       ~error:(fun e ->
         printf "\nThere have been errors.\n";
-        error e)          
+        error e)
   | None ->
     eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n";
     error (`invalid_command_line (sprintf "%S is not an integer" id))
@@ -198,7 +201,7 @@ let register_success hsc id =
 
 let register_failure ?reason hsc id =
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id))
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
@@ -221,7 +224,7 @@ let register_failure ?reason hsc id =
 
 let check_status ?(fix_it=false) hsc id =
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id))
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
@@ -229,16 +232,16 @@ let check_status ?(fix_it=false) hsc id =
       Bcl_to_fastq.status ~dbh ~configuration:hsc bcl_to_fastq
       >>= function
       | `running ->
-        printf "The function is STILL RUNNING.\n"; 
+        printf "The function is STILL RUNNING.\n";
         return ()
-      | `started_but_not_running e -> 
+      | `started_but_not_running e ->
         printf "The function is STARTED BUT NOT RUNNING!!!\n";
         if fix_it then (
           printf "Fixing …\n";
           Bcl_to_fastq.fail ~dbh bcl_to_fastq
             ~reason:"checking_status_reported_started_but_not_running"
           >>= fun _ -> return ())
-        else 
+        else
           return ()
       | `not_started e ->
         printf "The function is NOT STARTED: %S.\n"
@@ -248,10 +251,10 @@ let check_status ?(fix_it=false) hsc id =
     eprintf "ERROR: bcl-to-fastq evaluation must be an integer.\n";
     error (`invalid_command_line (sprintf "%S is not an integer" id))
   end
-    
+
 let kill hsc id =
   let bcl_to_fastq =
-    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id)) 
+    try Some (Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string id))
     with e -> None in
   begin match bcl_to_fastq with
   | Some bcl_to_fastq ->
