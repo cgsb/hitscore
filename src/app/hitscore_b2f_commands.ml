@@ -78,7 +78,7 @@ let start_parse_cmdline usage_prefix args =
   let basecalls_path = ref None in
   let options = pbs_options @ [
     ( "-basecalls", Arg.String (fun s -> basecalls_path := Some s),
-      "<regexp list>\n\tSet the relative path to the Base-Calls directory \
+      "<path>\n\tSet the relative path to the Base-Calls directory \
        (default: Data/Intensities/BaseCalls).");
     ( "-tiles", Arg.String (fun s -> tiles := Some s),
       "<regexp list>\n\tSet the --tiles option of CASAVA (copied verbatim).");
