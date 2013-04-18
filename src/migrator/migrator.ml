@@ -25,6 +25,7 @@ let map_g_values list_of_values ~f =
   | List l ->
     List (List.map l ~f:(function
     | List [Atom "g_value"; l] -> List [Atom "g_value"; (f l)]
+    | List [Atom "g_evaluation"; l] -> List [Atom "g_evaluation"; (f l)]
     | l -> l))))
 let v13_to_v14 file_in file_out =
   let open Sexplib.Sexp in
@@ -90,6 +91,10 @@ let v14_to_v15 file_in file_out =
         eprintf "Hiseq_runs: %d\n" (List.length hiseq_runs) ;
         List [Atom "hiseq_run";
               List (map_g_values hiseq_runs (add_string "sequencer" "CGSB-HS2000-1")) ]
+      | List [Atom "bcl_to_fastq"; List b2fs]  ->
+        eprintf "Bcl_to_fastqs: %d\n" (List.length b2fs) ;
+        List [Atom "bcl_to_fastq";
+              List (map_g_values b2fs (add_string "basecalls_path" "Data/Intensities/BaseCalls")) ]
       | List l -> List l
     in
     begin match dump_v14 with
