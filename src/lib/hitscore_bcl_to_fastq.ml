@@ -56,7 +56,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
 
     Layout.Function_bcl_to_fastq.(
       Access.Bcl_to_fastq.add_evaluation ~dbh
-        ~raw_data:hiseq_dir ?tiles ?bases_mask
+        ~raw_data:hiseq_dir ?tiles ?bases_mask ?basecalls_path
         ~availability ~mismatch:mismatch32 ~version:casava_version ~sample_sheet
       >>= fun b2f ->
       let log =
