@@ -7,8 +7,17 @@ open Sequme_flow_list
 open Sequme_flow_app_util
 module Flow_net = Sequme_flow_net
 
+
+let msg fmt =
+  ksprintf (fun s -> printf "%s\n%!" s; return ()) fmt
+
+let debug = ref false
+let dbg fmt =
+  ksprintf (fun s -> if !debug then printf "DEBUG: %s\n%!" s; return ()) fmt
+
+
 module Configuration = struct
-    
+
   type configuration_v0 = {
     host: string;
     port: int;
@@ -21,7 +30,7 @@ module Configuration = struct
     | `v0 of configuration_v0
   ]
   ] with sexp
-    
+
   let make ~host ~port ~auth_token ~auth_token_name ~user_name =
     `gencore (`v0 {host; port; auth_token; auth_token_name; user_name})
 
@@ -49,7 +58,7 @@ module Configuration = struct
   let token_name = function
     | `gencore (`v0 {auth_token_name; _})  -> auth_token_name
 end
-  
+
 type connection_state = {
   connection:  Sequme_flow_net.connection;
   serialization_mode: Communication.Protocol.serialization_mode;
@@ -61,15 +70,15 @@ let state  ~mode ?configuration connection =
 let send_message ~state message =
   Sequme_flow_io.bin_send (Flow_net.out_channel state.connection)
     (Communication.Protocol.string_of_up ~mode:state.serialization_mode message)
-  
+
 let recv_message ~state =
   Sequme_flow_io.bin_recv (Flow_net.in_channel state.connection)
   >>= fun m ->
   of_result (Communication.Protocol.down_of_string
                ~mode:state.serialization_mode m)
-    
+
 let cmdf fmt = ksprintf Sequme_flow_sys.system_command fmt
-  
+
 type common_error =
 [ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
 | `bin_send of [ `exn of exn | `message_too_long of string ]
@@ -89,7 +98,7 @@ type common_error =
 | `unexpected_message of Communication.Protocol.down
 | `tls_context_exn of exn ]
 with sexp_of
-  
+
 type init_error = [
 | common_error
 | `no_password
@@ -101,7 +110,7 @@ let connect ~host ~port =
   Sequme_flow_net.connect
     ~address:Unix.(ADDR_INET (Inet_addr.of_string_or_getbyname host, port))
     (`tls (`anonymous, `allow_self_signed))
-  
+
 let create_token () =
   Random.self_init ();
   String.init 128 (fun i -> Random.int 64 + 32 |! Char.of_int_exn)
@@ -127,7 +136,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
   | `libraries _
   | `tokens _
   | `error `not_implemented as m -> error (`unexpected_message m)
-  | `token_updated 
+  | `token_updated
   | `token_created ->
     msg "The Authentication Token has been validated by the server \\o/"
     >>= fun () ->
@@ -151,7 +160,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
     msg "The server has run into trouble; you mya try again a bit later, \
          or if the problem persists call for help."
   end
-  
+
 module Flag = struct
 
   let with_config_file () =
@@ -165,7 +174,7 @@ module Flag = struct
         ~doc:(sprintf "<path> Use this configuration file (default: %s)"
                 default_config_file)
     )
-    
+
   let with_user_name () =
     let login = Unix.getlogin () in
     Command_line.Spec.(
@@ -188,7 +197,7 @@ let init_command =
       ++ Flag.with_config_file ()
       ++ Flag.with_user_name ()
       +> flag "-token-name"  (optional_with_default default_token_name string)
-        ~doc:(sprintf 
+        ~doc:(sprintf
                 "<name> Give a name to the authentication token (default: %s)"
                 default_token_name)
       +> anon ("HOST" %: string)
@@ -208,7 +217,7 @@ let init_command =
           send_message state `terminate >>= fun () ->
           Flow_net.shutdown connection
         end)
-    
+
 let connect_and_authenticate ~configuration_file ~mode =
   Configuration.of_file configuration_file
   >>= fun configuration ->
@@ -223,7 +232,7 @@ let connect_and_authenticate ~configuration_file ~mode =
   >>= fun () ->
   recv_message state
   >>= begin function
-  | `authentication_successful -> msg "Authentication successful !¡!"
+  | `authentication_successful -> dbg "Authentication successful !¡!"
   | `error `wrong_authentication ->
     msg "Authentication failed …" >>= fun () ->
     error `stop
@@ -235,14 +244,20 @@ let connect_and_authenticate ~configuration_file ~mode =
 let terminate_and_disconnect ~state =
   send_message state `terminate >>= fun () ->
   Flow_net.shutdown state.connection
+  >>< begin function
+  | Ok () -> return ()
+  | Error e ->
+    let str = <:sexp_of< [ `io_exn of exn ] >> e |> Sexp.to_string in
+    dbg "small error while shutting down: %s" str
+  end
 
 type info_error = [
 | common_error
 ]
 with sexp_of
-  
+
 let info ~state =
-  msg "Getting info …" >>= fun () ->
+  dbg "Getting info …" >>= fun () ->
   send_message state `get_simple_info >>= fun () ->
   dbg "Waiting?" >>= fun () ->
   recv_message state
@@ -273,7 +288,7 @@ let info ~state =
       ])
   | m -> error (`unexpected_message m)
   end
-    
+
 let info_command =
   let open Command_line in
   basic ~summary:"Get information about you form the server \
@@ -373,7 +388,7 @@ let list_libraries_command =
         begin
           connect_and_authenticate ~configuration_file ~mode
           >>= fun state ->
-          let spec = 
+          let spec =
             match fastq_read with
             | Some n -> `fastq_read (1, n)
             | None -> `all in
@@ -381,7 +396,7 @@ let list_libraries_command =
           >>= fun () ->
           terminate_and_disconnect ~state
         end)
-  
+
 type auth_list_tokens_error = common_error with sexp_of
 type auth_revoke_token_error = common_error with sexp_of
 
@@ -449,9 +464,9 @@ let auth_command =
   group ~summary:"Manage you authentication tokens" [
     ("list", list_tokens_command);
     ("revoke", revoke_token_command);
-  ] 
-        
-    
+  ]
+
+
 let () =
   Command_line.(
     run ~version:"0"
