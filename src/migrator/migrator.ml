@@ -91,6 +91,10 @@ let v14_to_v15 file_in file_out =
         eprintf "Hiseq_runs: %d\n" (List.length hiseq_runs) ;
         List [Atom "hiseq_run";
               List (map_g_values hiseq_runs (add_string "sequencer" "CGSB-HS2000-1")) ]
+      | List [Atom "client_fastqs_dir"; List cfd]  ->
+        eprintf "Client_fastqs_dir: %d\n" (List.length cfd) ;
+        List [Atom "client_fastqs_dir";
+              List (map_g_values cfd (add_string "host" "bowery.es.its.nyu.edu")) ]
       | List [Atom "bcl_to_fastq"; List b2fs]  ->
         eprintf "Bcl_to_fastqs: %d\n" (List.length b2fs) ;
         List [Atom "bcl_to_fastq";
