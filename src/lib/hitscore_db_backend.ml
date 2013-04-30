@@ -1,10 +1,9 @@
 
 open Hitscore_std
 
-  
-module Timestamp = struct 
+
+module Timestamp = struct
   include Core.Std.Time
-  let () = write_new_string_and_sexp_formats__read_only_new ()
 end
 
 module Bytea = struct
@@ -90,23 +89,23 @@ module Bytea = struct
       if  cc < 0x20 || cc > 0x7e || c = '\'' || c = '"' || c = '\\'
       then
         Buffer.add_string buf (sprintf "\\\\%03o" cc) (* non-print -> \ooo *)
-      else 
+      else
         Buffer.add_char buf c (* printable *)
     done;
     sprintf "E'%s'::bytea" (Buffer.contents buf)
 
-      
+
   let to_db_input = string_of_bytea
   let of_db_output = bytea_of_string
 
 end
 
-  
+
 module Sql_query = struct
   type t = string
   type result = string option list list
 
-  type status = [ `Failed | `Inserted | `Started | `Succeeded ] 
+  type status = [ `Failed | `Inserted | `Started | `Succeeded ]
   let status_to_string : status -> string = function
     | `Started -> "Started"
     | `Inserted -> "Inserted"
@@ -129,7 +128,7 @@ module Sql_query = struct
       r_created: Timestamp.t;
       r_last_modified: Timestamp.t;
       r_sexp: Sexp.t }
-      
+
   type function_evaluation =
     {f_id:int;
      f_type: string;
@@ -146,7 +145,7 @@ module Sql_query = struct
     v_sexp: Sexp.t;
     v_last_modified: Timestamp.t;
   }
-      
+
   let escape_sql s = Bytea.to_db_input s
   let unescape s =
     (* eprintf "Unescaping: %S\n--> %S%!" s (Bytea.of_db_output s); *)
@@ -158,11 +157,11 @@ module Sql_query = struct
     "drop table volume";
     "drop sequence id_sequence;";
   ]
-        
+
   let create_sequence: t =
     "CREATE SEQUENCE id_sequence"
   let id_type =
-    "integer DEFAULT nextval('id_sequence') PRIMARY KEY NOT NULL" 
+    "integer DEFAULT nextval('id_sequence') PRIMARY KEY NOT NULL"
   let check_sequence : t = "select last_value from id_sequence"
   let update_sequence : t =
     "select setval('id_sequence', \
@@ -202,12 +201,12 @@ module Sql_query = struct
       \  sexp bytea NOT NULL)"  id_type
   let check_volume: t =
     "SELECT (id, last_modified, kind, sexp) FROM volume WHERE id = 0"
-        
+
   let last_modified_value ~record_name : t =
-    sprintf 
+    sprintf
       "select last_modified from record where type = %s ORDER BY 1 DESC LIMIT 1"
       (escape_sql record_name)
-      
+
   let last_modified_evaluation ~function_name : t =
     sprintf "select greatest (inserted, started, completed)
              from function where type = %s ORDER BY 1 DESC LIMIT 1"
@@ -215,7 +214,7 @@ module Sql_query = struct
 
   let last_modified_volume () : t =
     "select last_modified from volume ORDER BY 1 DESC LIMIT 1"
-      
+
 
   let add_value_sexp ~record_name sexp : t =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
@@ -233,14 +232,14 @@ module Sql_query = struct
       \ (type, inserted, status, sexp)\n\
       \ VALUES (%s, %s, %s, %s) RETURNING id"
       str_type now status_str str_sexp
-    
+
   let add_volume_sexp ~kind sexp : t =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
     let str_type = escape_sql kind in
     sprintf "INSERT INTO volume (last_modified, kind, sexp)\n\
       \ VALUES (%s, %s,%s) RETURNING id" now str_type str_sexp
-      
+
   let insert_value v : t =
     let id            = v.r_id in
     let typ           = v.r_type |! escape_sql in
@@ -265,11 +264,11 @@ module Sql_query = struct
      sprintf "INSERT INTO function \
         (id , type , result , inserted , started , completed , status , sexp)
         VALUES (%d, %s, %s, %s, %s, %s, %s, %s) "
-       id typ result inserted 
+       id typ result inserted
        (Option.value started ~default:"NULL")
        (Option.value completed ~default:"NULL")
-       status sexp 
-     
+       status sexp
+
   let insert_volume v : t =
     let str_sexp = Sexp.to_string_hum v.v_sexp |! escape_sql in
     let str_type = escape_sql v.v_kind in
@@ -299,7 +298,7 @@ module Sql_query = struct
     let str_type = escape_sql record_name in
     sprintf "UPDATE record SET last_modified = %s, sexp = %s \
              WHERE id = %d AND type = %s" now str_sexp id str_type
-     
+
   let update_volume_sexp ~kind id sexp : t =
     let now = Timestamp.(to_string (now ()))  |! escape_sql in
     let str_sexp = Sexp.to_string_hum sexp |! escape_sql in
@@ -326,13 +325,13 @@ module Sql_query = struct
     sprintf "UPDATE function SET completed = %s, status = %s, result = %d \
              WHERE id = %d AND type = %s"
       now (status_to_string `Succeeded |! escape_sql) result id str_type
-    
-      
+
+
   let should_be_single = function
     | [one] -> Ok one
     | more -> Error (`result_not_unique more)
-      
-      
+
+
   let parse_timestamp s =
     Result.try_with (fun () -> Timestamp.of_string (unescape s))
   let parse_timestamp_opt o =
@@ -410,7 +409,7 @@ module Sql_query = struct
 
 
 end
-  
+
 
 module type BACKEND = sig
   type db_handle
@@ -459,11 +458,11 @@ module type BACKEND = sig
          | `disconnection of exn
          | `query of Sql_query.t * exn ] ])
       Sequme_flow.t
-      
+
 end
-  
+
 module Backend : BACKEND = struct
-    
+
   type db_handle = {
     mutable connection: int PG.t; (* ensure it does not come from the
                                      syntax extension *)
@@ -482,7 +481,7 @@ module Backend : BACKEND = struct
   ] with sexp_of
   type result_item = string option list with sexp
   type result = result_item list with sexp
-    
+
   let connect ?host ?port ?database ?user ?password ?log () :
       (db_handle, [> `db_backend_error of [> error ] ]) Sequme_flow.t =
     bind_on_error
@@ -492,7 +491,7 @@ module Backend : BACKEND = struct
     >>= fun connection ->
     return {log; connection; host; port; database; user; password;}
 
-  let disconnect ~(dbh: db_handle) = 
+  let disconnect ~(dbh: db_handle) =
     bind_on_error (catch_io PG.close dbh.connection)
       (fun e -> error (`db_backend_error (`disconnection e)))
 
@@ -514,16 +513,16 @@ module Backend : BACKEND = struct
     >>= fun connection ->
     dbh.connection <- connection;
     return dbh
-    
+
   let logf dbh fmt =
     ksprintf (fun s ->
       match dbh.log with
       | Some f -> f s
       | None -> ()) ("DB:" ^^ fmt)
-      
+
   let query ~(dbh: db_handle) (query:Sql_query.t) =
     let name = sprintf "%f" (Random.float 100.) in
-    let work_m = 
+    let work_m =
       wrap_io (PG.prepare ~name ~query dbh.connection) ()
       >>= fun () ->
       wrap_io (PG.execute ~name ~params:[] dbh.connection) ()
@@ -540,7 +539,7 @@ module Backend : BACKEND = struct
       | `io_exn e ->
         logf dbh "QUERY: %S : ERROR: %s" query (Exn.to_string e);
         error (`db_backend_error (`query (query, e))))
-        
+
   let wipe_out ~dbh =
     while_sequential Sql_query.wipe_out (fun q ->
       bind_on_error (query ~dbh q) (fun e -> return []))
