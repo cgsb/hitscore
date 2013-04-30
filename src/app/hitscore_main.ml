@@ -543,8 +543,13 @@ module Hiseq_raw = struct
       | Error (`parse_run_parameters (`wrong_field s)) ->
         failwithf "Error while parsing %s in runParameters.xml" s ()
     in
-
-    let host = Option.value ~default:"bowery.es.its.nyu.edu" host in
+    let host =
+      Option.value_exn
+        ~error:(Error.of_exn (Failure "Cannot detect host!"))
+        (match host with
+        | Some s -> Some s
+        | None -> System.detect_host ()) in
+    (* Option.value_exn ~default:"bowery.es.its.nyu.edu" host in *)
     with_database config (fun ~dbh ->
       Access.Hiseq_raw.add_value ~dbh
         ~flowcell_name
@@ -628,7 +633,11 @@ module Hiseq_raw = struct
       ~usage:(fun o exec cmd ->
         fprintf o "usage: %s <profile> %s [-host <host-addr>] <absolute-path>\n"
           exec cmd;
-        fprintf o "   (default host being bowery.es.its.nyu.edu)\n")
+        fprintf o "   (default host being %s)\n"
+          (match System.detect_host () with
+          | Some s -> sprintf "detected as %S" s
+          | None -> sprintf "impossible to detect")
+      )
       ~run:(fun config exec cmd -> function
       | [path] -> register config path
       | ["-host"; host; path] -> register config ~host path
@@ -1227,11 +1236,18 @@ end
 
 module Prepare_delivery = struct
 
-  let run_function configuration bb inv dir directory_tag =
+  let run_function configuration bb inv host dir directory_tag =
     if not (Filename.is_absolute dir)
     then (eprintf "%s is not an absolute path" dir; failwith "STOP");
+    let host =
+      Option.value_exn
+        ~error:(Error.of_exn (Failure "Cannot detect host!"))
+        (match host with
+        | Some s -> Some s
+        | None -> System.detect_host ()) in
     with_database ~configuration (fun ~dbh ->
       Unaligned_delivery.run ~dbh ~configuration ?directory_tag
+        ~host
         ~bcl_to_fastq:(Layout.Function_bcl_to_fastq.unsafe_cast (Int.of_string bb))
         ~invoice:(Layout.Record_invoicing.unsafe_cast (Int.of_string inv))
         ~destination:dir
@@ -1248,14 +1264,20 @@ module Prepare_delivery = struct
   let () =
     define_command ~names:["deliver"] ~description:"Deliver links to clients"
       ~usage:(fun o exec cmd ->
-        fprintf o "Usage: %s <profile> %s <bcl_to_fastq> <invoice> <dir> [<tag>]\n"
+        fprintf o "Usage: %s <profile> %s [-host <host>] <bcl_to_fastq> <invoice> <dir> [<tag>]\n"
           exec cmd;
         fprintf o "Usage: %s <profile> %s -redo <path>\n" exec cmd;
+        fprintf o "Where the default <host> is %s\n"
+          (match System.detect_host () with
+          | Some s -> sprintf "detected as %S" s
+          | None -> sprintf "impossible to detect");
       )
       ~run:(fun config exec cmd -> function
       | ["-redo"; path] -> do_repair config path
-      | [bb; inv; dir] -> run_function config bb inv dir None
-      | [bb; inv; dir; tag] -> run_function config bb inv dir (Some tag)
+      | ["-host"; host; bb; inv; dir] -> run_function config bb inv (Some host) dir None
+      | [bb; inv; dir] -> run_function config bb inv None dir None
+      | [bb; inv; dir; tag] -> run_function config bb inv None dir (Some tag)
+      | ["-host"; host; bb; inv; dir; tag] -> run_function config bb inv (Some host) dir (Some tag)
       | l -> error (`invalid_command_line
                        (sprintf "don't know what to do with: %s"
                           String.(concat ~sep:", " l))))

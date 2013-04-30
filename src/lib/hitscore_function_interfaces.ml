@@ -259,6 +259,7 @@ module type UNALIGNED_DELIVERY = sig
   val run :
     dbh:Hitscore_db_backend.Backend.db_handle ->
     configuration:Configuration.local_configuration ->
+    host:string ->
     ?directory_tag:string ->
     bcl_to_fastq:Layout.Function_bcl_to_fastq.pointer ->
     invoice:Layout.Record_invoicing.pointer ->

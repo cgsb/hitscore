@@ -1,5 +1,5 @@
 open Core.Std
-  
+
 open Hitscore
 open Flow
 
@@ -13,7 +13,7 @@ module System = struct
     | Ok () -> ()
     | Error e -> raise (Wrong_status e)
     end
-  let command s = 
+  let command s =
     begin match Unix.system s with
     | Ok () -> Ok ()
     | Error status ->
@@ -28,12 +28,35 @@ module System = struct
 *)
   let command_to_string s =
     Unix.open_process_in s |! In_channel.input_all
-        
+
+  (* Totally non-cooperative host detection *)
+  let detect_host () =
+    begin match Unix.system "host bowery2" with
+    | Ok () ->
+      (* we 'see' bowery2 so we are on bowery *)
+      (Some "bowery.es.its.nyu.edu")
+    | Error (`Exit_non_zero 1) ->
+      begin match Unix.system "host butinah2" with
+      | Ok () ->
+        (* we 'see' butinah2 so we are on butinah *)
+        (Some "butinah.abudhabi.nyu.edu")
+      | Error (`Exit_non_zero 1) ->
+        (* We have no idea where we are *)
+        None
+      | Error status ->
+        eprintf "WARNING: `host butinah2` did not return 0 or 1";
+        None
+      end
+    | Error status ->
+      eprintf "WARNING: `host bowery2` did not return 0 or 1";
+      None
+    end
+
 end
 
 module XML = struct
   include Xmlm
-  let in_tree i = 
+  let in_tree i =
     let el tag childs = `E (tag, childs)  in
     let data d = `D d in
     input_doc_tree ~el ~data i
@@ -133,7 +156,7 @@ let string_of_error = function
       pointer.Hitscore_layout.Layout.Function_bcl_to_fastq.id
       Hitscore_layout.Layout.Enumeration_process_status.(to_string status)
   | `not_single_flowcell l ->
-    sprintf "Flowcell not unique: %s" 
+    sprintf "Flowcell not unique: %s"
       (String.concat ~sep:";" (List.map l (fun (s, ll) ->
         sprintf "%S: [%s]" s (String.concat ~sep:", "
                                 (List.map ll (sprintf "%d"))))))
@@ -148,7 +171,7 @@ let string_of_error = function
       | `Dump -> "Dump"
       | `File_system -> "File-system"
       | `Function f -> sprintf  "function %S" f
-      | `Record r -> sprintf "record %S" r) 
+      | `Record r -> sprintf "record %S" r)
       (match what with
       | `search_flowcell_by_name_not_unique (s, i) ->
         sprintf "search_flowcell_by_name_not_unique %s %d" s i
@@ -159,7 +182,7 @@ let string_of_error = function
     | `exn e
     | `connection e
     | `disconnection e
-    | `query  (_, e) -> 
+    | `query  (_, e) ->
       sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
     end
   | `id_not_found i ->
@@ -177,7 +200,7 @@ let string_of_error = function
       | `Dump -> "Dump"
       | `File_system -> "File-system"
       | `Function f -> sprintf  "function %S" f
-      | `Record r -> sprintf "record %S" r) 
+      | `Record r -> sprintf "record %S" r)
       (match what with
       | `db_backend_error (`query (q, e)) ->
         sprintf "Query %S failed: %s" q (Exn.to_string e)
@@ -186,7 +209,7 @@ let string_of_error = function
         | `exn e
         | `connection e
         | `disconnection e
-        | `query  (_, e) -> 
+        | `query  (_, e) ->
           sprintf "DB BACKEND ERROR: %s" (Exn.to_string e)
         end
       | `parse_timestamp s ->
@@ -210,7 +233,7 @@ let string_of_error = function
         sprintf "WRONG-ADD-VALUE"
       | `wrong_version (v1, v2) ->
         sprintf "Wrong version: %s Vs %s" v1 v2)
-        
+
 
 (*
 let display_errors = function
@@ -240,15 +263,15 @@ let print_query_result query l =
     (String.concat ~sep:"; " (List.map l (fun l2 ->
       sprintf "(%s)"
         (String.concat ~sep:", " (List.map l2 (Option.value ~default:"—"))))))
-*)  
+*)
 let pbs_related_command_line_options
-    ?(default_nodes=1) ?(default_ppn=8) ?(default_wall_hours=12) () = 
+    ?(default_nodes=1) ?(default_ppn=8) ?(default_wall_hours=12) () =
   let user = ref (Sys.getenv "LOGNAME") in
   let command_to_string s =
     Unix.open_process_in s |! In_channel.input_all in
-  let queue = 
+  let queue =
     let groups =
-      command_to_string "groups" 
+      command_to_string "groups"
       |! String.split_on_chars ~on:[ ' '; '\t'; '\n' ] in
     match List.find groups ((=) "cgsb") with
     | Some _ -> ref (Some "cgsb-s")
@@ -259,17 +282,17 @@ let pbs_related_command_line_options
   let hitscore_command =
     ref (sprintf "%s %s %s" Sys.executable_name Sys.argv.(1) Sys.argv.(2)) in
   let options = [
-    ( "-user", 
+    ( "-user",
       Arg.String (fun s -> user := Some s),
       sprintf "<login>\n\tSet the user-name (%s)."
         (Option.value_map ~default:"kind-of mandatory" !user
            ~f:(sprintf "default value inferred: %s")));
-    ( "-queue", 
+    ( "-queue",
       Arg.String (fun s -> queue := Some s),
-      sprintf "<name>\n\tSet the PBS-queue%s." 
-        (Option.value_map ~default:"" !queue 
+      sprintf "<name>\n\tSet the PBS-queue%s."
+        (Option.value_map ~default:"" !queue
            ~f:(sprintf " (default value inferred: %s)")));
-    ( "-nodes-ppn", 
+    ( "-nodes-ppn",
       Arg.Tuple [ Arg.Set_int nodes; Arg.Set_int ppn],
       sprintf "<n> <m>\n\tSet the number of nodes and processes per node \
                   (default %d, %d)." !nodes !ppn);

@@ -20,7 +20,7 @@ module Unaligned_delivery:
     | _ -> '_')
 
   let run ~dbh ~configuration
-      ?directory_tag ~bcl_to_fastq ~invoice ~destination =
+      ~host ?directory_tag ~bcl_to_fastq ~invoice ~destination =
     let layout = Classy.make dbh in
     layout#bcl_to_fastq#get bcl_to_fastq
     >>= fun b2f ->
@@ -42,15 +42,15 @@ module Unaligned_delivery:
     >>= fun pi ->
     return (pi#family_name, invoice#lanes)
     >>= fun (pi_name, invoice_lanes) ->
-    debug "pi: %s; lanes: %s\n" pi_name 
-      (Array.to_list invoice_lanes 
+    debug "pi: %s; lanes: %s\n" pi_name
+      (Array.to_list invoice_lanes
        |! List.map ~f:(fun l -> sprintf "%d" l#id) |! String.concat ~sep:", ")
     >>= fun () ->
     layout#flowcell#all >>= fun flowcells ->
     while_sequential flowcells ~f:(fun fc ->
       let find_lanes =
         Array.map invoice_lanes
-          ~f:(fun l -> Array.findi ~f:(fun _ o -> o#pointer = l#pointer) fc#lanes) 
+          ~f:(fun l -> Array.findi ~f:(fun _ o -> o#pointer = l#pointer) fc#lanes)
         |! Array.to_list in
       if List.for_all find_lanes ~f:((=) None) then
         return None
@@ -61,7 +61,7 @@ module Unaligned_delivery:
                       List.filter_opt find_lanes |! List.map ~f:fst)))
     >>| List.filter_opt >>= function
     | [ (flowcell_name, lanes_idxs) ]->
-      debug "%s wants lanes: %s of %s\n" pi_name 
+      debug "%s wants lanes: %s of %s\n" pi_name
         (lanes_idxs |! List.map ~f:(sprintf "%d") |! String.concat ~sep:", ")
         flowcell_name >>= fun () ->
       while_sequential (Array.to_list invoice_lanes) ~f:(fun il ->
@@ -75,16 +75,16 @@ module Unaligned_delivery:
       let links_dir =
         let default = Time.(now () |! to_local_date) |! Date.to_string in
         sprintf "%s/%s/%s_%s"
-          destination (sanitize_filename pi_name) 
+          destination (sanitize_filename pi_name)
           (Option.value ~default directory_tag) flowcell_name
-      in          
+      in
       cmd "mkdir -m 750 -p %S" links_dir  >>= fun () ->
       debug "created links dir: %s\n" links_dir >>= fun () ->
       while_sequential lanes_idxs ~f:(fun idx ->
         cmd "unset CDPATH; cd %s && ln -s %s/Project_Lane%d Lane%d"
           links_dir unaligned_path (idx + 1) (idx + 1))
       >>= fun (_: unit list) ->
-      Access_rights.set_posix_acls ~dbh 
+      Access_rights.set_posix_acls ~dbh
         ~more_readers:logins ~configuration (`dir links_dir)
       >>= fun () ->
       layout#add_prepare_unaligned_delivery
@@ -92,12 +92,12 @@ module Unaligned_delivery:
       >>= fun fpointer ->
       fpointer#get >>= fun f ->
       f#set_started >>= fun () ->
-      layout#add_client_fastqs_dir ~directory:(canonical_path links_dir) ()
+      layout#add_client_fastqs_dir ~host ~directory:(canonical_path links_dir) ()
       >>= fun result ->
       f#set_succeeded result#pointer
       >>= fun () ->
-      return fpointer#pointer 
-    | l -> 
+      return fpointer#pointer
+    | l ->
       error (`not_single_flowcell l)
 
   let repair_path ~dbh ~configuration path =
@@ -141,12 +141,12 @@ module Unaligned_delivery:
       >>= fun logins ->
       debug "Logins: %s\n" (String.concat ~sep:", " logins) >>= fun () ->
       while_sequential lane_indexes (fun i ->
-        ksprintf system_command 
+        ksprintf system_command
           "unset CDPATH; cd %s && rm -f Lane%d && \
              ln -s %s/Unaligned/Project_Lane%d Lane%d "
           path i unaligned i i)
       >>= fun _ ->
-      Access_rights.set_posix_acls ~dbh 
+      Access_rights.set_posix_acls ~dbh
         ~more_readers:logins ~configuration (`dir path)
       >>= fun () ->
       ksprintf (Common.add_log ~dbh) "(delivery_reparation %S \
@@ -158,5 +158,5 @@ module Unaligned_delivery:
     | l ->
       error (`cannot_find_delivery (path, List.length l))
     end
-    
+
 end

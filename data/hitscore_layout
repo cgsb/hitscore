@@ -210,6 +210,7 @@
 
 
 (record client_fastqs_dir
+        (host string)
         (directory string))
 
 (function client_fastqs_dir prepare_unaligned_delivery
