@@ -371,7 +371,7 @@ let list_libraries ~state ~separator ~query ~spec =
 
 let list_libraries_command =
   let open Command_line in
-  basic ~summary:"List the libraries you belong to"
+  basic ~summary:"List your libraries"
     Spec.(
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
@@ -471,7 +471,9 @@ let () =
   Command_line.(
     run ~version:"0"
       (group ~summary:"Gencore's command-line application" [
-        ("init", init_command);
+        ("config", group ~summary:"Manage the configuration of the application" [
+          ("init", init_command);
+        ]);
         ("info", info_command);
         ("libraries", list_libraries_command);
         ("auth", auth_command);
