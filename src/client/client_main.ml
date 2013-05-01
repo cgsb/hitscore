@@ -289,10 +289,10 @@ let info ~state =
   | m -> error (`unexpected_message m)
   end
 
-let info_command =
+let self_test_command =
   let open Command_line in
-  basic ~summary:"Get information about you form the server \
-                  (in other words, test the authentication ;)"
+  basic ~summary:"Test your connection/authentication setting by getting \
+                  information about you from the server"
     Spec.(
       Communication.Protocol.serialization_mode_flag ()
       ++ Flag.with_config_file ()
@@ -466,15 +466,105 @@ let auth_command =
     ("revoke", revoke_token_command);
   ]
 
+let manual () =
+  let module S = struct
+    include Core_extended.Extended_string
+    let indent ?(indentation=4) s =
+      String.split ~on:'\n' s
+      |> List.map ~f:(sprintf "%s%s" (String.make indentation ' '))
+      |> String.concat ~sep:"\n"
+    let underline s char =
+      let without_utf8 =
+(* http://stackoverflow.com/questions/4063146/getting-the-actual-length-of-a-utf-8-encoded-stdstring *)
+        String.filter s (fun c -> Char.to_int c land 0xc0 <> 0x80) in
+      let under = String.make (String.length without_utf8) char in
+      sprintf "%s\n%s\n" s under
+
+  end in
+  let outbuf = Buffer.create 42 in
+  let outs s = Buffer.add_string outbuf s in
+  let out fmt = ksprintf outs fmt in
+  let par fmt =
+    ksprintf (fun s ->
+        S.squeeze s |> S.word_wrap ~hard_limit:72 |> out "%s\n\n") fmt in
+  let code fmt =
+    ksprintf (fun s -> out "%s\n\n" (S.indent s)) fmt in
+  let links = ref [] in
+  let link name url =
+    links := (name, url) :: !links;
+    sprintf "[%s]" name in
+  let out_links () =
+    List.iter (List.rev !links) (fun (n, u) -> out "[%s]: %s\n" n u);
+    if List.length !links > 0 then out "\n";
+    links := [];
+  in
+  let section fmt =
+    out_links ();
+    ksprintf (fun s -> out "\n%s\n" (S.underline s '=')) fmt in
+  let subsection fmt =
+    out_links ();
+    ksprintf (fun s -> out "\n%s\n" (S.underline s '-')) fmt in
+  section "Welcome to Gencore's Command Line Application";
+  par "This manual describes the basic usage of `gencore` with examples. \
+       More details are available through the `-help` options of every \
+       sub-command.";
+  subsection "General Usage";
+  par "The application uses a hierarchy of commands which you can explore \
+      using:";
+  code "gencore help -r";
+  par "Note that every sub-command name can be shortened as long as it \
+       is not ambiguous, i.e. `gencore authentication` is equivalent to \
+       `gencore auth`.";
+  subsection "Initialization";
+  par "The application uses a configuration file which can be created with the \
+      `gencore configuration initialize` sub-command:";
+  code "gencore config init <host> <port>";
+  par "where <host> and <port> are the location of the Gencore server.";
+  par "If the username on your machine is not your NetID you need to provide \
+       the option `-user <netID>`.";
+  par "`gencore` will contact the server and ask you to authenticate \
+       yourself through your NetID (or with your Gencore password if any). \
+       Then it will request an authentication token (independent of your \
+       password) and store it together with other options in the \
+       configuration file (i.e. your password is never stored).";
+  par "Your can specify an alternate configuration file to use (option `-c`) \
+       but then you have to specify it every time.";
+  par "You can give a name to the authentication token (option `-token-name`) \
+       to simplify later your auth-token management (sub-command \
+       `authentication`).";
+  par "After you have successfully configured `gencore` you can test the \
+       connection settings with:";
+  code "gencore self-test";
+  subsection "The “Libraries” Command";
+  par "The idea here is to query our database about your libraries. By “your” \
+       we mean the libraries you have been associated with, i.e. the ones that \
+       show up in the %s section of the website."
+    (link "/libraries"
+       "https://gencore.bio.nyu.edu/libraries");
+  par "The querying is for now fairly limited, let's see a few examples.";
+  subsection "About this document";
+  let markdown = link "Markdown" "http://en.wikipedia.org/wiki/Markdown" in
+  let pandoc = link "Pandoc" "http://johnmacfarlane.net/pandoc/" in
+  par "You may view this document with the command `gencore manual` or, more \
+       progressively, with `gencore manual | less`, but if you have a \
+       %s processor like %s you may view the manual in your favorite \
+       web-browser:" markdown pandoc;
+  code "gencore manual | pandoc -s -o gencore-manual.html";
+  out_links ();
+  Buffer.contents outbuf
 
 let () =
   Command_line.(
     run ~version:"0"
       (group ~summary:"Gencore's command-line application" [
-        ("config", group ~summary:"Manage the configuration of the application" [
-          ("init", init_command);
-        ]);
-        ("info", info_command);
-        ("libraries", list_libraries_command);
-        ("auth", auth_command);
-      ]))
+          ("configuration",
+           group ~summary:"Manage the configuration of the application" [
+             ("initialize", init_command);
+           ]);
+          ("self-test", self_test_command);
+          ("libraries", list_libraries_command);
+          ("authentication", auth_command);
+          ("manual", basic ~summary:"Display the user manual"
+             Spec.(empty)
+             (fun () -> printf "%s\n" (manual ())));
+        ]))
