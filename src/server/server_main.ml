@@ -8,7 +8,7 @@ open Sequme_flow_list
 open Sequme_flow_app_util
 module Flow_net = Sequme_flow_net
 
-  
+
 let with_profile () =
   let open Command_line.Spec in
   let default_path =
@@ -80,7 +80,7 @@ let send_message state msg =
   let str =
     Communication.Protocol.string_of_down ~mode msg in
   Sequme_flow_io.bin_send (Flow_net.out_channel state.connection) str
-  
+
 let with_layout ~state f =
   with_database ~configuration:state.global.configuration (fun ~dbh ->
     let layout = Classy.make dbh in
@@ -91,7 +91,7 @@ let find_user layout user =
   >>| List.find ~f:(fun p ->
     p#login = Some user || p#email = user
             || Array.exists p#secondary_emails ~f:((=) user))
-  
+
 let handle_new_token ~state ~user ~password ~token_name ~token =
   with_layout ~state (fun layout ->
     find_user layout user
@@ -135,7 +135,7 @@ let handle_new_token ~state ~user ~password ~token_name ~token =
     >>= fun () ->
     error e
   end
-  
+
 let authenticate ~state ~user ~token_name ~token =
   with_layout ~state (fun layout ->
     find_user layout user
@@ -151,7 +151,7 @@ let authenticate ~state ~user ~token_name ~token =
           send_message state (`authentication_successful)
         end
         else send_message state (`error `wrong_authentication)
-      | None -> 
+      | None ->
         send_message state (`error `wrong_authentication)
       end
     | None ->
@@ -165,14 +165,14 @@ let authenticate ~state ~user ~token_name ~token =
     >>= fun () ->
     error e
   end
-      
+
 let retrieve_simple_info ~state =
   begin match state.user with
   | `none -> send_message state (`error `wrong_authentication)
   | `token_authenticated t ->
     with_layout ~state (fun layout ->
-      let classy_person = new Classy.person_element layout#dbh t in 
-      let open Communication.Protocol in 
+      let classy_person = new Classy.person_element layout#dbh t in
+      let open Communication.Protocol in
       while_sequential (Array.to_list classy_person#affiliations) (fun a ->
         a#get >>= fun aff ->
         return (Array.to_list aff#path))
@@ -201,7 +201,7 @@ let list_libraries ~state query =
             |! Option.map ~f:(fun s -> s.Bui.cluster_count) in
           map_option (Data_access.choose_delivery_for_user dmux sub)
             (fun (del, inv) ->
-              let path = 
+              let path =
                 Option.(value_map ~default:"NO-DIR"
                           ~f:(fun d-> d#directory) del#client_fastqs_dir) in
               return path)
@@ -270,7 +270,7 @@ let list_libraries ~state query =
     >>= fun result ->
     send_message state (`libraries result)
   end
-    
+
 let with_auth ~state =
   begin match state.user with
   | `none ->
@@ -278,7 +278,7 @@ let with_auth ~state =
     error `stop
   | `token_authenticated t -> return t
   end
-  
+
 let list_tokens ~state =
   with_auth ~state >>= fun logged ->
   state.global.persons_info () >>= fun info ->
@@ -288,7 +288,7 @@ let list_tokens ~state =
       then Some (List.map p#tokens (fun t -> t#name))
       else None) |! List.concat  in
   send_message state (`tokens tokens)
-    
+
 let revoke_token ~state token =
   with_auth ~state >>= fun logged ->
   state.global.persons_info () >>= fun info ->
@@ -301,7 +301,7 @@ let revoke_token ~state token =
   | Some (p, Some t) ->
     let tokens =
       Array.filter_map p#t#auth_tokens (fun ptok ->
-        if ptok#id = t#g_id then None else Some ptok#pointer) in   
+        if ptok#id = t#g_id then None else Some ptok#pointer) in
     p#t#set_auth_tokens tokens >>= fun () ->
     t#unsafe_delete >>= fun () ->
     send_message state (`token_updated)
@@ -310,8 +310,8 @@ let revoke_token ~state token =
   | None ->
     send_message state (`error (`server_error "person not found"))
   end
-  
-  
+
+
 let rec handle_up_message ~state =
   recv_message state
   >>= begin function
@@ -392,8 +392,8 @@ let start_server ~port ~global ~cert_key ~mode =
     (handle_connection ~mode ~global) >>= fun () ->
   log "Server started on port: %d" port
 
-    
-type error = 
+
+type error =
 [ `configuration_parsing_error of exn
 | `io_exn of exn
 | `profile_not_found of string
@@ -406,8 +406,8 @@ with sexp_of
 
 let string_of_error e =
   Sexp.to_string_hum (sexp_of_error e)
-  
-    
+
+
 let command =
   let open Command_line in
   let default_pid_file = "/tmp/hitscored.pid" in
@@ -439,8 +439,8 @@ let command =
           return ()
         end)
 
-    
+
 let () =
   Command_line.(run ~version:"0" command)
-    
+
 
