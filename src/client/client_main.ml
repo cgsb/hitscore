@@ -21,6 +21,7 @@ module Configuration = struct
   type configuration_v0 = {
     host: string;
     port: int;
+    root_path: string;
     user_name: string;
     auth_token_name: string;
     auth_token:  string;
@@ -31,8 +32,8 @@ module Configuration = struct
   ]
   ] with sexp
 
-  let make ~host ~port ~auth_token ~auth_token_name ~user_name =
-    `gencore (`v0 {host; port; auth_token; auth_token_name; user_name})
+  let make ~host ~port ~root_path ~auth_token ~auth_token_name ~user_name =
+    `gencore (`v0 {host; port; root_path; auth_token; auth_token_name; user_name})
 
   let to_string c =
     Sexp.to_string_hum (sexp_of_t c)
@@ -51,6 +52,8 @@ module Configuration = struct
     | `gencore (`v0 {host; _})  -> host
   let port = function
     | `gencore (`v0 {port; _})  -> port
+  let root_path = function
+    | `gencore (`v0 {root_path; _})  -> root_path
   let user_name = function
     | `gencore (`v0 {user_name; _})  -> user_name
   let token = function
@@ -115,8 +118,8 @@ let create_token () =
   Random.self_init ();
   String.init 128 (fun i -> Random.int 64 + 32 |! Char.of_int_exn)
 
-let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
-    ~user_name =
+let run_init_protocol ~state ~token_name ~host ~port ~root_path
+    ~configuration_file ~user_name =
   Read_line.password ()
     ~prompt:(sprintf "Password for %S (like the one for the website): "
                user_name)
@@ -143,7 +146,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~configuration_file
     cmdf "mkdir -p %S" Filename.(dirname configuration_file)
     >>= fun () ->
     let config =
-      Configuration.make ~host ~port ~auth_token:token
+      Configuration.make ~host ~port ~root_path ~auth_token:token
         ~auth_token_name:token_name ~user_name in
     cmdf "chmod -f 600 %S; true" configuration_file
     >>= fun () ->
@@ -200,10 +203,11 @@ let init_command =
         ~doc:(sprintf
                 "<name> Give a name to the authentication token (default: %s)"
                 default_token_name)
+      +> anon ("ROOT-PATH" %: string)
       +> anon ("HOST" %: string)
       +> anon ("PORT" %: int)
     )
-    (fun ~mode  ~configuration_file ~user_name token_name host port () ->
+    (fun ~mode  ~configuration_file ~user_name token_name root_path host port () ->
       run_flow ~on_error:(fun e ->
         eprintf "Client ends with Errors: %s"
           (Sexp.to_string_hum (sexp_of_init_error e)))
@@ -211,7 +215,7 @@ let init_command =
           connect ~host ~port
           >>= fun connection ->
           let state = state connection ~mode in
-          run_init_protocol ~state ~token_name ~host ~port ~configuration_file
+          run_init_protocol ~state ~token_name ~root_path ~host ~port ~configuration_file
             ~user_name
           >>= fun () ->
           send_message state `terminate >>= fun () ->
@@ -522,8 +526,9 @@ let manual () =
   subsection "Initialization";
   par "The application uses a configuration file which can be created with the \
       `gencore configuration initialize` sub-command:";
-  code "gencore config init <host> <port>";
-  par "where <host> and <port> are the location of the Gencore server.";
+  code "gencore config init <gencore-root> <host> <port>";
+  par "where `host` and `port` are the location of the Gencore server, and \
+       `gencore-root` is the path to Gencore's file-system.";
   par "If the username on your machine is not your NetID you need to provide \
        the option `-user <netID>`.";
   par "`gencore` will contact the server and ask you to authenticate \
