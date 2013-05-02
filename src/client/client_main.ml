@@ -358,9 +358,14 @@ let list_libraries ~state ~separator ~query ~spec =
       | `fastq_read (n, m) ->
         begin match List.nth row.li_fastq_files (n - 1) with
         | Some (r1, r2o, _) ->
+          let read_path v =
+            match Option.map ~f:Configuration.root_path state.configuration with
+            | Some p -> output "%s" (Filename.concat p v)
+            | None -> error (`no_configuration)
+          in
           begin match m, r2o with
-          | 1, _ -> output "%s" r1
-          | 2, Some r2 -> output "%s" r2
+          | 1, _ -> read_path r1
+          | 2, Some r2 -> read_path r2
           | _ -> output "NO-READ-%d" m
           end
         | None -> output "%dth-READS-NOT-FOUND" n
@@ -385,10 +390,12 @@ let list_libraries_command =
       +> anon (sequence ("QUERY-REGULAR-EXPRESSIONS" %: string))
     ) (fun ~mode ~configuration_file ~fastq_read query () ->
       run_flow ~on_error:(function
-      | `stop -> printf "Stopping\n%!"
-      | #info_error as e ->
-        eprintf "Client ends with Errors: %s\n"
-          (Sexp.to_string_hum (sexp_of_list_libraries_error e)))
+          | `no_configuration ->
+            eprintf "The application has not been configured\n%!";
+          | `stop -> printf "Stopping\n%!"
+          | #info_error as e ->
+            eprintf "Client ends with Errors: %s\n"
+              (Sexp.to_string_hum (sexp_of_list_libraries_error e)))
         begin
           connect_and_authenticate ~configuration_file ~mode
           >>= fun state ->
