@@ -504,6 +504,10 @@ let manual () =
   let subsection fmt =
     out_links ();
     ksprintf (fun s -> out "\n%s\n" (S.underline s '-')) fmt in
+  let finish () =
+    out_links ();
+    Buffer.contents outbuf
+  in
   section "Welcome to Gencore's Command Line Application";
   par "This manual describes the basic usage of `gencore` with examples. \
        More details are available through the `-help` options of every \
@@ -527,12 +531,12 @@ let manual () =
        Then it will request an authentication token (independent of your \
        password) and store it together with other options in the \
        configuration file (i.e. your password is never stored).";
-  par "Your can specify an alternate configuration file to use (option `-c`) \
+  par "You can specify an alternate configuration file to use (option `-c`) \
        but then you have to specify it every time.";
   par "You can give a name to the authentication token (option `-token-name`) \
        to simplify later your auth-token management (sub-command \
        `authentication`).";
-  par "After you have successfully configured `gencore` you can test the \
+  par "Once you have successfully configured `gencore` you can test the \
        connection settings with:";
   code "gencore self-test";
   subsection "The “Libraries” Command";
@@ -541,7 +545,20 @@ let manual () =
        show up in the %s section of the website."
     (link "/libraries"
        "https://gencore.bio.nyu.edu/libraries");
-  par "The querying is for now fairly limited, let's see a few examples.";
+  par "The querying is for now fairly limited, let's see a few examples:";
+  code "gencore libraries";
+  par "When called with no argument, it will return all your libraries in a \
+       “CSV table” (in the future this table will be much more customizable).";
+  par "The arguments of the sub-command are regular expressions (with \
+       Perl-like syntax) used to filter the output by “qualified library name” \
+       (`[project].[libname]`). For example,";
+  code "gencore lib '^MyProject\\.'";
+  par "will give you all the libraries for the project “MyProject”. Also,";
+  code "gencore lib 'C_el_[^\\.]*'";
+  par "will give you all the libraries whose name starts with `C_el_`";
+  par "An interesting option is the `-read N` one. It will provide you with \
+       paths to the FASTQ files of the Nth read of the selected libraries:";
+  code "gencore lib '^MyProject\\.' -read 1";
   subsection "About this document";
   let markdown = link "Markdown" "http://en.wikipedia.org/wiki/Markdown" in
   let pandoc = link "Pandoc" "http://johnmacfarlane.net/pandoc/" in
@@ -550,8 +567,9 @@ let manual () =
        %s processor like %s you may view the manual in your favorite \
        web-browser:" markdown pandoc;
   code "gencore manual | pandoc -s -o gencore-manual.html";
-  out_links ();
-  Buffer.contents outbuf
+  par "This application is in Beta™ testing mode, any feedback will be greatly \
+       appreciated (directly to `sebastien.mondet@nyu.edu`).";
+  finish ()
 
 let () =
   Command_line.(
