@@ -58,12 +58,14 @@ val get_fastq_stats:
   'error submission ->
   'error demultiplexing ->
   Hitscore_interfaces.B2F_unaligned_information.library_stats option
-  
+
+(** For a given aggredated demultiplexing, find the latest successful
+    delivery that links the submission's invoice. *)
 val choose_delivery_for_user:
   'error demultiplexing ->
   'error submission ->
   ('error delivery * 'error Hitscore_layout.Classy.invoicing_element) option
-    
+
 val user_file_paths:
   unaligned:'error unaligned ->
   submission: 'error submission ->
