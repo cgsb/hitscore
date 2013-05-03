@@ -206,20 +206,24 @@ let list_libraries ~state query =
                           ~f:(fun d-> d#directory) del#client_fastqs_dir) in
               return path)
           >>= fun delivery_path ->
-          map_option dmux#unaligned (fun un ->
-            let files =
-              Data_access.user_file_paths ~unaligned:un ~submission:sub lib in
-            let prefix =
-              Option.value ~default:""
-                (Configuration.root_path state.global.configuration) in
-            let r1s =
-              List.map files#fastq_r1s (String.chop_prefix ~prefix)
-              |> List.filter_opt in
-            let r2s =
-              List.map files#fastq_r2s (String.chop_prefix ~prefix)
-              |> List.filter_opt in
-            return (r1s, r2s, read_number)
-            ))
+          begin match delivery_path with
+          | None -> return None
+          | Some del_path ->
+            map_option dmux#unaligned (fun un ->
+                let files =
+                  Data_access.user_file_paths ~unaligned:un ~submission:sub lib in
+                let prefix =
+                  Option.value ~default:""
+                    (Configuration.root_path state.global.configuration) in
+                let r1s =
+                  List.map files#fastq_r1s (String.chop_prefix ~prefix)
+                  |> List.filter_opt in
+                let r2s =
+                  List.map files#fastq_r2s (String.chop_prefix ~prefix)
+                  |> List.filter_opt in
+                return (r1s, r2s, read_number)
+              )
+          end)
         >>| List.filter_opt))
     >>| List.concat
     >>| List.concat
