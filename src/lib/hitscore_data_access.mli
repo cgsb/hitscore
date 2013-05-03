@@ -1,5 +1,5 @@
 open Hitscore_data_access_types
-  
+
 module File_cache : sig
 
   val get_clusters_info :
@@ -25,7 +25,7 @@ module File_cache : sig
 
 end
 
-  
+
 
 val make_classy_libraries_information:
   configuration:Hitscore_configuration.Configuration.local_configuration ->
@@ -34,14 +34,14 @@ val make_classy_libraries_information:
      | `root_directory_not_configured ] as 'a) Hitscore_layout.Classy.layout_cache) ->
   ('a Hitscore_data_access_types.classy_libraries_information, 'a) Hitscore_std.t
 
-    
+
 val init_classy_libraries_information_loop :
   log:(string ->
        (unit,
         [> `Layout of
             Hitscore_layout.Layout.error_location *
               Hitscore_layout.Layout.error_cause
-        | `db_backend_error of Hitscore_db_backend.Backend.error 
+        | `db_backend_error of Hitscore_db_backend.Backend.error
         | `io_exn of exn
         | `root_directory_not_configured ]
           as 'a) Hitscore_std.t) ->
@@ -80,14 +80,14 @@ val make_classy_persons_information:
     ([> `Layout of Hitscore_layout.Layout.error_location * Hitscore_layout.Layout.error_cause
      | `root_directory_not_configured ] as 'a) Hitscore_layout.Classy.layout_cache) ->
   ('a Hitscore_data_access_types.classy_persons_information, 'a) Hitscore_std.t
-    
+
 val init_classy_persons_information_loop :
   log:(string ->
        (unit,
         [> `Layout of
             Hitscore_layout.Layout.error_location *
               Hitscore_layout.Layout.error_cause
-        | `db_backend_error of Hitscore_db_backend.Backend.error 
+        | `db_backend_error of Hitscore_db_backend.Backend.error
         | `io_exn of exn
         | `root_directory_not_configured ]
           as 'a) Hitscore_std.t) ->
