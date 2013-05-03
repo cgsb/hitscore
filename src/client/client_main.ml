@@ -355,25 +355,33 @@ let list_libraries ~state ~separator ~query ~spec =
                            ~f:(fun prev (_, _, fo) ->
                                prev +. Option.value ~default:0. fo)))))
           ] in
-        output "%s" row_string
-      | `fastq_read (n, m) ->
-        begin match List.nth row.li_fastq_files (n - 1) with
-        | Some (r1, r2o, _) ->
-          let read_path v =
-            match Option.map ~f:Configuration.root_path state.configuration with
-            | Some p -> output "%s" (Filename.concat p v)
-            | None -> error (`no_configuration)
-          in
+        output "%s\n" row_string
+      | `fastq_read (sub, m) ->
+        let display_one r1 r2o m =
+            let read_path v =
+              match Option.map ~f:Configuration.root_path state.configuration with
+              | Some p -> output "%s\n" (Filename.concat p v)
+              | None -> error (`no_configuration)
+            in
           begin match m, r2o with
           | 1, _ -> read_path r1
           | 2, Some r2 -> read_path r2
-          | _ -> output "NO-READ-%d" m
+          | _ -> output "NO-READ-%d\n" m
           end
-        | None -> output "%dth-READS-NOT-FOUND" n
+        in
+        begin match sub with
+        | Some n ->
+          begin match List.nth row.li_fastq_files (n - 1) with
+          | Some (r1, r2o, _) -> display_one r1 r2o m
+          | None -> output "%dth-READ-NOT-FOUND\n" n
+          end
+        | None ->
+          while_sequential row.li_fastq_files (fun (r1, r2o, _) ->
+              display_one r1 r2o m)
+          >>= fun _ ->
+          return ()
         end
-      end
-      >>= fun () ->
-      output "\n")
+      end)
     >>= fun _ ->
     return ()
   | m -> error (`unexpected_message m)
@@ -393,9 +401,9 @@ let list_libraries_command =
           ~doc:(sprintf "<string> Select the output format\n\
                          (right now: 'tsv' — the default, or 'csv')")
       ++ step (fun k submission -> k ~submission)
-      +> flag "-submission" ~aliases:["S"] (optional_with_default 1 int)
+      +> flag "-submission" ~aliases:["S"] (optional int)
           ~doc:("<n> Display the n-th submission when displaying FASTQ files\n\
-                 (default: 1st)")
+                 (default: display all)")
       +> anon (sequence ("QUERY-REGULAR-EXPRESSIONS" %: string))
     ) (fun ~mode ~configuration_file ~fastq_read ~format ~submission query () ->
       run_flow ~on_error:(function
