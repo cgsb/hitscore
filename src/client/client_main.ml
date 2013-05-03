@@ -141,7 +141,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
   | `error `not_implemented as m -> error (`unexpected_message m)
   | `token_updated
   | `token_created ->
-    msg "The Authentication Token has been validated by the server \\o/"
+    msg "\nThe Authentication Token has been validated by the server \\o/"
     >>= fun () ->
     cmdf "mkdir -p %S" Filename.(dirname configuration_file)
     >>= fun () ->
@@ -157,10 +157,10 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
     >>= fun () ->
     msg "The configuration file as been successfully written, Happy Hacking!"
   | `error `wrong_authentication ->
-    msg "The server has rejected your authentication; \
+    msg "\nThe server has rejected your authentication; \
          the username or password must be wrong"
   | `error (`server_error s) ->
-    msg "The server has run into trouble; you mya try again a bit later, \
+    msg "\nThe server has run into trouble; you may try again a bit later, \
          or if the problem persists call for help."
   end
 
@@ -187,6 +187,16 @@ module Flag = struct
     )
 
 end
+
+let terminate_and_disconnect ~state =
+  send_message state `terminate >>= fun () ->
+  Flow_net.shutdown state.connection
+  >>< begin function
+  | Ok () -> return ()
+  | Error e ->
+    let str = <:sexp_of< [ `io_exn of exn ] >> e |> Sexp.to_string in
+    dbg "small error while shutting down: %s" str
+  end
 
 let init_command =
   let open Command_line in
@@ -218,8 +228,7 @@ let init_command =
           run_init_protocol ~state ~token_name ~root_path ~host ~port ~configuration_file
             ~user_name
           >>= fun () ->
-          send_message state `terminate >>= fun () ->
-          Flow_net.shutdown connection
+          terminate_and_disconnect ~state
         end)
 
 let connect_and_authenticate ~configuration_file ~mode =
@@ -245,16 +254,6 @@ let connect_and_authenticate ~configuration_file ~mode =
   >>= fun () ->
   return state
 
-let terminate_and_disconnect ~state =
-  send_message state `terminate >>= fun () ->
-  Flow_net.shutdown state.connection
-  >>< begin function
-  | Ok () -> return ()
-  | Error e ->
-    let str = <:sexp_of< [ `io_exn of exn ] >> e |> Sexp.to_string in
-    dbg "small error while shutting down: %s" str
-  end
-
 type info_error = [
 | common_error
 ]
@@ -276,7 +275,7 @@ let info ~state =
           let (g, m, n, f) = psi.psi_full_name in
           sprintf "Full name(s): %s %s%s%s\n"
             g (Option.value ~default:" " m)
-            (Option.value_map ~default:"" n ~f:(sprintf "“%s” ")) f
+            (Option.value_map ~default:"" n ~f:(sprintf " “%s” ")) f
         end;
         "Emails: "; String.concat ~sep:", " psi.psi_emails; "\n";
         Option.value_map ~default:"" psi.psi_login ~f:(sprintf "Login: %s\n");
@@ -304,7 +303,7 @@ let self_test_command =
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"
       | #info_error as e ->
-        eprintf "Client ends with Errors: %s"
+        eprintf "Client ends with Errors: %s\n%!"
           (Sexp.to_string_hum (sexp_of_info_error e)))
         begin
           connect_and_authenticate ~configuration_file ~mode
@@ -404,7 +403,7 @@ let list_libraries_command =
             eprintf "The application has not been configured\n%!";
           | `stop -> printf "Stopping\n%!"
           | #info_error as e ->
-            eprintf "Client ends with Errors: %s\n"
+            eprintf "Client ends with Errors: %s\n%!"
               (Sexp.to_string_hum (sexp_of_list_libraries_error e)))
         begin
           connect_and_authenticate ~configuration_file ~mode
@@ -582,6 +581,9 @@ let manual () =
   par "An interesting option is the `-read N` one. It will provide you with \
        paths to the FASTQ files of the Nth read of the selected libraries:";
   code "gencore lib '^MyProject\\.' -read 1";
+  par "If the library has been submitted and/or delivered more than once, \
+       you can select which one you want to display with the option \
+       `-submission`";
   subsection "About this document";
   let markdown = link "Markdown" "http://en.wikipedia.org/wiki/Markdown" in
   let pandoc = link "Pandoc" "http://johnmacfarlane.net/pandoc/" in
