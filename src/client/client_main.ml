@@ -349,10 +349,12 @@ let list_libraries ~state ~separator ~query ~spec =
             (let l = List.length row.li_fastq_files in
              sprintf "%d FASTQ deliver%s: %s reads"
                l (if l = 1 then "y" else "ies")
-               (List.map row.li_fastq_files
-                  (fun (_, _, fo) ->
-                    Option.value_map ~default:"?" fo ~f:(sprintf "%.0f"))
-                |! String.concat ~sep:", "));
+               (if List.exists row.li_fastq_files (fun (_, _, f) -> f = None)
+                then "unknown number of"
+                else (sprintf "%.0f"
+                        (List.fold row.li_fastq_files ~init:0.
+                           ~f:(fun prev (_, _, fo) ->
+                               prev +. Option.value ~default:0. fo)))))
           ] in
         output "%s" row_string
       | `fastq_read (n, m) ->
