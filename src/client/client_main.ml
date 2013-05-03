@@ -389,8 +389,16 @@ let list_libraries_command =
       ++ step (fun k fastq_read -> k ~fastq_read)
       +> flag "-read" ~aliases:["R"] (optional int)
         ~doc:(sprintf "<number> Get the FASTQ file path for read <number>")
+      ++ step (fun k format -> k ~format)
+      +> flag "-format" ~aliases:["F"] (optional_with_default "tsv" string)
+          ~doc:(sprintf "<string> Select the output format\n\
+                         (right now: 'tsv' — the default, or 'csv')")
+      ++ step (fun k submission -> k ~submission)
+      +> flag "-submission" ~aliases:["S"] (optional_with_default 1 int)
+          ~doc:("<n> Display the n-th submission when displaying FASTQ files\n\
+                 (default: 1st)")
       +> anon (sequence ("QUERY-REGULAR-EXPRESSIONS" %: string))
-    ) (fun ~mode ~configuration_file ~fastq_read query () ->
+    ) (fun ~mode ~configuration_file ~fastq_read ~format ~submission query () ->
       run_flow ~on_error:(function
           | `no_configuration ->
             eprintf "The application has not been configured\n%!";
@@ -403,9 +411,10 @@ let list_libraries_command =
           >>= fun state ->
           let spec =
             match fastq_read with
-            | Some n -> `fastq_read (1, n)
+            | Some n -> `fastq_read (submission, n)
             | None -> `all in
-          list_libraries ~state ~spec ~separator:", " ~query
+          let separator = match format with  "csv" -> "," | _ -> "\t" in
+          list_libraries ~state ~spec ~separator ~query
           >>= fun () ->
           terminate_and_disconnect ~state
         end)
