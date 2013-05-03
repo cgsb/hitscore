@@ -578,7 +578,9 @@ let manual () =
   par "The querying is for now fairly limited, let's see a few examples:";
   code "gencore libraries";
   par "When called with no argument, it will return all your libraries in a \
-       “CSV table” (in the future this table will be much more customizable).";
+       “TSV or CSV table” (in the future this table will be much more \
+       customizable, but for now the option `-format` only allows 'csv' or \
+       'tsv').";
   par "The arguments of the sub-command are regular expressions (with \
        Perl-like syntax) used to filter the output by “qualified library name” \
        (`[project].[libname]`). For example,";
@@ -590,8 +592,9 @@ let manual () =
        paths to the FASTQ files of the Nth read of the selected libraries:";
   code "gencore lib '^MyProject\\.' -read 1";
   par "If the library has been submitted and/or delivered more than once, \
-       you can select which one you want to display with the option \
-       `-submission`";
+       the command will display all the FASTQ files. \
+       You can select which one you want to display with the option \
+       `-submission`.";
   subsection "About this document";
   let markdown = link "Markdown" "http://en.wikipedia.org/wiki/Markdown" in
   let pandoc = link "Pandoc" "http://johnmacfarlane.net/pandoc/" in
