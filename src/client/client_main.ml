@@ -148,7 +148,7 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
     let config =
       Configuration.make ~host ~port ~root_path ~auth_token:token
         ~auth_token_name:token_name ~user_name in
-    cmdf "chmod -f 600 %S; true" configuration_file
+    cmdf "chmod -f 600 %S 2> /dev/null > /dev/null ; true" configuration_file
     >>= fun () ->
     Sequme_flow_sys.write_file configuration_file
       ~content:(Configuration.to_string config ^ "\n")
