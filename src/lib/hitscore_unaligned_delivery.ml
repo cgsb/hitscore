@@ -78,6 +78,12 @@ module Unaligned_delivery:
           destination (sanitize_filename pi_name)
           (Option.value ~default directory_tag) flowcell_name
       in
+      layout#client_fastqs_dir#all >>= fun all_dirs ->
+      while_sequential all_dirs (fun cfdir ->
+          if cfdir#directory = canonical_path links_dir
+          then error (`directory_already_used (cfdir#g_id, cfdir#directory))
+          else return ())
+      >>= fun _ ->
       cmd "mkdir -m 750 -p %S" links_dir  >>= fun () ->
       debug "created links dir: %s\n" links_dir >>= fun () ->
       while_sequential lanes_idxs ~f:(fun idx ->

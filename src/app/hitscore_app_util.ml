@@ -67,6 +67,8 @@ let string_of_error = function
       (Layout.Enumeration_barcode_type.to_string p)
   | `fatal_error  `trees_to_unix_paths_should_return_one ->
     sprintf "FATAL_ERROR: trees_to_unix_paths_should_return_one\n"
+  | `directory_already_used (client_fastq_dir_id, path) ->
+    sprintf "CANNOT DELIVER: %s already used in %d\n" path client_fastq_dir_id
   | `io_exn e ->
     sprintf "IO-ERROR: %s\n" (Exn.to_string e)
   | `cannot_find_delivery (p, l) ->

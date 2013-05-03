@@ -277,6 +277,7 @@ module type UNALIGNED_DELIVERY = sig
            List.t
      | `partially_found_lanes of int * string
      | `root_directory_not_configured
+     | `directory_already_used of int * string
      | `system_command_error of
          string * [> `exited of int | `exn of exn
                   | `signaled of int | `stopped of int ]
