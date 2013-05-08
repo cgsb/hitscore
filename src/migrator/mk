@@ -22,7 +22,7 @@ make_module () {
 
     echo "Writing to $tmp"
     _build/src/codegen/hitscoregen.native codegen-ocaml data/hitscore_layout $tmp
-
+    echo "let write_new_string_and_sexp_formats__read_only_new () = ()" >> $name
     echo "module Info = struct let version = \"$version\" end" >> $name
     echo "module Hitscore_std = struct" >> $name
     cat src/lib/hitscore_std.ml >> $name
@@ -41,7 +41,7 @@ if [ "$1" = "update" ]; then
     mkdir -p _migrator
     current_branch=`git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' \
                       -e 's/* \(.*\)/\1/'`
-    make_module v13 1.3
+#    make_module v13 1.3
     make_module v14 1.4
     make_module v15 1.5
     git checkout $current_branch
@@ -58,6 +58,6 @@ if [ "$1" = "-h" ]; then
 fi
 
 cd _migrator
-$OCAMLFINDOPT -linkpkg v13.cmx v14.cmx v15.cmx migrator.ml -o migrator
+$OCAMLFINDOPT -linkpkg v14.cmx v15.cmx migrator.ml -o migrator
 cd ..
 
