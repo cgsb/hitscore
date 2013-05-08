@@ -716,8 +716,9 @@ let manual_command =
   basic ~summary:"Display the user manual"
     Spec.(
       Flag.with_config_file ()
+      +> flag "no-pager" ~doc:" Do not use any “pager”" no_arg
     )
-    (fun ~configuration_file () ->
+    (fun ~configuration_file no_pager () ->
        run_flow ~on_error:(fun e ->
            eprintf "Client ends with Errors: %s"
              (Sexp.to_string_hum (sexp_of_init_error e)))
@@ -726,12 +727,12 @@ let manual_command =
            >>= fun configuration ->
            let pager = Configuration.preference configuration "pager" in
            begin match pager with
-           | Some cmd ->
+           | Some cmd when not no_pager ->
              let tmp = Filename.temp_file "gencore" "manual.md" in
              Sequme_flow_sys.write_file tmp (manual ())
              >>= fun () ->
              cmdf "%s %S" cmd tmp
-           | None ->
+           | _ ->
              printf "%s\n" (manual ());
              return ()
            end
