@@ -702,13 +702,15 @@ let manual () =
   subsection "About this document";
   let markdown = link "Markdown" "http://en.wikipedia.org/wiki/Markdown" in
   let pandoc = link "Pandoc" "http://johnmacfarlane.net/pandoc/" in
-  par "You may view this document with the command `gencore manual` or, more \
-       progressively, with `gencore manual | less`, but if you have a \
-       %s processor like %s you may view the manual in your favorite \
-       web-browser:" markdown pandoc;
-  code "gencore manual | pandoc -s -o gencore-manual.html";
-  par "This application is in Beta™ testing mode, any feedback will be greatly \
-       appreciated (directly to `sebastien.mondet@nyu.edu`).";
+  par "You may view this document with the command `gencore manual`. \
+       If you want to display it progressively, you may want to configure your \
+       pager like `less` or `more`:";
+  code "gencore config set-pref pager less";
+  par "Moreover, if you have a %s processor like %s you may view the manual \
+       in your favorite web-browser:" markdown pandoc;
+  code "gencore manual -no-pager | pandoc -s -o gencore-manual.html";
+  par "This application is in Early Beta™ Testing Mode, any feedback will be \
+       greatly appreciated (directly to `sebastien.mondet@nyu.edu`).";
   finish ()
 
 let manual_command =
