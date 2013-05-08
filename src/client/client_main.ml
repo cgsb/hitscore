@@ -252,6 +252,55 @@ let init_command =
           terminate_and_disconnect ~state
         end)
 
+(* Command that sets a preference in the non-essential
+   configuration options. *)
+let set_preference_command =
+  let open Command_line in
+  basic ~summary:"Set preference values"
+    Spec.(
+      Flag.with_config_file ()
+        +> anon ("Key" %: string)
+        +> anon ("Value" %: string)
+    ) (fun ~configuration_file key value () ->
+      run_flow ~on_error:(fun e ->
+        eprintf "Client ends with Errors: %s"
+          (Sexp.to_string_hum (sexp_of_init_error e)))
+        begin
+          Configuration.of_file configuration_file
+          >>= fun configuration ->
+          let new_config =
+            Configuration.set_preference configuration (key, value) in
+          Sequme_flow_sys.write_file configuration_file
+            ~content:(Configuration.to_string new_config ^ "\n")
+          >>= fun () ->
+          msg "Preference %S set to %S" key value
+        end)
+
+(* Command that unsets a preference in the non-essential
+   configuration options. *)
+let unset_preference_command =
+  let open Command_line in
+  basic ~summary:"Unset preference values"
+    Spec.(
+      Flag.with_config_file ()
+        +> anon ("Key" %: string)
+    ) (fun ~configuration_file key () ->
+      run_flow ~on_error:(fun e ->
+        eprintf "Client ends with Errors: %s"
+          (Sexp.to_string_hum (sexp_of_init_error e)))
+        begin
+          Configuration.of_file configuration_file
+          >>= fun configuration ->
+          let prev_value = Configuration.preference configuration key in
+          let new_config = Configuration.unset_preference configuration key in
+          Sequme_flow_sys.write_file configuration_file
+            ~content:(Configuration.to_string new_config ^ "\n")
+          >>= fun () ->
+          msg "Preference %S has been erased (was %s)" key
+            (Option.value ~default:"\"None\"" prev_value)
+        end)
+
+
 let connect_and_authenticate ~configuration_file ~mode =
   Configuration.of_file configuration_file
   >>= fun configuration ->
@@ -635,6 +684,8 @@ let () =
           ("configuration",
            group ~summary:"Manage the configuration of the application" [
              ("initialize", init_command);
+             ("set-preference", set_preference_command);
+             ("unset-preference", unset_preference_command);
            ]);
           ("self-test", self_test_command);
           ("libraries", list_libraries_command);
