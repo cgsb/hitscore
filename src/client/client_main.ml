@@ -25,6 +25,7 @@ module Configuration = struct
     user_name: string;
     auth_token_name: string;
     auth_token:  string;
+    preferences: (string * string) list; (* Non-essential user preferences *)
   } with sexp
   type t = [
   | `gencore of [
@@ -32,8 +33,10 @@ module Configuration = struct
   ]
   ] with sexp
 
-  let make ~host ~port ~root_path ~auth_token ~auth_token_name ~user_name =
-    `gencore (`v0 {host; port; root_path; auth_token; auth_token_name; user_name})
+  let make
+      ~host ~port ~root_path ~auth_token ~auth_token_name ~user_name preferences =
+    `gencore (`v0 {host; port; root_path; auth_token;
+                   auth_token_name; user_name; preferences})
 
   let to_string c =
     Sexp.to_string_hum (sexp_of_t c)
@@ -60,6 +63,24 @@ module Configuration = struct
     | `gencore (`v0 {auth_token; _})  -> auth_token
   let token_name = function
     | `gencore (`v0 {auth_token_name; _})  -> auth_token_name
+
+  (*doc Get a given preference from the preferences list. *)
+  let preference config pref : string option =
+    match config with
+    | `gencore (`v0 {preferences; _})  -> List.Assoc.find preferences pref
+
+  let set_preference config (pref_k, pref_v) =
+    match config with
+    | `gencore (`v0 ({preferences; _} as record))  ->
+      let new_preferences = List.Assoc.add preferences pref_k pref_v in
+      `gencore (`v0 {record with preferences = new_preferences })
+  let unset_preference config pref =
+    match config with
+    | `gencore (`v0 ({preferences; _} as record))  ->
+      let new_preferences = List.Assoc.remove preferences pref in
+      `gencore (`v0 {record with preferences = new_preferences })
+
+
 end
 
 type connection_state = {
@@ -147,13 +168,13 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
     >>= fun () ->
     let config =
       Configuration.make ~host ~port ~root_path ~auth_token:token
-        ~auth_token_name:token_name ~user_name in
+        ~auth_token_name:token_name ~user_name [] in
     cmdf "chmod -f 600 %S 2> /dev/null > /dev/null ; true" configuration_file
     >>= fun () ->
     Sequme_flow_sys.write_file configuration_file
       ~content:(Configuration.to_string config ^ "\n")
     >>= fun () ->
-    cmdf "chmod 400 %S" configuration_file
+    cmdf "chmod 600 %S" configuration_file
     >>= fun () ->
     msg "The configuration file as been successfully written, Happy Hacking!"
   | `error `wrong_authentication ->
