@@ -69,6 +69,9 @@ module Configuration = struct
     match config with
     | `gencore (`v0 {preferences; _})  -> List.Assoc.find preferences pref
 
+  let all_preferences = function
+    | `gencore (`v0 {preferences; _})  -> preferences
+
   let set_preference config (pref_k, pref_v) =
     match config with
     | `gencore (`v0 ({preferences; _} as record))  ->
@@ -251,6 +254,37 @@ let init_command =
           >>= fun () ->
           terminate_and_disconnect ~state
         end)
+
+let display_config_command =
+  let open Command_line in
+  basic ~summary:"Display configuration"
+    Spec.(
+      Flag.with_config_file ()
+    ) (fun ~configuration_file () ->
+        run_flow ~on_error:(fun e ->
+            eprintf "Client ends with Errors: %s"
+              (Sexp.to_string_hum (sexp_of_init_error e)))
+          begin
+            let open Configuration in
+            of_file configuration_file
+            >>= fun configuration ->
+            msg "Current configuration (in %S):\n" configuration_file
+            >>= fun () ->
+            msg "* Connection: %s@%s:%d with token %S" (user_name configuration)
+              (host configuration) (port configuration)
+              (token_name configuration)
+            >>= fun () ->
+            msg "* Gencore root: %s" (root_path configuration)
+            >>= fun () ->
+            begin match all_preferences configuration with
+            | [] -> msg "* No preferences set."
+            | more ->
+              msg "* Preferences:\n%s"
+                (List.map more ~f:(fun (k, v) -> sprintf "    * %S → %S" k v)
+                 |> String.concat ~sep:"\n")
+            end
+          end)
+
 
 (* Command that sets a preference in the non-essential
    configuration options. *)
@@ -712,6 +746,7 @@ let () =
            ("initialize", init_command);
            ("set-preference", set_preference_command);
            ("unset-preference", unset_preference_command);
+           ("display", display_config_command);
          ]);
         ("self-test", self_test_command);
         ("libraries", list_libraries_command);
