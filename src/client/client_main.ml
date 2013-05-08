@@ -677,20 +677,44 @@ let manual () =
        appreciated (directly to `sebastien.mondet@nyu.edu`).";
   finish ()
 
+let manual_command =
+  let open Command_line in
+  basic ~summary:"Display the user manual"
+    Spec.(
+      Flag.with_config_file ()
+    )
+    (fun ~configuration_file () ->
+       run_flow ~on_error:(fun e ->
+           eprintf "Client ends with Errors: %s"
+             (Sexp.to_string_hum (sexp_of_init_error e)))
+         begin
+           Configuration.of_file configuration_file
+           >>= fun configuration ->
+           let pager = Configuration.preference configuration "pager" in
+           begin match pager with
+           | Some cmd ->
+             let tmp = Filename.temp_file "gencore" "manual.md" in
+             Sequme_flow_sys.write_file tmp (manual ())
+             >>= fun () ->
+             cmdf "%s %S" cmd tmp
+           | None ->
+             printf "%s\n" (manual ());
+             return ()
+           end
+         end)
+
 let () =
-  Command_line.(
-    run ~version:"0"
-      (group ~summary:"Gencore's command-line application" [
-          ("configuration",
-           group ~summary:"Manage the configuration of the application" [
-             ("initialize", init_command);
-             ("set-preference", set_preference_command);
-             ("unset-preference", unset_preference_command);
-           ]);
-          ("self-test", self_test_command);
-          ("libraries", list_libraries_command);
-          ("authentication", auth_command);
-          ("manual", basic ~summary:"Display the user manual"
-             Spec.(empty)
-             (fun () -> printf "%s\n" (manual ())));
-        ]))
+  let open Command_line in
+  run ~version:"0"
+    (group ~summary:"Gencore's command-line application" [
+        ("configuration",
+         group ~summary:"Manage the configuration of the application" [
+           ("initialize", init_command);
+           ("set-preference", set_preference_command);
+           ("unset-preference", unset_preference_command);
+         ]);
+        ("self-test", self_test_command);
+        ("libraries", list_libraries_command);
+        ("authentication", auth_command);
+        ("manual", manual_command);
+      ])
