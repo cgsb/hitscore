@@ -190,16 +190,18 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
 
 module Flag = struct
 
+  let default_config_file () =
+    let home = Sys.getenv "HOME" |! Option.value ~default:"/tmp/" in
+    Filename.concat home ".config/gencore/client.conf"
+
   let with_config_file () =
-    let default_config_file =
-      let home = Sys.getenv "HOME" |! Option.value ~default:"/tmp/" in
-      Filename.concat home ".config/gencore/client.conf" in
+    let default_path = default_config_file () in
     Command_line.Spec.(
       step (fun k configuration_file -> k ~configuration_file)
       +> flag "-configuration-file" ~aliases:["c"]
-        (optional_with_default default_config_file string)
+        (optional_with_default default_path string)
         ~doc:(sprintf "<path> Use this configuration file (default: %s)"
-                default_config_file)
+                default_path)
     )
 
   let with_user_name () =
@@ -665,8 +667,10 @@ let manual () =
        Then it will request an authentication token (independent of your \
        password) and store it together with other options in the \
        configuration file (i.e. your password is never stored).";
-  par "You can specify an alternate configuration file to use (option `-c`) \
-       but then you have to specify it every time.";
+  par "The configuration file is by default: `%s`"
+    (Flag.default_config_file ());
+  par "You can specify an alternate path with the option `-c` \
+       but then you have to use it every time.";
   par "You can give a name to the authentication token (option `-token-name`) \
        to simplify later your auth-token management (sub-command \
        `authentication`).";
