@@ -765,8 +765,12 @@ let manual_command =
                printf "%s\n" (manual ());
                return ()
              end
-           | Error (`read_file_error _) ->  (* → there is no config-file *)
+           | Error (`configuration (`cannot_read _)) ->
+             (* → there is no config-file *)
              printf "%s\n" (manual ());
+             printf "\nPS: You don't have a configuration file; \
+                   your next move should be\ninitialization, try:\n\n\
+                   \    gencore conf init -help\n\n";
              return ()
            | Error e -> error e
            end
