@@ -707,8 +707,9 @@ let manual () =
   let markdown = link "Markdown" "http://en.wikipedia.org/wiki/Markdown" in
   let pandoc = link "Pandoc" "http://johnmacfarlane.net/pandoc/" in
   par "You may view this document with the command `gencore manual`. \
-       If you want to display it progressively, you may want to configure your \
-       pager like `less` or `more`:";
+       If you want to display it progressively, after initializing `gencore` \
+       you may want to configure your \
+       pager like `less`, `more`, or even `vim`:";
   code "gencore config set-pref pager less";
   par "Moreover, if you have a %s processor like %s you may view the manual \
        in your favorite web-browser:" markdown pandoc;
@@ -730,17 +731,23 @@ let manual_command =
              (Sexp.to_string_hum (sexp_of_init_error e)))
          begin
            Configuration.of_file configuration_file
-           >>= fun configuration ->
-           let pager = Configuration.preference configuration "pager" in
-           begin match pager with
-           | Some cmd when not no_pager ->
-             let tmp = Filename.temp_file "gencore" "manual.md" in
-             Sequme_flow_sys.write_file tmp (manual ())
-             >>= fun () ->
-             cmdf "%s %S" cmd tmp
-           | _ ->
+           >>< begin function
+           | Ok configuration ->
+             let pager = Configuration.preference configuration "pager" in
+             begin match pager with
+             | Some cmd when not no_pager ->
+               let tmp = Filename.temp_file "gencore" "manual.md" in
+               Sequme_flow_sys.write_file tmp (manual ())
+               >>= fun () ->
+               cmdf "%s %S" cmd tmp
+             | _ ->
+               printf "%s\n" (manual ());
+               return ()
+             end
+           | Error (`read_file_error _) ->  (* → there is no config-file *)
              printf "%s\n" (manual ());
              return ()
+           | Error e -> error e
            end
          end)
 
