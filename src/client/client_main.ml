@@ -11,6 +11,9 @@ module Flow_net = Sequme_flow_net
 let msg fmt =
   ksprintf (fun s -> printf "%s\n%!" s; return ()) fmt
 
+let error_msg fmt =
+  ksprintf (fun s -> eprintf "ERROR:\n%s\n%!" s)  fmt
+
 let debug = ref false
 let dbg fmt =
   ksprintf (fun s -> if !debug then printf "DEBUG: %s\n%!" s; return ()) fmt
@@ -46,10 +49,29 @@ module Configuration = struct
     try Ok (of_string_exn s) with e -> Error (`parse_configuration e)
 
   let of_file file =
-    Sequme_flow_sys.read_file file
-    >>| String.strip
-    >>= fun s ->
-    of_result (of_string s)
+    begin
+      Sequme_flow_sys.read_file file
+      >>| String.strip
+      >>= fun s ->
+      of_result (of_string s)
+    end
+    >>< begin function
+    | Ok c -> return c
+    | Error (`read_file_timeout _) -> (* There is no timeout set *) assert false
+    | Error (`read_file_error e) ->
+      error (`configuration (`cannot_read file))
+    | Error (`parse_configuration c) ->
+      error (`configuration (`cannot_parse (file, c)))
+    end
+
+  let error_to_string = function
+  | `cannot_read f ->
+    sprintf "Cannot read configuration file (%S). \
+             Maybe you should run `gencore config init`?" f
+  | `cannot_parse (f, _) ->
+    sprintf "Cannot parse configuration file (%S), \
+             are you playing with the wrong version of `gencore`?" f
+
 
   let host = function
     | `gencore (`v0 {host; _})  -> host
@@ -120,6 +142,7 @@ type common_error =
 | `write_file_error of string * exn
 | `read_file_timeout of string * float
 | `read_file_error of string * exn
+| `configuration of [ `cannot_parse of string * exn | `cannot_read of string ]
 | `message_serialization of
     Communication.Protocol.serialization_mode * string * exn
 | `unexpected_message of Communication.Protocol.down
@@ -131,6 +154,16 @@ type init_error = [
 | `no_password
 ]
 with sexp_of
+
+let on_final_error e =
+  begin match e with
+  | `configuration e ->
+    error_msg "Configuration:\n%s" (Configuration.error_to_string e)
+  | #init_error as other ->
+    eprintf "Client ends with Errors: %s"
+      (Sexp.to_string_hum (sexp_of_init_error other))
+  end;
+  exit 1
 
 let connect ~host ~port =
   Sequme_flow_net.init_tls ();
@@ -263,9 +296,7 @@ let display_config_command =
     Spec.(
       Flag.with_config_file ()
     ) (fun ~configuration_file () ->
-        run_flow ~on_error:(fun e ->
-            eprintf "Client ends with Errors: %s"
-              (Sexp.to_string_hum (sexp_of_init_error e)))
+        run_flow ~on_error:on_final_error
           begin
             let open Configuration in
             of_file configuration_file
@@ -298,9 +329,7 @@ let set_preference_command =
         +> anon ("Key" %: string)
         +> anon ("Value" %: string)
     ) (fun ~configuration_file key value () ->
-      run_flow ~on_error:(fun e ->
-        eprintf "Client ends with Errors: %s"
-          (Sexp.to_string_hum (sexp_of_init_error e)))
+      run_flow ~on_error:on_final_error
         begin
           Configuration.of_file configuration_file
           >>= fun configuration ->
@@ -321,9 +350,7 @@ let unset_preference_command =
       Flag.with_config_file ()
         +> anon ("Key" %: string)
     ) (fun ~configuration_file key () ->
-      run_flow ~on_error:(fun e ->
-        eprintf "Client ends with Errors: %s"
-          (Sexp.to_string_hum (sexp_of_init_error e)))
+      run_flow ~on_error:on_final_error
         begin
           Configuration.of_file configuration_file
           >>= fun configuration ->
@@ -408,9 +435,8 @@ let self_test_command =
     ) (fun ~mode ~configuration_file () ->
       run_flow ~on_error:(function
       | `stop -> printf "Stopping\n%!"
-      | #info_error as e ->
-        eprintf "Client ends with Errors: %s\n%!"
-          (Sexp.to_string_hum (sexp_of_info_error e)))
+      |  #common_error as e ->
+        on_final_error e)
         begin
           connect_and_authenticate ~configuration_file ~mode
           >>= fun state ->
@@ -516,9 +542,8 @@ let list_libraries_command =
           | `no_configuration ->
             eprintf "The application has not been configured\n%!";
           | `stop -> printf "Stopping\n%!"
-          | #info_error as e ->
-            eprintf "Client ends with Errors: %s\n%!"
-              (Sexp.to_string_hum (sexp_of_list_libraries_error e)))
+          | #common_error as e ->
+            on_final_error e)
         begin
           connect_and_authenticate ~configuration_file ~mode
           >>= fun state ->
