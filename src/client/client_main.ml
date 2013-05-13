@@ -571,8 +571,7 @@ let auth_command =
         run_flow ~on_error:(function
         | `stop -> printf "Stopping\n%!"
         | #auth_list_tokens_error as e ->
-          eprintf "Client ends with Errors: %s\n"
-            (Sexp.to_string_hum (sexp_of_auth_list_tokens_error e)))
+          on_final_error e)
           begin
             let output fmt = ksprintf (fun s -> wrap_io Lwt_io.print s) fmt in
             connect_and_authenticate ~configuration_file ~mode
@@ -603,8 +602,7 @@ let auth_command =
         run_flow ~on_error:(function
         | `stop -> printf "Stopping\n%!"
         | #auth_revoke_token_error as e ->
-          eprintf "Client ends with Errors: %s\n"
-            (Sexp.to_string_hum (sexp_of_auth_list_tokens_error e)))
+          on_final_error e)
           begin
             connect_and_authenticate ~configuration_file ~mode
             >>= fun state ->
@@ -751,9 +749,7 @@ let manual_command =
       +> flag "no-pager" ~doc:" Do not use any “pager”" no_arg
     )
     (fun ~configuration_file no_pager () ->
-       run_flow ~on_error:(fun e ->
-           eprintf "Client ends with Errors: %s"
-             (Sexp.to_string_hum (sexp_of_init_error e)))
+       run_flow ~on_error:on_final_error
          begin
            Configuration.of_file configuration_file
            >>< begin function
