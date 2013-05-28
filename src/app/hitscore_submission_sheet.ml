@@ -804,6 +804,25 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       end
     in
 
+    (* A function that tries to add extensions to a filename to check
+       if the filename exists but the client had written it in a
+       window-ish way: with extension. *)
+    let fix_filename_for_windows_people filename ~potential_extensions =
+      if (Sys.file_exists filename) = `Yes || filename = ""
+      then filename
+      else
+        let potential_file =
+          List.find_map potential_extensions (fun ext ->
+              let name = sprintf "%s.%s" filename ext in
+              if (Sys.file_exists name) = `Yes
+              then Some name
+              else None) in
+        match potential_file with
+        | Some s ->
+          warning "Replacing %S with %S\n" filename s;
+          s
+        | None -> filename
+    in
 
 
     (* Adding contacts *)
@@ -882,6 +901,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '-' | '_' as c -> yes c
               | _ -> ());
               Buffer.contents buf  in
+            let filenames =
+              List.map filenames
+                (fix_filename_for_windows_people
+                   ~potential_extensions:["pdf"; "doc"; "docx"; "txt"; "html"])
+            in
             let files = List.map filenames Layout.File_system.Tree.file in
             List.iter filenames (fun n ->
               if (Sys.file_exists n) <> `Yes
@@ -1119,7 +1143,15 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       >>= fun stock_library ->
 
       map_option bio_wnb (fun well_number ->
-        let dir = List.filter_opt [bio_pdf; bio_xad] in
+
+        let dir =
+          List.filter_opt [
+            Option.map bio_pdf
+              (fix_filename_for_windows_people ~potential_extensions:["pdf"]);
+            Option.map bio_xad
+              (fix_filename_for_windows_people ~potential_extensions:["xad"]);
+          ]
+        in
         let files =
           match List.find !bio_directories (fun (l, i) -> l = dir) with
           | Some (_, i) -> return i
@@ -1162,7 +1194,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       >>= fun bioanalyzer ->
 
       map_option arg_wnb (fun well_number ->
-        let dir = match arg_img with | Some img -> [img] | _ -> [] in
+        let dir =
+          match arg_img with
+          | Some img -> [fix_filename_for_windows_people img
+                           ~potential_extensions:["pdf"; "jpg"; "png"]]
+          | _ -> [] in
         let files =
           match List.find !arg_directories (fun (l, i) -> l = dir) with
           | Some (_, i) -> return i
