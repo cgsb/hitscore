@@ -1107,11 +1107,12 @@ module Query = struct
                       None)
                 else
                   None) in
-            printf "Lane %d (%s) is orphan%s\n" lane#g_id
+            printf "Lane %d (%s) is orphan%s, %S\n" lane#g_id
               (run_type lane#requested_read_length_1 lane#requested_read_length_2)
               Option.(
                 value_map ~default:"" invoicing ~f:(fun (inv, pid, name) ->
                   sprintf " --> invoicing %d to %s (%d)" inv name pid))
+              (Option.value ~default:"NO NAME" lane#pool_name)
           )
         );
         return ()));
@@ -1728,4 +1729,3 @@ let () =
 
   | _ ->
     global_usage `error
-
