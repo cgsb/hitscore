@@ -778,7 +778,8 @@ let manual_command =
 
 let () =
   let open Command_line in
-  run ~version:"0"
+  run ~version:Hitscore_conf_values.version
+    ~build_info:(sprintf "Built on %s" Hitscore_conf_values.build_date)
     (group ~summary:"Gencore's command-line application" [
         ("configuration",
          group ~summary:"Manage the configuration of the application" [
