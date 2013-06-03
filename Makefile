@@ -33,7 +33,8 @@ dbclear:
               not table_schema ~ '^(information_schema|pg_.*)$$'" | psql -qAtX
 
 
-PKG_VERSION=$(shell printf "`cat setup.data`\necho \$$pkg_version\n" | sed 's/ = /=/' | sh)
+#PKG_VERSION=$(shell printf "`cat setup.data`\necho \$$pkg_version\n" | sed 's/ = /=/' | sh)
+PKG_VERSION=$(shell grep 'Version:' _oasis | sed 's/Version: *//')
 BINDIR=$(shell printf "`cat setup.data`\necho \$$bindir\n" | sed 's/ = /=/' | sh)
 
 install-version: _build/src/app/hitscore_main.native setup.data
@@ -82,4 +83,3 @@ fresh: clean uninstall
 distclean: clean
 	rm -f setup.data setup.log VERSION BUILD_DATE
 	ocaml setup.ml -distclean
-
