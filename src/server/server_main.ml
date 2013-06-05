@@ -251,7 +251,7 @@ let list_libraries ~state query =
       then persons_libraries
       else
         List.map query (fun qs ->
-          let rex = Pcre.regexp qs in
+          let rex = pcre_build qs in
           List.filter persons_libraries (fun l ->
             pcre_matches rex
               (sprintf "%s.%s"
