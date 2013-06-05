@@ -245,7 +245,8 @@ let list_libraries ~state query =
             List.exists people ((=) t))
       in
       let pcre_matches rex str =
-        try ignore (Pcre.exec ~rex str); true with Not_found -> false in
+        try ignore (Pcre.exec ~rex str); true with _ -> false in
+      let pcre_build qs = try Pcre.regexp qs with _ -> Pcre.regexp ".*" in
       if query = []
       then persons_libraries
       else
@@ -455,5 +456,3 @@ let command =
 
 let () =
   Command_line.(run ~version:"0" command)
-
-
