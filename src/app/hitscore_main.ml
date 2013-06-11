@@ -485,7 +485,7 @@ end
 
 module Hiseq_raw = struct
 
-  let fs_checks directory run_params sum1 =
+  let fs_checks directory run_params =
     begin
       try
         let dir_stat = Unix.stat directory in
@@ -507,14 +507,7 @@ module Hiseq_raw = struct
         eprintf "Cannot stat %s\n" run_params;
         failwith "Hiseq_raw.register"
     end;
-    begin
-      try
-        Unix.stat sum1 |! Pervasives.ignore
-      with
-      | Unix.Unix_error _ ->
-        eprintf "Cannot stat %s\n" sum1;
-        failwith "Hiseq_raw.register"
-    end
+    ()
 
   let register ?host config directory =
     if not (Filename.is_absolute directory) then (
@@ -522,9 +515,7 @@ module Hiseq_raw = struct
       failwith "Hiseq_raw.register"
     );
     let xml_run_params = Filename.concat directory "runParameters.xml" in
-    let xml_read1 =
-      Filename.concat directory "Data/reports/Summary/read1.xml" in
-    fs_checks directory xml_run_params xml_read1;
+    fs_checks directory xml_run_params;
 
     let { Hitscore_interfaces.Hiseq_raw_information.
           flowcell_name     ;
