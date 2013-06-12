@@ -215,7 +215,8 @@ module Assemble_sample_sheet:
                 >>| List.concat
                 >>| List.filter ~f:(fun k -> k = `bioo || k = `illumina)
                 >>| List.dedup
-                >>= begin function
+                >>= fun barcode_types ->
+                begin match barcode_types with
                 | [one_barcode_type] -> return (Some one_barcode_type)
                 | _ -> return (None)
                 end

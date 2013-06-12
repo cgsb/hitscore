@@ -180,7 +180,8 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
   Read_line.password ()
     ~prompt:(sprintf "Password for %S (like the one for the website): "
                user_name)
-  >>= begin function
+  >>= fun pass_opt ->
+  begin match pass_opt with
   | Some s -> return s
   | None -> error `no_password
   end
@@ -189,7 +190,8 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
   send_message ~state (`new_token (user_name, password, token_name, token))
   >>= fun () ->
   recv_message ~state
-  >>= begin function
+  >>= fun msg ->
+  begin match msg with
   | `user_message _
   | `simple_info _
   | `authentication_successful
@@ -377,7 +379,8 @@ let connect_and_authenticate ~configuration_file ~mode =
                     Configuration.token configuration))
   >>= fun () ->
   recv_message state
-  >>= begin function
+  >>= fun msg ->
+  begin match msg with
   | `authentication_successful -> dbg "Authentication successful !¡!"
   | `error `wrong_authentication ->
     msg "Authentication failed …" >>= fun () ->
@@ -580,7 +583,8 @@ let auth_command =
             >>= fun () ->
             dbg "Sent query, waiting for response" >>= fun () ->
             recv_message state
-            >>= begin function
+            >>= fun msg ->
+            begin match msg with
             | `tokens l ->
               output "Tokens:\n" >>= fun () ->
               while_sequential l (output "  * %S\n")
@@ -610,7 +614,8 @@ let auth_command =
             >>= fun () ->
             dbg "Sent query, waiting for response" >>= fun () ->
             recv_message state
-            >>= begin function
+            >>= fun msg ->
+            begin match msg with
             | `token_updated ->
               msg "Done"
             | m -> error (`unexpected_message m)
