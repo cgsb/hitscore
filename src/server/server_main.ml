@@ -246,7 +246,8 @@ let list_libraries ~state query =
       in
       let pcre_matches rex str =
         try ignore (Pcre.exec ~rex str); true with _ -> false in
-      let pcre_build qs = try Pcre.regexp qs with _ -> Pcre.regexp ".*" in
+      let pcre_build qs =
+        try Pcre.regexp qs with _ -> Pcre.regexp (String.make 42 'B') in
       if query = []
       then persons_libraries
       else
