@@ -246,9 +246,7 @@ let list_libraries ~state query =
       in
       let pcre_matches rex str =
         try ignore (Pcre.exec ~rex str); true with _ -> false in
-      (* let pcre_build qs = try Pcre.regexp qs with _ -> Pcre.regexp ".*" in *)
-      let pcre_build qs =
-        try Pcre.regexp qs with _ -> assert false in
+      let pcre_build qs = try Pcre.regexp qs with _ -> Pcre.regexp ".*" in
       if query = []
       then persons_libraries
       else
@@ -329,41 +327,33 @@ let revoke_token ~state token =
 
 
 let rec handle_up_message ~state =
-  try
-    begin
-      recv_message state
-      >>= fun m ->
-      begin match m with
-      | `log s ->
-        log "Client wants to log: %S" s
-        >>= fun () ->
-        begin match state.user with
-        | `none ->
-          send_message state (`user_message "you can't!")
-        | `token_authenticated p ->
-          log "and the client was right …"
-        end
-      | `new_token (user, password, token_name, token) ->
-        handle_new_token ~state ~user ~password ~token_name ~token
-      | `list_tokens -> list_tokens ~state
-      | `revoke_token t -> revoke_token ~state t
-      | `authenticate (user, token_name, token) ->
-        authenticate ~state ~user ~token ~token_name
-      | `get_simple_info ->
-        log "get_simple_info" >>= fun () ->
-        retrieve_simple_info ~state
-      | `get_libraries names_rexes -> list_libraries ~state names_rexes
-      | `terminate ->
-        log "Terminating connection" >>= fun () ->
-        error `stop
-      end
-      >>= fun () ->
-      handle_up_message ~state
-    end
-  with e ->
-    log "Unexpected exn in handle_up_message: %s" (Exn.to_string e)
+  recv_message state
+  >>= begin function
+  | `log s ->
+    log "Client wants to log: %S" s
     >>= fun () ->
-    send_message state (`error (`server_error "SERVER ERROR"))
+    begin match state.user with
+    | `none ->
+      send_message state (`user_message "you can't!")
+    | `token_authenticated p ->
+      log "and the client was right …"
+    end
+  | `new_token (user, password, token_name, token) ->
+    handle_new_token ~state ~user ~password ~token_name ~token
+  | `list_tokens -> list_tokens ~state
+  | `revoke_token t -> revoke_token ~state t
+  | `authenticate (user, token_name, token) ->
+    authenticate ~state ~user ~token ~token_name
+  | `get_simple_info ->
+    log "get_simple_info" >>= fun () ->
+    retrieve_simple_info ~state
+  | `get_libraries names_rexes -> list_libraries ~state names_rexes
+  | `terminate ->
+    log "Terminating connection" >>= fun () ->
+    error `stop
+  end
+  >>= fun () ->
+  handle_up_message ~state
 
 type error_in_connection =
 [ `bin_recv of [ `exn of exn | `wrong_length of int * string ]
@@ -432,7 +422,7 @@ let string_of_error e =
   Sexp.to_string_hum (sexp_of_error e)
 
 
-let command () =
+let command =
   let open Command_line in
   let default_pid_file = "/tmp/hitscored.pid" in
   basic ~summary:"Hitscore's server application"
@@ -465,17 +455,4 @@ let command () =
 
 
 let () =
-  try
-    Command_line.(run ~version:"0" (command ()))
-  with e ->
-    let recipients = ["seb@mondet.org"; "sm4431@nyu.edu"] in
-    let sender =
-      (sprintf "server_%d@%s" (Caml.Unix.getpid ()) (Unix.gethostname ())) in
-    let subject =
-      (sprintf "Death of Server %d on %s" (Caml.Unix.getpid ()) (Unix.gethostname ()))
-    in
-    let body =  (sprintf "\n\nServer died with error: %s" Exn.(to_string e)) in
-    eprintf "Sending Email to: %s\n%!" (String.concat recipients ~sep:", ");
-    Core_extended.Sendmail.send ~sender ~subject ~recipients body;
-    eprintf "Email sent (?)\n%!";
-    exit 1
+  Command_line.(run ~version:"0" command)

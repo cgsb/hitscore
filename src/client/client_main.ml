@@ -190,8 +190,8 @@ let run_init_protocol ~state ~token_name ~host ~port ~root_path
   send_message ~state (`new_token (user_name, password, token_name, token))
   >>= fun () ->
   recv_message ~state
-  >>= fun msg ->
-  begin match msg with
+  >>= fun message ->
+  begin match message with
   | `user_message _
   | `simple_info _
   | `authentication_successful
@@ -379,8 +379,8 @@ let connect_and_authenticate ~configuration_file ~mode =
                     Configuration.token configuration))
   >>= fun () ->
   recv_message state
-  >>= fun msg ->
-  begin match msg with
+  >>= fun message ->
+  begin match message with
   | `authentication_successful -> dbg "Authentication successful !¡!"
   | `error `wrong_authentication ->
     msg "Authentication failed …" >>= fun () ->
@@ -614,8 +614,8 @@ let auth_command =
             >>= fun () ->
             dbg "Sent query, waiting for response" >>= fun () ->
             recv_message state
-            >>= fun msg ->
-            begin match msg with
+            >>= fun message ->
+            begin match message with
             | `token_updated ->
               msg "Done"
             | m -> error (`unexpected_message m)
