@@ -522,6 +522,19 @@ let list_libraries ~state ~separator ~query ~spec =
   | m -> error (`unexpected_message m)
   end
 
+
+let pcre_error_to_string e =
+  let open Pcre in
+  match e with
+  | Partial            -> "Partial"
+  | BadPartial         -> "BadPartial"
+  | BadPattern (s, i)  -> sprintf "BadPattern: %s %d" s i
+  | BadUTF8            -> "BadUTF8"
+  | BadUTF8Offset      -> "BadUTF8Offset"
+  | MatchLimit         -> "MatchLimit"
+  | RecursionLimit     -> "RecursionLimit"
+  | InternalError  s   -> sprintf "InternalError %s" s
+
 let list_libraries_command =
   let open Command_line in
   basic ~summary:"List your libraries"
@@ -555,6 +568,21 @@ let list_libraries_command =
             | Some n -> `fastq_read (submission, n)
             | None -> `all in
           let separator = match format with  "csv" -> "," | _ -> "\t" in
+          dbg "Verifying query"
+          >>= fun () ->
+          while_sequential query (fun r ->
+              dbg "Checking %S" r
+              >>= fun () ->
+              begin try Pcre.regexp r |> Pervasives.ignore; return ()
+              with
+              | Pcre.Error e ->
+                msg "Error: Wrong regular expression: %S\n       %s" r
+                  (pcre_error_to_string e)
+                >>= fun () ->
+                error `stop
+              end
+            )
+          >>= fun _ ->
           list_libraries ~state ~spec ~separator ~query
           >>= fun () ->
           terminate_and_disconnect ~state
