@@ -90,6 +90,44 @@
         notable
 )
 
+(record pgm_stock_library
+        (name           string)
+        of_project
+        (description string option)
+        (sample      sample option)
+        (protocol  protocol option)
+        (application    string array)
+        (stranded       bool)
+        (rnaseq_control string option)
+        (barcoding barcode array array)
+        (a_adapter_length int option )
+        (p1_adapter_length int option)
+        (preparator person option)
+        notable
+)
+(record pgm_input_library
+        (library pgm_stock_library)
+        (submission_date timestamp)
+        (volume_uL real option)
+        (concentration_molML real option)
+        (user_db key_value array)
+        notable
+)
+
+(record pgm_pool
+        (pool_name string option)
+        (total_volume real option)
+        (libraries pgm_input_library array)
+        (pooled_percentages real array)
+        (contacts     person array)
+        )
+
+(record pgm_run
+        (date timestamp)
+        (sequencer string)
+        (pool pgm_pool)
+        notable)
+
 (record lane
         (pool_name string option)
         (seeding_concentration_pM real option)
