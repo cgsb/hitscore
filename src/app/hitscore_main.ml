@@ -1540,8 +1540,125 @@ module Fastx_qs = struct
         | l -> error (`invalid_command_line
                          (sprintf "don't know what to do with: %s"
                             String.(concat ~sep:", " l))))
-        end
+end
 
+module Users = struct
+
+  let int s = try Some (Int.of_string s) with _ -> None
+
+  let opt_val o msg =
+    match o with None -> error (`string msg) | Some s -> return s
+
+  let errf fmt = ksprintf (fun s -> error (`string s)) fmt
+
+  let parse_lane_indexes s =
+    begin match s with
+    | "*" -> return [2;3;4;5;6;7;8]
+    | other ->
+      begin match String.split other ~on:',' with
+      | [no_coma] ->
+        begin match int no_coma with
+        | Some i -> return [i]
+        | None ->
+          begin match String.split other ~on:'-' with
+          | [b;t] ->
+            opt_val (int b) (sprintf "%S should be an integer (parsing %s)" b s)
+            >>= fun bot ->
+            opt_val (int t) (sprintf "%S should be an integer (parsing %s)" t s)
+            >>= fun top ->
+            return (List.init (top - bot + 1) (fun i -> bot + i))
+          | _ ->
+            errf "Cannot parse %S" s
+          end
+        end
+      | more_than_one ->
+        while_sequential more_than_one (fun i ->
+            opt_val (int i) (sprintf "%S should be an integer (parsing %s)" i s))
+      end
+    end
+
+
+  let add_user_to_lanes ~configuration ~wet_run ~user ~lanes_specification =
+    with_database ~configuration (fun ~dbh ->
+        let layout = Classy.make dbh in
+        layout#person#all
+        >>| List.find ~f:(fun p ->
+            Int.to_string p#g_id = user || p#login = Some user || p#email = user
+            || Array.exists p#secondary_emails ~f:((=) user))
+        >>= fun uopt ->
+        opt_val uopt  (sprintf "cannot find user: %S" user)
+        >>= fun person ->
+        layout#flowcell#all >>= fun all_flowcells ->
+        layout#lane#all >>= fun all_lanes ->
+        begin
+          while_sequential lanes_specification ~f:(fun spec ->
+              begin match int spec  with
+              | Some id ->
+                let optlane = List.find all_lanes ~f:(fun l -> l#g_id = id) in
+                opt_val optlane (sprintf "cannot find lane: %d" id)
+                >>= fun l ->
+                return [l]
+              | None ->
+                begin match String.split spec ~on:':' with
+                | [fcid; lanes] ->
+                  let fcopt =
+                    List.find all_flowcells (fun f -> f#serial_name = fcid) in
+                  opt_val fcopt (sprintf "Cannot find flowcell %s" fcid)
+                  >>= fun fc ->
+                  parse_lane_indexes lanes
+                  >>= fun indexes ->
+                  while_sequential indexes (fun i ->
+                      try (fc#lanes).(i - 1)#get with _ ->
+                        errf "%dth Lane does not exists in %s" i fcid)
+                | s -> errf "cannot parse %S" spec
+                end
+              end)
+          >>| List.concat
+        end
+        >>= fun lanes_to_treat ->
+        while_sequential lanes_to_treat (fun l ->
+            eprintf "Lane %d (people: %s)\n%!" l#g_id
+              (String.concat ~sep:", "
+                 (Array.to_list l#contacts
+                  |> List.map ~f:(fun c -> Int.to_string c#id)));
+            if wet_run then
+              begin
+                eprintf "[wet-run] Adding %d\n%!" person#g_id;
+                let current =
+                  Array.(map l#contacts ~f:(fun c -> c#pointer) |> to_list) in
+                let to_set = List.dedup (current @ [person#g_pointer]) in
+                l#set_contacts (Array.of_list to_set)
+              end
+            else
+              begin
+                eprintf "[dry-run] Would add %d\n%!" person#g_id;
+                return ()
+              end)
+        >>= fun _ ->
+        return ())
+
+  let () =
+    define_command
+      ~names:["add-user-to-lanes"; "u2l"]
+      ~description:"Add a user to a bunch of lanes"
+      ~usage:(fun o exec cmd ->
+        fprintf o "Usage: %s <profile> %s [-wet-run] <user> <spec>\n" exec cmd;
+        fprintf o "Where the specification is a list of either:\n\
+                   * lane database IDs\n\
+                   * 'FCIDXX:*' → (lanes 2 to 8)\n\
+                   * 'FCIDXX:n-m' → (lanes n to m)\n\
+                   * 'FCIDXX:i,j,k' → (lanes i, j, k)\n\
+                  ")
+      ~run:(fun configuration exec cmd ->
+        function
+        | "-wet-run" :: user :: lanes_specification ->
+          add_user_to_lanes ~wet_run:true ~configuration ~user ~lanes_specification
+        | user :: lanes_specification ->
+          add_user_to_lanes ~wet_run:false ~configuration ~user ~lanes_specification
+        | [] -> error (`invalid_command_line "need at least a user name !"))
+
+
+end
 
 (* more define_command's: *)
 let () =
