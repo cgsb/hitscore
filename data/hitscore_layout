@@ -55,9 +55,8 @@
 (record barcode
         (kind barcode_type)
         (index int option)
-        (position_in_r1 int option)
-        (position_in_r2 int option)
-        (position_in_index int option)
+        (read int option)
+        (position int option)
         (sequence string option))
 
 (record stock_library

@@ -488,11 +488,15 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
           (column row col_Custom_Barcode_Location
            >>= fun s ->
            return (String.split ~on:',' (String.lowercase s)))
-          |! value_map ~default:[] ~f:(List.map ~f:String.strip)
-          |! List.filter_map ~f:(fun s ->
+          |> value_map ~default:[] ~f:(List.map ~f:String.strip)
+          |> List.filter_map ~f:(fun s ->
             match String.split ~on:':' s |! List.map ~f:String.strip with
-            | [ "r1" ; two ] -> int two >>= fun i -> Some (`on_r1 i)
-            | [ "r2" ; two ] -> int two >>= fun i -> Some (`on_r2 i)
+            | [ "r1" ; two ] -> int two >>= fun i -> Some (`on_r (1, i))
+            | [ "r2" ; two ] -> int two >>= fun i -> Some (`on_r (2, i))
+            | [ "r3" ; two ] -> int two >>= fun i -> Some (`on_r (3, i))
+            | [ "r4" ; two ] -> int two >>= fun i -> Some (`on_r (4, i))
+            | [ "r5" ; two ] -> int two >>= fun i -> Some (`on_r (5, i))
+            | [ "r6" ; two ] -> int two >>= fun i -> Some (`on_r (6, i))
             | [ "i"  ; two ] -> int two >>= fun i -> Some (`on_i i )
             | _ ->
               perror "Lib %s: cannot understand custom-barcode-loc: %S" libname s;
@@ -650,8 +654,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             if cbp <> [] then
               sprintf "[Position: %s]"
                 (String.concat ~sep:", " (List.map cbp ~f:(function
-                | `on_r1 i -> sprintf "%d on R1" i
-                | `on_r2 i -> sprintf "%d on R2" i
+                | `on_r(r, i) -> sprintf "%d on R%d" i r
                 | `on_i i -> sprintf "%d on Idx" i))) else ""; nl;
             vm p5 ~default:"[NO P5 LENGTH]" ~f:(sprintf "[P5: %d]");
             vm p7 ~default:"[NO P7 LENGTH]" ~f:(sprintf "[P7: %d]"); nl;
@@ -1002,15 +1005,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let positions = ref cbp in
       while_sequential cbs begin fun sequence -> (* custom barcode seqs *)
         begin match List.hd !positions with
-        | Some (`on_r1 i) -> return (sprintf "(r1 %d)" i, Some i, None, None)
-        | Some (`on_r2 i) -> return (sprintf "(r2 %d)" i, None, None, Some i)
-        | Some (`on_i i) ->  return (sprintf "(index %d)" i, None, Some i, None)
+        | Some (`on_r (r, p)) -> return (sprintf "(r%d %d)" r p, r, p)
+        | Some (`on_i i) ->  return (sprintf "(r2 :index %d)" i, 2, i)
         | None -> failwithf "Custom barcodes should have one position each!"
         end
-        >>= fun (poslog, position_in_r1, position_in_index, position_in_r2) ->
+        >>= fun (poslog, read, position) ->
         positions := List.tl_exn !positions;
-        return (sequence, poslog,
-                position_in_r1, position_in_index, position_in_r2)
+        return (sequence, poslog, read, position)
       end
       >>| List.dedup
       >>= fun custom_barcodes ->
@@ -1018,21 +1019,19 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       layout#barcode#all >>= fun all_barcodes ->
 
       while_sequential custom_barcodes
-        begin fun (sequence, poslog, position_in_r1, position_in_index, position_in_r2) ->
+        begin fun (sequence, poslog, read, position) ->
           let found =
             List.find all_barcodes ~f:(fun b ->
-              b#kind = `custom && b#index = None
-              && b#position_in_r1 = position_in_r1
-              && b#position_in_r2    =   position_in_r2
-              && b#position_in_index =   position_in_index
-              && b#sequence          =   Some sequence) in
+                b#kind = `custom && b#index = None
+                && b#position = Some position && b#read = Some read
+                && b#sequence = Some sequence) in
           match found with
           | Some b -> return b#g_pointer
           | None ->
             run ~dbh ~fake:(fun x -> Layout.Record_barcode.unsafe_cast x)
               ~real:(fun dbh ->
                 Access.Barcode.add_value ~dbh ~kind:`custom ?index:None
-                  ?position_in_r1 ?position_in_r2 ?position_in_index ~sequence)
+                  ~position ~read ~sequence)
               ~log:(sprintf "(add_barcode custom %s %s)" sequence poslog)
         end
       >>= fun custom_barcode_pointers ->
@@ -1053,18 +1052,15 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         let found =
           List.find all_barcodes ~f:(fun b ->
             b#kind = kind && b#index = Some index
-              && b#position_in_r1    = None
-              && b#position_in_r2    = None
-              && b#position_in_index = None
-              && b#sequence          = None) in
+              && b#position = None && b#read = None
+              && b#sequence = None) in
         match found with
         | Some b -> return b#g_pointer
         | None ->
             run ~dbh ~fake:(fun x -> Layout.Record_barcode.unsafe_cast x)
               ~real:(fun dbh ->
                 Access.Barcode.add_value ~dbh ~kind ~index
-                  ?position_in_r1:None ?position_in_r2:None ?position_in_index:None
-                  ?sequence:None)
+                  ?position:None ?read:None ?sequence:None)
               ~log:(sprintf "(add_barcode %s %d)"
                       (Layout.Enumeration_barcode_type.to_string kind) index)
       end
@@ -1079,10 +1075,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             all_known_barcodes
             (fun (i, b) -> if i = index then Some b else None))
         @ List.filter_map custom_barcodes
-          (fun (sequence, poslog, position_in_r1, position_in_index, position_in_r2) ->
-            if position_in_index = Some 1
-            then Some sequence
-            else None)
+            (fun (sequence, poslog, read, position) ->
+               if read =  2 && position =  1
+               then Some sequence
+               else None)
       in
 
 
@@ -1264,7 +1260,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             List.find_map Assemble_sample_sheet.illumina_barcodes
               (fun (ii, s) -> if bar#index = Some ii then Some s else None)
           | `custom ->
-            if bar#position_in_index = Some 1 then bar#sequence else None
+            if bar#position = Some 1 && bar#read = Some 2
+            then bar#sequence else None
           | `bioo_96 | `nugen -> None
         in
         return seq

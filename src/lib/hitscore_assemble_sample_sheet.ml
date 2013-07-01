@@ -135,8 +135,9 @@ module Assemble_sample_sheet:
                       return (Some (`bioo b))
                     | {g_value = { kind = `illumina; index = Some b; _}; _} ->
                       return (Some (`illumina b))
-                    | {g_value = { kind = `custom; position_in_index = Some 1;
-                                   sequence = Some s; _}; _} when String.length s = 6 ->
+                    | {g_value = { kind = `custom; read = Some 2;
+                                   position = Some 1; sequence = Some s; _}; _}
+                      when String.length s = 6 ->
                       return (Some (`illumina_compatible s))
                     | _ -> return None
                     end)
