@@ -81,22 +81,31 @@ let int ?(msg="") s =
   with e ->
     perror "%sCannot read an integer from %s" msg s; None
 
+type run_type =
+  | Hiseq_se of int
+  | Hiseq_pe of int * int
+  | Pgm of int * [ `chip_314 | `chip_316 | `chip_318 ]
 
 let parse_run_type s =
-  match String.split ~on:' ' s with
-  | [ "PE"; lengths ] ->
+  begin match String.split ~on:' ' (String.lowercase s) with
+  | ["hiseq"; "pe"; lengths] | [ "pe"; lengths ] ->
     begin match String.split ~on:'x' lengths with
     | [ left; right ] ->
-      Option.bind (int left) (fun l -> Some (s, l, int right))
-    | _ ->
-      perror "Wrong read length spec (PE): %s" s;
-      None
+      Option.(
+        int left >>= fun l ->
+        int right >>= fun r ->
+        return (s, Hiseq_pe (l, r)))
+    | _ -> None
     end
-  | [ "SE"; length ] ->
-    Option.bind (int length) (fun l -> Some (s, l, None))
-  | _ ->
-    perror "Wrong read length spec (PE): %s" s;
-    None
+  | [ "hiseq"; "se"; lgth ] | [ "se"; lgth ] ->
+    Option.(int lgth >>= fun l -> return (s, Hiseq_se l))
+  | _ -> None
+  end
+  |>
+  begin function
+  | Some s -> Some s
+  | None -> perror "Wrong read length spec: %S" s; None
+  end
 
 let parse_date s =
   match String.split ~on:'/' s |! List.map ~f:(String.strip) with
@@ -1386,8 +1395,15 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let pooled_percentages = List.map input_libs ~f:snd |! Array.of_list in
 
       let requested_read_length_1, requested_read_length_2 =
-        match run_type_parsed with Some (_, l, r) -> (l, r)
-        | None -> (if not dry_run then failwith "cannot go further"); (42, None) in
+        match run_type_parsed with
+        | Some (_, Hiseq_pe (l, r)) -> (l, Some r)
+        | Some (_, Hiseq_se l) -> (l, None)
+        | Some (_, Pgm _) ->
+          failwith "requested read lengths: PGM: not implemented"
+        | None ->
+          (if not dry_run then
+             failwith "cannot go further (requested read lengths)");
+          (42, None) in
 
       let contacts = List.map contacts snd |! Array.of_list in
       let pool_name = String.(chop_prefix_exn pool ~prefix:"Pool" |! strip) in
