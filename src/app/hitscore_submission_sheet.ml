@@ -82,9 +82,9 @@ let int ?(msg="") s =
     perror "%sCannot read an integer from %s" msg s; None
 
 type run_type =
-  | Hiseq_se of int
-  | Hiseq_pe of int * int
+  | Hiseq of [`se of int | `pe of int * int ]
   | Pgm of int * [ `chip_314 | `chip_316 | `chip_318 ]
+  | Unknown_run_type
 
 let parse_run_type s =
   begin match String.split ~on:' ' (String.lowercase s) with
@@ -94,11 +94,21 @@ let parse_run_type s =
       Option.(
         int left >>= fun l ->
         int right >>= fun r ->
-        return (s, Hiseq_pe (l, r)))
+        return (s, Hiseq (`pe (l, r))))
     | _ -> None
     end
   | [ "hiseq"; "se"; lgth ] | [ "se"; lgth ] ->
-    Option.(int lgth >>= fun l -> return (s, Hiseq_se l))
+    Option.(int lgth >>= fun l -> return (s, Hiseq (`se l)))
+  | [ "pgm"; run_type; chip ] ->
+    Option.(
+      int run_type >>= fun r ->
+      int chip >>= fun c ->
+      begin match c with
+      | 314 -> return (s, Pgm (r, `chip_314))
+      | 316 -> return (s, Pgm (r, `chip_316))
+      | 318 -> return (s, Pgm (r, `chip_318))
+      | _ -> None
+      end)
   | _ -> None
   end
   |>
@@ -1396,10 +1406,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
 
       let requested_read_length_1, requested_read_length_2 =
         match run_type_parsed with
-        | Some (_, Hiseq_pe (l, r)) -> (l, Some r)
-        | Some (_, Hiseq_se l) -> (l, None)
+        | Some (_, Hiseq (`pe (l, r))) -> (l, Some r)
+        | Some (_, Hiseq (`se l)) -> (l, None)
         | Some (_, Pgm _) ->
           failwith "requested read lengths: PGM: not implemented"
+        | Some (_, Unknown_run_type)
         | None ->
           (if not dry_run then
              failwith "cannot go further (requested read lengths)");
