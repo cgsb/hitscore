@@ -214,7 +214,7 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
   | l ->
     failwithf "Wrong contact line: %s" (strlist l))
 
-let parse_pools ~phix sanitized =
+let parse_pools ~run_type ~phix sanitized =
   let sections =
     Array.mapi sanitized ~f:(fun i a -> (i, a)) |! Array.to_list |!
         List.filter ~f:(function
@@ -223,13 +223,25 @@ let parse_pools ~phix sanitized =
             List.map ~f:(fun (i, a) -> i)
   in
   List.map sections (fun section ->
-    match sanitized.(section) with
-    | pool :: "Seeding Concentration (10 - 20 pM):" :: scs
-      :: "Total Volume (uL):" :: tvs :: "Concentration (nM):" :: cs ::
-        emptyness when List.for_all emptyness ((=) "") ->
-      let seeding_pM, tot_vol, nm =
-        let i32 = int ~msg:(sprintf "%s row: " pool) in
-        (i32 scs, i32 tvs, i32 cs) in
+      let pool, seeding_pM, tot_vol, nm =
+        match run_type, sanitized.(section) with
+        | Hiseq _, pool
+                   :: "Seeding Concentration (10 - 20 pM):" :: scs
+                   :: "Total Volume (uL):" :: tvs
+                   :: "Concentration (nM):" :: cs
+                   :: emptyness when List.for_all emptyness ((=) "") ->
+          let i32 = int ~msg:(sprintf "%s row: " pool) in
+          (pool, i32 scs, i32 tvs, i32 cs)
+        | Pgm _, pool
+                 :: "Total Volume (uL):" :: tvs
+                 :: "Concentration (nM):" :: cs
+                 :: emptyness when List.for_all emptyness ((=) "") ->
+          let i32 = int ~msg:(sprintf "%s row: " pool) in
+          (pool, None, i32 tvs, i32 cs)
+        | _, l ->
+          perror "Wrong Pool row: %s" (strlist l);
+          ("Wrong Pool For Hitscore", None, None, None)
+      in
       let pool_libs =
         list_of_filteri (fun i ->
           let row = sanitized.(section + i + 2) in
@@ -244,7 +256,7 @@ let parse_pools ~phix sanitized =
               perror "Wrong pool percentage %s in row [%s]" percent (strlist row);
               None
             end
-          | _ -> (* We should had hit another pool *) None) in
+          | _ -> (* We should have hit another pool *) None) in
       let pool_libs_redistributed =
         match List.Assoc.find phix pool with
         | None -> pool_libs
@@ -253,11 +265,9 @@ let parse_pools ~phix sanitized =
           ("PhiX", Float.of_int p)
           :: (List.map pool_libs
                 ~f:(fun (lib, plib) ->
-                  (lib, plib -. (float p /. libnb))))
+                    (lib, plib -. (float p /. libnb))))
       in
-      Some (pool, seeding_pM, tot_vol, nm, pool_libs_redistributed)
-    | l ->
-      perror "Wrong Pool row: %s" (strlist l); None)
+      Some (pool, seeding_pM, tot_vol, nm, pool_libs_redistributed))
 
 (* parse_invoicing --> submission_date, run_type, invoicings *)
 let parse_invoicing sanitized =
@@ -599,7 +609,10 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         if_verbose "  %s, %f\n" email p
       ););
 
-    let pools = parse_pools ~phix sanitized in
+    let run_type =
+      Option.value_map ~f:snd ~default:Unknown_run_type run_type_parsed in
+
+    let pools = parse_pools ~run_type ~phix sanitized in
     let () = (* check pools *)
       List.iter pools (function
       | Some (pool, _,_,_, l) ->
