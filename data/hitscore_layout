@@ -113,20 +113,6 @@
         notable
 )
 
-(record pgm_pool
-        (pool_name string option)
-        (total_volume real option)
-        (libraries pgm_input_library array)
-        (pooled_percentages real array)
-        (contacts     person array)
-        )
-
-(record pgm_run
-        (date timestamp)
-        (sequencer string)
-        (pool pgm_pool)
-        notable)
-
 (record lane
         (pool_name string option)
         (seeding_concentration_pM real option)
@@ -137,6 +123,32 @@
         (requested_read_length_2 int option)
         (contacts     person array)
         )
+
+(record invoicing
+        (pi person)
+        (account_number   string option)
+        (fund      string option)
+        (org       string option)
+        (program   string option)
+        (project   string option)
+        (lanes lane array)
+        (percentage real)
+        notable)
+
+(record pgm_pool
+        (pool_name string option)
+        (total_volume real option)
+        (libraries pgm_input_library array)
+        (pooled_percentages real array)
+        (invoices invoicing array)
+        (contacts     person array)
+        )
+
+(record pgm_run
+        (date timestamp)
+        (sequencer string)
+        (pool pgm_pool)
+        notable)
 
 (record flowcell
         (serial_name string)
@@ -159,17 +171,6 @@
         (b_started timestamp option)
         (b_finished timestamp option)
         (b_returned timestamp option))
-
-(record invoicing
-        (pi person)
-        (account_number   string option)
-        (fund      string option)
-        (org       string option)
-        (program   string option)
-        (project   string option)
-        (lanes lane array)
-        (percentage real)
-        notable)
 
 
 ;; Common fields of bioanalyzer and agarose_gel:
