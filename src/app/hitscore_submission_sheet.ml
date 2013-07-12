@@ -34,8 +34,10 @@ type error_buffer = {
   mutable errors: string list;
   mutable warnings: string list;
   mutable missing_files: (string * string) list;
+  mutable fixed_files: (string * string) list;
 }
-let error_buffer = { errors = []; warnings = []; missing_files = []}
+let error_buffer =
+  { errors = []; warnings = []; missing_files = []; fixed_files = []}
 let print_error_buffer () =
   begin match List.dedup error_buffer.warnings with
   | [] -> printf "## No Warnings\n"
@@ -53,6 +55,14 @@ let print_error_buffer () =
         printf "* %S (%s)\n" f m
       );
   end;
+  begin match List.dedup error_buffer.fixed_files with
+  | [] -> printf "## All The Filenames Were Correct\n"
+  | some ->
+    printf "## Fixed files:\n";
+    List.iter some (fun (f, m) ->
+        printf "* %S -> %S\n" f m
+      );
+  end;
   begin match List.dedup error_buffer.errors with
   | [] -> printf "## No Errors\n"
   | some ->
@@ -68,6 +78,8 @@ let missing_file file fmt =
   ksprintf (fun s ->
       error_buffer.missing_files <- (file, s) :: error_buffer.missing_files
     ) fmt
+let fixed_file file s =
+  error_buffer.fixed_files <- (file, s) :: error_buffer.fixed_files
 
 let warning fmt =
   ksprintf (fun s -> error_buffer.warnings <- s :: error_buffer.warnings) fmt
@@ -94,7 +106,7 @@ let fix_filename_for_windows_people filename ~potential_extensions =
           else None) in
     match potential_file with
     | Some s ->
-      warning "Replacing %S with %S\n" filename s;
+      fixed_file filename s;
       s
     | None -> filename
 
