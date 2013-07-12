@@ -33,8 +33,9 @@ let find_contact ~dbh ~verbose first last email =
 type error_buffer = {
   mutable errors: string list;
   mutable warnings: string list;
+  mutable missing_files: (string * string) list;
 }
-let error_buffer = { errors = []; warnings = []}
+let error_buffer = { errors = []; warnings = []; missing_files = []}
 let print_error_buffer () =
   begin match List.dedup error_buffer.warnings with
   | [] -> printf "## No Warnings\n"
@@ -42,6 +43,14 @@ let print_error_buffer () =
     printf "## WARNINGS:\n";
     List.iter some (fun s ->
         printf "* %s\n" s
+      );
+  end;
+  begin match List.dedup error_buffer.missing_files with
+  | [] -> printf "## All The Files Were Found\n"
+  | some ->
+    printf "## MISSING FILES:\n";
+    List.iter some (fun (f, m) ->
+        printf "* %S (%s)\n" f m
       );
   end;
   begin match List.dedup error_buffer.errors with
@@ -55,6 +64,11 @@ let print_error_buffer () =
   ()
 let perror fmt =
   ksprintf (fun s -> error_buffer.errors <- s :: error_buffer.errors) fmt
+let missing_file file fmt =
+  ksprintf (fun s ->
+      error_buffer.missing_files <- (file, s) :: error_buffer.missing_files
+    ) fmt
+
 let warning fmt =
   ksprintf (fun s -> error_buffer.warnings <- s :: error_buffer.warnings) fmt
 let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S"))
@@ -824,13 +838,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       let erroneous_pointer f =
         if dry_run then f (-1)
         else failwith "erroneous_pointer during wet-run!" in
-      let check_and_copy_files volume filenames =
+      let check_and_copy_files volume filenames msg =
         if dry_run
         then begin
           List.iter filenames (fun n ->
               if (Sys.file_exists n) <> `Yes
               then
-                perror "File %S should be in the current directory!" n;
+                missing_file n msg;
             );
           dry_buffer :=
             (0,
@@ -948,8 +962,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 List.iter filenames (fun n ->
                     if (Sys.file_exists n) <> `Yes
                     then
-                      perror "Lib: %s, Protocol: %s: File %S should be in the current directory!"
-                        libname name n;
+                      missing_file n "Protocol %s of lib: %s" name libname;
                   );
                 run ~dbh
                   ~fake:(fun x -> Layout.File_system.unsafe_cast x)
@@ -961,7 +974,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                           hr_tag
                           (String.concat ~sep:" " (List.map filenames (sprintf "%S"))))
                 >>= fun volume ->
-                check_and_copy_files volume filenames
+                check_and_copy_files volume filenames "protocol file"
               | None ->
                 perror "Lib: %s, Protocol %S is not in the DB and has no file."
                   libname name;
@@ -1205,7 +1218,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                             "(add_volume bioanalyzer_directory %s (files (%s)))"
                             hr_tag (String.concat ~sep:" " (List.map dir (sprintf "%S"))))
                   >>= fun x ->
-                  check_and_copy_files x dir
+                  check_and_copy_files x dir "bioanalyzer"
                   >>= fun _ ->
                   bio_directories := (dir, x) :: !bio_directories;
                   return x
@@ -1252,7 +1265,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                             "(add_volume agarose_gel_directory %s (files (%s)))"
                             hr_tag (String.concat ~sep:" " (List.map dir (sprintf "%S"))))
                   >>= fun x ->
-                  check_and_copy_files x dir >>= fun _ ->
+                  check_and_copy_files x dir "agarose gel" >>= fun _ ->
                   arg_directories := (dir, x) :: !arg_directories;
                   return x
               in
