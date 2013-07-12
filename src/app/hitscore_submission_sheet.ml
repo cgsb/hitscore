@@ -572,6 +572,85 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
                    notes         ,
                    key_value_list)))
 
+let print_libraries ~verbose libraries =
+  let if_verbose fmt =
+    ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
+  if_verbose "Libraries:\n";
+  List.iter libraries (function
+    | `wrong libname -> if_verbose "  wrong lib: %s\n" libname
+    | `existing (s, _, c, n, kv) ->
+      if_verbose "  existing lib: %s%s%s {%s}\n" s
+        (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%d nM)"))
+        (Option.value_map n ~default:" (no note)" ~f:(sprintf " (note: %S)"))
+        (String.concat ~sep:", "
+           (List.map kv ~f:(function
+              | (k, Some v) -> sprintf "[%S -- %S]" k v
+              | (k, None)   -> sprintf "[NO %S]" k)))
+    | `new_lib (s, project, conc, note,
+                short_desc, sample_name, species, app, strd, tsc, rsc,
+                bt, bcs, cbs, cbp,
+                p5, p7,
+                bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
+                arg_wnb, arg_avg, arg_min, arg_max, arg_img,
+                protocol_name ,
+                protocol_files ,
+                preparator    ,
+                notes         ,
+                key_value_list) ->
+      let vm = Option.value_map in
+      let nl = "\n" in
+      let bioarg (bio_wnb, bio_avg, bio_min, bio_max) =
+        (String.concat ~sep:", " [
+            vm bio_wnb ~default:"[NO WNB]" ~f:(sprintf "[wnb: %d]");
+            vm bio_avg ~default:"[NO AVG]" ~f:(sprintf "[avg: %d]");
+            vm bio_min ~default:"[NO MIN]" ~f:(sprintf "[min: %d]");
+            vm bio_max ~default:"[NO MAX]" ~f:(sprintf "[max: %d]");
+          ]) in
+      if_verbose "  new lib: %s\n    %s\n" s
+        (String.concat ~sep:"    " ([
+             vm project ~default:"[no project]" ~f:(sprintf "[Proj: %s]");
+             vm short_desc ~default:"[no desc]" ~f:(sprintf "[Desc: %s]");
+             vm sample_name ~default:"[no sample]" ~f:(sprintf "[Sample: %s]");
+             vm species ~default:"[no species]" ~f:(sprintf "[Org: %s]"); nl;
+             vm app ~default:"[NO APP]" ~f:(sprintf "[App: %s]");
+             vm strd ~default:"[NO STRANDEDNESS]"
+               ~f:(fun b -> if b then "[stranded]" else "[not stranded]"); nl;
+             vm tsc ~default:"[no truseq-c]" ~f:(sprintf "[TruSeqC: %b]");
+             vm rsc ~default:"[no rnaseq-c]" ~f:(sprintf "[RNASeqC: %s]"); nl;
+             sprintf "Barcode [Type: %s"
+               (Option.value_map ~default:"NONE"
+                  ~f:Layout.Enumeration_barcode_type.to_string bt);
+             sprintf "(%s)]" (String.concat ~sep:", "
+                                (List.map bcs (Int.to_string)));
+             if cbs <> [] then
+               sprintf "[Custom: (%s)]" (String.concat ~sep:", " cbs)
+             else "";
+             if cbp <> [] then
+               sprintf "[Position: %s]"
+                 (String.concat ~sep:", " (List.map cbp ~f:(function
+                    | `on_r(r, i) -> sprintf "%d on R%d" i r
+                    | `on_i i -> sprintf "%d on Idx" i))) else ""; nl;
+             vm p5 ~default:"[NO P5 LENGTH]" ~f:(sprintf "[P5: %d]");
+             vm p7 ~default:"[NO P7 LENGTH]" ~f:(sprintf "[P7: %d]"); nl;
+             sprintf "[Bioanalzer: %s]" (bioarg (bio_wnb, bio_avg, bio_min, bio_max));
+             vm bio_pdf ~default:"[NO PDF]" ~f:(sprintf "\n      [pdf: %S]");
+             vm bio_xad ~default:"[NO XAD]" ~f:(sprintf "\n      [xad: %S]"); nl;
+             sprintf "[Agarose Gel %s]" (bioarg (arg_wnb, arg_avg, arg_min, arg_max));
+             vm arg_img ~default:"[NO IMG]" ~f:(sprintf "\n      [img: %S]"); nl;
+             vm protocol_name  ~default:"[NO PROTOCOL]" ~f:(sprintf "[Protocol: %s]");
+             vm protocol_files ~default:"[NO P-FILE]"
+               ~f:(fun l -> sprintf "[P-Files: %s]" (String.concat ~sep:", " l)); nl;
+             vm preparator     ~default:"[NO PREPARATOR]" ~f:(sprintf "[Prep by %s]"); nl;
+             vm notes          ~default:"" ~f:(sprintf "[Note: %S]");
+           ]
+             @
+               (List.map key_value_list ~f:(function
+                  | (k, Some v) -> sprintf "\n    [%S -- %S]" k v
+                  | (k, None)   -> sprintf "\n    [NO %S]" k))
+           )
+        )
+    )
+
 let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
   let if_verbose fmt =
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
@@ -633,82 +712,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
 
 
       parse_libraries ~dbh ~layout loaded sanitized >>= fun libraries ->
-      if verbose then (* print libraries *) (
-        if_verbose "Libraries:\n";
-        List.iter libraries (function
-          | `wrong libname -> if_verbose "  wrong lib: %s\n" libname
-          | `existing (s, _, c, n, kv) ->
-            if_verbose "  existing lib: %s%s%s {%s}\n" s
-              (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%d nM)"))
-              (Option.value_map n ~default:" (no note)" ~f:(sprintf " (note: %S)"))
-              (String.concat ~sep:", "
-                 (List.map kv ~f:(function
-                    | (k, Some v) -> sprintf "[%S -- %S]" k v
-                    | (k, None)   -> sprintf "[NO %S]" k)))
-          | `new_lib (s, project, conc, note,
-                      short_desc, sample_name, species, app, strd, tsc, rsc,
-                      bt, bcs, cbs, cbp,
-                      p5, p7,
-                      bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
-                      arg_wnb, arg_avg, arg_min, arg_max, arg_img,
-                      protocol_name ,
-                      protocol_files ,
-                      preparator    ,
-                      notes         ,
-                      key_value_list) ->
-            let vm = Option.value_map in
-            let nl = "\n" in
-            let bioarg (bio_wnb, bio_avg, bio_min, bio_max) =
-              (String.concat ~sep:", " [
-                  vm bio_wnb ~default:"[NO WNB]" ~f:(sprintf "[wnb: %d]");
-                  vm bio_avg ~default:"[NO AVG]" ~f:(sprintf "[avg: %d]");
-                  vm bio_min ~default:"[NO MIN]" ~f:(sprintf "[min: %d]");
-                  vm bio_max ~default:"[NO MAX]" ~f:(sprintf "[max: %d]");
-                ]) in
-            if_verbose "  new lib: %s\n    %s\n" s
-              (String.concat ~sep:"    " ([
-                   vm project ~default:"[no project]" ~f:(sprintf "[Proj: %s]");
-                   vm short_desc ~default:"[no desc]" ~f:(sprintf "[Desc: %s]");
-                   vm sample_name ~default:"[no sample]" ~f:(sprintf "[Sample: %s]");
-                   vm species ~default:"[no species]" ~f:(sprintf "[Org: %s]"); nl;
-                   vm app ~default:"[NO APP]" ~f:(sprintf "[App: %s]");
-                   vm strd ~default:"[NO STRANDEDNESS]"
-                     ~f:(fun b -> if b then "[stranded]" else "[not stranded]"); nl;
-                   vm tsc ~default:"[no truseq-c]" ~f:(sprintf "[TruSeqC: %b]");
-                   vm rsc ~default:"[no rnaseq-c]" ~f:(sprintf "[RNASeqC: %s]"); nl;
-                   sprintf "Barcode [Type: %s"
-                     (Option.value_map ~default:"NONE"
-                        ~f:Layout.Enumeration_barcode_type.to_string bt);
-                   sprintf "(%s)]" (String.concat ~sep:", "
-                                      (List.map bcs (Int.to_string)));
-                   if cbs <> [] then
-                     sprintf "[Custom: (%s)]" (String.concat ~sep:", " cbs)
-                   else "";
-                   if cbp <> [] then
-                     sprintf "[Position: %s]"
-                       (String.concat ~sep:", " (List.map cbp ~f:(function
-                          | `on_r(r, i) -> sprintf "%d on R%d" i r
-                          | `on_i i -> sprintf "%d on Idx" i))) else ""; nl;
-                   vm p5 ~default:"[NO P5 LENGTH]" ~f:(sprintf "[P5: %d]");
-                   vm p7 ~default:"[NO P7 LENGTH]" ~f:(sprintf "[P7: %d]"); nl;
-                   sprintf "[Bioanalzer: %s]" (bioarg (bio_wnb, bio_avg, bio_min, bio_max));
-                   vm bio_pdf ~default:"[NO PDF]" ~f:(sprintf "\n      [pdf: %S]");
-                   vm bio_xad ~default:"[NO XAD]" ~f:(sprintf "\n      [xad: %S]"); nl;
-                   sprintf "[Agarose Gel %s]" (bioarg (arg_wnb, arg_avg, arg_min, arg_max));
-                   vm arg_img ~default:"[NO IMG]" ~f:(sprintf "\n      [img: %S]"); nl;
-                   vm protocol_name  ~default:"[NO PROTOCOL]" ~f:(sprintf "[Protocol: %s]");
-                   vm protocol_files ~default:"[NO P-FILE]"
-                     ~f:(fun l -> sprintf "[P-Files: %s]" (String.concat ~sep:", " l)); nl;
-                   vm preparator     ~default:"[NO PREPARATOR]" ~f:(sprintf "[Prep by %s]"); nl;
-                   vm notes          ~default:"" ~f:(sprintf "[Note: %S]");
-                 ]
-                   @
-                     (List.map key_value_list ~f:(function
-                        | (k, Some v) -> sprintf "\n    [%S -- %S]" k v
-                        | (k, None)   -> sprintf "\n    [NO %S]" k))
-                 )
-              )
-          ));
+      if verbose then (print_libraries ~verbose libraries);
 
       (* More checks *)
       let () =
