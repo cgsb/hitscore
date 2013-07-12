@@ -46,6 +46,25 @@ let wetfail ~dry_run fmt =
 let failwithf fmt =
   ksprintf (fun s -> error (`pss_failure s)) fmt
 
+(* A function that tries to add extensions to a filename to check
+   if the filename exists but the client had written it in a
+   window-ish way: with extension. *)
+let fix_filename_for_windows_people filename ~potential_extensions =
+  if (Sys.file_exists filename) = `Yes || filename = ""
+  then filename
+  else
+    let potential_file =
+      List.find_map potential_extensions (fun ext ->
+          let name = sprintf "%s.%s" filename ext in
+          if (Sys.file_exists name) = `Yes
+          then Some name
+          else None) in
+    match potential_file with
+    | Some s ->
+      warning "Replacing %S with %S\n" filename s;
+      s
+    | None -> filename
+
 let find_section sanitized section =
   let check o =
     Option.value_exn o ~message:(sprintf "Can't the find %S section." section)
@@ -192,19 +211,6 @@ let parse_contacts ~verbose ~layout ~dbh sanitized =
       search_person_by_email layout email
       >>= fun p ->
       return (email, Some p#g_pointer, [])
-      (*
-         begin match Layout.Search.record_person_by_email ~dbh email with
-         | Ok [ one ] ->
-         if_verbose
-         "  Found one person with %S as email: %d.\n"
-         email one.Layout.Record_person.id;
-         Some (email, Some one, [])
-         | Ok [] ->
-         perror "  Found no one with %S as email." email;
-         None
-         | _ ->
-         failwithf "Database problem while looking for %S" email ()
-         end *)
     | printname :: email :: first :: middle :: last :: _ as l ->
       find_contact ~dbh ~verbose first last email
       >>= (function
@@ -841,26 +847,6 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           >>= fun (_: unit list) ->
           return volume
         end
-      in
-
-      (* A function that tries to add extensions to a filename to check
-         if the filename exists but the client had written it in a
-         window-ish way: with extension. *)
-      let fix_filename_for_windows_people filename ~potential_extensions =
-        if (Sys.file_exists filename) = `Yes || filename = ""
-        then filename
-        else
-          let potential_file =
-            List.find_map potential_extensions (fun ext ->
-                let name = sprintf "%s.%s" filename ext in
-                if (Sys.file_exists name) = `Yes
-                then Some name
-                else None) in
-          match potential_file with
-          | Some s ->
-            warning "Replacing %S with %S\n" filename s;
-            s
-          | None -> filename
       in
 
 
