@@ -819,7 +819,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
       in
 
       (* Dry or Wet additions to the database *)
-      let fake_pointer = ref 10000 in
+      let fake_pointer = ref 1000000 in
       let dry_buffer = ref [] in
       let print_dry_buffer () =
         if dry_run then
