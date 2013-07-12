@@ -30,14 +30,33 @@ let find_contact ~dbh ~verbose first last email =
   | other -> return (`none (first, last, email))
   end
 
-let print = ksprintf
-let errbuf = Buffer.create 42
+type error_buffer = {
+  mutable errors: string list;
+  mutable warnings: string list;
+}
+let error_buffer = { errors = []; warnings = []}
+let print_error_buffer () =
+  begin match List.dedup error_buffer.warnings with
+  | [] -> printf "## No Warnings\n"
+  | some ->
+    printf "## WARNINGS:\n";
+    List.iter some (fun s ->
+        printf "* %s\n" s
+      );
+  end;
+  begin match List.dedup error_buffer.errors with
+  | [] -> printf "## No Errors\n"
+  | some ->
+    printf "## ERRORS:\n";
+    List.iter some (fun s ->
+        printf "* %s\n" s
+      );
+  end;
+  ()
 let perror fmt =
-  let  f = Buffer.add_string errbuf in
-  print f ("ERROR:" ^^ fmt ^^ "\n")
+  ksprintf (fun s -> error_buffer.errors <- s :: error_buffer.errors) fmt
 let warning fmt =
-  let  f = Buffer.add_string errbuf in
-  print f ("WARNING:" ^^ fmt ^^ "\n")
+  ksprintf (fun s -> error_buffer.warnings <- s :: error_buffer.warnings) fmt
 let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S"))
 
 let wetfail ~dry_run fmt =
@@ -655,7 +674,6 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
   let if_verbose fmt =
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
 
-  Buffer.clear errbuf;
   printf "========= Loading %S =========\n" file;
   with_database ~configuration:hsc (fun ~dbh ->
       let layout = Classy.make dbh in
@@ -1489,11 +1507,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                            (value_map note ~default:"" ~f:(sprintf " (note %S)"))))
       >>= fun _ ->
 
-      begin match (Buffer.contents errbuf) with
-      | "" -> printf "=== No errors or warnings detected. ===\n"
-      | s -> printf "=== ERRORS and WARNINGS: ===\n%s\n" s;
-      end;
       print_dry_buffer ();
+      print_error_buffer ();
 
       printf "=== Lanes ready to use: ===\n";
       List.iter named_lanes ~f:(fun (name, id) ->
