@@ -341,6 +341,26 @@ let parse_invoicing sanitized =
      | l -> perror "Wrong chartfield row: %s" (strlist l); None))
 
 
+let check_existing_library ~all_libraries ~(libname: string) rest_of_the_row =
+  let project =
+    match rest_of_the_row with
+    | "" :: _ | [] -> None
+    | p :: _ -> Some p in
+  let search =
+    List.filter all_libraries ~f:(fun l ->
+        l#name = libname && l#project = project) in
+  begin match search with
+  | [one] ->
+    return (Some one#g_pointer)
+  | [] ->
+    return None
+  |  l ->
+    perror "Library %s has an ambiguous name: %d homonyms%s"
+      libname (List.length l)
+      (Option.value_map project ~default:"" ~f:(sprintf " in project %s"));
+    return None
+  end
+
 let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
   let check_libname n =
     if String.for_all n ~f:(function
@@ -350,38 +370,6 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
     else (
       perror "Wrong library name: %S" n
     ) in
-
-  let check_existing_library (libname: string) rest =
-    let project =
-      match rest with
-      | "" :: _ | [] -> None
-      | p :: _ -> Some p in
-    layout#stock_library#all
-    >>| List.filter ~f:(fun l ->
-        l#name = libname && l#project = project)
-    >>= fun search ->
-    (* let search = (\* working around strangety of PGOCaml (c.f.  *)
-    (*                 email sent to the mailinglist)  *\) *)
-    (*   match project with *)
-    (*   | Some _ -> *)
-    (*     Layout.Search.record_stock_library_by_name_project *)
-    (*       ~dbh libname project *)
-    (*   | None -> *)
-    (*     Layout.Search.record_stock_library_by_name ~dbh libname *)
-    (* in *)
-    begin match search with
-    | [one] ->
-      (* if_verbose "Ok found that library: %d\n" one#g_id; *)
-      return (Some one#g_pointer)
-    | [] ->
-      return None
-    |  l ->
-      perror "Library %s has an ambiguous name: %d homonyms%s"
-        libname (List.length l)
-        (Option.value_map project ~default:"" ~f:(sprintf " in project %s"));
-      return None
-    end
-  in
 
   let section = find_section sanitized "Libraries" in
   let column row name =
@@ -423,11 +411,14 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
         | Invalid_argument "index out of bounds" -> None
         | e -> warning "Saw exception: %s" (Exn.to_string e); None) in
 
+  layout#stock_library#all
+  >>= fun all_libraries ->
+
   while_sequential filtered_rows (function
     | `known (i, libname, rest) ->
       check_libname libname;
       (* if_verbose "%s should be already known\n" libname; *)
-      check_existing_library libname rest
+      check_existing_library ~all_libraries ~libname rest
       >>= fun exisiting ->
       let int = int ~msg:(sprintf "Lib %s: " libname) in
       begin match exisiting with
@@ -455,7 +446,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
     | `new_one (i, libname, rest) ->
       let row = sanitized.(section + i + 2)  in
       check_libname libname;
-      check_existing_library libname rest
+      check_existing_library ~all_libraries ~libname rest
       >>= fun exisiting ->
       begin match exisiting with
       | Some lib_p ->
