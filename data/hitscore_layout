@@ -147,7 +147,7 @@
 (record pgm_run
         (date timestamp)
         (sequencer string)
-        (pool pgm_pool)
+        (pool pgm_pool array)
         notable)
 
 (record flowcell
