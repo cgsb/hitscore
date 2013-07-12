@@ -39,6 +39,9 @@ let warning fmt =
   print f ("WARNING:" ^^ fmt ^^ "\n")
 let strlist l = String.concat ~sep:"; " (List.map l (sprintf "%S"))
 
+let wetfail ~dry_run fmt =
+  ksprintf (if not dry_run then failwith else perror "%s") fmt
+
 let failwithf fmt =
   ksprintf (fun s -> error (`pss_failure s)) fmt
 
@@ -1080,7 +1083,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         then perror "Barcode %d is not known" i;);
 
       while_sequential bcs begin fun index ->
-        let kind = Option.value_exn bt in
+        let kind =
+          match bt with
+          | Some s -> s
+          | None ->
+            perror "Wrong Barcode kind";
+            `custom
+        in
         let found =
           List.find all_barcodes ~f:(fun b ->
             b#kind = kind && b#index = Some index
@@ -1422,7 +1431,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | Some (_, Hiseq (`pe (l, r))) -> (l, Some r)
         | Some (_, Hiseq (`se l)) -> (l, None)
         | Some (_, Pgm _) ->
-          failwith "requested read lengths: PGM: not implemented"
+          wetfail ~dry_run "requested read lengths: PGM: not implemented";
+          (43, None)
         | Some (_, Unknown_run_type)
         | None ->
           (if not dry_run then
@@ -1430,7 +1440,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           (42, None) in
 
       let contacts = List.map contacts snd |! Array.of_list in
-      let pool_name = String.(chop_prefix_exn pool ~prefix:"Pool" |! strip) in
+      let pool_name =
+        try String.(chop_prefix_exn pool ~prefix:"Pool" |! strip)
+        with
+        | e ->
+          wetfail ~dry_run "removing %S prefix of %S" "Pool" pool;
+          "NO_POOL_NAME"
+      in
       run ~dbh ~fake:(fun x -> Layout.Record_lane.unsafe_cast x)
         ~real:Option.(fun dbh ->
           Access.Lane.add_value ~dbh ~libraries:input_libraries ~pooled_percentages
