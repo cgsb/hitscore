@@ -35,9 +35,12 @@ type error_buffer = {
   mutable warnings: string list;
   mutable missing_files: (string * string) list;
   mutable fixed_files: (string * string) list;
+  mutable library_errors: (string * string) list;
 }
 let error_buffer =
-  { errors = []; warnings = []; missing_files = []; fixed_files = []}
+  { errors = []; warnings = [];
+    missing_files = []; fixed_files = [];
+    library_errors = [];}
 let print_error_buffer () =
   begin match List.dedup error_buffer.warnings with
   | [] -> printf "## No Warnings\n"
@@ -63,6 +66,20 @@ let print_error_buffer () =
         printf "* %S -> %S\n" f m
       );
   end;
+  let error_kinds =
+    List.dedup ~compare:(fun (_, e1) (_, e2) -> compare e1 e2)
+      error_buffer.library_errors in
+  begin match error_kinds with
+  | [] -> printf "## No library errors\n"
+  | some ->
+    printf "## LIBRARY ERRORS:\n";
+    List.iter some (fun (_, err) ->
+        printf "* %s [%s]\n" err
+          (String.concat ~sep:", "
+             (List.filter_map error_buffer.library_errors
+                ~f:(fun (l, e) -> if e = err then Some l else None)))
+      );
+  end;
   begin match List.dedup error_buffer.errors with
   | [] -> printf "## No Errors\n"
   | some ->
@@ -80,6 +97,10 @@ let missing_file file fmt =
     ) fmt
 let fixed_file file s =
   error_buffer.fixed_files <- (file, s) :: error_buffer.fixed_files
+let lib_error libname fmt =
+  ksprintf (fun s ->
+      error_buffer.library_errors <- (libname, s) :: error_buffer.library_errors
+    ) fmt
 
 let warning fmt =
   ksprintf (fun s -> error_buffer.warnings <- s :: error_buffer.warnings) fmt
@@ -505,7 +526,8 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
         match column row col with
         | Some s -> Some s
         | None ->
-          perror "Lib: %s, mandatory field not provided: %s" libname col; None in
+          lib_error libname "mandatory field not provided: %s" col;
+          None in
       let mandatory32 r c =
         mandatory r c >>= int ~msg:(sprintf "Lib: %s (%s)" libname c) in
       let column32 r c =
@@ -540,7 +562,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
           | Ok s -> Some s
           | Error "bioo scientific" -> Some `bioo
           | Error s ->
-            perror "Lib: %s cannot recognize barcode provider: %s" libname s;
+            lib_error libname "cannot recognize barcode provider: %S" s;
             None
           end
         | None -> None in
@@ -574,7 +596,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
             | [ "r6" ; two ] -> int two >>= fun i -> Some (`on_r (6, i))
             | [ "i"  ; two ] -> int two >>= fun i -> Some (`on_i i )
             | _ ->
-              perror "Lib %s: cannot understand custom-barcode-loc: %S" libname s;
+              lib_error libname "cannot understand custom-barcode-loc: %S" s;
               None)
       in
       let rawrow = loaded.(section + i + 2) in
@@ -809,7 +831,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 | Some (pool, spm, tv, nm, input_libs) ->
                   (List.find input_libs ~f:(fun (n, _) -> libname = n)) <> None
                 | None -> false) = None then
-            perror "Lib %S is not used in any pool." libname
+            lib_error libname "not used in any pool"
         in
         List.iter lib_names check_lib;
         if List.dedup lib_names |! List.length <> List.length lib_names then
@@ -988,8 +1010,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 >>= fun volume ->
                 check_and_copy_files volume filenames "protocol file"
               | None ->
-                perror "Lib: %s, Protocol %S is not in the DB and has no file."
-                  libname name;
+                lib_error libname "Protocol %S is not in the DB and has no file."
+                  name;
                 return (erroneous_pointer Layout.File_system.unsafe_cast)
               end
               >>= fun prot_vol ->
@@ -1107,7 +1129,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           in
           List.iter bcs (fun i ->
               if List.for_all all_known_barcodes ((fun (ii, b) -> i <> ii))
-              then perror "Barcode %d is not known" i;);
+              then lib_error libname "Barcode %d is not known" i;);
 
           while_sequential bcs begin fun index ->
             let kind =
@@ -1171,7 +1193,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 >>= fun search ->
                 begin match search with
                 | [] ->
-                  perror "Lib %s: Unknown preparator: %s" libname email;
+                  lib_error libname "Unknown preparator: %s" email;
                   return (erroneous_pointer Layout.Record_person.unsafe_cast)
                 | [one] -> return one#g_pointer
                 | _ -> failwithf "more than one person with email %S" email
@@ -1305,7 +1327,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           begin match arg_wnb, arg_avg, arg_min, arg_max, arg_img with
           | Some _, Some _, Some _, Some _, Some _ -> ()
           | None, None, None, None, None -> ()
-          | _ -> warning "Lib %s: Incomplete Agarose Gel" libname;
+          | _ -> lib_error libname "Incomplete Agarose Gel";
           end;
 
           stock := (libname, project, stock_library, library_indexes) :: !stock;
