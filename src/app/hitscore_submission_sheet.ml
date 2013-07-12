@@ -1067,10 +1067,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             begin match List.hd !positions with
             | Some (`on_r (r, p)) -> return (sprintf "(r%d %d)" r p, r, p)
             | Some (`on_i i) ->  return (sprintf "(r2 :index %d)" i, 2, i)
-            | None -> failwithf "Custom barcodes should have one position each!"
+            | None ->
+              wetfail ~dry_run "Custom barcodes should have one position each!";
+              return ("(ERROR)", 0, 0)
             end
             >>= fun (poslog, read, position) ->
-            positions := List.tl_exn !positions;
+            positions := List.tl !positions |> Option.value ~default:[];
             return (sequence, poslog, read, position)
           end
           >>| List.dedup
