@@ -85,9 +85,9 @@ let v15_to_v16 file_in file_out =
   let dump_v16 =
     let parse = function
       | Atom a -> Atom a
-      | List [Atom "version"; Atom old_version]
-          when old_version = V15.Info.version ->
-        eprintf "Changed version.\n"; List [Atom "version"; Atom V16.Info.version ]
+      | List [Atom "version"; Atom old_version] ->
+        eprintf "Changed version: %s -> %s.\n" old_version V16.Info.version;
+        List [Atom "version"; Atom V16.Info.version ]
       | List [Atom "barcode"; List barcodes]  ->
         eprintf "barcodes: %d\n" (List.length barcodes) ;
         let new_barcodes =
