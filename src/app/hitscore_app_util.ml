@@ -195,6 +195,7 @@ let string_of_error = function
     sprintf "unknown_value_type %s" s
   | `unknown_volume_kind s ->
     sprintf "unknown_volume_kind %s" s
+  | `string s -> s
   | `Layout (where, what) ->
     sprintf "LAYOUT-ERROR (%s): %s"
       (match where with
