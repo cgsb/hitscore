@@ -76,6 +76,23 @@
         notable
 )
 
+;; Common fields of bioanalyzer and agarose_gel:
+(subrecord bioanalyzer_like
+        (library stock_library)
+        (well_number int option)
+        (mean_fragment_size real option)
+        (min_fragment_size real option)
+        (max_fragment_size real option)
+        notable)
+
+(volume bioanalyzer_directory bioanalyzer)
+(record bioanalyzer
+        bioanalyzer_like
+        (files bioanalyzer_directory option))
+(volume agarose_gel_directory agarose_gel)
+(record agarose_gel
+        bioanalyzer_like
+        (files agarose_gel_directory option))
 (record key_value
         (key string)
         (value string))
@@ -102,6 +119,8 @@
         (a_adapter_length int option )
         (p1_adapter_length int option)
         (preparator person option)
+        (agarose_gels      agarose_gel array)
+        (bioanalyzers bioanalyzer array)
         notable
 )
 (record pgm_input_library
@@ -173,23 +192,6 @@
         (b_returned timestamp option))
 
 
-;; Common fields of bioanalyzer and agarose_gel:
-(subrecord bioanalyzer_like
-        (library stock_library)
-        (well_number int option)
-        (mean_fragment_size real option)
-        (min_fragment_size real option)
-        (max_fragment_size real option)
-        notable)
-
-(volume bioanalyzer_directory bioanalyzer)
-(record bioanalyzer
-        bioanalyzer_like
-        (files bioanalyzer_directory option))
-(volume agarose_gel_directory agarose_gel)
-(record agarose_gel
-        bioanalyzer_like
-        (files agarose_gel_directory option))
 
 (record hiseq_raw
         (flowcell_name string)
