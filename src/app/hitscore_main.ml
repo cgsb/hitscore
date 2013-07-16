@@ -1355,6 +1355,71 @@ module Hiseq_run = struct
 
 end
 
+
+module Pgm_run = struct
+
+  let errf fmt = ksprintf (fun s -> error (`string s)) fmt
+
+  let register ~configuration ?(force=false) ~sequencer ~day_date ~run_type ~chip_type ?note pools =
+    with_database configuration (fun ~dbh ->
+        let layout = Classy.make dbh in
+        begin try return (Time.of_string (day_date ^ " 10:00:00-04:00"))
+        with e -> errf "Parsing date %S: %s" day_date (Exn.to_string e)
+        end
+        >>= fun date ->
+        begin match run_type with
+        | "200" | "400" -> return run_type
+        | other when force -> return other
+        | other ->
+          errf "Run type error: %S should be 200, 400, or use the -force" other
+        end
+        >>= fun run_type ->
+        begin match chip_type with
+        | "314" | "316" | "318" -> return chip_type
+        | other when force -> return other
+        | other ->
+          errf "Chip type error: %S should be 31[468], or use the -force" other
+        end
+        >>= fun chip_type ->
+        layout#pgm_pool#all
+        >>= fun all_pgm_pools ->
+        let int s =
+          try Int.of_string s |> return with e -> errf "not-an-int: %s" s in
+        while_sequential pools (fun pool_id ->
+            int pool_id
+            >>= fun pid ->
+            begin match List.find all_pgm_pools (fun p ->  p#g_id = pid) with
+            | Some p -> return p#g_pointer
+            | None -> errf "Cannot find pgm-pool %d" pid
+            end)
+        >>= fun pgm_pools ->
+        layout#add_pgm_run () ~date ~run_type ~chip_type ~sequencer
+          ~pool:(Array.of_list pgm_pools) ?note
+        >>= fun _ ->
+        return ()
+      )
+
+  let () =
+    let sequencer = "CGSB-PGM-1" in
+    define_command ~names:["register-pgm-run"]
+      ~description:"Register a PGM run"
+      ~usage:(fun o exec cmd ->
+          fprintf o "Usage: %s <profile> %s [-force] <date> <run-type> \
+                     <chip-type> <pool1> <pool2> ...\n"
+            exec cmd;
+        )
+      ~run:(fun configuration exec cmd -> function
+        | "-force" :: day_date :: run_type :: chip_type :: pools ->
+          register ~force:true ~configuration ~sequencer ~day_date ~run_type ~chip_type pools
+        | day_date :: run_type :: chip_type :: pools ->
+          register ~configuration ~sequencer ~day_date ~run_type ~chip_type pools
+        | l -> error (`invalid_command_line
+                        (sprintf "don't know what to do with: %s"
+                           String.(concat ~sep:", " l))))
+
+
+end
+
 module Fastx_qs = struct
 
   let start_parse_cmdline usage_prefix args =
