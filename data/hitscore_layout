@@ -167,6 +167,8 @@
         (date timestamp)
         (sequencer string)
         (pool pgm_pool array)
+        (run_type string)
+        (chip_type string)
         notable)
 
 (record flowcell
