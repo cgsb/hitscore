@@ -1101,7 +1101,12 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           >>= fun sample ->
 
           let stranded = Option.value ~default:false strd in
-          let truseq_control = Option.value ~default:false tsc in
+          let truseq_control =
+            match run_type, tsc with
+            | Hiseq _, None -> Some false
+            | Hiseq _, Some s -> Some s
+            | Pgm _, _ -> None
+            | Unknown_run_type, _ -> Some false in
 
           let positions = ref cbp in
           while_sequential cbs begin fun sequence -> (* custom barcode seqs *)
@@ -1228,7 +1233,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   ?sample ?protocol:prot_opt
                   ~application:(match app with None -> [||] | Some s -> [|s|])
                   ~stranded
-                  ~truseq_control ?rnaseq_control:rsc
+                  ?truseq_control ?rnaseq_control:rsc
                   ~barcoding:[| Array.of_list all_barcode_pointers |]
                   ?x_adapter_length:p5
                   ?y_adapter_length:p7
