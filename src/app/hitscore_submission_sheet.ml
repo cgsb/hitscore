@@ -237,8 +237,10 @@ let col_Barcode_Provider = "Barcode Provider"
 let col_Barcode_Number = "Barcode Number"
 let col_Custom_Barcode_Sequence = "Custom Barcode Sequence"
 let col_Custom_Barcode_Location = "Custom Barcode Location"
-let col_P5_Adapter_Length  = "P5 Adapter Length"
-let col_P7_Adapter_Length  = "P7 Adapter Length"
+let col_hiseq_P5_Adapter_Length  = "P5 Adapter Length"
+let col_hiseq_P7_Adapter_Length  = "P7 Adapter Length"
+let col_pgm_A_Adapter_Length  = "A Adapter Length"
+let col_pgm_P1_Adapter_Length  = "P1 Adapter Length"
 let col_Bioanalyzer___Well_Number  = "Bioanalyzer - Well Number"
 let col_Bioanalyzer___Mean_Fragment_Size  = "Bioanalyzer - Mean Fragment Size"
 let col_Bioanalyzer___Min_Fragment_Size  = "Bioanalyzer - Min Fragment Size"
@@ -427,7 +429,7 @@ let check_existing_library ~all_libraries ~(libname: string) rest_of_the_row =
     return None
   end
 
-let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
+let parse_libraries ~dbh ~(layout: _ Classy.layout) ~run_type loaded sanitized =
   let check_libname n =
     if String.for_all n ~f:(function
       | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-' | '_' -> true
@@ -600,8 +602,22 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
               None)
       in
       let rawrow = loaded.(section + i + 2) in
-      let p5_adapter_length = mandatory32 row col_P5_Adapter_Length in
-      let p7_adapter_length = mandatory32 row col_P7_Adapter_Length in
+      let adapters =
+        match run_type with
+        | Hiseq _ ->
+          let p5 = mandatory32 row col_hiseq_P5_Adapter_Length in
+          let p7 = mandatory32 row col_hiseq_P7_Adapter_Length in
+          `adapters (p5, p7)
+        | Pgm _ ->
+          let a =  mandatory32 row col_pgm_A_Adapter_Length in
+          let p1 = mandatory32 row col_pgm_P1_Adapter_Length in
+          `adapters (a, p1)
+        | Unknown_run_type ->
+          warning "Unknown-run-type → parsing P5, P7 like for a HiSeq";
+          let p5 = mandatory32 row col_hiseq_P5_Adapter_Length in
+          let p7 = mandatory32 row col_hiseq_P7_Adapter_Length in
+          `adapters (p5, p7)
+      in
       let bio_wnb  = mandatory32 row col_Bioanalyzer___Well_Number in
       let bio_avg  = mandatory32 row col_Bioanalyzer___Mean_Fragment_Size in
       let bio_min  = mandatory32 row col_Bioanalyzer___Min_Fragment_Size in
@@ -630,7 +646,7 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) loaded sanitized =
                    truseq_control, rnaseq_control,
                    barcode_type, barcodes,
                    custom_barcode_sequence, custom_barcode_positions,
-                   p5_adapter_length, p7_adapter_length,
+                   adapters,
                    bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                    arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                    protocol_name ,
@@ -656,7 +672,7 @@ let print_libraries ~verbose libraries =
     | `new_lib (s, project, conc, note,
                 short_desc, sample_name, species, app, strd, tsc, rsc,
                 bt, bcs, cbs, cbp,
-                p5, p7,
+                adapters,
                 bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                 arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                 protocol_name ,
@@ -673,6 +689,7 @@ let print_libraries ~verbose libraries =
             vm bio_min ~default:"[NO MIN]" ~f:(sprintf "[min: %d]");
             vm bio_max ~default:"[NO MAX]" ~f:(sprintf "[max: %d]");
           ]) in
+      let `adapters (adapt_one, adapt_two) = adapters in
       if_verbose "  new lib: %s\n    %s\n" s
         (String.concat ~sep:"    " ([
              vm project ~default:"[no project]" ~f:(sprintf "[Proj: %s]");
@@ -696,9 +713,10 @@ let print_libraries ~verbose libraries =
                sprintf "[Position: %s]"
                  (String.concat ~sep:", " (List.map cbp ~f:(function
                     | `on_r(r, i) -> sprintf "%d on R%d" i r
-                    | `on_i i -> sprintf "%d on Idx" i))) else ""; nl;
-             vm p5 ~default:"[NO P5 LENGTH]" ~f:(sprintf "[P5: %d]");
-             vm p7 ~default:"[NO P7 LENGTH]" ~f:(sprintf "[P7: %d]"); nl;
+                    | `on_i i -> sprintf "%d on Idx" i))) else "";
+             nl;
+             vm adapt_one ~default:"[NO P5/A LENGTH]" ~f:(sprintf "[P5/A: %d]");
+             vm adapt_two ~default:"[NO P7/P1 LENGTH]" ~f:(sprintf "[P7/P1: %d]"); nl;
              sprintf "[Bioanalzer: %s]" (bioarg (bio_wnb, bio_avg, bio_min, bio_max));
              vm bio_pdf ~default:"[NO PDF]" ~f:(sprintf "\n      [pdf: %S]");
              vm bio_xad ~default:"[NO XAD]" ~f:(sprintf "\n      [xad: %S]"); nl;
@@ -777,7 +795,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
           | None -> ()));
 
 
-      parse_libraries ~dbh ~layout loaded sanitized >>= fun libraries ->
+      parse_libraries ~dbh ~layout ~run_type loaded sanitized
+      >>= fun libraries ->
       if verbose then (print_libraries ~verbose libraries);
 
       (* More checks *)
@@ -787,7 +806,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | `new_lib (s, project, conc, note,
                         short_desc, sample_name, species, app, strd, tsc, rsc,
                         bt, bcs, cbs, cbp,
-                        p5, p7,
+                        adapters,
                         bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                         arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                         protocol_name, protocol_files, preparator, notes,
@@ -819,7 +838,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             | `new_lib (ln, project, conc, note,
                         short_desc, sample_name, species, app, strd, tsc, rsc,
                         bt, bcs, cbs, cbp,
-                        p5, p7,
+                        adapters,
                         bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                         arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                         protocol_name, protocol_files, preparator, notes,
@@ -963,7 +982,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         | `new_lib (libname, project, conc, note,
                     short_desc, sample_name, species, app, strd, tsc, rsc,
                     bt, bcs, cbs, cbp,
-                    p5, p7,
+                    adapters,
                     bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                     arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                     protocol_name ,
@@ -1201,7 +1220,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               end)
           >>= fun preparator ->
 
-
+          let `adapters (p5, p7) = adapters in
           run ~dbh ~fake:(fun x -> Layout.Record_stock_library.unsafe_cast x)
             ~real:(fun dbh ->
                 Access.Stock_library.add_value ~dbh
@@ -1388,7 +1407,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   | `new_lib (ln, project, conc, note,
                               short_desc, sample_name, species, app, strd, tsc, rsc,
                               bt, bcs, cbs, cbp,
-                              p5, p7,
+                              adapters,
                               bio_wnb, bio_avg, bio_min, bio_max, bio_pdf, bio_xad,
                               arg_wnb, arg_avg, arg_min, arg_max, arg_img,
                               protocol_name ,
