@@ -736,6 +736,49 @@ let print_libraries ~verbose libraries =
         )
     )
 
+let make_invoices ~dry_run ~contacts ~dbh ~layout ~invoicing named_lanes =
+  let run, erroneous_pointer = dry_run in
+  while_sequential invoicing (fun (piemail, p, chartstuff) ->
+      begin match List.Assoc.find contacts piemail with
+      | Some id -> return id
+      | None ->
+        layout#person#all >>| List.filter ~f:(fun p -> p#email = piemail)
+        >>= fun search ->
+        begin match search with
+        | [] ->
+          perror "Invoice for %s: Unknown PI." piemail;
+          return (erroneous_pointer Layout.Record_person.unsafe_cast)
+        | [one] -> return one#g_pointer
+        | _ -> failwith "DB error searching for P.I."
+        end
+      end
+      >>= fun pi ->
+      let account_number, fund, org, program, project, note = chartstuff in
+      let lanes =
+        Array.map (Array.of_list named_lanes) ~f:(function
+           | (_, `hiseq_lane l)  -> l
+           | _ -> assert false) in
+      run ~dbh ~fake:(fun x -> Layout.Record_invoicing.unsafe_cast x)
+        ~real:(fun dbh ->
+            Access.Invoicing.add_value ~dbh ~pi
+              ~percentage:p
+              ~lanes
+              ?account_number ?fund ?org ?program ?project
+              ?note)
+        ~log:Option.(sprintf "(add_invoicing (pi %d) (percentage %g) \
+                              (lanes (%s))%s%s%s%s%s%s)"
+                       pi.Layout.Record_person.id p
+                       (String.concat_array ~sep:" "
+                          (Array.map lanes ~f:(fun l ->
+                               sprintf "%d" l.Layout.Record_lane.id)))
+                       (value_map account_number ~default:""
+                          ~f:(sprintf " (account_number %s)"))
+                       (value_map fund ~default:"" ~f:(sprintf " (fund %s)"))
+                       (value_map org ~default:"" ~f:(sprintf " (org %s)"))
+                       (value_map program ~default:"" ~f:(sprintf " (program %s)"))
+                       (value_map project ~default:"" ~f:(sprintf " (project %s)"))
+                       (value_map note ~default:"" ~f:(sprintf " (note %S)"))))
+
 let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
   let if_verbose fmt =
     ksprintf (if verbose then print_string else Pervasives.ignore) fmt in
@@ -1386,6 +1429,19 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
         )
       >>= fun all_barcoded_libs ->
 
+      (* We create now the invoices for the PGM pools, but the
+         invoices for the HiSeq lanes will be created after the lanes.
+
+         There is an issue asking to uniformize this: agarwal/hitscore#86. *)
+      begin match run_type with
+      | Pgm _ ->
+        make_invoices ~dry_run:(run, erroneous_pointer) ~contacts ~dbh
+          ~layout ~invoicing []
+      | Hiseq _ -> return []
+      | Unknown_run_type -> return []
+      end
+      >>= fun invoices_for_pgm ->
+
       while_sequential (List.filter_opt pools) (fun (pool, spm, tv, nm, input_libs) ->
           while_sequential input_libs (fun (libname, percent) ->
               let find_stock =
@@ -1450,28 +1506,50 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               >>| Array.of_list
               >>= fun user_db ->
 
-              let concentration_nM =
+              let concentration = (* nM or molML *)
                 let open Option in
                 concentration >>| Int64.of_int >>| Float.of_int64 in
-              run ~dbh ~fake:(fun x -> Layout.Record_input_library.unsafe_cast x)
-                ~real:(fun dbh ->
-                    Access.Input_library.add_value ~dbh
-                      ~library:the_lib
-                      ~submission_date:(Option.value submission_date ~default:(Time.now ()))
-                      ?volume_uL:None ?concentration_nM ~user_db ?note)
+
+              begin match run_type with
+              | Hiseq _ | Unknown_run_type ->
+                run ~dbh ~fake:(fun x -> Layout.Record_input_library.unsafe_cast x)
+                  ~real:(fun dbh ->
+                      Access.Input_library.add_value ~dbh
+                        ~library:the_lib
+                        ~submission_date:(Option.value submission_date ~default:(Time.now ()))
+                        ?volume_uL:None ?concentration_nM:concentration ~user_db ?note)
                 ~log:Option.(sprintf "(add_input_library %d (submission_date %S)%s \
                                       (user_db (%s))%s)"
                                (the_lib.Layout.Record_stock_library.id)
                                (value_map ~f:Time.to_string ~default:"NONE" submission_date)
-                               (value_map concentration_nM
+                               (value_map concentration
                                   ~default:"" ~f:(sprintf " (concentration_nM %f)"))
                                (String.concat ~sep:" "
                                   (List.map (Array.to_list user_db) ~f:(fun l ->
                                        sprintf "%d" l.Layout.Record_key_value.id)))
                                (value_map note ~default:"" ~f:(sprintf " (note %S)")))
-              >>= fun input_lib_pointer ->
-              return (libname, input_lib_pointer, index_barcodes)
-            )
+                >>= fun input_lib_pointer ->
+                return (libname, `hiseq_ilib input_lib_pointer, index_barcodes)
+              | Pgm _ ->
+                run ~dbh ~fake:(fun x -> Layout.Record_pgm_input_library.unsafe_cast x)
+                  ~real:(fun dbh ->
+                      Access.Pgm_input_library.add_value ~dbh
+                        ~library:the_lib
+                        ~submission_date:(Option.value submission_date ~default:(Time.now ()))
+                        ?volume_uL:None ?concentration_molML:concentration ~user_db ?note)
+                  ~log:Option.(sprintf "(add_pgm_input_library %d (submission_date %S)%s \
+                                        (user_db (%s))%s)"
+                                 (the_lib.Layout.Record_stock_library.id)
+                                 (value_map ~f:Time.to_string ~default:"NONE" submission_date)
+                                 (value_map concentration
+                                    ~default:"" ~f:(sprintf " (concentration_molML %f)"))
+                               (String.concat ~sep:" "
+                                  (List.map (Array.to_list user_db) ~f:(fun l ->
+                                       sprintf "%d" l.Layout.Record_key_value.id)))
+                               (value_map note ~default:"" ~f:(sprintf " (note %S)")))
+                >>= fun input_lib_pointer ->
+                return (libname, `pgm_ilib input_lib_pointer, index_barcodes)
+              end)
           >>= fun meta_input_libs ->
 
           (* Duplications: *)
@@ -1494,24 +1572,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             end in
           loop barcodes_of_the_lane;
 
-          let input_libraries =
-            List.map meta_input_libs (fun (_, pointer, _) -> pointer) |! Array.of_list in
-
           let pooled_percentages = List.map input_libs ~f:snd |! Array.of_list in
-
-          let requested_read_length_1, requested_read_length_2 =
-            match run_type_parsed with
-            | Some (_, Hiseq (`pe (l, r))) -> (l, Some r)
-            | Some (_, Hiseq (`se l)) -> (l, None)
-            | Some (_, Pgm _) ->
-              wetfail ~dry_run "requested read lengths: PGM: not implemented";
-              (43, None)
-            | Some (_, Unknown_run_type)
-            | None ->
-              (if not dry_run then
-                 failwith "cannot go further (requested read lengths)");
-              (42, None) in
-
           let contacts = List.map contacts snd |! Array.of_list in
           let pool_name =
             try String.(chop_prefix_exn pool ~prefix:"Pool" |! strip)
@@ -1520,76 +1581,97 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               wetfail ~dry_run "removing %S prefix of %S" "Pool" pool;
               "NO_POOL_NAME"
           in
-          run ~dbh ~fake:(fun x -> Layout.Record_lane.unsafe_cast x)
-            ~real:Option.(fun dbh ->
-                Access.Lane.add_value ~dbh ~libraries:input_libraries ~pooled_percentages
-                  ?seeding_concentration_pM:(spm >>| Int64.of_int >>| Float.of_int64)
-                  ?total_volume:(tv >>| Int64.of_int >>| Float.of_int64)
-                  ~requested_read_length_1 ?requested_read_length_2
-                  ~pool_name ~contacts)
-            ~log:(sprintf "(add_lane (libraries (%s)) (percentages %s) \
-                           (contacts (%s)))"
-                    (String.concat ~sep:" "
-                       (List.map (Array.to_list input_libraries) ~f:(fun l ->
-                            sprintf "%d" l.Layout.Record_input_library.id)))
-                    (Array.sexp_of_t Float.sexp_of_t pooled_percentages |! Sexp.to_string)
-                    (String.concat ~sep:" "
-                       (List.map (Array.to_list contacts) ~f:(fun l ->
-                            sprintf "%d" l.Layout.Record_person.id))))
-          >>= fun lane ->
-          return (pool, lane)
+
+          begin match run_type with
+          | Hiseq hiseq_run_type ->
+            let input_libraries =
+              List.map meta_input_libs (function
+                | (_, `hiseq_ilib pointer, _) -> pointer
+                | _ -> assert false)
+              |> Array.of_list in
+            let requested_read_length_1, requested_read_length_2 =
+              match hiseq_run_type with
+              | `pe (l, r) -> (l, Some r)
+              |`se l -> (l, None) in
+            run ~dbh ~fake:(fun x -> Layout.Record_lane.unsafe_cast x)
+              ~real:Option.(fun dbh ->
+                  Access.Lane.add_value ~dbh ~libraries:input_libraries ~pooled_percentages
+                    ?seeding_concentration_pM:(spm >>| Int64.of_int >>| Float.of_int64)
+                    ?total_volume:(tv >>| Int64.of_int >>| Float.of_int64)
+                    ~requested_read_length_1 ?requested_read_length_2
+                    ~pool_name ~contacts)
+              ~log:(sprintf "(add_lane (libraries (%s)) (percentages %s) \
+                             (contacts (%s)))"
+                      (String.concat ~sep:" "
+                         (List.map (Array.to_list input_libraries) ~f:(fun l ->
+                              sprintf "%d" l.Layout.Record_input_library.id)))
+                      (Array.sexp_of_t Float.sexp_of_t pooled_percentages |! Sexp.to_string)
+                      (String.concat ~sep:" "
+                         (List.map (Array.to_list contacts) ~f:(fun l ->
+                              sprintf "%d" l.Layout.Record_person.id))))
+            >>= fun lane ->
+            return (pool, `hiseq_lane lane)
+          | Pgm _ ->
+            let input_libraries =
+              List.map meta_input_libs (function
+                | (_, `pgm_ilib pointer, _) -> pointer
+                | _ -> assert false)
+              |> Array.of_list in
+            run ~dbh ~fake:(fun x -> Layout.Record_pgm_pool.unsafe_cast x)
+              ~real:Option.(fun dbh ->
+                  Access.Pgm_pool.add_value ~dbh
+                    ~libraries:input_libraries ~pooled_percentages
+                    ~invoices:(Array.of_list invoices_for_pgm)
+                    ?total_volume:(tv >>| Int64.of_int >>| Float.of_int64)
+                    ~pool_name ~contacts)
+              ~log:(sprintf "(add_pgm_pool (libraries (%s)) (percentages %s) \
+                             (contacts (%s)))"
+                      (String.concat ~sep:" "
+                         (List.map (Array.to_list input_libraries) ~f:(fun l ->
+                              sprintf "%d" l.Layout.Record_pgm_input_library.id)))
+                      (Array.sexp_of_t Float.sexp_of_t pooled_percentages |! Sexp.to_string)
+                      (String.concat ~sep:" "
+                         (List.map (Array.to_list contacts) ~f:(fun l ->
+                              sprintf "%d" l.Layout.Record_person.id))))
+            >>= fun poolp ->
+            return (pool, `pgm_pool poolp)
+          | Unknown_run_type ->
+            wetfail ~dry_run "NO RUN TYPE: PGM: not implemented";
+            return (pool, `none)
+          end
         )
       >>= fun named_lanes ->
 
-      while_sequential invoicing (fun (piemail, p, chartstuff) ->
-          begin match List.Assoc.find contacts piemail with
-          | Some id -> return id
-          | None ->
-            layout#person#all >>| List.filter ~f:(fun p -> p#email = piemail)
-            >>= fun search ->
-            begin match search with
-            | [] ->
-              perror "Invoice for %s: Unknown PI." piemail;
-              return (erroneous_pointer Layout.Record_person.unsafe_cast)
-            | [one] -> return one#g_pointer
-            | _ -> failwith "DB error searching for P.I."
-            end
-          end
-          >>= fun pi ->
-
-          let account_number, fund, org, program, project, note = chartstuff in
-          run ~dbh ~fake:(fun x -> Layout.Record_invoicing.unsafe_cast x)
-            ~real:(fun dbh ->
-                Access.Invoicing.add_value ~dbh ~pi
-                  ~percentage:p
-                  ~lanes:(Array.map (Array.of_list named_lanes) ~f:snd)
-                  ?account_number ?fund ?org ?program ?project
-                  ?note)
-            ~log:Option.(sprintf "(add_invoicing (pi %d) (percentage %g) \
-                                  (lanes (%s))%s%s%s%s%s%s)"
-                           pi.Layout.Record_person.id p
-                           (String.concat ~sep:" "
-                              (List.map named_lanes ~f:(fun (_, l) ->
-                                   sprintf "%d" l.Layout.Record_lane.id)))
-                           (value_map account_number ~default:""
-                              ~f:(sprintf " (account_number %s)"))
-                           (value_map fund ~default:"" ~f:(sprintf " (fund %s)"))
-                           (value_map org ~default:"" ~f:(sprintf " (org %s)"))
-                           (value_map program ~default:"" ~f:(sprintf " (program %s)"))
-                           (value_map project ~default:"" ~f:(sprintf " (project %s)"))
-                           (value_map note ~default:"" ~f:(sprintf " (note %S)"))))
+      (* Now we create the invoices for the HiSeq
+         (the PGM ones were invoices_for_pgm). *)
+      begin match run_type with
+      | Hiseq hiseq_run_type ->
+        make_invoices ~dry_run:(run, erroneous_pointer) ~contacts ~dbh
+          ~layout ~invoicing named_lanes
+      | Pgm _ -> return []
+      | Unknown_run_type -> return []
+      end
       >>= fun _ ->
 
       print_dry_buffer ();
       print_error_buffer ();
 
       printf "=== Lanes ready to use: ===\n";
-      List.iter named_lanes ~f:(fun (name, id) ->
+      List.iter named_lanes ~f:(function
+        | name, `none ->
+          printf "%s ---> UNUSABLE ??\n" name
+        | (name, `hiseq_lane id) ->
           let with_phix =
             match List.Assoc.find phix name with
             | None -> "(no phix)"
             | Some p -> sprintf "(phix: %d%%)" p in
           printf "%s --> %d %s\n" name id.Layout.Record_lane.id with_phix
+        | (name, `pgm_pool id) ->
+          let with_phix =
+            match List.Assoc.find phix name with
+            | None -> "(no phix)"
+            | Some p -> sprintf "(phix: %d%%)" p in
+          printf "%s --> %d %s\n" name id.Layout.Record_pgm_pool.id with_phix
         );
       printf "Charged to %s.\n" (String.concat ~sep:", "
                                    (List.map invoicing (fun (e, _, _) -> e)));
