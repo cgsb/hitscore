@@ -126,6 +126,21 @@ let v15_to_v16 file_in file_out =
                 M16.(sexp_of_t (of_15 v15)))
         in
         List [Atom "barcode"; List new_barcodes]
+      | List [Atom "stock_library"; List sls]  ->
+        eprintf "Stocks: %d\n" (List.length sls) ;
+        List [Atom "stock_library";
+              List (map_g_values sls (function
+                | Atom _ -> assert false
+                | List fields ->
+                  List (List.map fields ~f:(function
+                    | List [Atom "p5_adapter_length"; sexp] ->
+                      List [Atom "x_adapter_length"; sexp]
+                    | List [Atom "p7_adapter_length"; sexp] ->
+                      List [Atom "y_adapter_length"; sexp]
+                    | List [Atom "truseq_control"; Atom boolean] ->
+                      (* eprintf "truseq_control: %s\n%!" boolean; *)
+                      List [Atom "truseq_control"; List [Atom boolean]]
+                    | other -> other))))]
       | List l -> List l
     in
     begin match dump_v15 with
@@ -136,7 +151,6 @@ let v15_to_v16 file_in file_out =
         | List [Atom va; _], List [Atom vb; _] -> - (compare va vb)
         | _ -> assert false) in
       List (List.map sorted ~f:parse)
-      |> add_empty "pgm_stock_library"
       |> add_empty "pgm_input_library"
       |> add_empty "pgm_pool"
       |> add_empty "pgm_run"
