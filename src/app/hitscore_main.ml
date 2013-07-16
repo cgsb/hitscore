@@ -1075,6 +1075,27 @@ module Query = struct
     | None -> sprintf "SE %d" r1
 
   let predefined_queries = [
+    ("orphan-pgm-pools",
+     (["List of pgm-pools that are not referenced by any pgm-run."],
+      fun _ dbh args ->
+        let layout = Classy.make dbh in
+        layout#pgm_pool#all >>= fun all_pools ->
+        layout#pgm_run#all >>= fun all_runs ->
+        let result =
+          List.filter all_pools (fun pool ->
+              List.for_all all_runs ~f:(fun run ->
+                  not (Array.exists run#pool (fun p -> p#id = pool#g_id))))
+        in
+        while_sequential result (fun pool ->
+            printf "PGM-pool: %d (name: %S) (invoices: %s) (contacts: %s)\n"
+              pool#g_id (Option.value ~default:"" pool#pool_name)
+              (Array.map pool#invoices ~f:(fun i -> Int.to_string i#id)
+               |> String.concat_array ~sep:", ")
+              (Array.map pool#contacts ~f:(fun c -> Int.to_string c#id)
+               |> String.concat_array ~sep:", ");
+            return ())
+        >>= fun _ ->
+        return ()));
     ("orphan-lanes",
      (["List of lanes which are not referenced by any flowcell."],
       fun _ dbh args ->
