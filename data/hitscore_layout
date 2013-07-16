@@ -67,11 +67,11 @@
         (protocol  protocol option)
         (application    string array)
         (stranded       bool)
-        (truseq_control bool)
+        (truseq_control bool option) ;; None for the PGM libs
         (rnaseq_control string option)
         (barcoding barcode array array)
-        (p5_adapter_length int option )
-        (p7_adapter_length int option)
+        (x_adapter_length int option)
+        (y_adapter_length int option)
         (preparator person option)
         notable
 )
@@ -106,25 +106,25 @@
         notable
 )
 
-(record pgm_stock_library
-        (name           string)
-        of_project
-        (description string option)
-        (sample      sample option)
-        (protocol  protocol option)
-        (application    string array)
-        (stranded       bool)
-        (rnaseq_control string option)
-        (barcoding barcode array array)
-        (a_adapter_length int option )
-        (p1_adapter_length int option)
-        (preparator person option)
-        (agarose_gels      agarose_gel array)
-        (bioanalyzers bioanalyzer array)
-        notable
-)
+;; (record pgm_stock_library
+;;         (name           string)
+;;         of_project
+;;         (description string option)
+;;         (sample      sample option)
+;;         (protocol  protocol option)
+;;         (application    string array)
+;;         (stranded       bool)
+;;         (rnaseq_control string option)
+;;         (barcoding barcode array array)
+;;         (a_adapter_length int option )
+;;         (p1_adapter_length int option)
+;;         (preparator person option)
+;;         (agarose_gels      agarose_gel array)
+;;         (bioanalyzers bioanalyzer array)
+;;         notable
+;; )
 (record pgm_input_library
-        (library pgm_stock_library)
+        (library stock_library)
         (submission_date timestamp)
         (volume_uL real option)
         (concentration_molML real option)

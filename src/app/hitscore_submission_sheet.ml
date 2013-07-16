@@ -1230,8 +1230,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                   ~stranded
                   ~truseq_control ?rnaseq_control:rsc
                   ~barcoding:[| Array.of_list all_barcode_pointers |]
-                  ?p5_adapter_length:p5
-                  ?p7_adapter_length:p7
+                  ?x_adapter_length:p5
+                  ?y_adapter_length:p7
                   ?preparator
                   ?note:None)
             ~log:Option.(

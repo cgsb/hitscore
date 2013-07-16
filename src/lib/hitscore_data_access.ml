@@ -594,4 +594,3 @@ let make_classy_persons_information
 let init_classy_persons_information_loop =
   init_some_retrieval_loop ~f:(make_classy_persons_information)
     ~log_prefix:"persons-classy-info"
-
