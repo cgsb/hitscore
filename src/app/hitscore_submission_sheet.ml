@@ -312,7 +312,7 @@ let parse_pools ~run_type ~phix sanitized =
           (pool, i32 scs, i32 tvs, i32 cs)
         | Pgm _, pool
                  :: "Total Volume (uL):" :: tvs
-                 :: "Concentration (nM):" :: cs
+                 :: "Concentration (moles/mL):" :: cs
                  :: emptyness when List.for_all emptyness ((=) "") ->
           let i32 = int ~msg:(sprintf "%s row: " pool) in
           (pool, None, i32 tvs, i32 cs)
