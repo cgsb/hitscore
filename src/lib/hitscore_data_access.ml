@@ -469,7 +469,7 @@ let db_connect ?log t =
     db_host t, db_port t, db_database t, db_username t, db_password t in
   Backend.connect ?host ?port ?database ?user ?password ?log ()
 
-let init_some_retrieval_loop ~log ~log_prefix ~loop_waiting_time
+let init_retrieval_loop ~log ~log_prefix ~loop_waiting_time
     ~allowed_age ~maximal_age ~configuration ~f =
   let info_mem = ref None in
   let logf fmt = ksprintf log fmt in
@@ -548,7 +548,7 @@ let init_some_retrieval_loop ~log ~log_prefix ~loop_waiting_time
   end
 
 let init_classy_libraries_information_loop =
-  init_some_retrieval_loop ~f:(make_classy_libraries_information)
+  init_retrieval_loop ~f:(make_classy_libraries_information)
     ~log_prefix:"libraries-classy-info"
 
 let make_classy_persons_information
@@ -592,5 +592,5 @@ let make_classy_persons_information
   end: _ classy_persons_information)
 
 let init_classy_persons_information_loop =
-  init_some_retrieval_loop ~f:(make_classy_persons_information)
+  init_retrieval_loop ~f:(make_classy_persons_information)
     ~log_prefix:"persons-classy-info"

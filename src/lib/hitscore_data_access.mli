@@ -101,3 +101,38 @@ val init_classy_persons_information_loop :
   ('a Hitscore_data_access_types.classy_persons_information,
    [> `io_exn of exn]) Hitscore_std.t
 
+val init_retrieval_loop:
+  log:(string ->
+       (unit,
+        [> `Layout of
+            Hitscore_layout.Layout.error_location *
+              Hitscore_layout.Layout.error_cause
+        | `db_backend_error of Hitscore_db_backend.Backend.error
+        | `io_exn of exn
+        | `root_directory_not_configured ]
+          as 'a) Hitscore_std.t) ->
+  log_prefix:string ->
+  loop_waiting_time:float ->
+  allowed_age:float ->
+  maximal_age:float ->
+  configuration:Hitscore_configuration.Configuration.local_configuration ->
+  f:(configuration:Hitscore_configuration.Configuration.local_configuration ->
+     layout_cache:[> `Layout of
+                       Hitscore_layout.Layout.error_location *
+                         Hitscore_layout.Layout.error_cause ]
+         Hitscore_layout.Classy.layout_cache ->
+     ('b, 'a) Hitscore_std.t) ->
+  (unit -> ('b, [> `io_exn of exn]) Hitscore_std.t)
+(**
+   The call
+   [init_retrieval_loop ~log ~log_prefix ~loop_waiting_time ~allowed_age
+   ~maximal_age ~configuration ~f]:
+
+   - uses [log] to output information (prefixed with [log_prefix])
+   - it starts an “update” loop (runs every [loop_waiting_time] seconds)
+   - it uses [(allowed_age, maximal_age)] to create a [Classy.layout_cache]
+   - in case of error tries to reconnect to the database ([Backend.reconnect])
+   - it calls [f ~configuration ~layout_cache] to create the cached value
+   - the function returns a function that gets the current cached value
+     (uses [Lwt_condition] to wait for the first one to be available)
+*)
