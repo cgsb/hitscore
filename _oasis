@@ -48,7 +48,6 @@ Library hitscore
           , Hitscore_delete_intensities
           , Hitscore_common
           , Hitscore_communication
-          , Hitscore_broker
           , Hitscore_data_access_types
           , Hitscore_data_access
           , Hitscore_generic_fastqs

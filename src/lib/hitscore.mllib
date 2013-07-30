@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a46ddc39b57e2f45cfb36c278c877880)
+# DO NOT EDIT (digest: 49ef0886f2e9bfac1f9eb20a2f765cbd)
 Hitscore
 Hitscore_std
 Hitscore_interfaces
@@ -18,7 +18,6 @@ Hitscore_unaligned_delivery
 Hitscore_delete_intensities
 Hitscore_common
 Hitscore_communication
-Hitscore_broker
 Hitscore_data_access_types
 Hitscore_data_access
 Hitscore_generic_fastqs
