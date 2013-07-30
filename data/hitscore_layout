@@ -194,6 +194,12 @@
         (b_finished timestamp option)
         (b_returned timestamp option))
 
+(record pgm_raw
+        (run_name string)
+        (raw string option)
+        (fastq string option)
+        (report string option)
+        (more key_value array))
 
 
 (record hiseq_raw
