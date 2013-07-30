@@ -1381,7 +1381,8 @@ module Pgm_run = struct
 
   let errf fmt = ksprintf (fun s -> error (`string s)) fmt
 
-  let register ~configuration ?(force=false) ~sequencer ~day_date ~run_type ~chip_type ?note pools =
+  let register ~configuration ?(force=false) ~run_name ~sequencer
+      ~day_date ~run_type ~chip_type ?note pools =
     with_database configuration (fun ~dbh ->
         let layout = Classy.make dbh in
         begin try return (Time.of_string (day_date ^ " 10:00:00-04:00"))
@@ -1414,7 +1415,7 @@ module Pgm_run = struct
             | None -> errf "Cannot find pgm-pool %d" pid
             end)
         >>= fun pgm_pools ->
-        layout#add_pgm_run () ~date ~run_type ~chip_type ~sequencer
+        layout#add_pgm_run () ~date ~run_name ~run_type ~chip_type ~sequencer
           ~pool:(Array.of_list pgm_pools) ?note
         >>= fun _ ->
         return ()
@@ -1425,15 +1426,17 @@ module Pgm_run = struct
     define_command ~names:["register-pgm-run"]
       ~description:"Register a PGM run"
       ~usage:(fun o exec cmd ->
-          fprintf o "Usage: %s <profile> %s [-force] <date> <run-type> \
+          fprintf o "Usage: %s <profile> %s [-force] <run-name> <date> <run-type> \
                      <chip-type> <pool1> <pool2> ...\n"
             exec cmd;
         )
       ~run:(fun configuration exec cmd -> function
-        | "-force" :: day_date :: run_type :: chip_type :: pools ->
-          register ~force:true ~configuration ~sequencer ~day_date ~run_type ~chip_type pools
-        | day_date :: run_type :: chip_type :: pools ->
+        | "-force" :: run_name :: day_date :: run_type :: chip_type :: pools ->
+          register ~force:true ~configuration ~run_name ~sequencer
+            ~day_date ~run_type ~chip_type pools
+        | run_name :: day_date :: run_type :: chip_type :: pools ->
           register ~configuration ~sequencer ~day_date ~run_type ~chip_type pools
+            ~run_name
         | l -> error (`invalid_command_line
                         (sprintf "don't know what to do with: %s"
                            String.(concat ~sep:", " l))))

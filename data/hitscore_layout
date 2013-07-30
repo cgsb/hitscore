@@ -165,6 +165,7 @@
 
 (record pgm_run
         (date timestamp)
+        (run_name string)
         (sequencer string)
         (pool pgm_pool array)
         (run_type string)
