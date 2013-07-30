@@ -13,10 +13,10 @@ module Assemble_sample_sheet:
     let illumina_barcodes = [
       1, "ATCACG"; 2, "CGATGT"; 3, "TTAGGC"; 4, "TGACCA"; 5, "ACAGTG";
       6, "GCCAAT"; 7, "CAGATC"; 8, "ACTTGA"; 9, "GATCAG"; 10, "TAGCTT";
-      11, "GGCTAC"; 12, "CTTGTA";
-      13, "AGTCAA"; 14, "AGTTCC"; 15, "ATGTCA"; 16, "CCGTCC";
-      18, "GTCCGC"; 19, "GTGAAA"; 20, "GTGGCC"; 21, "GTTTCG";
-      22, "CGTACG"; 23, "GAGTGG"; 25, "ACTGAT"; 27, "ATTCCT";
+      11, "GGCTAC"; 12, "CTTGTA"; 13, "AGTCAA"; 14, "AGTTCC"; 15, "ATGTCA";
+      16, "CCGTCC"; 17, "GTAGAG"; 18, "GTCCGC"; 19, "GTGAAA"; 20, "GTGGCC";
+      21, "GTTTCG"; 22, "CGTACG"; 23, "GAGTGG"; 24, "GGTAGC"; 25, "ACTGAT";
+      27, "ATTCCT";
     ]
     let bioo_barcodes = [
       1,"CGATGT"; 2,"TGACCA"; 3,"ACAGTG"; 4,"GCCAAT"; 5,"CAGATC";
