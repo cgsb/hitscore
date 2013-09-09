@@ -1182,6 +1182,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                 run ~dbh ~fake:(fun x -> Layout.Record_barcode.unsafe_cast x)
                   ~real:(fun dbh ->
                       Access.Barcode.add_value ~dbh ~kind:`custom ?index:None
+                        ?provider:None ?name:None
                         ~position ~read ~sequence)
                   ~log:(sprintf "(add_barcode custom %s %s)" sequence poslog)
             end
@@ -1217,6 +1218,7 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               run ~dbh ~fake:(fun x -> Layout.Record_barcode.unsafe_cast x)
                 ~real:(fun dbh ->
                     Access.Barcode.add_value ~dbh ~kind ~index
+                      ?provider:None ?name:None
                       ?position:None ?read:None ?sequence:None)
                 ~log:(sprintf "(add_barcode %s %d)"
                         (Layout.Enumeration_barcode_type.to_string kind) index)

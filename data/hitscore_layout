@@ -53,11 +53,14 @@
              bioo bioo_96 illumina nugen custom)
 
 (record barcode
-        (kind barcode_type)
-        (index int option)
+        (kind barcode_type) ; Legacy barcode kind
+        (index int option)  ; Legacy barcode index
+        ;; Super generic barcodes:
         (read int option)
         (position int option)
-        (sequence string option))
+        (sequence string option)
+        (provider string option)
+        (name string option))
 
 (record stock_library
         (name           string)
