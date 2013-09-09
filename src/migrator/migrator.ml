@@ -106,7 +106,10 @@ let v15_to_v16 file_in file_out =
               index: int option;
               read: int option;
               position: int option;
-              sequence: string option } with sexp
+              sequence: string option;
+              provider: string option;
+              name: string option;
+            } with sexp
             let of_15 v =
               let {M15. kind; index; position_in_r1; position_in_r2;
                     position_in_index; sequence } = v in
@@ -118,7 +121,7 @@ let v15_to_v16 file_in file_out =
                 | None, None, None-> None, None
                 | _, _, _ -> failwithf "unexpected barcode record"  ()
               in
-              { kind; index; read; position; sequence }
+              { kind; index; read; position; sequence; provider = None; name = None }
           end in
           map_g_values barcodes (fun g_value ->
                 let v15 = M15.t_of_sexp g_value in
