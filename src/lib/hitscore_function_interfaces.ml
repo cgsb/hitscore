@@ -114,6 +114,7 @@ start ~dbh ~configuration       (* common arguments *)
     ?hitscore_command:string ->
     ?make_command:string ->
     ?basecalls_path: string ->
+    ?ignore_missing_bcl: bool ->
     string ->
     ([> `failure of
         Hitscore_layout.Layout.Function_bcl_to_fastq.pointer *

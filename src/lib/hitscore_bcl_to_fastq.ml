@@ -25,6 +25,7 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
       ?(hitscore_command="echo hitscore should: ")
       ?(make_command="make -j8")
       ?(basecalls_path= "Data/Intensities/BaseCalls/")
+      ?(ignore_missing_bcl=false)
       name =
 
     check_hiseq_raw_availability ~dbh ~hiseq_raw:hiseq_dir
@@ -115,11 +116,14 @@ module Bcl_to_fastq: Hitscore_function_interfaces.BCL_TO_FASTQ = struct
                     %s %s --input-dir %s \
                     --output-dir %s \
                     --sample-sheet %s \
-                    --mismatches %d"
+                    --mismatches %d \
+                    %s"
             (Option.value_map ~default:"" ~f:(sprintf "--tiles %S") tiles)
             (Option.value_map ~default:""
                ~f:(sprintf "--use-bases-mask %S") bases_mask)
-          basecalls unaligned sample_sheet_path mismatch32) in
+            basecalls unaligned sample_sheet_path mismatch32
+            (if ignore_missing_bcl then "--ignore-missing-bcl" else "")
+          ) in
       cmd "%s" command_chain >>= fun () ->
       Common.PBS.qsub_pbs_script ~dbh ~configuration pbs pbs_script
     in

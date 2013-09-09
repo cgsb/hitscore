@@ -76,6 +76,7 @@ let start_parse_cmdline usage_prefix args =
   let force_new = ref false in
   let bases_mask = ref None in
   let basecalls_path = ref None in
+  let ignore_missing_bcl = ref false in
   let options = pbs_options @ [
     ( "-basecalls", Arg.String (fun s -> basecalls_path := Some s),
       "<path>\n\tSet the relative path to the Base-Calls directory \
@@ -103,8 +104,12 @@ let start_parse_cmdline usage_prefix args =
     ( "-make",
       Arg.Set_string make_command,
       sprintf "<command>\n\tSet the 'make' command used by the PBS-script \
-            (default: %S)." !make_command)
-  ] in
+            (default: %S)." !make_command);
+    ( "-ignore-missing-bcl",
+      Arg.Set ignore_missing_bcl,
+      sprintf " \n\tPass the `--ignore-missing-bcl` option to CASAVA \
+               (default: false).")
+    ] in
   let anon_args = ref [] in
   let anon s = anon_args := s :: !anon_args in
   let usage =
@@ -117,7 +122,8 @@ let start_parse_cmdline usage_prefix args =
     try Arg.parse_argv cmdline options anon usage;
       `go (List.rev !anon_args, !sample_sheet_kind, !force_new,
         !user, !queue, !nodes, !ppn, !wall_hours, !version, !mismatch,
-        !hitscore_command, !make_command, !tiles, !bases_mask, !basecalls_path)
+        !hitscore_command, !make_command, !tiles, !bases_mask, !basecalls_path,
+           !ignore_missing_bcl)
     with
     | Arg.Bad b -> `bad b
     | Arg.Help h -> `help h
@@ -127,7 +133,8 @@ let start hsc prefix cl_args =
   begin match (start_parse_cmdline prefix cl_args) with
   | `go (args, kind, force_new, user, queue, nodes, ppn,
          wall_hours, version, mismatch,
-         hitscore_command, make_command, tiles, bases_mask, basecalls_path) ->
+         hitscore_command, make_command, tiles, bases_mask, basecalls_path,
+         ignore_missing_bcl) ->
     db_connect hsc
     >>= fun dbh ->
     begin match args with
@@ -139,6 +146,7 @@ let start hsc prefix cl_args =
       Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
         ~sample_sheet ~hiseq_dir ~hitscore_command ?bases_mask ?basecalls_path
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
+        ~ignore_missing_bcl
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
       >>= fun started ->
       begin match started with
