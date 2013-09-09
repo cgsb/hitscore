@@ -154,6 +154,7 @@ let v15_to_v16 file_in file_out =
       |> add_empty "pgm_input_library"
       |> add_empty "pgm_pool"
       |> add_empty "pgm_run"
+      |> add_empty "pgm_raw"
     end
   in
 
