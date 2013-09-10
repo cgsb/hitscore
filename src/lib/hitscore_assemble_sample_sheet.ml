@@ -31,32 +31,16 @@ module Assemble_sample_sheet:
       46,"TCCCGA"; 47,"TCGAAG"; 48,"TCGGCA";]
 
     let barcode_sequences barcodes =
-      let module M = struct
-        exception Local_barcode_not_found of int * [ `bioo | `illumina ]
-        let f () =
-          try Ok (
-            List.map barcodes (function
-            | `bioo idx ->
-              begin match List.Assoc.find bioo_barcodes idx with
-              | Some b -> b
-              | None -> raise (Local_barcode_not_found (idx, `bioo))
-              end
-            | `illumina idx ->
-              begin match List.Assoc.find illumina_barcodes idx with
-              | Some b -> b
-              | None -> raise (Local_barcode_not_found (idx, `illumina))
-              end
-            | `illumina_compatible s -> s))
-          with
-          | Local_barcode_not_found (i, t) ->
-            Error (`barcode_not_found (i, (t :> Layout.Enumeration_barcode_type.t)))
-      end in
-      M.f ()
+      match barcodes with
+      | [`illumina_i1 s] -> [s]
+      | [`illumina_i1 s1; `illumina_i2 s2] -> [sprintf "%s-%s" s1 s2]
+      | [`illumina_i2 s2; `illumina_i1 s1] -> [sprintf "%s-%s" s1 s2]
+      | _ -> []
 
     let all_barcode_sequences barcode_type =
       match barcode_type with
-      | Some `illumina -> Array.of_list illumina_barcodes
-      | Some `bioo -> Array.of_list bioo_barcodes
+      | Some "illumina" -> Array.of_list illumina_barcodes
+      | Some "bioo" -> Array.of_list bioo_barcodes
       | _ -> [| |]
 
     type sample_sheet = {
@@ -131,14 +115,20 @@ module Assemble_sample_sheet:
                   while_sequential (Array.to_list and_array) (fun one ->
                     Access.Barcode.get ~dbh one
                     >>= begin function
+                    (*
                     | {g_value = { kind = `bioo; index = Some b; _}; _} ->
                       return (Some (`bioo b))
                     | {g_value = { kind = `illumina; index = Some b; _}; _} ->
                       return (Some (`illumina b))
-                    | {g_value = { kind = `custom; read = Some 2;
+                    *)
+                    | {g_value = { read = Some "I1";
                                    position = Some 1; sequence = Some s; _};
                        _} ->
-                      return (Some (`illumina_compatible s))
+                      return (Some (`illumina_i1 s))
+                    | {g_value = { read = Some "I2";
+                                   position = Some 1; sequence = Some s; _};
+                       _} ->
+                      return (Some (`illumina_i2 s))
                     | _ -> return None
                     end)
                   >>| List.filter_opt
@@ -149,11 +139,7 @@ module Assemble_sample_sheet:
                   (* if only one lib, then no barcoding *)
                   if Array.length libraries <= 1 then []
                   else illuminaish_barcoding in
-                begin match (barcode_sequences barcodes) with
-                | Ok bars ->
-                  return (name, bars)
-                | Error e -> error e
-                end)
+                return (name, (barcode_sequences barcodes)))
               >>= fun name_bars ->
               begin match name_bars with
               | [] ->
@@ -209,16 +195,16 @@ module Assemble_sample_sheet:
                     begin fun b ->
                       let open Layout.Record_barcode in
                       Access.Barcode.get ~dbh b
-                      >>= fun {g_value = {kind ; _}} ->
-                      return kind
+                      >>= fun {g_value = {provider ; _}} ->
+                      return provider
                     end
                 end
                 >>| List.concat
-                >>| List.filter ~f:(fun k -> k = `bioo || k = `illumina)
+                >>| List.filter ~f:(fun k -> k = Some "bioo" || k = Some "illumina")
                 >>| List.dedup
                 >>= fun barcode_types ->
                 begin match barcode_types with
-                | [one_barcode_type] -> return (Some one_barcode_type)
+                | [Some one_barcode_type] -> return (Some one_barcode_type)
                 | _ -> return (None)
                 end
                 >>= fun elected_barcode_type ->
@@ -231,8 +217,7 @@ module Assemble_sample_sheet:
                   Array.iter some  ~f:(fun (i, b) ->
                     print out "%s,%d,Lane%d_%s_%02d_%s,,%s,,N,,,Lane%d\n"
                       flowcell_name (lane_idx + 1) (lane_idx + 1)
-                      (Layout.Enumeration_barcode_type.to_string
-                         (Option.value_exn elected_barcode_type))
+                      (Option.value ~default:"NONE" elected_barcode_type)
                       i b b (lane_idx + 1));
                   return ()
                 end

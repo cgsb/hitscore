@@ -30,7 +30,7 @@ module Configuration : Hitscore_interfaces.CONFIGURATION = struct
     raw_data_path: string option;
     hiseq_directory: string;
     bcl_to_fastq:  bcl_to_fastq list;
-    barcode_data: (string * string * int * int * string) list;
+    barcode_data: (string * string * string * int * string) list;
                   (* provider, name, read, position, sequence *)
   }
 
@@ -165,7 +165,7 @@ module Configuration : Hitscore_interfaces.CONFIGURATION = struct
               List.map barcodes (function
                 | List [Atom bname; Atom read; Atom position; Atom sequence;] ->
                   begin try
-                    (provider, bname, Int.of_string read, Int.of_string position, sequence)
+                    (provider, bname, read, Int.of_string position, sequence)
                   with
                     e -> ksprintf fail "Wrong barcode specification: %s, %s (profile: %s): %s"
                            provider bname name (Exn.to_string e)

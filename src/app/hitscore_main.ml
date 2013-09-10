@@ -67,7 +67,7 @@ module Configuration_file = struct
     );
     printf "Barcodes:\n";
     List.iter (barcode_data config) (fun (provider, name, read, pos, seq) ->
-        printf "  %s:%s = (R%d at %d: %s)\n" provider name read pos seq;
+        printf "  %s:%s = (%s at %d: %s)\n" provider name read pos seq;
       );
     ()
 

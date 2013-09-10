@@ -38,7 +38,7 @@ module type CONFIGURATION = sig
     ?hiseq_directory:string ->
     ?upload_directory:string ->
     ?bcl_to_fastq:bcl_to_fastq list ->
-    ?barcode_data:(string * string * int * int * string) list ->
+    ?barcode_data:(string * string * string * int * string) list ->
     unit -> local_configuration
 
   (** Get the Data-base configuration *)
@@ -98,7 +98,7 @@ module type CONFIGURATION = sig
   val bcl_to_fastq_pre_commands: local_configuration -> version:string -> string list
 
   val barcode_data :
-    local_configuration -> (string * string * int * int * string) list
+    local_configuration -> (string * string * string * int * string) list
 
   (** Set of available profiles. *)
   type profile_set

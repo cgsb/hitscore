@@ -403,23 +403,15 @@ let fastxqs_path fastxqs_path lane_index lib_name barcode read =
     lane_index read
 
 let demuxable_barcode_sequences lane lib =
-  let module Barcodes = Hitscore_assemble_sample_sheet.Assemble_sample_sheet in
   if List.length lane#inputs = 1
   then ["NoIndex"; "Undetermined"]
   else
     begin match lib#barcoding with
     | [and_list] ->
       if List.for_all and_list (fun o ->
-        (o#kind = `illumina || o#kind = `bioo) && o#index <> None)
+        (o#provider = Some "illumina" || o#provider = Some "bioo") && o#read = Some "I1")
       then
-        List.filter_map and_list (fun o ->
-          match o#kind with
-          | `illumina ->
-            List.Assoc.find
-              Barcodes.illumina_barcodes (Option.value_exn o#index)
-          | `bioo ->
-            List.Assoc.find Barcodes.bioo_barcodes (Option.value_exn o#index)
-          | _ -> None)
+        List.filter_map and_list (fun o -> o#sequence)
       else []
     | _ -> []
     end

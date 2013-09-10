@@ -266,10 +266,7 @@ let list_libraries ~state query =
       let li_description =  l#stock#description in
       let li_barcoding =
         List.map l#barcoding ~f:(List.map ~f:(fun b ->
-          match b#kind, b#index with
-          | `bioo, Some i -> sprintf "Bioo-%d" i
-          | `illumina, Some i -> sprintf "Illumina-%d" i
-          | _ -> "TODO")) in
+            "TODO")) in
       let li_sample =
         (Option.(l#sample >>= fun s -> return s#sample#name),
          Option.(l#sample >>= fun s ->

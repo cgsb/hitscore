@@ -49,14 +49,14 @@
         (doc protocol_directory)
         notable)
 
-(enumeration barcode_type
-             bioo bioo_96 illumina nugen custom)
+;;(enumeration barcode_type
+;;             bioo bioo_96 illumina nugen custom)
 
 (record barcode
-        (kind barcode_type) ; Legacy barcode kind
-        (index int option)  ; Legacy barcode index
+;;        (kind barcode_type) ; Legacy barcode kind
+;;        (index int option)  ; Legacy barcode index
         ;; Super generic barcodes:
-        (read int option)
+        (read string option)
         (position int option)
         (sequence string option)
         (provider string option)

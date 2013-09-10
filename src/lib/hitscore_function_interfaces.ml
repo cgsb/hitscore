@@ -51,8 +51,6 @@ module type ASSEMBLE_SAMPLE_SHEET = sig
      [> `Layout of
          Hitscore_layout.Layout.error_location *
            Hitscore_layout.Layout.error_cause
-     | `barcode_not_found of
-         int * Hitscore_layout.Layout.Enumeration_barcode_type.t
      | `duplicated_barcode of string
      | `fatal_error of
          [> `add_volume_did_not_create_a_tree_volume of
