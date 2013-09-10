@@ -77,6 +77,7 @@ let start_parse_cmdline usage_prefix args =
   let bases_mask = ref None in
   let basecalls_path = ref None in
   let ignore_missing_bcl = ref false in
+  let ignore_missing_stats = ref false in
   let options = pbs_options @ [
     ( "-basecalls", Arg.String (fun s -> basecalls_path := Some s),
       "<path>\n\tSet the relative path to the Base-Calls directory \
@@ -108,6 +109,10 @@ let start_parse_cmdline usage_prefix args =
     ( "-ignore-missing-bcl",
       Arg.Set ignore_missing_bcl,
       sprintf " \n\tPass the `--ignore-missing-bcl` option to CASAVA \
+                  (default: false).");
+    ( "-ignore-missing-stats",
+      Arg.Set ignore_missing_stats,
+      sprintf " \n\tPass the `--ignore-missing-stats` option to CASAVA \
                (default: false).")
     ] in
   let anon_args = ref [] in
@@ -123,7 +128,7 @@ let start_parse_cmdline usage_prefix args =
       `go (List.rev !anon_args, !sample_sheet_kind, !force_new,
         !user, !queue, !nodes, !ppn, !wall_hours, !version, !mismatch,
         !hitscore_command, !make_command, !tiles, !bases_mask, !basecalls_path,
-           !ignore_missing_bcl)
+           !ignore_missing_bcl, !ignore_missing_stats)
     with
     | Arg.Bad b -> `bad b
     | Arg.Help h -> `help h
@@ -134,7 +139,7 @@ let start hsc prefix cl_args =
   | `go (args, kind, force_new, user, queue, nodes, ppn,
          wall_hours, version, mismatch,
          hitscore_command, make_command, tiles, bases_mask, basecalls_path,
-         ignore_missing_bcl) ->
+         ignore_missing_bcl, ignore_missing_stats) ->
     db_connect hsc
     >>= fun dbh ->
     begin match args with
@@ -146,7 +151,7 @@ let start hsc prefix cl_args =
       Bcl_to_fastq.start ~dbh ~make_command ~configuration:hsc ?tiles
         ~sample_sheet ~hiseq_dir ~hitscore_command ?bases_mask ?basecalls_path
         ?user ~nodes ~ppn ?queue ~wall_hours ~version ~mismatch
-        ~ignore_missing_bcl
+        ~ignore_missing_bcl ~ignore_missing_stats
         (sprintf "%s_%s" flowcell Time.(now() |! to_filename_string))
       >>= fun started ->
       begin match started with
