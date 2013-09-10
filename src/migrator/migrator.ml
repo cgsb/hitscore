@@ -76,6 +76,27 @@ let v14_to_v15 file_in file_out =
     output_string o (Sexplib.Sexp.to_string_hum dump_v15)));
   ()
 
+let illumina_barcodes = [
+  1, "ATCACG"; 2, "CGATGT"; 3, "TTAGGC"; 4, "TGACCA"; 5, "ACAGTG";
+  6, "GCCAAT"; 7, "CAGATC"; 8, "ACTTGA"; 9, "GATCAG"; 10, "TAGCTT";
+  11, "GGCTAC"; 12, "CTTGTA"; 13, "AGTCAA"; 14, "AGTTCC"; 15, "ATGTCA";
+  16, "CCGTCC"; 17, "GTAGAG"; 18, "GTCCGC"; 19, "GTGAAA"; 20, "GTGGCC";
+  21, "GTTTCG"; 22, "CGTACG"; 23, "GAGTGG"; 24, "GGTAGC"; 25, "ACTGAT";
+  27, "ATTCCT";
+]
+
+let bioo_barcodes = [
+  1,"CGATGT"; 2,"TGACCA"; 3,"ACAGTG"; 4,"GCCAAT"; 5,"CAGATC";
+  6,"CTTGTA"; 7,"ATCACG"; 8,"TTAGGC"; 9,"ACTTGA"; 10,"GATCAG";
+  11,"TAGCTT"; 12,"GGCTAC"; 13,"AGTCAA"; 14,"AGTTCC"; 15,"ATGTCA";
+  16,"CCGTCC"; 17,"GTAGAG"; 18,"GTCCGC"; 19,"GTGAAA"; 20,"GTGGCC";
+  21,"GTTTCG"; 22,"CGTACG"; 23,"GAGTGG"; 24,"GGTAGC"; 25,"ACTGAT";
+  26,"ATGAGC"; 27,"ATTCCT"; 28,"CAAAAG"; 29,"CAACTA"; 30,"CACCGG";
+  31,"CACGAT"; 32,"CACTCA"; 33,"CAGGCG"; 34,"CATGGC"; 35,"CATTTT";
+  36,"CCAACA"; 37,"CGGAAT"; 38,"CTAGCT"; 39,"CTATAC"; 40,"CTCAGA";
+  41,"GCGCTA"; 42,"TAATCG"; 43,"TACAGC"; 44,"TATAAT"; 45,"TCATTC";
+  46,"TCCCGA"; 47,"TCGAAG"; 48,"TCGGCA";]
+
 let v15_to_v16 file_in file_out =
   let open Sexplib.Sexp in
   let dump_v15 =
@@ -93,7 +114,7 @@ let v15_to_v16 file_in file_out =
         let new_barcodes =
           let module M15 = struct
             type t = {
-              kind: string;
+              kind: Layout.Enumeration_barcode_type.t;
               index: int option;
               position_in_r1: int option;
               position_in_r2: int option;
@@ -102,9 +123,9 @@ let v15_to_v16 file_in file_out =
           end in
           let module M16 = struct
             type t = {
-              kind: string;
-              index: int option;
-              read: int option;
+              (* kind: string; *)
+              (* index: int option; *)
+              read: string option;
               position: int option;
               sequence: string option;
               provider: string option;
@@ -113,15 +134,49 @@ let v15_to_v16 file_in file_out =
             let of_15 v =
               let {M15. kind; index; position_in_r1; position_in_r2;
                     position_in_index; sequence } = v in
-              let read, position =
-                match position_in_r1, position_in_r2, position_in_index with
-                | Some n, None, None -> Some 1, Some n
-                | None, Some n, None -> Some 3, Some n
-                | None, None, Some n -> Some 2, Some n
-                | None, None, None-> None, None
-                | _, _, _ -> failwithf "unexpected barcode record"  ()
-              in
-              { kind; index; read; position; sequence; provider = None; name = None }
+              match kind with
+              | `illumina ->
+                let i =
+                  Option.value_exn index
+                    ~message:"illumina barcode without index!" in
+                begin match List.Assoc.find illumina_barcodes i with
+                | Some s ->
+                  { read = Some "I1";
+                    position = Some 1;
+                    sequence = Some s;
+                    provider = Some "illumina";
+                    name = Some "1" }
+                | None -> failwithf "illumina barcode %d not found" i ()
+                end
+              | `bioo ->
+                let i =
+                  Option.value_exn index
+                    ~message:"bioo barcode without index!" in
+                begin match List.Assoc.find bioo_barcodes i with
+                | Some s ->
+                  { read = Some "I1";
+                    position = Some 1;
+                    sequence = Some s;
+                    provider = Some "bioo";
+                    name = Some "1" }
+                | None -> failwithf "bioo barcode %d not found" i ()
+                end
+              | `custom ->
+                let read, position =
+                  match position_in_r1, position_in_r2, position_in_index with
+                  | Some n, None, None -> Some "R1", Some n
+                  | None, Some n, None -> Some "R2", Some n
+                  | None, None, Some n -> Some "I1", Some n
+                  | _, _, _ -> failwithf "unexpected barcode record"  ()
+                in
+                { read; position; sequence; provider = None; name = None }
+              | `bioo_96 -> failwith "not implemented bioo 96"
+              | `nugen ->
+                assert (position_in_r1 = None && position_in_index = None
+                        && position_in_r2 = None && index <> None);
+                {read = None; position = None; sequence = None;
+                 provider = Some "nugen";
+                 name = Some (Int.to_string (Option.value_exn index))}
           end in
           map_g_values barcodes (fun g_value ->
                 let v15 = M15.t_of_sexp g_value in
