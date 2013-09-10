@@ -569,25 +569,24 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) ~run_type loaded sanitized =
           end
         | None -> None in
       *)
+      let split_and_strip s =
+        String.split_on_chars ~on:[','; '-'] s
+        |> List.map ~f:String.strip
+        |> List.map ~f:String.lowercase
+        |> List.filter ~f:((<>) "") in
       let barcodes =
         match column row col_Barcode_Number with
         | None -> []
-        | Some s ->
-          String.split ~on:',' s
-          |! List.map ~f:String.strip
-          |! List.filter ~f:((<>) "")
+        | Some s -> split_and_strip s
       in
       let custom_barcode_sequence =
-        (column row col_Custom_Barcode_Sequence
-         >>= fun s ->
-         return (String.split ~on:',' s))
-        |! value_map ~default:[] ~f:(List.map ~f:String.strip)
+        value_map ~default:[]
+          (column row col_Custom_Barcode_Sequence)
+          ~f:split_and_strip
       in
       let custom_barcode_positions =
-        (column row col_Custom_Barcode_Location
-         >>= fun s ->
-         return (String.split ~on:',' (String.lowercase s)))
-        |> value_map ~default:[] ~f:(List.map ~f:String.strip)
+        value_map ~default:[] ~f:split_and_strip
+          (column row col_Custom_Barcode_Location)
         |> List.filter_map ~f:(fun s ->
             match String.split ~on:':' s |! List.map ~f:String.strip with
             | [ "r1" ; two ] -> int two >>= fun i -> Some (`on_r1 i)
