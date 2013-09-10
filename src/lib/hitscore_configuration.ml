@@ -1,6 +1,6 @@
 open Hitscore_std
 
-module Configuration = struct
+module Configuration : Hitscore_interfaces.CONFIGURATION = struct
 
   type db_configuration = {
     db_host     : string;
@@ -30,16 +30,18 @@ module Configuration = struct
     raw_data_path: string option;
     hiseq_directory: string;
     bcl_to_fastq:  bcl_to_fastq list;
+    barcode_data: (string * string * int * int * string) list;
+                  (* provider, name, read, position, sequence *)
   }
 
   let configure ?root_path ?(root_writers=[]) ?root_group
       ?(vol_directory="vol") ?db_configuration ?work_path
       ?raw_data_path ?(hiseq_directory="HiSeq")
       ?(upload_directory="upload")
-      ?(bcl_to_fastq=[]) () =
+      ?(bcl_to_fastq=[]) ?(barcode_data=[]) () =
     { root_path; root_writers; root_group; upload_directory;
       vol_directory; db_configuration; work_path;
-      raw_data_path; hiseq_directory; bcl_to_fastq}
+      raw_data_path; hiseq_directory; bcl_to_fastq; barcode_data}
 
   let db t = t.db_configuration
 
@@ -84,6 +86,8 @@ module Configuration = struct
   let db_database t = Option.map t.db_configuration (fun dbc -> dbc.db_database)
   let db_username t = Option.map t.db_configuration (fun dbc -> dbc.db_username)
   let db_password t = Option.map t.db_configuration (fun dbc -> dbc.db_password)
+
+  let barcode_data t = t.barcode_data
 
   let parse_sexp sexp =
     let fail msg =
@@ -153,9 +157,28 @@ module Configuration = struct
           | _ ->
             ksprintf fail "Incomplete DB configuration (profile: %s)" name)
       in
+      let barcode_data =
+        List.find_map l (function
+        | List (Atom "barcodes" :: l) ->
+          Some (List.concat_map l (function
+            | List (Atom provider :: barcodes) ->
+              List.map barcodes (function
+                | List [Atom bname; Atom read; Atom position; Atom sequence;] ->
+                  begin try
+                    (provider, bname, Int.of_string read, Int.of_string position, sequence)
+                  with
+                    e -> ksprintf fail "Wrong barcode specification: %s, %s (profile: %s): %s"
+                           provider bname name (Exn.to_string e)
+                  end
+                | other ->
+                  ksprintf fail "Wrong barcode for %S (profile: %s)" provider name)
+            | _ ->
+              ksprintf fail "Wrong barcodes (profile: %s)" name))
+        | _ -> None)
+      in
       (name,
        configure ?work_path ?vol_directory:None ?upload_directory:None
-         ?raw_data_path ?hiseq_directory ~bcl_to_fastq
+         ?raw_data_path ?hiseq_directory ~bcl_to_fastq ?barcode_data
          ?root_path ~root_writers ?root_group ?db_configuration)
     | _ -> fail "expecting a (profile ...)"
     in

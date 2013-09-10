@@ -14,6 +14,12 @@ module type CONFIGURATION = sig
     database:string ->
     username:string -> password:string -> db_configuration
 
+  (**  *)
+  type bcl_to_fastq = {
+    b2f_version: string;
+    b2f_pre_commands: string list;
+  }
+
   (** [local_configuration] contains a whole configuration instance. *)
   type local_configuration
 
@@ -21,28 +27,32 @@ module type CONFIGURATION = sig
       the default values will be used (i.e. PGOCaml will try to connect to
       the local database). The default [vol_directory] is ["vol"], the
       default [hiseq_directory] is ["HiSeq"]. *)
-  val configure : ?root_path:string ->
-    ?root_writers:string list -> ?root_group:string ->
+  val configure :
+    ?root_path:string ->
+    ?root_writers:string list ->
+    ?root_group:string ->
     ?vol_directory:string ->
-    ?upload_directory:string ->
     ?db_configuration:db_configuration ->
     ?work_path:string ->
     ?raw_data_path:string ->
     ?hiseq_directory:string ->
+    ?upload_directory:string ->
+    ?bcl_to_fastq:bcl_to_fastq list ->
+    ?barcode_data:(string * string * int * int * string) list ->
     unit -> local_configuration
 
   (** Get the Data-base configuration *)
   val db: local_configuration -> db_configuration option
-    
-  val db_host     : local_configuration -> string   option 
-  val db_port     : local_configuration -> int      option 
-  val db_database : local_configuration -> string   option 
-  val db_username : local_configuration -> string   option 
-  val db_password : local_configuration -> string   option 
+
+  val db_host     : local_configuration -> string   option
+  val db_port     : local_configuration -> int      option
+  val db_database : local_configuration -> string   option
+  val db_username : local_configuration -> string   option
+  val db_password : local_configuration -> string   option
 
   (** Get the current root path (if set).  *)
   val root_path : local_configuration -> string option
-    
+
   (** Get the root writers' logins. *)
   val root_writers: local_configuration -> string list
 
@@ -51,13 +61,13 @@ module type CONFIGURATION = sig
 
   (** Get the name of the volumes directory (i.e. ["vol"]). *)
   val vol_directory: local_configuration -> string
-    
+
   (** Get the current path to the volumes (i.e. kind-of [$ROOT/vol/]). *)
   val vol_path: local_configuration -> string option
 
   (** Get the name of the uploads directory (i.e. ["upload"] by default). *)
   val upload_directory: local_configuration -> string
-    
+
   (** Get the current path to the uploads (i.e. kind-of [$ROOT/upload/]). *)
   val upload_path: local_configuration -> string option
 
@@ -80,28 +90,31 @@ module type CONFIGURATION = sig
   (** Get the path to the HiSeq raw data
       (like "/data/cgsb/gencore-raw/HiSeq"). *)
   val hiseq_data_path: local_configuration -> string option
-    
+
   (** Get all the available/configured B2F versions. *)
   val bcl_to_fastq_available_versions: local_configuration -> string list
 
   (** For a given [version], get the commands to run before. *)
   val bcl_to_fastq_pre_commands: local_configuration -> version:string -> string list
 
-    
+  val barcode_data :
+    local_configuration -> (string * string * int * int * string) list
+
   (** Set of available profiles. *)
   type profile_set
 
   (** Parse a list of S-Expressions representing configuration profiles. *)
-  val parse_str: string -> 
+  val parse_str: string ->
     (profile_set, [> `configuration_parsing_error of exn ]) Result.t
 
   (** Get the list of available profile names.  *)
   val profile_names: profile_set -> string list
 
   (** Select a profile and build a configuration with it. *)
-  val use_profile: profile_set -> string -> 
+  val use_profile: profile_set -> string ->
     (local_configuration, [> `profile_not_found of string]) Result.t
 
+  val default_sequencers: string list
 
 end
 
@@ -109,9 +122,9 @@ end
 
 (** XML Dom-like representation highly-compatible with XMLM. *)
 module  XML = struct
-  type name = string * string 
+  type name = string * string
   type attribute = name * string
-  type tag = name * attribute list 
+  type tag = name * attribute list
   type tree = [ `E of tag * tree list | `D of string ]
 end
 
@@ -126,7 +139,7 @@ module Hiseq_raw_information = struct
     read_length_2     : int option;
     with_intensities  : bool;
     run_date          : Time.t; }
-      
+
   (** The information returned by the
       [Hiseq_raw.clusters_summary] function.  *)
   type clusters_info = {
@@ -145,7 +158,7 @@ end
 module type HISEQ_RAW = sig
 
   (** Parse {e runParameters.xml}. *)
-  val run_parameters: XML.tree -> 
+  val run_parameters: XML.tree ->
     (Hiseq_raw_information.run_parameters,
      [> `parse_run_parameters of
          [> `wrong_date of string | `wrong_field of string ] ]) Result.t

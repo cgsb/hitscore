@@ -12,7 +12,8 @@ include Hitscore_layout
 
   (* module Layou_access = Hitscore_db_access.Make(Flow) *)
 
-module Configuration = Hitscore_configuration.Configuration
+module Configuration =
+  Hitscore_configuration.Configuration
 
 module Access_rights = Hitscore_access_rights.Access_rights
 
