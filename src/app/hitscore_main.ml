@@ -65,6 +65,10 @@ module Configuration_file = struct
         printf "  PRE: %S\n" c;
       );
     );
+    printf "Barcodes:\n";
+    List.iter (barcode_data config) (fun (provider, name, read, pos, seq) ->
+        printf "  %s:%s = (R%d at %d: %s)\n" provider name read pos seq;
+      );
     ()
 
   let print_env () =
