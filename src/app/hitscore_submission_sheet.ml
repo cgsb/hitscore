@@ -1169,6 +1169,8 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
 
           while_sequential custom_barcodes
             begin fun (sequence, poslog, read, position) ->
+              let sequence = String.uppercase sequence in
+              let read = String.uppercase read in
               let found =
                 List.find all_barcodes ~f:(fun b ->
                     b#position = Some position && b#read = Some read
@@ -1228,12 +1230,15 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
             *)
             begin match List.find all_known_barcodes
                           (fun (prov, name, _, _, _) ->
-                             Some prov = bt && name = index)
+                             Some (String.lowercase prov) = (Option.map bt String.lowercase)
+                             && String.lowercase name = String.lowercase index)
             with
             | None ->
               lib_error libname "Barcode %s:%s is not known" (Option.value bt ~default:"{NONE}") index;
               return (Layout.Record_barcode.unsafe_cast 0, None)
             | Some (provider, name, read, pos, seq)  ->
+              let sequence = String.uppercase seq in
+              let read = String.uppercase read in
               let found =
                 List.find all_barcodes ~f:(fun b ->
                     b#provider = Some provider
@@ -1243,13 +1248,13 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
                     && b#sequence = Some seq)
               in
               match found with
-              | Some b -> return (b#g_pointer, Some (read, pos, seq))
+              | Some b -> return (b#g_pointer, Some (read, pos, sequence))
               | None ->
                 run ~dbh ~fake:(fun x -> Layout.Record_barcode.unsafe_cast x)
                   ~real:(fun dbh ->
                       Access.Barcode.add_value ~dbh
                         ~provider ~name
-                        ~position:pos ~read ~sequence:seq)
+                        ~position:pos ~read ~sequence)
                   ~log:(sprintf "(add_barcode %s:%s -> %s: %d %s)"
                           provider name read pos seq)
                 >>= fun p ->
@@ -1601,16 +1606,19 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
 
           (* Duplications: *)
           let barcodes_of_the_lane =
-            List.map meta_input_libs (fun (name, _, barcodes) -> barcodes)
-            |> List.concat
-            |> List.filter_opt in
+            List.map meta_input_libs
+              (fun (name, _, barcodes) ->
+                 `barcoding (List.sort ~cmp:compare (List.filter_opt barcodes)))
+            (* |> List.concat *)
+            (* |> List.filter_opt; *)
+          in
           let rec loop barcodes =
             begin match List.find_a_dup barcodes with
-            | Some s ->
+            | Some ((`barcoding l) as s) ->
               let examples =
                 List.filter meta_input_libs (fun (name, _, barcodes) ->
-                    List.mem barcodes (Some s)) in
-              perror "There are barcoding duplicates in %s:\n%s\n" pool
+                    (List.sort ~cmp:compare (List.filter_opt barcodes)) = l) in
+              perror "There are barcoding duplicates in %s:\n%s" pool
                 (List.map examples (fun (name, _, barcodes) ->
                      sprintf "  %S: %s\n%!" name
                        (String.concat ~sep:", "
