@@ -169,6 +169,10 @@ let int ?(msg="") s =
   try Scanf.sscanf s "%d" Option.some
   with e ->
     perror "%sCannot read an integer from %s" msg s; None
+let parse_float ?(msg="") s =
+  try Scanf.sscanf s "%f" Option.some
+  with e ->
+    perror "%sCannot read an float from %s" msg s; None
 
 type run_type =
   | Hiseq of [`se of int | `pe of int * int ]
@@ -488,13 +492,13 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) ~run_type loaded sanitized =
       (* if_verbose "%s should be already known\n" libname; *)
       check_existing_library ~all_libraries ~libname rest
       >>= fun exisiting ->
-      let int = int ~msg:(sprintf "Lib %s: " libname) in
       begin match exisiting with
       | Some lib_t ->
         let key_value_list =
           List.map custom_keys
             (fun c -> (c, column loaded.(section + i + 2) c)) in
         return (
+            let msg = sprintf "Concentration of %s: " libname in
           match rest with
           | [] | [ _ ]
           |  _ :: "" :: []
@@ -502,11 +506,11 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) ~run_type loaded sanitized =
             `existing (libname, lib_t, None, None, key_value_list)
           |  _ :: conc :: []
           |  _ :: conc :: "" :: _ ->
-            `existing (libname, lib_t, int conc, None, key_value_list)
+            `existing (libname, lib_t, parse_float ~msg conc, None, key_value_list)
           | _ :: "" :: note :: _ ->
             `existing (libname, lib_t, None, Some note, key_value_list)
           | _ :: conc :: note :: _ ->
-            `existing (libname, lib_t, int conc, Some note, key_value_list))
+            `existing (libname, lib_t, parse_float ~msg conc, Some note, key_value_list))
       | None ->
         perror "Library %s is declared as already defined but was not found" libname;
         return (`wrong libname)
@@ -534,9 +538,11 @@ let parse_libraries ~dbh ~(layout: _ Classy.layout) ~run_type loaded sanitized =
         mandatory r c >>= int ~msg:(sprintf "Lib: %s (%s)" libname c) in
       let column32 r c =
         column r c >>= int ~msg:(sprintf "Lib: %s (%s)" libname c) in
+      let column_float r c =
+        column r c >>= parse_float ~msg:(sprintf "Lib: %s (%s)" libname c) in
       let int = int ~msg:(sprintf "Lib %s: " libname) in
       let project = column row col_Project_Name in
-      let conc = column32 row col_Concentration__nM_ in
+      let conc = column_float row col_Concentration__nM_ in
       let note = column row col_Note in
       let short_desc = column row col_Library_Short_Description in
       let sample_name = column row col_Sample_Name in
@@ -659,7 +665,7 @@ let print_libraries ~verbose libraries =
     | `wrong libname -> if_verbose "  wrong lib: %s\n" libname
     | `existing (s, _, c, n, kv) ->
       if_verbose "  existing lib: %s%s%s {%s}\n" s
-        (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%d nM)"))
+        (Option.value_map c ~default:" (no concentration)" ~f:(sprintf " (%f nM)"))
         (Option.value_map n ~default:" (no note)" ~f:(sprintf " (note: %S)"))
         (String.concat ~sep:", "
            (List.map kv ~f:(function
@@ -1558,9 +1564,11 @@ let parse ?(dry_run=true) ?(verbose=false) ?(phix=[]) hsc file =
               >>| Array.of_list
               >>= fun user_db ->
 
+                  (*
               let concentration = (* nM or molML *)
                 let open Option in
                 concentration >>| Int64.of_int >>| Float.of_int64 in
+*)
 
               begin match run_type with
               | Hiseq _ | Unknown_run_type ->
