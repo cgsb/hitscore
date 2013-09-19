@@ -403,16 +403,29 @@ let fastxqs_path fastxqs_path lane_index lib_name barcode read =
     lane_index read
 
 let demuxable_barcode_sequences lane lib =
+  let is_i1_indexing o =
+    o#read = Some "I1" && o#position = Some 1 && o#sequence <> None in
+  let is_dual_indexing one two =
+    one#read = Some "I1" && one#position = Some 1 && one#sequence <> None
+    &&
+    two#read = Some "I2" && two#position = Some 1 && two#sequence <> None
+  in
   if List.length lane#inputs = 1
   then ["NoIndex"; "Undetermined"]
   else
     begin match lib#barcoding with
     | [and_list] ->
-      if List.for_all and_list (fun o ->
-        (o#provider = Some "illumina" || o#provider = Some "bioo") && o#read = Some "I1")
-      then
-        List.filter_map and_list (fun o -> o#sequence)
-      else []
+      begin match and_list with
+      | l when List.for_all ~f:is_i1_indexing l -> 
+        List.map ~f:(fun o -> Option.value_exn o#sequence) l
+      | [one; two] when is_dual_indexing one two ->
+          [sprintf "%s-%s" 
+             (Option.value_exn one#sequence) (Option.value_exn two#sequence)]
+      | [two; one] when is_dual_indexing one two ->
+          [sprintf "%s-%s" 
+             (Option.value_exn one#sequence) (Option.value_exn two#sequence)]
+      | _ -> []
+      end
     | _ -> []
     end
 
