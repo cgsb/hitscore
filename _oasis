@@ -8,6 +8,10 @@ License:     PROP
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
 
+Flag client_server
+  Description: build the client and server apps
+  Default: false
+
 Library hitscoregen
   Path: src/codegen/
   BuildDepends: threads, core, sexplib.syntax
@@ -25,9 +29,9 @@ Executable hitscoregen
 Library hitscore
   Path: src/lib
   FindlibName: hitscore
-  BuildDepends: threads, core, pgocaml, sexplib.syntax, bin_prot.syntax,
-               biocaml, sequme, hitscoregen, lwt, lwt.unix, cryptokit, simple_pam
-  XMETARequires: threads, core, pgocaml, biocaml, sequme, hitscoregen, lwt, lwt.unix, cryptokit, simple_pam
+  BuildDepends: threads, core, pgocaml, sexplib.syntax, bin_prot.syntax, xmlm,
+               hitscoregen, lwt, lwt.unix, lwt.preemptive, cryptokit, simple_pam
+  XMETARequires: threads, core, pgocaml, hitscoregen, lwt, lwt.unix, lwt.preemptive,  cryptokit, simple_pam, xmlm
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore
@@ -53,6 +57,11 @@ Library hitscore
           , Hitscore_generic_fastqs
           , Hitscore_fastx_quality_stats
           , Hitscore_script
+          , Sequme_flow_app_util
+          , Sequme_pbs
+          , Sequme_flow
+          , Sequme_flow_list
+          , Sequme_flow_sys
 
 Executable hitscore
   Path: src/app
@@ -65,6 +74,7 @@ Executable hitscored
   Path: src/server
   MainIs: server_main.ml
   BuildDepends: threads, hitscore, core_extended
+  Build$: flag(client_server)
   CompiledObject: best
   Install: true
 
@@ -72,6 +82,7 @@ Executable gencore
   Path: src/client
   MainIs: client_main.ml
   BuildDepends: threads, hitscore, core_extended
+  Build$: flag(client_server)
   CompiledObject: best
   Install: true
 

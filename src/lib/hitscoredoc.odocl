@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 49ef0886f2e9bfac1f9eb20a2f765cbd)
+# DO NOT EDIT (digest: a478c98de8b300ee93754bd4d238a87a)
 Hitscore
 Hitscore_std
 Hitscore_interfaces
@@ -23,4 +23,9 @@ Hitscore_data_access
 Hitscore_generic_fastqs
 Hitscore_fastx_quality_stats
 Hitscore_script
+Sequme_flow_app_util
+Sequme_pbs
+Sequme_flow
+Sequme_flow_list
+Sequme_flow_sys
 # OASIS_STOP
