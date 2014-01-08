@@ -237,7 +237,7 @@ let make_classy_libraries_information ~configuration ~layout_cache =
                      method inputs = libs
                      method contacts = contacts end))
     >>= fun lanes ->
-    let hiseq_raws =
+    flow_detach (fun () ->
       filter_map hiseq_raws
         ~filter:(fun h -> h#flowcell_name = fc#serial_name)
         ~map:(fun h ->
@@ -271,8 +271,8 @@ let make_classy_libraries_information ~configuration ~layout_cache =
                   method deliveries = Option.value ~default:[] deliveries
                  end)) in
           (object (* hiseq_raw *)
-            method oo = h method demultiplexings = demuxes end))
-    in
+            method oo = h method demultiplexings = demuxes end)))
+    >>= fun hiseq_raws ->
     return (object method oo = fc (* Flowcell *)
                    method lanes = lanes
                    method hiseq_raws = hiseq_raws end))
@@ -307,12 +307,14 @@ let make_classy_libraries_information ~configuration ~layout_cache =
   layout_cache#stock_library
   >>= while_sequential ~f:(fun sl ->
     let optid =  Option.map ~f:(fun o -> o#id) in
-    let sample = List.find_map samples (fun s ->
+    flow_detach (fun () ->
+      List.find_map samples (fun s ->
         if Some s#g_id = optid sl#sample then (
           let org = List.find organisms (fun o -> Some o#g_id = optid s#organism) in
           Some (object method sample = s method organism = org end))
-        else None) in
-    let (submissions: _ submission list) =
+        else None))
+    >>= fun sample ->
+    flow_detach (fun () ->
       List.map flowcells (fun fc ->
         List.filter_mapi fc#lanes ~f:(fun idx l ->
           if List.exists l#inputs (fun i -> i#library#id = sl#g_id)
@@ -326,14 +328,16 @@ let make_classy_libraries_information ~configuration ~layout_cache =
                   method lane_index = idx + 1
                   method lane = l
                   method invoices = invoices
-           end))) |! List.concat in
+           end))) |! List.concat)
+    >>= fun (submissions: _ submission list) ->
     let preparator =
       List.find persons (fun p ->
         Some p#g_pointer = Option.map sl#preparator (fun p -> p#pointer)) in
-    let barcoding =
+    flow_detach (fun () ->
       List.map (Array.to_list sl#barcoding)
         (fun il -> List.filter_map (Array.to_list il) ~f:(fun i ->
-          List.find barcodes (fun b -> b#g_id = i#id))) in
+          List.find barcodes (fun b -> b#g_id = i#id))))
+    >>= fun barcoding ->
     let bios =
       List.filter bioanalyzers (fun b -> b#bioanalyzer#library#id = sl#g_id) in
     let agels =
