@@ -27,4 +27,32 @@ let flow_detach f =
   Lwt_preemptive.detach (fun () -> Ok (f ())) ()
 let flow_yield () =
   wrap_io (fun () -> Lwt_main.yield ()) ()
+
+let flow_invoke ~on_exn (f : unit -> 'b) =
+  let open Lwt in
+  let lwt_input, unix_output = Lwt_unix.pipe_in () in
+  Lwt_io.flush_all ()
+  >>= fun () ->
+  begin match Lwt_unix.fork() with
+  | -1 -> 
+    dbgt "PROBLEM !!! Fork FAILED !!!";
+    return (Ok (f ()))
+  | 0 ->
+    dbgt "Subprocess %d STARTED" (Caml.Unix.getpid ());
+    let output = Unix.out_channel_of_descr unix_output in
+    Marshal.(to_channel output (try f () with e -> on_exn e) [Closures]);
+    Out_channel.close output;
+    dbgt "Subprocess %d ENDS" (Caml.Unix.getpid ());
+    exit 0
+  | pid ->
+    let channel = Lwt_io.(of_fd ~mode:input lwt_input) in
+    Lwt_io.read channel
+    >>= fun data ->
+    let v = Marshal.from_string data (String.length data) in
+    Lwt_unix.waitpid [] pid
+    >>= fun (_, _) ->
+    Lwt_io.close channel
+    >>= fun () ->
+    return (Ok v)
+  end
   
