@@ -569,28 +569,35 @@ let make_classy_persons_information
   layout_cache#lane >>= fun lanes ->
   layout_cache#input_library >>= fun input_libraries ->
   layout_cache#stock_library >>= fun stock_libraries ->
-  while_sequential persons
-    begin fun person ->
-      let lanes_involved =
-        List.filter lanes (fun l ->
-          Array.exists l#contacts (fun p -> p#id = person#g_id)) in
-      let libraries =
-        List.map lanes_involved (fun l ->
-          List.filter input_libraries (fun il ->
-            Array.exists l#libraries (fun lib -> lib#id = il#g_id))
-          |! List.filter_map ~f:(fun il ->
-            List.find stock_libraries (fun sl -> sl#g_id = il#library#id)))
-        |! List.concat
-      in
-      let tokens =
-        List.filter tokens (fun t ->
-          Array.exists person#auth_tokens (fun at -> at#id = t#g_id)) in
-      return (object
-        method lanes = lanes_involved
-        method libraries = libraries
-        method tokens = tokens
-        method t = person
-      end : _ person)
+  (* dbgt "flow detach in make_classy_persons_information (Thread.delay 0.01)"; *)
+  flow_detach
+    begin fun () ->
+      List.map persons
+        begin fun person ->
+          let lanes_involved =
+            List.filter lanes (fun l ->
+              Array.exists l#contacts (fun p -> p#id = person#g_id)) in
+          let libraries =
+            List.map lanes_involved (fun l ->
+              (* Thread.yield (); *)
+              Thread.delay 0.01;
+              List.filter input_libraries (fun il ->
+                Array.exists l#libraries (fun lib -> lib#id = il#g_id))
+              |! List.filter_map ~f:(fun il ->
+                List.find stock_libraries (fun sl -> sl#g_id = il#library#id)))
+            |! List.concat
+          in
+          let tokens =
+            List.filter tokens (fun t ->
+              Array.exists person#auth_tokens (fun at -> at#id = t#g_id)) in
+          (* dbgt "thread.yield detach in make_classy_persons_information"; *)
+          (object
+            method lanes = lanes_involved
+            method libraries = libraries
+            method tokens = tokens
+            method t = person
+          end : _ person)
+        end
     end
   >>= fun persons ->
   let creation_finished_on = Time.now () in
