@@ -44,13 +44,13 @@ let filesystem_kinds_and_types dsl =
 
 let ocaml_file_system_module out dsl =
   doc out "The [pointer] represents a handle to a volume in the DB.";
-  line out "type pointer = { id : int } with sexp";
+  line out "type pointer = { id : int } with sexp,yojson";
 
   doc out "Unsafely create a volume.";
   line out "let unsafe_cast id = { id }";
 
   doc out "The specification of file-trees.";
-  line out "type tree = %s with sexp"
+  line out "type tree = %s with sexp,yojson"
     (String.concat ~sep:"\n" [
       "  | File of string * Enumeration_file_type.t";
       "  | Directory of string * Enumeration_file_type.t * tree list";
@@ -59,13 +59,13 @@ let ocaml_file_system_module out dsl =
   doc out "The volume content is …";
   line out "type content = \n\
       \  | Link of pointer
-      \  | Tree of string option * tree list  with sexp";
+      \  | Tree of string option * tree list  with sexp,yojson";
   
   doc out "A volume is then …";
   line out "type t =\n  %s"
     "{ g_id:int; g_last_modified : Timestamp.t; \
      \  g_kind: Enumeration_volume_kind.t; \
-     \  g_content: content; } with sexp";
+     \  g_content: content; } with sexp,yojson";
   doc out "Get the toplevel directory corresponding to a volume-kind.";
   line out " let toplevel_of_kind = function";
   List.iter dsl.nodes (function
@@ -1105,7 +1105,7 @@ let ocaml_module raw_dsl dsl output_string =
   | Enumeration (name, fields) ->
     line out "module Enumeration_%s = struct" name;
     doc out "The type of {i %s} items." name;
-    line out "type t = [%s] with sexp"
+    line out "type t = [%s] with sexp,yojson"
       (List.map fields (sprintf "`%s") |! String.concat ~sep:" | ");
     
     line out "let to_string : t -> string = function\n| %s\n" 
@@ -1131,11 +1131,11 @@ let ocaml_module raw_dsl dsl output_string =
   | Enumeration (name, fields) -> ()
   | Record (name, fields) ->
     line out "module Record_%s = struct" name;
-    line out "type pointer = { id: int}  with sexp";
-    line out "type value = {\n %s} with sexp"
+    line out "type pointer = { id: int}  with sexp,yojson";
+    line out "type value = {\n %s} with sexp,yojson"
       (List.map fields (fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
-    line out "type t = {%s;\n  g_value: value} with sexp" 
+    line out "type t = {%s;\n  g_value: value} with sexp,yojson" 
       (List.map record_standard_fields
          ~f:(fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
@@ -1144,11 +1144,11 @@ let ocaml_module raw_dsl dsl output_string =
     line out "end";
   | Function (name, args, result) ->
     line out "module Function_%s = struct" name;
-    line out "type pointer = { id: int}  with sexp";
-    line out "type evaluation = {\n %s} with sexp"
+    line out "type pointer = { id: int}  with sexp,yojson";
+    line out "type evaluation = {\n %s} with sexp,yojson"
       (List.map args (fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
-    line out "type t = {%s;\n  g_evaluation: evaluation} with sexp" 
+    line out "type t = {%s;\n  g_evaluation: evaluation} with sexp,yojson" 
       (List.map (function_standard_fields result)
          ~f:(fun (n,t) -> sprintf "%s : %s" n (ocaml_type t))
        |! String.concat ~sep:";\n  ");
@@ -1169,7 +1169,7 @@ let ocaml_module raw_dsl dsl output_string =
     line out "  %s: Function_%s.t list;" name name;
   | Volume (_, _) -> ()
   );
-  line out "} with sexp";
+  line out "} with sexp,yojson";
 
   line out "end";
   line out "open Layout";
@@ -1186,7 +1186,7 @@ let ocaml_module raw_dsl dsl output_string =
   | Volume (name, _) -> 
     line out "| `%s_pointer of File_system.pointer" name;
   );
-  line out "] with sexp";
+  line out "] with sexp,yojson";
 
   line out "type value = [";
   List.iter all_nodes (function
@@ -1198,7 +1198,7 @@ let ocaml_module raw_dsl dsl output_string =
   | Volume (name, _) -> 
     line out "| `%s_volume of File_system.t" name;
   );
-  line out "] with sexp";
+  line out "] with sexp,yojson";
 
   line out "end";
 
