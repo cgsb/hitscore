@@ -1,7 +1,7 @@
 # OASIS_START
-# DO NOT EDIT (digest: 48ddf7365b2140e82891aa174612d0b6)
-# Ignore VCS directories, you can use the same kind of rule outside 
-# OASIS_START/STOP if you want to exclude directories that contains 
+# DO NOT EDIT (digest: c1fe9dac989027af143e435fdd72f21b)
+# Ignore VCS directories, you can use the same kind of rule outside
+# OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
 <**/.svn>: -traverse
 <**/.svn>: not_hygienic
@@ -35,6 +35,7 @@
 <src/lib/*.ml{,i}>: pkg_lwt.preemptive
 <src/lib/*.ml{,i}>: pkg_cryptokit
 <src/lib/*.ml{,i}>: pkg_simple_pam
+<src/lib/*.ml{,i}>: pkg_deriving-yojson.syntax_tc
 # Executable hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscore
 <src/app/hitscore_main.{native,byte}>: use_hitscoregen
@@ -49,6 +50,7 @@
 <src/app/hitscore_main.{native,byte}>: pkg_lwt.preemptive
 <src/app/hitscore_main.{native,byte}>: pkg_cryptokit
 <src/app/hitscore_main.{native,byte}>: pkg_simple_pam
+<src/app/hitscore_main.{native,byte}>: pkg_deriving-yojson.syntax_tc
 <src/app/*.ml{,i}>: use_hitscore
 <src/app/*.ml{,i}>: use_hitscoregen
 <src/app/*.ml{,i}>: pkg_threads
@@ -62,6 +64,7 @@
 <src/app/*.ml{,i}>: pkg_lwt.preemptive
 <src/app/*.ml{,i}>: pkg_cryptokit
 <src/app/*.ml{,i}>: pkg_simple_pam
+<src/app/*.ml{,i}>: pkg_deriving-yojson.syntax_tc
 # Executable hitscored
 <src/server/server_main.{native,byte}>: use_hitscore
 <src/server/server_main.{native,byte}>: use_hitscoregen
@@ -77,6 +80,7 @@
 <src/server/server_main.{native,byte}>: pkg_lwt.preemptive
 <src/server/server_main.{native,byte}>: pkg_cryptokit
 <src/server/server_main.{native,byte}>: pkg_simple_pam
+<src/server/server_main.{native,byte}>: pkg_deriving-yojson.syntax_tc
 <src/server/*.ml{,i}>: use_hitscore
 <src/server/*.ml{,i}>: use_hitscoregen
 <src/server/*.ml{,i}>: pkg_threads
@@ -91,6 +95,7 @@
 <src/server/*.ml{,i}>: pkg_lwt.preemptive
 <src/server/*.ml{,i}>: pkg_cryptokit
 <src/server/*.ml{,i}>: pkg_simple_pam
+<src/server/*.ml{,i}>: pkg_deriving-yojson.syntax_tc
 # Executable gencore
 <src/client/client_main.{native,byte}>: use_hitscore
 <src/client/client_main.{native,byte}>: use_hitscoregen
@@ -106,6 +111,7 @@
 <src/client/client_main.{native,byte}>: pkg_lwt.preemptive
 <src/client/client_main.{native,byte}>: pkg_cryptokit
 <src/client/client_main.{native,byte}>: pkg_simple_pam
+<src/client/client_main.{native,byte}>: pkg_deriving-yojson.syntax_tc
 <src/client/*.ml{,i}>: use_hitscore
 <src/client/*.ml{,i}>: use_hitscoregen
 <src/client/*.ml{,i}>: pkg_threads
@@ -120,6 +126,7 @@
 <src/client/*.ml{,i}>: pkg_lwt.preemptive
 <src/client/*.ml{,i}>: pkg_cryptokit
 <src/client/*.ml{,i}>: pkg_simple_pam
+<src/client/*.ml{,i}>: pkg_deriving-yojson.syntax_tc
 # OASIS_STOP
 
 <src/*/*.ml{,i}>: syntax_camlp4o

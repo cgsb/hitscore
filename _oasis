@@ -30,8 +30,9 @@ Library hitscore
   Path: src/lib
   FindlibName: hitscore
   BuildDepends: threads, core, pgocaml, sexplib.syntax, bin_prot.syntax, xmlm,
-               hitscoregen, lwt, lwt.unix, lwt.preemptive, cryptokit, simple_pam
-  XMETARequires: threads, core, pgocaml, hitscoregen, lwt, lwt.unix, lwt.preemptive,  cryptokit, simple_pam, xmlm
+                 hitscoregen, lwt, lwt.unix, lwt.preemptive, cryptokit, simple_pam, deriving-yojson.syntax_tc
+  XMETARequires: threads, core, pgocaml, hitscoregen, lwt, lwt.unix, lwt.preemptive,  
+                 cryptokit, simple_pam, xmlm, deriving-yojson
   BuildTools: camlp4o, hitscoregen
   Install: true
   Modules: Hitscore
