@@ -8,50 +8,12 @@ The default path is: *\~/.config/hitscore/config.sexp*, but the
 path (*':'* is the separator), e.g.:
 `hitscore myfile.sexp:specialprofile <command> ...`
 
-This one defines one *profile* “*test*”, Hitscore will in that case use
-the local/default database of the user:
+A config-file contains a succession of “profiles”, each profile is completely
+in dependent, the syntax is based on 
+[S-Expressions](http://en.wikipedia.org/wiki/S-expression).
 
-```
-(profile test
- (root "/home/sm4431/tmp/gencore_extract/gencore/"
-  (writers sm4431 root)
-  (group admin))
- (raw "/home/sm4431/tmp/gencore_extract/gencore-raw"
-  (hiseq "HiSeq"))
- (work "/tmp/zz_hs_work/")
- )
-```
-
-```
-(profile dev
-         (root "/scratch/sm4431/gencore-dev/"
-          (writers sm4431 aa144)
-          (group cgsb))
- 	 (raw "/data/cgsb/gencore-raw"
-	  (hiseq "HiSeq"))
-         (work "/scratch/sm4431/gencorework-dev/")
-          (db
-           (host "pg.bio.nyu.edu")
-           (port 5432)
-           (database "hitscore-dev")
-           (username "hitscore-dev")
-           (password "very long secret")))
-
-(profile production
-         (root "/data/cgsb/gencore/"
-           (writers sm4431 aa144)
-           (group cgsb))
- 	 (raw "/data/cgsb/gencore-raw"
-	  (hiseq "HiSeq"))
-         (work "/scratch/sm4431/gencorework-dev/")
-         (work "/scratch/sm4431/gencorework/")
-         (db
-          (host "pg.bio.nyu.edu")
-          (port 5432)
-          (database "hitscore")
-          (username "hitscore")
-          (password "very long secret")))
-```
+See the `gencore` user's config file; it has many profiles, the `dev` one has
+been documented.
 
 ## Quick HOWTOs
 
