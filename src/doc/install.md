@@ -81,8 +81,8 @@ The following lines can be put in `ocaml_opam.env` for reuse:
 
 The code repositories are:
 
-    NYU_OPAM_REPO=git@github.com:smondet/nyu-opam-repo
-    HITSCOREWEB_REPO=git@github.com:smondet/hitscoreweb
+    NYU_OPAM_REPO=git@github.com:cgsb/nyu-opam-repo
+    HITSCOREWEB_REPO=git@github.com:cgsb/hitscoreweb
 
 The user doing this must have their SSH keys registered on Github, and
 `ssh-agent` running (and there may a `yes` or two to type during the
