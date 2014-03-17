@@ -9,7 +9,8 @@ HiSeq 2500
 
 - Create submission-sheet(s).
 - Make sure the HiSeq hard-drives are almost empty (`D:` and `E:`).
-- Make sure there is enough space in `Pod:/hiseq/`.
+- Make sure there is enough space in `Pod:/hiseq/` (c.f. section about
+“clean-up” below).
 
 ### At The Pool Submission Deadline
 
@@ -81,6 +82,31 @@ When the run is dual-indexed, one must add the option
 
 The delivery without Hitscore is done by simply giving read access to the FASTQ
 files inside `Unaligned` (c.f. `man setfacl`).
+
+#### Keep SAV Files
+
+In order to inspect older runs with *SAV*, wet-lab people need an extract of
+each run directory.
+They are all there: ``/hiseq/SAV_only/`.
+The idea is to copy the `runParameters.xml` file and the `InterOp` directory.
+
+#### Clean-Up Pod
+
+Usually before each run, we check that `Pod`'s mount is at least half-empty.
+
+    $ df -h /hiseq
+    Filesystem            Size  Used Avail Use% Mounted on
+    /export/gencore-raw    10T  1.8T  8.3T  18% /hiseq
+
+To clean-up, list the directories in `/hiseq` directories. Send an email to the
+Gencore manager, with the status of each run directory (backed-up, delivered,
+“some problem to investigate”, etc.).
+
+When both sides (*wet* and *dry* labs) agree, they send an email to `root`
+(`fas.bio.computing@nyu.edu`) to ask for the deletions of the directories.
+
+This deletion gets rid of the Intensities (since they were not backed-up);
+running the basecaller again becomes impossible.
 
 MiSeq
 -----
