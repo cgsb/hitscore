@@ -67,3 +67,30 @@ The fields corresponding to the following errors are not really mandatory:
     * mandatory field not provided: P7 Adapter Length [LIB_2, LIB_1]
     * mandatory field not provided: Protocol File [LIB_2, LIB_1]
     * mandatory field not provided: Protocol Name [LIB_2, LIB_1]
+
+### Barcoding
+
+Barcode information is **critical**, it is better to leave it all blank than to
+try import an erroneous barcoding.
+
+For example, importing will fail when this error has not been solved:
+
+    * Barcode some random name:2 is not known [LIB_1]
+
+because `"some random name"` is not a valid barcode provider.
+
+Valid barcodes are defined in Hitscore's configuration file (master at
+`~gencore/.config/hitscore/config.sexp` on Bowery).
+
+The barcode columns go by 2, both fields must go together (the 4 of them is
+also OK):
+
+- `Barcode Provider`, `Barcode Number` → for “standard” barcodes in the
+configuration file.
+- `Custom Barcode Sequence`, `Custom Barcode Location` → for custom barcodes.
+
+Custom barcodes can be more than *one*, for example: `AACTGC,AGGTT` as
+“sequences” with `R1:1,I1:2` as “Location” mean that `AACTGC` is to be expected
+on read 1 at position 1, and `AGGTT` is to be expected on the (first) index
+read at position 2.
+
