@@ -9,50 +9,13 @@ path (*':'* is the separator), e.g.:
 `hitscore myfile.sexp:specialprofile <command> ...`
 
 A config-file contains a succession of “profiles”, each profile is completely
-in dependent, the syntax is based on 
+independent, the syntax is based on 
 [S-Expressions](http://en.wikipedia.org/wiki/S-expression).
 
-See the `gencore` user's config file; it has many profiles, the `dev` one has
-been documented.
+See the `gencore` user's config file on `Bowery`; it has many profiles, the
+`dev` one has been documented.
 
 ## Quick HOWTOs
-
-### Layout Changes
-
-After editing `data/hitscore_layout`:
-
-- update `./src/migrator/mk` (add the future version if not already
-  there, remove useless old versions).
-- commit (or stash?) everything so that the Git index is clean. And a
-  *tag* for the development version e.g `v3.4-dev`.
-- run `./src/migrator/mk update` (this will use Git to retrieve old
-  tagged versions)
-- now you can do the layout updates in `./src/migrator/migrator.ml`
-- compile them with `./src/migrator/mk`
-
-Often the layout updates are simply adding empty records or fields, e.g.:
-
-```
-dump_v06
-|! add_empty "record_fastx_results"
-|! add_empty "function_fastx_quality_stats_of_unaligned"
-|! parse
-```
-
-The migrator is easy to test with a dump of the layout:
-
-```
- $ ./_migrator/migrator v06-v07 some_dump_06.sexp out07.sexp
-```
-
-The migrator already checks that the resulting `out07.sexp` has the
-right format, but doing a full load with an empty database will allow more
-checks (unique pointers, etc.):
-
-```
- $ hitscore test load-file out07.sexp
- $ hitscore test verify-layout
-```
 
 ### Importing Submission Sheets
 
@@ -223,3 +186,41 @@ Follow the following steps to do in order to switch to a new version
         the DB in some other way)*
     -   `hitscore production check-db`
     -   `hitscore production load-file hitscore_to_load.sexp`
+
+### Layout Changes
+
+After editing `data/hitscore_layout`:
+
+- update `./src/migrator/mk` (add the future version if not already
+  there, remove useless old versions).
+- commit (or stash?) everything so that the Git index is clean. And a
+  *tag* for the development version e.g `v3.4-dev`.
+- run `./src/migrator/mk update` (this will use Git to retrieve old
+  tagged versions)
+- now you can do the layout updates in `./src/migrator/migrator.ml`
+- compile them with `./src/migrator/mk`
+
+Often the layout updates are simply adding empty records or fields, e.g.:
+
+```
+dump_v06
+|! add_empty "record_fastx_results"
+|! add_empty "function_fastx_quality_stats_of_unaligned"
+|! parse
+```
+
+The migrator is easy to test with a dump of the layout:
+
+```
+ $ ./_migrator/migrator v06-v07 some_dump_06.sexp out07.sexp
+```
+
+The migrator already checks that the resulting `out07.sexp` has the
+right format, but doing a full load with an empty database will allow more
+checks (unique pointers, etc.):
+
+```
+ $ hitscore test load-file out07.sexp
+ $ hitscore test verify-layout
+```
+
