@@ -87,7 +87,7 @@ files inside `Unaligned` (c.f. `man setfacl`).
 
 In order to inspect older runs with *SAV*, wet-lab people need an extract of
 each run directory.
-They are all there: ``/hiseq/SAV_only/`.
+They are all there: `/hiseq/SAV_only/`.
 The idea is to copy the `runParameters.xml` file and the `InterOp` directory.
 
 #### Clean-Up Pod
