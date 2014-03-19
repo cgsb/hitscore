@@ -16,11 +16,18 @@ Servers, Directories, Clusters
     For the HiSeq **without Intensities**.
     - `/data/cgsb/gencore-raw/<SEQUENCER_NAME>` backups (`targ.gz`) of the runs
     (**without Intensities**).
-    - `/data/cgsb/gencore/in/`: place where the submission sheets and files are treated (*HiSeq-only*).
-    - `/data/cgsb/gencore/vol/`: root directory for Hitscore (fully managed by the software).
-    - `/data/cgsb/gencore/backup/`: place to put the backups of the Hitscore database.
+    - `/data/cgsb/gencore/in/`: place where the submission sheets and files are
+    treated (*HiSeq-only*).
+    - `/data/cgsb/gencore/vol/`: root directory for Hitscore (fully managed by
+    the software).
+    - `/data/cgsb/gencore/backup/`: place to put the backups of the Hitscore
+    database.
     - `/data/cgsb/gencore/out/`: “output” directory
         - Managed with Hitscore for the HiSeq (set of symbolic links pointing
         to `/data/cgsb/gencore/vol`).
-        - Managed manually for the MiSeq (copy FASTQ files form `/scratch/gencore/miseq-M02455/<MISEQ_RUN>`).
+        - Managed manually for the MiSeq (copy FASTQ files form
+        `/scratch/gencore/miseq-M02455/<MISEQ_RUN>`).
+    - `/home/gencore/.config/hitscore/config.sexp` → important Hitscore
+    configuration file.
+
 
