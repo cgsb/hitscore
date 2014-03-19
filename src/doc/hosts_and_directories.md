@@ -1,4 +1,3 @@
-
 Servers, Directories, Clusters
 ==============================
 
@@ -14,7 +13,7 @@ Servers, Directories, Clusters
     - `/scratch/gencore/<SEQUENCER_NAME>` scratch space where the run
     directories are *un-tarred* until they are not needed any more.<br/>
     For the HiSeq **without Intensities**.
-    - `/data/cgsb/gencore-raw/<SEQUENCER_NAME>` backups (`targ.gz`) of the runs
+    - `/data/cgsb/gencore-raw/<SEQUENCER_NAME>` backups (`tar.gz`) of the runs
     (**without Intensities**).
     - `/data/cgsb/gencore/in/`: place where the submission sheets and files are
     treated (*HiSeq-only*).
