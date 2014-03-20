@@ -9,7 +9,7 @@ Servers, Directories, Clusters
         - HiSeq runs copied by the machine, **with Intensities**.
     - `/hiseq/SAV_only/<RUN_DIRECTORY>` extracts of every HiSeq run, contain
     only the file `runParameters.xml` and the directory `InterOp/`
-- `Bowery` (the `/data/cgsb/` tree is the part of `/scratch` that is backed-up):
+- `Bowery` (the `/data/cgsb/` (a symlink to `/scratch/cgsb/`) tree is the part of `/scratch` that is backed-up):
     - `/scratch/gencore/<SEQUENCER_NAME>` scratch space where the run
     directories are *un-tarred* until they are not needed any more.<br/>
     For the HiSeq **without Intensities**.
