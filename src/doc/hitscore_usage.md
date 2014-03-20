@@ -69,7 +69,7 @@ As simple as:
 
 Choose and Hiseq-raw directory (e.g. from the output of
 register-hiseq-raw, the
-[/layout](https://gencore.bio.nyu.edu/layout?type=record_hiseq_raw&action=view)
+[/layout](https://gencore.bio.nyu.edu/layout?type=hiseq_raw)
 service, or `select * in hiseq_raw`, …).
 
      $ hitscore production bcl-to-fastq start  <nb>
