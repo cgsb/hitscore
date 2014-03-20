@@ -6,7 +6,10 @@ HiSeq 2500
 ----------
 
 ### Before The Run
-
+- Remote Desktop is available on the HiSeq2500 at:
+  - Host: 172.22.2.31
+  - User: SBSUser
+  - Password: sbs123
 - Create submission-sheet(s).
 - Make sure the HiSeq hard-drives are almost empty (`D:` and `E:`).
 - Make sure there is enough space in `Pod:/hiseq/` (c.f. section about
