@@ -26,6 +26,7 @@ Servers, Directories, Clusters
         to `/data/cgsb/gencore/vol`).
         - Managed manually for the MiSeq (copy FASTQ files form
         `/scratch/gencore/miseq-M02455/<MISEQ_RUN>`).
+    - `/scratch/gencore/gencorework` is a temp directory managed by hitscore where demultiplexing takes place. If demultiplexing fails files may have to be removed manually from here. The directory can safely be flushed as long as hitscore is not actively using it, i.e. during a run.
     - `/home/gencore/.config/hitscore/config.sexp` → important Hitscore
     configuration file.
 
