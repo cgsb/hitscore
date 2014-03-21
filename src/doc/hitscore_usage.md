@@ -69,9 +69,9 @@ As simple as:
 Choose and Hiseq-raw directory (e.g. from the output of
 register-hiseq-raw, the
 [/layout](https://gencore.bio.nyu.edu/layout?type=hiseq_raw)
-service, or `select * in hiseq_raw`, …).
+service).
 
-     $ hitscore production bcl-to-fastq start  <nb>
+     $ hitscore production bcl-to-fastq start (<flowcell name>|<directory path>|<directory db identifier>)
 
 See
 
