@@ -1,4 +1,3 @@
-
 # Hitscore
 
 ## Hitscore configuration file
@@ -217,7 +216,7 @@ The migrator is easy to test with a dump of the layout:
 
 The migrator already checks that the resulting `out07.sexp` has the
 right format, but doing a full load with an empty database will allow more
-checks (unique pointers, etc.):
+checks (unique pointers, etc):
 
 ```
  $ hitscore test load-file out07.sexp
