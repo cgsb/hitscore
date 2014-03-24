@@ -119,6 +119,7 @@ Example delivering C0HYHACXX:
 
 And then for each one needed:
 
+    $ hitscore production deliver <bcl_to_fastq id> <invoice id> /data/cgsb/gencore/out <tag, usually run date>
     $ hitscore production deliver 34 10 /data/cgsb/gencore/out 2012-02-06
 
 
