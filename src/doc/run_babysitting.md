@@ -131,7 +131,20 @@ volume.
 Then from `Pod` follow the same process as with the HiSeq (`tar`, `rsync`,
 `untar`).
 
-The FASTQ files are already there, one just needs to give access rights.
+`Untar` on bowery and move tar.gz to `/data/cgsb/gencore-raw/miseq-M02455/`
+
+
+The FASTQ files are already there, in `/scratch/gencore/miseq-M02455/<DIR>/Data/Intensities/BaseCalls/`.
+
+In `/data/cgsb/gencore/out/`
+
+    mkdir -p <PI Name>/<Date -- Meaningful run-name>
+
+One just needs to copy the `fastq.gz` files there, and give access rights:
+
+    setfacl -m u:<netID1>:r,u:<netID2>:r *
+
+In case it is a new P.I., there may be read/exec rights to setup on upper directories.
 
 PGM
 ---
