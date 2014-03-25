@@ -11,5 +11,8 @@ Gencore Computational Operations Documentation
 - Notes about [Pool Submission Sheets](pool_submission_sheets.md).
 - Recapitulations of all the [hosts and directories](hosts_and_directories.md)
 for Gencore's data.
+- How to deal with [new users and user's requests](users.md)
+- About the [deletion policy for the backups](gencore_raw_clean_up.md)
+
 
 

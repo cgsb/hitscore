@@ -6,6 +6,7 @@ HiSeq 2500
 ----------
 
 ### Before The Run
+
 - Remote Desktop is available on the HiSeq2500 at:
   - Host: 172.22.2.31
   - User: SBSUser
