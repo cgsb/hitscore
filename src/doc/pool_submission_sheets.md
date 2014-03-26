@@ -94,3 +94,13 @@ Custom barcodes can be more than *one*, for example: `AACTGC,AGGTT` as
 on read 1 at position 1, and `AGGTT` is to be expected on the (first) index
 read at position 2.
 
+### Things That Go Together
+
+If the protocol *name* is new, the protocol *file* **must** be at least
+specified (even if the file itself is missing).
+
+
+
+
+
+
