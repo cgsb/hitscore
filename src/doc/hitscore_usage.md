@@ -70,8 +70,9 @@ Choose and Hiseq-raw directory (e.g. from the output of
 register-hiseq-raw, the
 [/layout](https://gencore.bio.nyu.edu/layout?type=hiseq_raw)
 service).
+This command requires a `-user <NetID>` for qsub.
 
-     $ hitscore production bcl-to-fastq start (<flowcell name>|<directory path>|<directory db identifier>)
+     $ hitscore production bcl-to-fastq start (<flowcell name>|<directory path>|<directory db identifier>) -user <NetID>
 
 See
 
