@@ -142,10 +142,36 @@ And then for each one needed:
     $ hitscore production deliver <bcl_to_fastq id> <invoice id> /data/cgsb/gencore/out <tag, usually run date>
     $ hitscore production deliver 34 10 /data/cgsb/gencore/out 2012-02-06
 
+## Database Backups
 
-### Website Deployment
+### Create a Backup
 
-Go to WSO6.
+On Bowery, in `/data/cgsb/gencore/backup/layout/`:
+
+    hitscore production dump-to-file hitscore_layout_<date>_<time>_v16.sexp
+
+where `v16` means “version 1.6” (last version of Hitscore).
+
+### Restore From a Backup
+
+Wipe-out the database:
+
+    hitscore production wipe-out-database I am sure
+
+recreate empty tables if neeeded:
+
+    hitscore production check-db
+
+load the database from a backup file:
+
+    hitscore production load-file hitscore_layout_<date>_<time>_v16.sexp
+
+this command can take very long and we have seen network issue making it hang.
+
+
+## Website Deployment
+
+Go to `WSO6.`
 
 Pull, compile, and install hitscore and hitscoreweb (and any other
 dependency …).
@@ -159,20 +185,29 @@ The release number should be increased every time for a given hitscore
 version (at least if we want to be RPM-clean).
 
 RPMs go to `in /tmp/hitscorerpmbuild/RPMS/x86_64`, send the latest one
-to `WSO1`/`WSO5`, and:
+to `WSO1`, and:
 
-As root:
+As root on `WSO1`, put the website in Read-only mode:
 
-     # service hitscoreweb stop
-     # killall hitscoreserver   #sometimes needed (TODO: fix)
-     # rpm -e hitscoreweb
-     # rpm -i /tmp/hitscorerpmbuild/RPMS/x86_64/hitscoreweb-0.6-3.x86_64.rpm
-     # service hitscoreweb start
+    echo 'maintenance:on' > /var/hitscoreweb/ocsigen_command
 
-One may use something like this after stopping the service:
+(to put back in read-write mode just use `maintenance:off`).
 
-     # while true; do echo "Gencore stopped for Maintenance, come back in a few minutes" | nc -l 80 ; done
+You can go to <https://gencore.bio.nyu.edu/log> to see what users are doing.
 
+Then stop the server, install, the new one and start it:
+
+     service hitscoreweb stop
+     killall hitscoreserver             # sometimes needed
+     rpm -e hitscoreweb
+     rpm -i <NAME OF THE RPM FILE>
+     service hitscoreweb start
+
+Once running, the webserver takes a while before being able to accept new
+users, just wait for the caches to be ready :)
+
+
+## For New Developments Only
 
 ### Migration Between Versions
 
