@@ -207,6 +207,33 @@ Then stop the server, install, the new one and start it:
 Once running, the webserver takes a while before being able to accept new
 users, just wait for the caches to be ready :)
 
+## Editing The Database
+
+There are many ways to edit the database:
+
+- The *Layout Navigaditor*: <https://gencore.bio.nyu.edu/layout>
+- The command `hitscore production edit <db ID`
+- The command `hitscore production with-env <cmd>` with `<cmd>=psql`
+(requires the postgreSQL client `psql`)
+
+### Example: Clean-up The Logs
+
+For example, one things can be nice to do every few months:
+cleaning-up the `log` in the database.
+
+Start `psql` with the right database parameters:
+
+    hitscore production wenv psql
+
+To see all the log entries:
+
+    SELECT * FROM record WHERE type = 'log';
+
+To delete them all:
+
+    DELETE FROM record WHERE type = 'log';
+
+
 
 ## For New Developments Only
 
