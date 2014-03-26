@@ -143,14 +143,6 @@ And then for each one needed:
     $ hitscore production deliver 34 10 /data/cgsb/gencore/out 2012-02-06
 
 
-### Deleting Intensities
-
-for now the deletion is manual, but one can register a successful one:
-
-     $ hitscore production delete-intensities register <nb>
-
-where `<bn>` is an Hiseq-raw directory `g_id`.
-
 ### Website Deployment
 
 Go to WSO6.
