@@ -2,7 +2,7 @@
 
 ## Hitscore configuration file
 
-The default path is: *\~/.config/hitscore/config.sexp*, but the
+The default path is: `~/.config/hitscore/config.sexp`, but the
 *hitscore* and *hitscoreweb* commands can be called with a different
 path (*':'* is the separator), e.g.:
 `hitscore myfile.sexp:specialprofile <command> ...`
@@ -79,6 +79,19 @@ See
      $ hitscore production bcl-to-fastq start -help
 
 for options (sample-sheet kind, tiles, wall-hours, etc.).
+
+**Notes**:
+
+- If the run is dual-indexed one needs to pass the option:
+`-bases-mask 'Y*,I8,I8,Y*'`.
+- To run CASAVA only on lanes 2 and 3: `-tiles s_2,s_3`
+- If something is wrong with the results (libraries not having reads), one can
+try the option `-all-barcodes`, it will run CASAVA with all possible Illumina
+or BIOO barcodes (only for single-indexed).
+- To avoid any demultiplexing, and just do the Bcl *to* FASTQ conversion of
+each lane use `-no-demux`.
+- If CASAVA fails because of 2 barcodes that were too close, try again with
+`-mismatch-zero`.
 
 
 ### Generating FASTX Quality Statistics
