@@ -8,7 +8,7 @@ path (*':'* is the separator), e.g.:
 `hitscore myfile.sexp:specialprofile <command> ...`
 
 A config-file contains a succession of “profiles”, each profile is completely
-independent, the syntax is based on 
+independent, the syntax is based on
 [S-Expressions](http://en.wikipedia.org/wiki/S-expression).
 
 See the `gencore` user's config file on `Bowery`; it has many profiles, the
@@ -99,6 +99,26 @@ Right now, its input is the ID of a given *bcl-to-fastq* run For
 example, after the *bcl-to-fastq* 42 has finished successfully:
 
     hitscore production fxqs start -from-b2f 42
+
+### Updating Data On The Web-Server
+
+`WSO1`, the VM hosting *Hitscoreweb*, cannot access Bowery:
+
+    $ sh bin/Rsync_gencore_data
+    usage: bin/Rsync_gencore_data <user> <host>
+    * <host> maybe 'wso1' or 'wso2'
+    * <user> should be able to log on <host>
+
+for example:
+
+    $ sh bin/Rsync_gencore_data nni42 wso1
+
+### Review The Statistics
+
+Send an Email to the *Core Facility Manager* with information about the run and
+the demux-statistics copied from the website:
+
+    https://gencore.bio.nyu.edu/flowcell?serial=<FLOWCELL ID>
 
 
 ### Delivery
