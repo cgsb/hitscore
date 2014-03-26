@@ -14,7 +14,7 @@ independent, the syntax is based on
 See the `gencore` user's config file on `Bowery`; it has many profiles, the
 `dev` one has been documented.
 
-## Quick HOWTOs
+## Run Babysitting With Hitscore
 
 ### Importing Submission Sheets
 
