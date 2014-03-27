@@ -1,4 +1,3 @@
-
 Build and Install
 =================
 
@@ -90,6 +89,12 @@ installations because of SSH “new hosts”).
 
     opam remote add nyu $NYU_OPAM_REPO
     opam update
+    
+> If you're building only `hitscore` on **Bowery**:<br/>
+> Now you should just need `opam install hitscore` and then copy the result of `which hitscore` to `gencore`'s `~/bin/`
+
+Now install all the required packages:
+
     opam install --yes hitscore jsonm eliom re
 
 This will download and install Hitscore, all its dependencies, and the
