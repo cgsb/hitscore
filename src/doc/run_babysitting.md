@@ -149,12 +149,21 @@ In case it is a new P.I., there may be read/exec rights to setup on upper direct
 PGM
 ---
 
-Log into the PGM, and do the backups to Bowery:
+Data from PGM is backed up on bowery and the delivery is done on a case-by-case (downloadable from the web interface, or copy to specified location on `Bowery`).
 
-- The RAW files are in `/results/sn25080361/<run name>`, the file
-`explog_final.txt` shows that the run is done.
+Log into the PGM
+ssh ionadmin@pgm1.bio.nyu.edu
+
+RAW (.dat) run files are stored in `/results/sn25080361/<run name>`
+- `explog_final.txt` in run folder indicates that the run is complete.
+
+Processed run files are stored in `/results/analysis/output/Home/<run name>`
+- `explog_final.txt` in run folder indicates that the run is complete.
+
+The 
+/data/cgsb/gencore-raw/pgm-25080361
+- The RAW files are in , the file
 - The FASTQ files are in `/results/analysis/output/Home`, the naming scheme is
 not well-defined, one has to look for them.
 
-The delivery is done on a case-by-case (people can download them form the web
-interface, or may want them somewhere on `Bowery`).
+
