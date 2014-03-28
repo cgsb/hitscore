@@ -156,6 +156,7 @@ Log into the PGM
 ssh ionadmin@pgm1.bio.nyu.edu
 
 On PGM,
+
 RAW (.dat) run files are stored in `/results/sn25080361/<run name>`
 - `explog_final.txt` in run folder indicates that the run is complete.
 
@@ -164,5 +165,6 @@ Processed run files are stored in `/results/analysis/output/Home/<run name>`
 
 FASTQ files are usually stored in `/results/analysis/output/Home/<run name>/plugin_out/downloads`
 
-On Bowery, 
+On Bowery,
+
 Data is backed up in `/data/cgsb/gencore-raw/pgm-25080361`
