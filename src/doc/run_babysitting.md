@@ -128,11 +128,21 @@ Just check that the hard-drive is not full.
 Go to the machine and copy the run directory to the `gencore-raw` mounted
 volume.
 
-Then from `Pod` follow the same process as with the HiSeq (`tar`, `rsync`,
-`untar`).
+Create a `tar.gz` before transfering 
 
-`Untar` on bowery and move tar.gz to `/data/cgsb/gencore-raw/miseq-M02455/`
+    tar -czf ~/$DIR.tar.gz $DIR
 
+This should be transferred to `Bowery`; the `gencore` user has a
+`~/bin/rsync-tar.pbs` script.
+
+    qsub -v DIR=$DIR ~/bin/rsync-tar.pbs
+
+Then the archive should be extracted; the `gencore` user has a
+`~/bin/untar.pbs` script.
+
+    qsub -v DIR=$DIR ~/bin/untar.pbs
+
+After `untar` move the tar.gz to `/data/cgsb/gencore-raw/miseq-M02455/`
 
 The FASTQ files are already there, in `/scratch/gencore/miseq-M02455/<DIR>/Data/Intensities/BaseCalls/`.
 
